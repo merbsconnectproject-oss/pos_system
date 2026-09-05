@@ -1,0 +1,363 @@
+import React, { useState } from 'react';
+import { Search, Receipt, AlertTriangle, Printer, RotateCcw, CheckCircle2, X, Download, FileSpreadsheet } from 'lucide-react';
+import { CompletedSale, Outlet, StockMovement } from '../types';
+import { ManagerPinModal } from './ManagerPinModal';
+import { exportToCsv } from '../utils/csvExport';
+
+interface SalesHistoryViewProps {
+  sales: CompletedSale[];
+  currentOutlet: Outlet;
+  onVoidSale: (saleId: string, reason: string, approver: string, reversingMovements: StockMovement[]) => void;
+}
+
+export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
+  sales,
+  currentOutlet,
+  onVoidSale,
+}) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewingReceipt, setViewingReceipt] = useState<CompletedSale | null>(null);
+  const [isReprint, setIsReprint] = useState(false);
+  const [voidingSale, setVoidingSale] = useState<CompletedSale | null>(null);
+  const [voidReasonCode, setVoidReasonCode] = useState<'CASHIER_ERROR' | 'CUSTOMER_RETURN' | 'DEFECTIVE_PRODUCT' | 'DUPLICATE_ENTRY'>('CASHIER_ERROR');
+  const [voidNote, setVoidNote] = useState('');
+  const [pinModalOpen, setPinModalOpen] = useState(false);
+
+  const filteredSales = sales.filter((s) => {
+    const matchesOutlet = currentOutlet.id === 'all-outlets' || s.outletId === currentOutlet.id;
+    const matchesSearch =
+      s.receiptNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.customerPhone && s.customerPhone.includes(searchTerm));
+    return matchesOutlet && matchesSearch;
+  });
+
+  const handleExportSalesCsv = () => {
+    const filename = `sales_history_${currentOutlet.id}_${new Date().toISOString().slice(0, 10)}.csv`;
+    const headers = [
+      'Receipt Number',
+      'Transaction Date',
+      'Store Outlet',
+      'Cashier',
+      'Customer Name',
+      'Customer Phone',
+      'Customer Tier',
+      'Payment Method',
+      'Items Count',
+      'Items Breakdown',
+      'Subtotal (GHS)',
+      'Discount (GHS)',
+      'Tax (GHS)',
+      'Total Amount (GHS)',
+      'Transaction Status',
+      'Void Reason',
+      'Void Approved By',
+    ];
+
+    const rows = filteredSales.map((s) => {
+      const itemsCount = s.items.reduce((sum, item) => sum + item.quantity, 0);
+      const itemsBreakdown = s.items
+        .map(
+          (item) =>
+            `${item.product.name} (Qty: ${item.quantity} ${item.selectedUnit || item.product.baseUnit} @ GHS ${item.unitPrice.toFixed(2)})`
+        )
+        .join('; ');
+
+      return [
+        s.receiptNumber,
+        s.timestamp,
+        s.outletName,
+        s.cashierName,
+        s.customerName,
+        s.customerPhone || '',
+        s.customerTier || 'Retail',
+        s.paymentMethod,
+        itemsCount,
+        itemsBreakdown,
+        s.subtotal.toFixed(2),
+        s.discount.toFixed(2),
+        s.tax.toFixed(2),
+        s.total.toFixed(2),
+        s.status,
+        s.voidReason || '',
+        s.voidedBy || '',
+      ];
+    });
+
+    exportToCsv(filename, headers, rows);
+  };
+
+  const handleStartVoid = (sale: CompletedSale) => {
+    setVoidingSale(sale);
+    setPinModalOpen(true);
+  };
+
+  const handlePinSuccess = (approver: string) => {
+    setPinModalOpen(false);
+    if (!voidingSale) return;
+
+    // Generate reversing movements for each item (BR-3)
+    const reversingMovements: StockMovement[] = voidingSale.items.map((item) => ({
+      id: `rev-${Date.now()}-${item.product.id}`,
+      timestamp: new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      outletId: voidingSale.outletId,
+      productId: item.product.id,
+      productName: item.product.name,
+      type: 'SALE_VOID',
+      quantity: item.quantity,
+      previousStock: item.product.stock[voidingSale.outletId] || 0,
+      newStock: (item.product.stock[voidingSale.outletId] || 0) + item.quantity,
+      referenceNumber: voidingSale.receiptNumber,
+      reason: `Sale voided: [${voidReasonCode}] ${voidNote || 'Correcting erroneous sale'}`,
+      user: approver,
+    }));
+
+    onVoidSale(voidingSale.id, `[${voidReasonCode}] ${voidNote || 'Voided by manager'}`, approver, reversingMovements);
+    setVoidingSale(null);
+    setVoidNote('');
+    alert(`Receipt #${voidingSale.receiptNumber} has been voided. Stock returned to ${voidingSale.outletName}.`);
+  };
+
+  return (
+    <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black text-slate-800 tracking-tight">Sales & Receipts History</h1>
+            <span className="bg-slate-100 text-slate-700 text-[11px] font-bold px-2 py-0.5 rounded-full">
+              Screens C-25 / C-27 • BR-3 Sale Voiding
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Completed sales are immutable. Corrections are made via Void with manager PIN approval.
+          </p>
+        </div>
+
+        <button
+          onClick={handleExportSalesCsv}
+          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
+          title="Export sales transactions to CSV for accounting software (QuickBooks, Sage, Xero, Excel)"
+        >
+          <Download className="w-4 h-4 stroke-[2.5]" />
+          <span>Export Sales (CSV)</span>
+        </button>
+      </div>
+
+      {/* Search Bar */}
+      <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by receipt #, customer, phone..."
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-orange-500"
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-xs text-slate-500 font-bold">
+            Showing {filteredSales.length} Sales
+          </div>
+        </div>
+      </div>
+
+      {/* Sales Table */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+              <tr>
+                <th className="py-3 px-4">Receipt #</th>
+                <th className="py-3 px-4">Date & Time</th>
+                <th className="py-3 px-4">Outlet</th>
+                <th className="py-3 px-4">Customer</th>
+                <th className="py-3 px-4">Items Count</th>
+                <th className="py-3 px-4">Payment</th>
+                <th className="py-3 px-4 text-right">Total (GH₵)</th>
+                <th className="py-3 px-4 text-center">Status</th>
+                <th className="py-3 px-4 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredSales.map((sale) => (
+                <tr key={sale.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="py-3 px-4 font-mono font-bold text-slate-900">{sale.receiptNumber}</td>
+                  <td className="py-3 px-4 text-slate-600 whitespace-nowrap">{sale.createdAt}</td>
+                  <td className="py-3 px-4 font-semibold text-slate-700">{sale.outletName}</td>
+                  <td className="py-3 px-4">
+                    <div className="font-bold text-slate-800">{sale.customerName}</div>
+                    {sale.customerPhone && (
+                      <div className="text-[11px] text-slate-400 font-mono">{sale.customerPhone}</div>
+                    )}
+                  </td>
+                  <td className="py-3 px-4 text-slate-600">
+                    {sale.items.reduce((sum, it) => sum + it.quantity, 0)} units ({sale.items.length} lines)
+                  </td>
+                  <td className="py-3 px-4">
+                    {sale.payments.map((p, idx) => (
+                      <span key={idx} className="inline-block bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold mr-1">
+                        {p.provider || p.method.toUpperCase()}
+                      </span>
+                    ))}
+                  </td>
+                  <td className="py-3 px-4 text-right font-black text-slate-900">
+                    GH₵ {sale.total.toFixed(2)}
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    {sale.status === 'COMPLETED' ? (
+                      <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                        Completed
+                      </span>
+                    ) : (
+                      <span className="bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                        Voided
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button
+                        onClick={() => {
+                          setViewingReceipt(sale);
+                          setIsReprint(true);
+                        }}
+                        className="p-1 text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors"
+                        title="View Thermal Receipt (Reprint)"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                      </button>
+                      {sale.status === 'COMPLETED' && (
+                        <button
+                          onClick={() => handleStartVoid(sale)}
+                          className="px-2 py-1 text-[11px] font-bold text-red-600 hover:bg-red-50 border border-red-200 rounded-md transition-colors"
+                          title="Void Sale with Manager PIN"
+                        >
+                          Void
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Thermal Receipt Preview Modal (PRD §9) */}
+      {viewingReceipt && (
+        <div 
+          onClick={() => setViewingReceipt(null)}
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-center justify-center p-4 animate-modal-backdrop"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden border border-slate-200 p-5 space-y-4 animate-modal-card"
+          >
+            <div className="flex items-center justify-between border-b pb-2">
+              <h3 className="font-black text-slate-800 text-sm">Receipt Preview</h3>
+              <button onClick={() => setViewingReceipt(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Thermal Print Receipt Design */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-dashed border-slate-300 font-mono text-xs text-slate-800 space-y-2 select-text">
+              {isReprint && (
+                <div className="text-center font-black text-red-600 border border-red-300 bg-red-50 py-1 tracking-widest">
+                  *** REPRINT ***
+                </div>
+              )}
+              <div className="text-center">
+                <div className="font-black text-base uppercase">{viewingReceipt.outletName}</div>
+                <div className="text-[10px] text-slate-500">
+                  {viewingReceipt.outletId === 'inco-hardware' ? '12 Main Street, Koforidua' : 'Harper Road, Kumasi'}
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  Tel: {viewingReceipt.outletId === 'inco-hardware' ? '+233 24 000 0002' : '+233 24 000 0003'}
+                </div>
+              </div>
+
+              <div className="border-t border-b border-dashed border-slate-300 py-1.5 space-y-0.5 text-[11px]">
+                <div className="flex justify-between">
+                  <span>Receipt:</span>
+                  <span className="font-bold">{viewingReceipt.receiptNumber}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Date:</span>
+                  <span>{viewingReceipt.createdAt}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Cashier:</span>
+                  <span>{viewingReceipt.cashierName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Customer:</span>
+                  <span>{viewingReceipt.customerName}</span>
+                </div>
+              </div>
+
+              {/* Items */}
+              <div className="space-y-1 py-1">
+                {viewingReceipt.items.map((it, idx) => (
+                  <div key={idx} className="flex justify-between text-[11px]">
+                    <div>
+                      <div>{it.product.name}</div>
+                      <div className="text-[10px] text-slate-500">
+                        {it.quantity} x GH₵ {it.unitPrice.toFixed(2)}
+                      </div>
+                    </div>
+                    <span className="font-bold">GH₵ {it.lineTotal.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Totals */}
+              <div className="border-t border-dashed border-slate-300 pt-2 space-y-1 text-xs">
+                <div className="flex justify-between">
+                  <span>Subtotal:</span>
+                  <span>GH₵ {viewingReceipt.subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-black text-sm pt-1 border-t border-slate-300">
+                  <span>TOTAL:</span>
+                  <span>GH₵ {viewingReceipt.total.toFixed(2)}</span>
+                </div>
+                {viewingReceipt.payments.map((p, i) => (
+                  <div key={i} className="flex justify-between text-[11px] text-slate-600">
+                    <span>Paid via {p.provider || p.method}:</span>
+                    <span>GH₵ {p.amount.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-center pt-3 text-[10px] text-slate-400">
+                Thank you for your business!
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                window.print();
+              }}
+              className="w-full bg-slate-900 hover:bg-black text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Print to Thermal Printer</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Manager PIN Modal for Void */}
+      <ManagerPinModal
+        isOpen={pinModalOpen}
+        onClose={() => setPinModalOpen(false)}
+        title="Manager Authorization: Void Sale"
+        description="Sale voiding is an irreversible auditing action (BR-3). Reversing inventory movements will be generated automatically."
+        onSuccess={handlePinSuccess}
+      />
+    </div>
+  );
+};
