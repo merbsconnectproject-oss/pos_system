@@ -79,9 +79,6 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-slate-800 tracking-tight">Suppliers & Vendor Directory</h1>
-            <span className="bg-orange-100 text-orange-700 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-              {currentOutlet.name}
-            </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
             Registered wholesale distributors, authorized brand importers, and verified factory accounts.

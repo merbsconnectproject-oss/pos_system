@@ -15,6 +15,10 @@ import {
   Sparkles,
   ArrowRight,
   Settings,
+  DollarSign,
+  CalendarClock,
+  ArrowRightLeft,
+  BarChart3,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -70,13 +74,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
 
             <button
+              onClick={() => handleNavClick('analytics')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'analytics'
+                  ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+              }`}
+              title="Analytics & Executive Reports (AI Inferred)"
+            >
+              <div className="flex items-center gap-3">
+                <BarChart3
+                  className={`w-4 h-4 shrink-0 ${
+                    activeTab === 'analytics' ? 'text-white' : 'text-slate-400'
+                  }`}
+                />
+                {!collapsed && <span>Analytics &amp; Reports</span>}
+              </div>
+              {!collapsed && (
+                <span
+                  className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded-md flex items-center gap-0.5 ${
+                    activeTab === 'analytics'
+                      ? 'bg-white/20 text-white'
+                      : 'bg-orange-50 text-orange-600 border border-orange-200'
+                  }`}
+                >
+                  <Sparkles className="w-2.5 h-2.5" /> AI
+                </span>
+              )}
+            </button>
+
+            <button
               onClick={() => handleNavClick('outlet-comparison')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'outlet-comparison'
                   ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
               }`}
-              title="Outlet Comparison (Screen I-19)"
+              title="Outlet Comparison"
             >
               <div className="flex items-center gap-3">
                 <Store
@@ -86,17 +120,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 {!collapsed && <span>Outlet Comparison</span>}
               </div>
-              {!collapsed && (
-                <span
-                  className={`text-[10px] font-mono px-1.5 py-0.2 rounded-md ${
-                    activeTab === 'outlet-comparison'
-                      ? 'bg-white/20 text-white'
-                      : 'bg-slate-100 text-slate-500'
-                  }`}
-                >
-                  I-19
-                </span>
-              )}
             </button>
           </div>
         </div>
@@ -116,17 +139,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 if (onCloseMobile) onCloseMobile();
               }}
               className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-black bg-slate-900 hover:bg-black text-white shadow-xs transition-all cursor-pointer group"
-              title="Launch POS Terminal (F2)"
+              title="Launch POS Terminal"
             >
               <div className="flex items-center gap-3">
                 <Monitor className="w-4 h-4 text-orange-400 group-hover:scale-110 transition-transform shrink-0" />
                 {!collapsed && <span>Open Terminal</span>}
               </div>
-              {!collapsed && (
-                <span className="text-[10px] font-mono bg-white/10 text-orange-300 px-1.5 py-0.5 rounded">
-                  F2
-                </span>
-              )}
             </button>
 
             <button
@@ -136,7 +154,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
               }`}
-              title="Sales & Receipts (BR-3 Void)"
+              title="Sales & Receipts"
             >
               <div className="flex items-center gap-3">
                 <FileText
@@ -146,17 +164,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 {!collapsed && <span>Receipts &amp; Voids</span>}
               </div>
-              {!collapsed && (
-                <span
-                  className={`text-[10px] font-mono px-1.5 py-0.2 rounded-md ${
-                    activeTab === 'sales-history'
-                      ? 'bg-white/20 text-white'
-                      : 'bg-slate-100 text-slate-500'
-                  }`}
-                >
-                  BR-3
-                </span>
-              )}
             </button>
 
             <button
@@ -169,7 +176,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
               }`}
-              title="Cash Drawer & Shift (Blind Count BR-14)"
+              title="Cash Drawer & Shift"
             >
               <div className="flex items-center gap-3">
                 <Wallet
@@ -179,11 +186,73 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 {!collapsed && <span>Cashier Shifts</span>}
               </div>
-              {!collapsed && (
-                <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.2 rounded-md border border-emerald-200">
-                  Drawer
-                </span>
-              )}
+            </button>
+
+            <button
+              onClick={() => handleNavClick('returns-exchanges')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'returns-exchanges'
+                  ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+              }`}
+              title="Returns & Product Swaps"
+            >
+              <div className="flex items-center gap-3">
+                <ArrowRightLeft
+                  className={`w-4 h-4 shrink-0 ${
+                    activeTab === 'returns-exchanges' ? 'text-white' : 'text-slate-400'
+                  }`}
+                />
+                {!collapsed && <span>Returns &amp; Swaps</span>}
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* FINANCE & ACCOUNTS */}
+        <div>
+          {!collapsed && (
+            <div className="px-5 text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+              Finance &amp; Accounting
+            </div>
+          )}
+          <div className="px-2.5 space-y-1">
+            <button
+              onClick={() => handleNavClick('expenses')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'expenses'
+                  ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+              }`}
+              title="Expenses & Operating Accounts"
+            >
+              <div className="flex items-center gap-3">
+                <DollarSign
+                  className={`w-4 h-4 shrink-0 ${
+                    activeTab === 'expenses' ? 'text-white' : 'text-slate-400'
+                  }`}
+                />
+                {!collapsed && <span>Expenses &amp; P&amp;L</span>}
+              </div>
+            </button>
+
+            <button
+              onClick={() => handleNavClick('installments')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'installments'
+                  ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+              }`}
+              title="Pay in Installments (Customer Credit Plans)"
+            >
+              <div className="flex items-center gap-3">
+                <CalendarClock
+                  className={`w-4 h-4 shrink-0 ${
+                    activeTab === 'installments' ? 'text-white' : 'text-slate-400'
+                  }`}
+                />
+                {!collapsed && <span>Installment Plans</span>}
+              </div>
             </button>
           </div>
         </div>
@@ -203,7 +272,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
               }`}
-              title="Product Catalogue (BR-1)"
+              title="Product Catalogue"
             >
               <div className="flex items-center gap-3">
                 <Package
@@ -213,11 +282,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 {!collapsed && <span>Product Catalogue</span>}
               </div>
-              {!collapsed && (
-                <span className="text-[10px] bg-amber-50 text-amber-700 font-bold px-1.5 py-0.2 rounded-md border border-amber-200">
-                  BR-1
-                </span>
-              )}
             </button>
 
             <button
@@ -227,7 +291,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
               }`}
-              title="Goods Receipt Note (BR-4 Weighted Avg)"
+              title="Goods Receipt Note (GRN)"
             >
               <div className="flex items-center gap-3">
                 <Truck
@@ -237,11 +301,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 {!collapsed && <span>Goods Receipt (GRN)</span>}
               </div>
-              {!collapsed && (
-                <span className="text-[10px] bg-blue-50 text-blue-700 font-bold px-1.5 py-0.2 rounded-md border border-blue-200">
-                  BR-4
-                </span>
-              )}
             </button>
 
             <button
@@ -251,7 +310,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
               }`}
-              title="Stock Movements Trail (Screen E-06, BR-2)"
+              title="Stock Movements Trail"
             >
               <div className="flex items-center gap-3">
                 <Layers
@@ -261,9 +320,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 {!collapsed && <span>Stock Movements</span>}
               </div>
-              {!collapsed && (
-                <span className="text-[10px] font-mono text-slate-400">E-06</span>
-              )}
             </button>
           </div>
         </div>
@@ -317,7 +373,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
               }`}
-              title="Audit & Security Log (BR-15)"
+              title="Audit & Security Log"
             >
               <div className="flex items-center gap-3">
                 <ShieldCheck
@@ -325,13 +381,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     activeTab === 'audit-log' ? 'text-white' : 'text-slate-400'
                   }`}
                 />
-                {!collapsed && <span>Audit Trail (BR-15)</span>}
+                {!collapsed && <span>Audit Trail</span>}
               </div>
-              {!collapsed && (
-                <span className="text-[10px] bg-slate-100 text-slate-500 font-mono px-1.5 py-0.2 rounded-md">
-                  J-06
-                </span>
-              )}
             </button>
 
             <button
@@ -351,11 +402,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 {!collapsed && <span>System Settings</span>}
               </div>
-              {!collapsed && (
-                <span className="text-[10px] bg-slate-100 text-slate-500 font-mono px-1.5 py-0.2 rounded-md">
-                  Config
-                </span>
-              )}
             </button>
           </div>
         </div>

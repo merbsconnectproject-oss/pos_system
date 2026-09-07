@@ -52,7 +52,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, onAddCu
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-slate-800 tracking-tight">Customers Directory</h1>
             <span className="bg-orange-100 text-orange-700 text-[11px] font-bold px-2 py-0.5 rounded-full">
-              Trade vs Retail Pricing (FR-CUST-04)
+              Trade vs Retail Pricing
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">

@@ -25,21 +25,36 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   const [receiptWidth, setReceiptWidth] = useState<'80mm' | '58mm'>('80mm');
 
   const swatches = [
-    { label: 'Dreams Orange', hex: '#ff9f43' },
-    { label: 'Emerald Green', hex: '#28c76f' },
-    { label: 'Royal Blue', hex: '#00cfe8' },
-    { label: 'Vibrant Purple', hex: '#7367f0' },
-    { label: 'Crimson Red', hex: '#ea5455' },
-    { label: 'Warm Amber', hex: '#f59e0b' },
-    { label: 'Deep Slate', hex: '#1e293b' },
+    { label: 'Orange (Default)', hex: '#c55200' },
+    { label: 'Amber', hex: '#a56800' },
+    { label: 'Crimson', hex: '#c1354b' },
+    { label: 'Plum', hex: '#8b4a99' },
+    { label: 'Forest', hex: '#2d7a4f' },
+    { label: 'Teal', hex: '#10786f' },
+    { label: 'Graphite', hex: '#57534e' },
   ];
+
+  // Refuse blue per Counter Datasheet AC-11 & NFR-15
+  const isBlueHex = (hex: string) => {
+    const clean = hex.replace('#', '');
+    if (clean.length !== 6) return false;
+    const r = parseInt(clean.substring(0, 2), 16);
+    const g = parseInt(clean.substring(2, 4), 16);
+    const b = parseInt(clean.substring(4, 6), 16);
+    // Rough check if blue dominant over red and green, or known blue ranges
+    return b > r + 30 && b > g + 15;
+  };
 
   const handleHexSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (/^#[0-9A-F]{6}$/i.test(customHex)) {
+      if (isBlueHex(customHex)) {
+        alert('Blue is refused as an accent color per design system rules (AC-11). Please choose Orange, Amber, Crimson, Plum, Forest, Teal, or Graphite.');
+        return;
+      }
       onChangeAccent(customHex);
     } else {
-      alert('Please enter a valid 6-digit hex code, e.g. #ff9f43');
+      alert('Please enter a valid 6-digit hex code, e.g. #c55200');
     }
   };
 

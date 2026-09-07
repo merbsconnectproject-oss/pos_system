@@ -6,7 +6,7 @@ interface SalesPurchaseChartProps {
   accentColor?: string;
 }
 
-export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = () => {
+export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = ({ accentColor }) => {
   const [activeRange, setActiveRange] = useState<'1D' | '1W' | '1M' | '3M' | '1Y'>('1M');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
@@ -19,7 +19,14 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = () => {
       {/* Chart Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500 border border-orange-100">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center border shadow-2xs"
+            style={{
+              backgroundColor: 'var(--accent-50, #fff7ed)',
+              color: 'var(--accent, #c55200)',
+              borderColor: 'var(--accent-200, #fed7aa)',
+            }}
+          >
             <BarChart3 className="w-5 h-5 stroke-[2.5]" />
           </div>
           <div>
@@ -43,9 +50,14 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = () => {
               onClick={() => setActiveRange(range)}
               className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                 activeRange === range
-                  ? 'bg-orange-500 text-white shadow-xs'
+                  ? 'text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
               }`}
+              style={
+                activeRange === range
+                  ? { backgroundColor: accentColor || 'var(--accent, #c55200)' }
+                  : undefined
+              }
             >
               {range}
             </button>
@@ -56,12 +68,18 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = () => {
       {/* Sub-header Legend */}
       <div className="flex items-center gap-3 py-3">
         <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-2xs">
-          <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+          <span
+            className="w-2.5 h-2.5 rounded-full"
+            style={{ backgroundColor: accentColor || 'var(--chart-1, #c55200)' }}
+          ></span>
           <span className="text-xs text-slate-500 font-medium">Total POS Sales</span>
           <span className="text-xs font-black text-slate-900 ml-1 font-mono">GH₵ 48.9K</span>
         </div>
         <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-2xs">
-          <span className="w-2.5 h-2.5 rounded-full bg-orange-200"></span>
+          <span
+            className="w-2.5 h-2.5 rounded-full"
+            style={{ backgroundColor: 'var(--chart-2, #0f766e)' }}
+          ></span>
           <span className="text-xs text-slate-500 font-medium">Goods Received (GRN)</span>
           <span className="text-xs font-black text-slate-900 ml-1 font-mono">GH₵ 24.1K</span>
         </div>
@@ -99,7 +117,12 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = () => {
                 {/* Tooltip on hover */}
                 {isHovered && (
                   <div className="absolute -top-14 z-30 bg-slate-900 text-white text-[11px] rounded-xl p-2 shadow-2xl pointer-events-none whitespace-nowrap border border-slate-700 animate-in fade-in zoom-in-95">
-                    <div className="font-bold text-orange-400 mb-0.5">{item.time} September</div>
+                    <div
+                      className="font-bold mb-0.5"
+                      style={{ color: 'var(--accent, #c55200)' }}
+                    >
+                      {item.time} September
+                    </div>
                     <div className="text-[10px] space-y-0.5">
                       <div className="flex justify-between gap-3 text-slate-300">
                         <span>Sales:</span>
@@ -120,15 +143,21 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = () => {
                   }`}
                   style={{ height: `${totalHeightPct}%` }}
                 >
-                  {/* Top segment: Purchase */}
+                  {/* Top segment: Purchase (Deep Teal --chart-2) */}
                   <div
-                    className="w-full bg-orange-200"
-                    style={{ height: `${purchaseHeightPct}%` }}
+                    className="w-full"
+                    style={{
+                      height: `${purchaseHeightPct}%`,
+                      backgroundColor: 'var(--chart-2, #0f766e)',
+                    }}
                   ></div>
-                  {/* Bottom segment: Sales */}
+                  {/* Bottom segment: Sales (Primary Accent --chart-1) */}
                   <div
-                    className="w-full bg-orange-500"
-                    style={{ height: `${salesHeightPct}%` }}
+                    className="w-full"
+                    style={{
+                      height: `${salesHeightPct}%`,
+                      backgroundColor: accentColor || 'var(--chart-1, #c55200)',
+                    }}
                   ></div>
                 </div>
 

@@ -104,7 +104,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           <div className="flex flex-col leading-none">
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-black tracking-tight text-slate-900">dreams</span>
+              <span className="text-lg font-black tracking-tight text-slate-900">Radiance</span>
               <span className="text-[10px] font-black uppercase text-orange-600 tracking-widest px-1.5 py-0.5 rounded bg-orange-50 border border-orange-200">
                 POS
               </span>
@@ -169,7 +169,7 @@ export const Header: React.FC<HeaderProps> = ({
           {outletDropdownOpen && (
             <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 py-2 divide-y divide-slate-100 animate-in fade-in zoom-in-95">
               <div className="px-3.5 py-1.5 text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                Select Active Branch (BR-1)
+                Select Active Branch
               </div>
               <div className="p-1 space-y-0.5">
                 {outlets.map((outlet) => (
@@ -222,7 +222,6 @@ export const Header: React.FC<HeaderProps> = ({
                 className="w-full text-left px-3 py-2 rounded-lg hover:bg-orange-50 hover:text-orange-600 flex items-center justify-between cursor-pointer"
               >
                 <span>+ Add Product</span>
-                <span className="text-[10px] text-slate-400 font-mono">BR-1</span>
               </button>
               <button
                 onClick={() => {
@@ -232,7 +231,6 @@ export const Header: React.FC<HeaderProps> = ({
                 className="w-full text-left px-3 py-2 rounded-lg hover:bg-orange-50 hover:text-orange-600 flex items-center justify-between cursor-pointer"
               >
                 <span>+ Register Customer</span>
-                <span className="text-[10px] text-slate-400 font-mono">Trade</span>
               </button>
               <button
                 onClick={() => {
@@ -242,7 +240,6 @@ export const Header: React.FC<HeaderProps> = ({
                 className="w-full text-left px-3 py-2 rounded-lg hover:bg-orange-50 hover:text-orange-600 flex items-center justify-between cursor-pointer"
               >
                 <span>+ Add Supplier</span>
-                <span className="text-[10px] text-slate-400 font-mono">Vendor</span>
               </button>
               <button
                 onClick={() => {
@@ -252,7 +249,6 @@ export const Header: React.FC<HeaderProps> = ({
                 className="w-full text-left px-3 py-2 rounded-lg hover:bg-orange-50 hover:text-orange-600 flex items-center justify-between cursor-pointer"
               >
                 <span>+ Cash Drawer / Shift</span>
-                <span className="text-[10px] text-slate-400 font-mono">BR-14</span>
               </button>
             </div>
           )}

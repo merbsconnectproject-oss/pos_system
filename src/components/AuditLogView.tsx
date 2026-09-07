@@ -24,7 +24,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ logs }) => {
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-black text-slate-800 tracking-tight">Security & Audit Trail</h1>
           <span className="bg-slate-100 text-slate-700 text-[11px] font-bold px-2 py-0.5 rounded-full">
-            Screen J-06 • Append-Only (BR-15)
+            Immutable Log
           </span>
         </div>
         <p className="text-xs text-slate-500 mt-1">

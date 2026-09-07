@@ -55,7 +55,7 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
             <Wallet className="w-5 h-5 text-orange-400" />
             <div>
               <h3 className="font-black text-sm">Cashier Shift &amp; Drawer</h3>
-              <p className="text-[10px] text-slate-400">PRD Screen C-30 • Blind Count (BR-14)</p>
+              <p className="text-[10px] text-slate-400">Blind Reconciliation</p>
             </div>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
@@ -120,7 +120,7 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
               <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-900 flex items-start gap-2">
                 <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div>
-                  <strong>Blind Cash Count (BR-14):</strong> Expected drawer takings are strictly hidden until you count and submit your physical cash.
+                  <strong>Blind Cash Count:</strong> Expected drawer takings are strictly hidden until you count and submit your physical cash.
                 </div>
               </div>
 

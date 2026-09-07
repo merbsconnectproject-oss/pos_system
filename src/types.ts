@@ -1,4 +1,4 @@
-export type OutletId = 'inco-hardware' | 'apex-electricals' | 'all-outlets';
+export type OutletId = 'inco-hardware' | 'apex-electricals' | 'radiance-lighting' | 'all-outlets';
 
 export interface Outlet {
   id: OutletId;
@@ -21,7 +21,7 @@ export interface Product {
   id: string;
   name: string;
   sku: string;
-  outletId?: 'inco-hardware' | 'apex-electricals' | 'all-outlets'; // Dedicated store assignment
+  outletId?: OutletId; // Dedicated store assignment
   category:
     | 'Power Tools & Machinery'
     | 'Hand Tools & Hardware'
@@ -80,7 +80,7 @@ export type PaymentSplit = PaymentEntry;
 export interface CompletedSale {
   id: string; // UUID (BR-7)
   receiptNumber: string; // e.g. INC-01-004312 (BR-6)
-  outletId: 'inco-hardware' | 'apex-electricals';
+  outletId: OutletId;
   outletName: string;
   terminalId: string;
   cashierName: string;
@@ -104,10 +104,10 @@ export interface CompletedSale {
 export interface StockMovement {
   id: string;
   timestamp: string;
-  outletId: 'inco-hardware' | 'apex-electricals';
+  outletId: OutletId;
   productId: string;
   productName: string;
-  type: 'RECEIPT' | 'SALE' | 'SALE_VOID' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'DAMAGE' | 'LOSS' | 'OPENING';
+  type: 'RECEIPT' | 'SALE' | 'SALE_VOID' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'DAMAGE' | 'LOSS' | 'OPENING' | 'CUSTOMER_RETURN' | 'EXCHANGE_SWAP';
   quantity: number;
   previousStock: number;
   newStock: number;
@@ -243,4 +243,141 @@ export interface GeneralSettings {
   autoPrintReceipt: boolean;
   showCashierOnReceipt: boolean;
   accentColor: string;
+}
+
+// ==========================================
+// 1. ACCOUNTING & EXPENSE MODULE TYPES
+// ==========================================
+export type ExpenseCategory =
+  | 'Rent & Lease'
+  | 'Utilities & Power'
+  | 'Staff & Payroll'
+  | 'Delivery & Haulage'
+  | 'Advertising & Marketing'
+  | 'Maintenance & Repairs'
+  | 'Packaging & Bags'
+  | 'Taxes, Levies & Licenses'
+  | 'Office & Communication'
+  | 'Miscellaneous';
+
+export interface Expense {
+  id: string;
+  date: string;
+  category: ExpenseCategory;
+  title: string;
+  description?: string;
+  amount: number;
+  outletId: OutletId;
+  outletName: string;
+  payee: string;
+  paymentMethod: 'Cash (Drawer)' | 'Mobile Money' | 'Bank Transfer' | 'Cheque' | 'Corporate Card';
+  referenceNumber?: string;
+  taxDeductible: boolean;
+  recordedBy: string;
+  status: 'PAID' | 'PENDING';
+}
+
+// ==========================================
+// 2. CUSTOMER INSTALLMENT PLANS (PAY IN INSTALLMENTS)
+// ==========================================
+export interface InstallmentScheduleItem {
+  installmentNumber: number;
+  dueDate: string;
+  expectedAmount: number;
+  paidAmount: number;
+  paidDate?: string;
+  paymentMethod?: PaymentMethod;
+  reference?: string;
+  status: 'PENDING' | 'PAID' | 'OVERDUE' | 'PARTIAL';
+  receiptNumber?: string;
+}
+
+export interface CustomerInstallmentPlan {
+  id: string;
+  planNumber: string; // e.g. INST-2026-001
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerTier: 'retail' | 'electrician' | 'contractor' | 'company';
+  outletId: OutletId;
+  outletName: string;
+  saleId?: string;
+  items: {
+    productId: string;
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+  }[];
+  totalAmount: number;
+  downPayment: number;
+  remainingBalance: number;
+  frequency: 'weekly' | 'biweekly' | 'monthly';
+  installmentCount: number;
+  startDate: string;
+  status: 'ACTIVE' | 'COMPLETED' | 'DEFAULTED';
+  schedule: InstallmentScheduleItem[];
+  notes?: string;
+  createdAt: string;
+}
+
+// ==========================================
+// 3. RETURNS & EXCHANGES / SWAPPING GOODS
+// ==========================================
+export type ReturnReason =
+  | 'Defective / Faulty Item'
+  | 'Wrong Specification / Color'
+  | 'Customer Changed Mind'
+  | 'Excess Project Quantity'
+  | 'Warranty Claim / Burnt'
+  | 'Warranty Claim';
+
+export type ReturnDisposition = 'RESTOCK' | 'DAMAGED_WRITE_OFF' | 'SUPPLIER_RMA';
+
+export interface ReturnItemDetail {
+  productId: string;
+  productName: string;
+  sku?: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  reason: ReturnReason;
+  disposition: ReturnDisposition;
+  conditionNotes?: string;
+}
+
+export type ReturnedItemDetail = ReturnItemDetail;
+
+export interface SwapReplacementItem {
+  productId: string;
+  productName: string;
+  sku?: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export type SwappedItemDetail = SwapReplacementItem;
+
+export interface ReturnExchangeRecord {
+  id: string;
+  referenceNumber: string; // e.g. RET-2026-001 or SWAP-2026-001
+  type: 'RETURN_REFUND' | 'EXCHANGE_SWAP';
+  originalReceiptNumber: string;
+  originalSaleId?: string;
+  customerId?: string;
+  customerName: string;
+  customerPhone?: string;
+  outletId: OutletId;
+  outletName: string;
+  cashierName: string;
+  timestamp: string;
+  returnedItems: ReturnItemDetail[];
+  swappedItems: SwapReplacementItem[];
+  returnedSubtotal: number;
+  swappedSubtotal: number;
+  netDifference: number; // positive: customer pays extra; negative: store refunds customer; 0: even swap
+  settlementMethod: 'Cash' | 'Mobile Money' | 'Store Credit Voucher' | 'Even Swap' | 'Bank Transfer';
+  settlementStatus: 'SETTLED' | 'PENDING';
+  notes?: string;
 }

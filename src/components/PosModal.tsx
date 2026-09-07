@@ -1188,7 +1188,7 @@ export const PosModal: React.FC<PosModalProps> = ({
         isOpen={Boolean(floorOverrideTarget)}
         onClose={() => setFloorOverrideTarget(null)}
         title="Manager Approval: Floor Price Override"
-        description="Cashier entered a price below the minimum floor price (BR-10). Manager authorization PIN required to proceed."
+        description="Cashier entered a price below the minimum floor price threshold. Manager authorization PIN required to proceed."
         onSuccess={handleFloorPinSuccess}
       />
     </div>

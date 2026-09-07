@@ -591,13 +591,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const swatches = [
-    { label: 'Dreams Orange', hex: '#ff9f43' },
-    { label: 'Emerald Green', hex: '#28c76f' },
-    { label: 'Royal Blue', hex: '#00cfe8' },
-    { label: 'Vibrant Purple', hex: '#7367f0' },
-    { label: 'Crimson Red', hex: '#ea5455' },
-    { label: 'Warm Amber', hex: '#f59e0b' },
-    { label: 'Deep Slate', hex: '#1e293b' },
+    { label: 'Orange (Default)', hex: '#c55200' },
+    { label: 'Amber', hex: '#a56800' },
+    { label: 'Crimson', hex: '#c1354b' },
+    { label: 'Plum', hex: '#8b4a99' },
+    { label: 'Forest', hex: '#2d7a4f' },
+    { label: 'Teal', hex: '#10786f' },
+    { label: 'Graphite', hex: '#57534e' },
   ];
 
   const currentRoleConfig =
@@ -637,15 +637,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             Manage store profiles, user credentials, role permissions, master security policies,
             and thermal receipt hardware.
           </p>
-        </div>
-
-        {/* Quick Branch Status indicator */}
-        <div className="flex items-center gap-2 bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-2xs self-start sm:self-auto">
-          <Store className="w-4 h-4 text-orange-500" />
-          <div className="text-xs">
-            <span className="text-slate-400">Context: </span>
-            <span className="font-bold text-slate-800">{currentOutlet.name}</span>
-          </div>
         </div>
       </div>
 
@@ -1257,7 +1248,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
                       />
                       <div>
-                        <div className="text-xs font-bold text-slate-800">Override Floor Price (BR-10)</div>
+                        <div className="text-xs font-bold text-slate-800">Override Floor Price</div>
                         <div className="text-[11px] text-slate-500">Sell below floor price threshold without manager prompt</div>
                       </div>
                     </label>
@@ -1272,7 +1263,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
                       />
                       <div>
-                        <div className="text-xs font-bold text-slate-800">Void Completed Sales (BR-3)</div>
+                        <div className="text-xs font-bold text-slate-800">Void Completed Sales</div>
                         <div className="text-[11px] text-slate-500">Cancel immutable receipts and restore inventory</div>
                       </div>
                     </label>
@@ -1287,7 +1278,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
                       />
                       <div>
-                        <div className="text-xs font-bold text-slate-800">Shift Drawer Close (BR-14)</div>
+                        <div className="text-xs font-bold text-slate-800">Shift Drawer Close</div>
                         <div className="text-[11px] text-slate-500">Submit blind physical cash drawer counts</div>
                       </div>
                     </label>
@@ -1408,7 +1399,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
                       />
                       <div>
-                        <div className="text-xs font-bold text-slate-800">Inspect Security Audit Trail (BR-15)</div>
+                        <div className="text-xs font-bold text-slate-800">Inspect Security Audit Trail</div>
                         <div className="text-[11px] text-slate-500">Review forensic user activity and authorization logs</div>
                       </div>
                     </label>
@@ -1497,7 +1488,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200">
                     <div className="space-y-0.5">
                       <div className="text-xs font-bold text-slate-800">
-                        Enforce Manager PIN on Floor Price Breach (BR-10)
+                        Enforce Manager PIN on Floor Price Breach
                       </div>
                       <div className="text-[11px] text-slate-500">
                         Prevents selling below product minimum margin unless authorized with manager PIN.
@@ -1514,7 +1505,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200">
                     <div className="space-y-0.5">
                       <div className="text-xs font-bold text-slate-800">
-                        Enforce Manager PIN on Sale Void (BR-3)
+                        Enforce Manager PIN on Sale Void
                       </div>
                       <div className="text-[11px] text-slate-500">
                         Completed sales are immutable. Voiding requires manager authorization PIN and mandatory audit reason.
@@ -1531,7 +1522,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200">
                     <div className="space-y-0.5">
                       <div className="text-xs font-bold text-slate-800">
-                        Enforce Blind Cash Drawer Count on Shift Close (BR-14)
+                        Enforce Blind Cash Drawer Count on Shift Close
                       </div>
                       <div className="text-[11px] text-slate-500">
                         Cashiers do not see expected register total before submitting their counted physical cash.
@@ -1779,10 +1770,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <button
                       onClick={() => {
                         if (/^#[0-9A-F]{6}$/i.test(customHex)) {
+                          const clean = customHex.replace('#', '');
+                          const r = parseInt(clean.substring(0, 2), 16);
+                          const g = parseInt(clean.substring(2, 4), 16);
+                          const b = parseInt(clean.substring(4, 6), 16);
+                          if (b > r + 30 && b > g + 15) {
+                            alert('Blue is refused as an accent color per design system rules (AC-11). Please choose Orange, Amber, Crimson, Plum, Forest, Teal, or Graphite.');
+                            return;
+                          }
                           onChangeAccent(customHex);
                           showToast('Custom accent color applied.');
                         } else {
-                          alert('Please enter a valid 6-digit hex code, e.g. #ff9f43');
+                          alert('Please enter a valid 6-digit hex code, e.g. #c55200');
                         }
                       }}
                       className="px-4 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"

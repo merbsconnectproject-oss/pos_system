@@ -81,7 +81,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
           <div className="flex items-center gap-2">
             <Sliders className="w-5 h-5 text-orange-400" />
             <div>
-              <h3 className="font-black text-sm">Stock Adjustment (PRD Screen E-08)</h3>
+              <h3 className="font-black text-sm">Stock Adjustment</h3>
               <p className="text-[11px] text-slate-300">Target Store: <strong>{storeName}</strong></p>
             </div>
           </div>

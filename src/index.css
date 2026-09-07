@@ -2,9 +2,73 @@
 
 @layer base {
   :root {
-    --primary-accent: #ff9f43;
-    --primary-accent-hover: #f39234;
-    --primary-accent-light: #fff2e5;
+    /* Counter Datasheet Design System Tokens */
+    --accent: #c55200;
+    --accent-fg: #ffffff;
+    --accent-hover: #b14900;
+    --accent-active: #9f4100;
+    --accent-50: #fff5f0;
+    --accent-100: #ffe8dd;
+    --accent-200: #ffd2be;
+    --accent-300: #ffb593;
+    --accent-400: #ff905a;
+    --accent-500: #ed7638;
+    --accent-600: #d6611e;
+    --accent-700: #b64c02;
+    --accent-800: #913a00;
+    --accent-900: #6b2900;
+    --accent-soft: var(--accent-50);
+    --accent-on-soft: var(--accent-800);
+    --accent-border: var(--accent-200);
+
+    /* Neutrals */
+    --paper: #ffffff;
+    --canvas: #f6f4f0;
+    --sunken: #efece6;
+    --ink: #1a1614;
+    --ink-muted: #5d5850;
+    --ink-subtle: #6f6960;
+    --border: #e2ded6;
+    --border-strong: #cfcabf;
+
+    --shell: #1c1917;
+    --shell-raised: #2c2926;
+    --shell-border: #45413b;
+    --shell-fg: #f5f4f1;
+    --shell-fg-muted: #a8a29a;
+
+    /* Semantic — fixed, never derived from accent (FR-SET-04) */
+    --success: #15803d;
+    --success-soft: #eefaf1;
+    --success-border: #b6e3c4;
+    --success-on-soft: #14532d;
+    --warning: #b45309;
+    --warning-soft: #fffaeb;
+    --warning-border: #f5d9a1;
+    --warning-on-soft: #713f12;
+    --danger: #b3261e;
+    --danger-soft: #fdf2f1;
+    --danger-border: #f2c4c0;
+    --danger-on-soft: #7f1d1d;
+    --info: #57534e;
+    --info-soft: #f2f0ec;
+    --info-border: #d3cfc8;
+    --info-on-soft: #2c2926;
+
+    /* Charts — eight series, none of them blue (AC-11) */
+    --chart-1: #c55200;
+    --chart-2: #0f766e;
+    --chart-3: #b45309;
+    --chart-4: #7c3f8f;
+    --chart-5: #4d7c0f;
+    --chart-6: #a3401f;
+    --chart-7: #9d174d;
+    --chart-8: #57534e;
+    --chart-grid: #e2ded6;
+
+    --primary-accent: #c55200;
+    --primary-accent-hover: #b14900;
+    --primary-accent-light: #fff5f0;
   }
 
   body {

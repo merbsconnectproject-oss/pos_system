@@ -264,9 +264,6 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-slate-800 tracking-tight">Product Catalogue & Stock</h1>
-            <span className="bg-orange-100 text-orange-700 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-              {currentOutlet.name}
-            </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
             {currentOutlet.id === 'inco-hardware' && (
@@ -517,7 +514,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                         </span>
                       ) : (
                         <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                          Inactive (BR-17)
+                          Inactive
                         </span>
                       )}
                     </td>
@@ -545,7 +542,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                               ? 'bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-600'
                               : 'bg-emerald-50 text-emerald-600'
                           }`}
-                          title={p.active ? 'Deactivate Product (BR-17)' : 'Activate Product'}
+                          title={p.active ? 'Deactivate Product' : 'Activate Product'}
                         >
                           <Power className="w-3.5 h-3.5" />
                         </button>

@@ -1,15 +1,23 @@
 import React, { useState } from 'react';
 import { ChevronDown, ArrowUpRight, Users, ShieldCheck } from 'lucide-react';
 
-export const CustomerOverviewChart: React.FC = () => {
+interface CustomerOverviewChartProps {
+  accentColor?: string;
+}
+
+export const CustomerOverviewChart: React.FC<CustomerOverviewChartProps> = ({ accentColor }) => {
   const [filter, setFilter] = useState<'Today' | 'This Week' | 'This Month'>('Today');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [hoveredSegment, setHoveredSegment] = useState<string | null>(null);
 
+  const primaryColor = accentColor || 'var(--chart-1, #c55200)';
+  const secondaryColor = 'var(--chart-2, #0f766e)';
+  const tertiaryColor = 'var(--chart-4, #7c3f8f)';
+
   const segments = [
-    { label: 'Electricians (Trade)', pct: 45, color: '#f97316', amount: 'GH₵ 22.5K', count: 184 },
-    { label: 'Contractors', pct: 35, color: '#0d9488', amount: 'GH₵ 17.2K', count: 96 },
-    { label: 'Retail Walk-ins', pct: 20, color: '#64748b', amount: 'GH₵ 9.8K', count: 312 },
+    { label: 'Electricians (Trade)', pct: 45, color: primaryColor, amount: 'GH₵ 22.5K', count: 184 },
+    { label: 'Contractors', pct: 35, color: secondaryColor, amount: 'GH₵ 17.2K', count: 96 },
+    { label: 'Retail Walk-ins', pct: 20, color: tertiaryColor, amount: 'GH₵ 9.8K', count: 312 },
   ];
 
   return (
@@ -71,7 +79,7 @@ export const CustomerOverviewChart: React.FC = () => {
               cx="50"
               cy="50"
               r="38"
-              stroke="#f97316"
+              stroke={primaryColor}
               strokeWidth={hoveredSegment === 'Electricians (Trade)' ? '11' : '9'}
               strokeDasharray="238.76"
               strokeDashoffset="131.3"
@@ -97,7 +105,7 @@ export const CustomerOverviewChart: React.FC = () => {
               cx="50"
               cy="50"
               r="25"
-              stroke="#0d9488"
+              stroke={secondaryColor}
               strokeWidth={hoveredSegment === 'Contractors' ? '9' : '7'}
               strokeDasharray="157.08"
               strokeDashoffset="80"

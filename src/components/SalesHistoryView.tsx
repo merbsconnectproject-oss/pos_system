@@ -16,6 +16,7 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
   onVoidSale,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'COMPLETED' | 'VOIDED'>('ALL');
   const [viewingReceipt, setViewingReceipt] = useState<CompletedSale | null>(null);
   const [isReprint, setIsReprint] = useState(false);
   const [voidingSale, setVoidingSale] = useState<CompletedSale | null>(null);
@@ -23,13 +24,20 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
   const [voidNote, setVoidNote] = useState('');
   const [pinModalOpen, setPinModalOpen] = useState(false);
 
-  const filteredSales = sales.filter((s) => {
-    const matchesOutlet = currentOutlet.id === 'all-outlets' || s.outletId === currentOutlet.id;
+  const outletSales = sales.filter((s) => currentOutlet.id === 'all-outlets' || s.outletId === currentOutlet.id);
+  const completedSales = outletSales.filter((s) => s.status === 'COMPLETED');
+  const voidedSales = outletSales.filter((s) => s.status === 'VOIDED');
+  const totalCompletedValue = completedSales.reduce((sum, s) => sum + s.total, 0);
+  const totalVoidedValue = voidedSales.reduce((sum, s) => sum + s.total, 0);
+  const avgTicket = completedSales.length > 0 ? totalCompletedValue / completedSales.length : 0;
+
+  const filteredSales = outletSales.filter((s) => {
+    const matchesStatus = statusFilter === 'ALL' || s.status === statusFilter;
     const matchesSearch =
       s.receiptNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (s.customerPhone && s.customerPhone.includes(searchTerm));
-    return matchesOutlet && matchesSearch;
+    return matchesStatus && matchesSearch;
   });
 
   const handleExportSalesCsv = () => {
@@ -119,14 +127,14 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
+    <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-300">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-slate-800 tracking-tight">Sales & Receipts History</h1>
-            <span className="bg-slate-100 text-slate-700 text-[11px] font-bold px-2 py-0.5 rounded-full">
-              Screens C-25 / C-27 • BR-3 Sale Voiding
+            <span className="bg-slate-100 text-slate-700 text-[11px] font-bold px-2 py-0.5 rounded-full border border-slate-300">
+              Audit Trail
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
@@ -144,8 +152,63 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
         </button>
       </div>
 
-      {/* Search Bar */}
-      <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex items-center justify-between">
+      {/* KPI Summary Cards (Solid Darker Shade) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Net Sales */}
+        <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm flex flex-col justify-between">
+          <div>
+            <span className="text-xs font-bold tracking-wide uppercase text-slate-400">Total Net Sales</span>
+            <div className="text-2xl sm:text-3xl font-black text-white font-mono mt-2">
+              GH₵ {totalCompletedValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-800 text-xs text-slate-400 font-medium">
+            From {completedSales.length} valid transactions
+          </div>
+        </div>
+
+        {/* Completed Receipts */}
+        <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm flex flex-col justify-between">
+          <div>
+            <span className="text-xs font-bold tracking-wide uppercase text-slate-400">Completed Receipts</span>
+            <div className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono mt-2">
+              {completedSales.length}
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-800 text-xs text-emerald-400 font-medium">
+            Active verified receipts
+          </div>
+        </div>
+
+        {/* Voided Sales */}
+        <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm flex flex-col justify-between">
+          <div>
+            <span className="text-xs font-bold tracking-wide uppercase text-slate-400">Voided Transactions</span>
+            <div className="text-2xl sm:text-3xl font-black text-rose-400 font-mono mt-2">
+              {voidedSales.length}
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-800 text-xs text-rose-400 font-medium">
+            GH₵ {totalVoidedValue.toLocaleString('en-US', { minimumFractionDigits: 2 })} reversed
+          </div>
+        </div>
+
+        {/* Average Ticket */}
+        <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm flex flex-col justify-between">
+          <div>
+            <span className="text-xs font-bold tracking-wide uppercase text-slate-400">Average Order Ticket</span>
+            <div className="text-2xl sm:text-3xl font-black text-cyan-400 font-mono mt-2">
+              GH₵ {avgTicket.toFixed(2)}
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-800 text-xs text-slate-400 font-medium">
+            Per completed customer sale
+          </div>
+        </div>
+      </div>
+
+      {/* Search & Status Filter Bar */}
+      <div className="bg-white rounded-xl p-4 border border-slate-300 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <input
@@ -153,21 +216,51 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by receipt #, customer, phone..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-orange-500"
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-orange-500"
           />
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-xs text-slate-500 font-bold">
-            Showing {filteredSales.length} Sales
+
+        <div className="flex items-center gap-2">
+          <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-300">
+            <button
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                statusFilter === 'ALL'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              All ({outletSales.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('COMPLETED')}
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                statusFilter === 'COMPLETED'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Completed ({completedSales.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('VOIDED')}
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                statusFilter === 'VOIDED'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Voided ({voidedSales.length})
+            </button>
           </div>
         </div>
       </div>
 
       {/* Sales Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-300 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+            <thead className="bg-slate-100 text-slate-600 font-bold border-b border-slate-300">
               <tr>
                 <th className="py-3 px-4">Receipt #</th>
                 <th className="py-3 px-4">Date & Time</th>
@@ -180,7 +273,7 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
                 <th className="py-3 px-4 text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-200">
               {filteredSales.map((sale) => (
                 <tr key={sale.id} className="hover:bg-slate-50 transition-colors">
                   <td className="py-3 px-4 font-mono font-bold text-slate-900">{sale.receiptNumber}</td>
@@ -355,7 +448,7 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
         isOpen={pinModalOpen}
         onClose={() => setPinModalOpen(false)}
         title="Manager Authorization: Void Sale"
-        description="Sale voiding is an irreversible auditing action (BR-3). Reversing inventory movements will be generated automatically."
+        description="Sale voiding is an irreversible auditing action. Reversing inventory movements will be generated automatically."
         onSuccess={handlePinSuccess}
       />
     </div>

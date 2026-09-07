@@ -188,7 +188,7 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
             <div className="flex items-center gap-1.5 text-slate-800 font-bold">
               <Calculator className="w-4 h-4 text-orange-500" />
-              <span>Weighted Average Costing (PRD BR-4)</span>
+              <span>Weighted Average Costing</span>
             </div>
             <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-600 pt-1">
               <div>

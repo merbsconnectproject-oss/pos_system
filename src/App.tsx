@@ -16,6 +16,10 @@ import { CustomersView } from './components/CustomersView';
 import { SuppliersView } from './components/SuppliersView';
 import { AuditLogView } from './components/AuditLogView';
 import { SettingsView } from './components/SettingsView';
+import { ExpensesAccountingView } from './components/ExpensesAccountingView';
+import { InstallmentsView } from './components/InstallmentsView';
+import { ReturnsExchangesView } from './components/ReturnsExchangesView';
+import { AnalyticsReportsView } from './components/AnalyticsReportsView';
 import {
   OUTLETS,
   INITIAL_PRODUCTS,
@@ -27,6 +31,9 @@ import {
   INITIAL_USERS,
   INITIAL_ROLES_PERMISSIONS,
   INITIAL_SETTINGS,
+  INITIAL_EXPENSES,
+  INITIAL_INSTALLMENT_PLANS,
+  INITIAL_RETURNS_EXCHANGES,
 } from './mockData';
 import {
   Outlet,
@@ -41,11 +48,14 @@ import {
   UserAccount,
   RolePermissions,
   GeneralSettings,
+  Expense,
+  CustomerInstallmentPlan,
+  ReturnExchangeRecord,
 } from './types';
 
 export default function App() {
   const [outlets] = useState<Outlet[]>(OUTLETS);
-  const [currentOutletId, setCurrentOutletId] = useState<OutletId>('inco-hardware');
+  const [currentOutletId, setCurrentOutletId] = useState<OutletId>('radiance-lighting');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -57,6 +67,11 @@ export default function App() {
   const [sales, setSales] = useState<CompletedSale[]>(INITIAL_SALES);
   const [movements, setMovements] = useState<StockMovement[]>(INITIAL_MOVEMENTS);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(INITIAL_AUDIT_LOGS);
+
+  // Radiance Lighting & Accounting Modules state
+  const [expenses, setExpenses] = useState<Expense[]>(INITIAL_EXPENSES);
+  const [installmentPlans, setInstallmentPlans] = useState<CustomerInstallmentPlan[]>(INITIAL_INSTALLMENT_PLANS);
+  const [returnsExchanges, setReturnsExchanges] = useState<ReturnExchangeRecord[]>(INITIAL_RETURNS_EXCHANGES);
 
   // Settings, Users & RBAC state
   const [users, setUsers] = useState<UserAccount[]>(INITIAL_USERS);
@@ -80,13 +95,15 @@ export default function App() {
   const [goodsReceiptModalOpen, setGoodsReceiptModalOpen] = useState(false);
   const [adjustmentTargetProduct, setAdjustmentTargetProduct] = useState<Product | null>(null);
 
-  // Appearance accent color state
-  const [accentColor, setAccentColor] = useState<string>('#ff9f43');
+  // Appearance accent color state (Counter Datasheet default: #c55200)
+  const [accentColor, setAccentColor] = useState<string>('#c55200');
 
   const currentOutlet = outlets.find((o) => o.id === currentOutletId) || outlets[0];
 
   useEffect(() => {
     document.documentElement.style.setProperty('--primary-accent', accentColor);
+    document.documentElement.style.setProperty('--accent', accentColor);
+    document.documentElement.style.setProperty('--chart-1', accentColor);
   }, [accentColor]);
 
   // Global ⌘K keyboard shortcut listener
@@ -243,6 +260,106 @@ export default function App() {
       entity: `Receipt ${sale.receiptNumber}`,
       outletName: sale.outletName,
       details: `Voided sale. Reason: ${reason}`,
+    };
+    setAuditLogs((prev) => [auditEntry, ...prev]);
+  };
+
+  // Radiance Lighting: Accounting & Expense Handlers
+  const handleAddExpense = (newExpense: Expense) => {
+    setExpenses((prev) => [newExpense, ...prev]);
+    const auditEntry: AuditLogEntry = {
+      id: `aud-${Date.now()}`,
+      timestamp: new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      actor: newExpense.recordedBy,
+      action: 'EXPENSE_RECORDED',
+      entity: newExpense.referenceNumber || newExpense.title,
+      outletName: newExpense.outletName,
+      details: `Logged operational expense: ${newExpense.title} (${newExpense.category}) - GH₵ ${newExpense.amount.toFixed(2)}`,
+    };
+    setAuditLogs((prev) => [auditEntry, ...prev]);
+  };
+
+  const handleDeleteExpense = (expenseId: string) => {
+    setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
+  };
+
+  // Radiance Lighting: Customer Installment Plans Handlers
+  const handleAddInstallmentPlan = (newPlan: CustomerInstallmentPlan) => {
+    setInstallmentPlans((prev) => [newPlan, ...prev]);
+    const auditEntry: AuditLogEntry = {
+      id: `aud-${Date.now()}`,
+      timestamp: new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      actor: 'Ama Serwaa',
+      action: 'INSTALLMENT_CREATED',
+      entity: newPlan.planNumber,
+      outletName: newPlan.outletName,
+      details: `Created customer installment plan for ${newPlan.customerName}. Total: GH₵ ${newPlan.totalAmount.toFixed(2)}, Down: GH₵ ${newPlan.downPayment.toFixed(2)}`,
+    };
+    setAuditLogs((prev) => [auditEntry, ...prev]);
+  };
+
+  const handleUpdateInstallmentPlan = (updatedPlan: CustomerInstallmentPlan) => {
+    setInstallmentPlans((prev) =>
+      prev.map((p) => (p.id === updatedPlan.id ? updatedPlan : p))
+    );
+  };
+
+  // Radiance Lighting: Goods Return and Swap (Exchange) Handler
+  const handleAddReturnRecord = (
+    record: ReturnExchangeRecord,
+    stockAdjustments: Array<{ productId: string; quantityDelta: number; reason: string }>
+  ) => {
+    setReturnsExchanges((prev) => [record, ...prev]);
+
+    // Adjust physical inventory in products
+    setProducts((prev) =>
+      prev.map((p) => {
+        const adj = stockAdjustments.find((a) => a.productId === p.id);
+        if (adj) {
+          const currentStock = p.stock[record.outletId] || 0;
+          return {
+            ...p,
+            stock: {
+              ...p.stock,
+              [record.outletId]: Math.max(0, Number((currentStock + adj.quantityDelta).toFixed(3))),
+            },
+          };
+        }
+        return p;
+      })
+    );
+
+    // Append Stock Movements (CUSTOMER_RETURN & EXCHANGE_SWAP)
+    const newMovements: StockMovement[] = stockAdjustments.map((adj) => {
+      const prod = products.find((p) => p.id === adj.productId);
+      const prevStock = prod?.stock[record.outletId] || 0;
+      const updatedStock = Math.max(0, Number((prevStock + adj.quantityDelta).toFixed(3)));
+      return {
+        id: `mov-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        productId: adj.productId,
+        productName: prod ? prod.name : 'Fixture Item',
+        outletId: record.outletId,
+        type: adj.quantityDelta > 0 ? ('CUSTOMER_RETURN' as const) : ('EXCHANGE_SWAP' as const),
+        quantity: Math.abs(adj.quantityDelta),
+        previousStock: prevStock,
+        newStock: updatedStock,
+        referenceNumber: record.referenceNumber,
+        timestamp: record.timestamp,
+        user: record.cashierName,
+        reason: adj.reason,
+      };
+    });
+    setMovements((prev) => [...newMovements, ...prev]);
+
+    // Audit log
+    const auditEntry: AuditLogEntry = {
+      id: `aud-${Date.now()}`,
+      timestamp: new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      actor: record.cashierName,
+      action: record.type === 'EXCHANGE_SWAP' ? 'EXCHANGE_SWAP' : 'RETURN_REFUND',
+      entity: record.referenceNumber,
+      outletName: record.outletName,
+      details: `${record.type === 'EXCHANGE_SWAP' ? 'Merchandise Swap' : 'Goods Return'} for ${record.customerName} on receipt ${record.originalReceiptNumber}. Net: GH₵ ${record.netDifference.toFixed(2)}`,
     };
     setAuditLogs((prev) => [auditEntry, ...prev]);
   };
@@ -441,6 +558,8 @@ export default function App() {
               onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
               onViewAllLowStock={() => setActiveTab('products')}
               onSelectTab={setActiveTab}
+              accentColor={accentColor}
+              onChangeAccent={setAccentColor}
             />
           )}
 
@@ -450,6 +569,20 @@ export default function App() {
               outlets={outlets}
               products={products}
               sales={sales}
+            />
+          )}
+
+          {/* Comprehensive Analytics, Reports & AI Inferences */}
+          {activeTab === 'analytics' && (
+            <AnalyticsReportsView
+              products={products}
+              sales={sales}
+              expenses={expenses}
+              installmentPlans={installmentPlans}
+              returnsExchanges={returnsExchanges}
+              currentOutlet={currentOutlet}
+              outlets={outlets}
+              accentColor={accentColor}
             />
           )}
 
@@ -521,6 +654,47 @@ export default function App() {
 
           {/* Security & Audit Trail Log (Screen J-06, BR-15) */}
           {activeTab === 'audit-log' && <AuditLogView logs={auditLogs} />}
+
+          {/* Radiance Lighting: Accounting & Expenses P&L */}
+          {activeTab === 'expenses' && (
+            <ExpensesAccountingView
+              expenses={expenses}
+              onAddExpense={handleAddExpense}
+              onDeleteExpense={handleDeleteExpense}
+              sales={sales}
+              currentOutlet={currentOutlet}
+              outlets={outlets}
+              accentColor={accentColor}
+            />
+          )}
+
+          {/* Radiance Lighting: Pay in Installments (Credit Plans) */}
+          {activeTab === 'installments' && (
+            <InstallmentsView
+              plans={installmentPlans}
+              installmentPlans={installmentPlans}
+              onAddPlan={handleAddInstallmentPlan}
+              onUpdatePlan={handleUpdateInstallmentPlan}
+              products={products}
+              customers={customers}
+              currentOutlet={currentOutlet}
+              outlets={outlets}
+              accentColor={accentColor}
+            />
+          )}
+
+          {/* Radiance Lighting: Goods Returns and Exchanges / Swaps */}
+          {activeTab === 'returns-exchanges' && (
+            <ReturnsExchangesView
+              records={returnsExchanges}
+              onAddRecord={handleAddReturnRecord}
+              sales={sales}
+              products={products}
+              currentOutlet={currentOutlet}
+              outlets={outlets}
+              accentColor={accentColor}
+            />
+          )}
 
           {/* Comprehensive System Settings Hub */}
           {activeTab === 'settings' && (
