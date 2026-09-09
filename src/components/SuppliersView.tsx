@@ -95,7 +95,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row gap-3 items-center justify-between">
+      <div className="bg-white rounded-xl p-4 border border-slate-300 shadow-xs flex flex-col sm:flex-row gap-3 items-center justify-between">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <input
@@ -103,7 +103,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search vendor, contact person, product line..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-orange-500"
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-orange-500"
           />
         </div>
 
@@ -142,7 +142,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
         {filtered.map((s) => (
           <div
             key={s.id}
-            className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+            className="bg-white rounded-xl border border-slate-300 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4"
           >
             <div className="space-y-2">
               <div className="flex justify-between items-start gap-2">
@@ -194,7 +194,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
               </div>
             </div>
 
-            <div className="border-t border-slate-100 pt-3 flex justify-between items-center text-xs">
+            <div className="border-t border-slate-200 pt-3 flex justify-between items-center text-xs">
               <div>
                 <span className="text-[10px] text-slate-400 block">Total Purchased:</span>
                 <strong className="text-slate-900 font-black">
@@ -220,7 +220,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 border border-slate-200 animate-modal-card"
+            className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 border border-slate-300 animate-modal-card"
           >
             <div className="flex justify-between items-center mb-3">
               <h3 className="font-black text-base text-slate-800">Add Supplier</h3>
@@ -242,7 +242,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
                     className={`p-2 rounded-lg border text-left cursor-pointer transition-all ${
                       targetStore === 'inco-hardware'
                         ? 'border-amber-500 bg-amber-50/50 ring-2 ring-amber-500/20'
-                        : 'border-slate-200'
+                        : 'border-slate-300'
                     }`}
                   >
                     <div className="font-bold text-slate-800">Inco Hardware</div>
@@ -257,7 +257,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
                     className={`p-2 rounded-lg border text-left cursor-pointer transition-all ${
                       targetStore === 'apex-electricals'
                         ? 'border-blue-500 bg-blue-50/50 ring-2 ring-blue-500/20'
-                        : 'border-slate-200'
+                        : 'border-slate-300'
                     }`}
                   >
                     <div className="font-bold text-slate-800">Apex Electricals</div>

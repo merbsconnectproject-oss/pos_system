@@ -1,4 +1,10 @@
-export type OutletId = 'inco-hardware' | 'apex-electricals' | 'radiance-lighting' | 'all-outlets';
+/**
+ * Outlet identifiers are plain slugs so that administrators can register new
+ * branches at runtime (Settings → Stores & Branches). The seeded stores use
+ * 'inco-hardware', 'apex-electricals', 'radiance-lighting'; 'all-outlets' is
+ * the reserved enterprise-wide scope.
+ */
+export type OutletId = string;
 
 export interface Outlet {
   id: OutletId;
@@ -8,6 +14,8 @@ export interface Outlet {
   address: string;
   receiptPrefix: string;
   managerName: string;
+  active?: boolean;
+  createdAt?: string;
 }
 
 export interface SellingUnit {
@@ -175,7 +183,7 @@ export interface UserAccount {
   email: string;
   phone: string;
   role: UserRole;
-  outletId: 'inco-hardware' | 'apex-electricals' | 'all-outlets';
+  outletId: OutletId; // Branch assignment, or 'all-outlets' for enterprise scope
   active: boolean;
   pinCode: string; // 4-digit manager or cashier PIN
   lastLogin?: string;
@@ -183,6 +191,7 @@ export interface UserAccount {
   mustChangePasswordOnNextLogin?: boolean; // State flag requiring password update on next login
   passwordResetAt?: string; // Timestamp when password was reset
   tempPassword?: string; // Latest temporary assigned password
+  password?: string; // Standing sign-in credential
 }
 
 export interface PermissionDefinition {

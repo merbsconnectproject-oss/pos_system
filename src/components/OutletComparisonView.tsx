@@ -81,8 +81,8 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
       let topDriver = 'Fast-moving installation essentials and standard retail lines.';
       let theme = {
         gradient: 'from-slate-800 to-slate-900',
-        badgeBg: 'bg-slate-100 text-slate-800 border-slate-200',
-        border: 'border-slate-200',
+        badgeBg: 'bg-slate-100 text-slate-800 border-slate-300',
+        border: 'border-slate-300',
         accentText: 'text-slate-900',
       };
 
@@ -206,7 +206,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
       {/* Header with Metric Mode Segmented Switcher */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-300 shadow-2xs">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">
             Multi-Outlet Comparison
@@ -221,14 +221,14 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">
             Metric View:
           </span>
-          <div className="inline-flex bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs shadow-inner">
+          <div className="inline-flex bg-slate-100 p-1.5 rounded-xl border border-slate-300 text-xs shadow-inner">
             <button
               type="button"
               id="outlet-comparison-toggle-total"
               onClick={() => setMetricMode('total')}
               className={`px-3.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-2 ${
                 metricMode === 'total'
-                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80'
+                  ? 'bg-white text-slate-900 shadow-xs border border-slate-300'
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
@@ -242,7 +242,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
               onClick={() => setMetricMode('average')}
               className={`px-3.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-2 ${
                 metricMode === 'average'
-                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80'
+                  ? 'bg-white text-slate-900 shadow-xs border border-slate-300'
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
@@ -307,7 +307,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
           return (
             <div
               key={outlet.id}
-              className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all overflow-hidden flex flex-col justify-between"
+              className="bg-white rounded-2xl border border-slate-300 shadow-2xs hover:shadow-xs transition-all overflow-hidden flex flex-col justify-between"
             >
               {/* Branch Header Banner */}
               <div
@@ -476,7 +476,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                 )}
 
                 {/* Key Revenue Driver Box */}
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                <div className="p-3 bg-slate-50 border border-slate-300 rounded-xl text-xs space-y-1">
                   <span className="font-bold text-slate-800 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-orange-500" />
                     <span>Branch Catalyst & Category Focus</span>
@@ -486,7 +486,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
               </div>
 
               {/* Branch Card Footer Status */}
-              <div className="p-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+              <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
                 <span className="flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5 text-slate-400" />
                   Manager: {outlet.managerName || 'Assigned Lead'}
@@ -503,8 +503,8 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
       </div>
 
       {/* Comparative Cross-Branch Summary Matrix Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
-        <div className="p-5 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-white rounded-2xl border border-slate-300 shadow-2xs overflow-hidden">
+        <div className="p-5 border-b border-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
               <Layers className="w-4 h-4 text-orange-600" />
@@ -535,7 +535,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50/80 text-slate-500 uppercase text-[10px] font-bold border-b border-slate-200">
+            <thead className="bg-slate-50/80 text-slate-500 uppercase text-[10px] font-bold border-b border-slate-300">
               <tr>
                 <th className="py-3.5 px-4">Metric Dimension</th>
                 {outletMetricsList.map((m) => (
@@ -549,7 +549,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                 <th className="py-3.5 px-4">Variance & Insight</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
+            <tbody className="divide-y divide-slate-200 font-medium">
               {/* Row 1: Gross Revenue / AOV */}
               <tr className={metricMode === 'total' ? 'bg-orange-50/30' : 'bg-blue-50/30'}>
                 <td className="py-3 px-4 font-bold text-slate-800 flex items-center gap-2">

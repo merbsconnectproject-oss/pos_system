@@ -432,7 +432,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <>
       {/* 1. DESKTOP SIDEBAR */}
       <aside
-        className={`hidden md:flex flex-col bg-white border-r border-slate-200/90 h-[calc(100vh-4rem)] sticky top-16 overflow-y-auto transition-all duration-300 select-none z-20 shrink-0 ${
+        className={`hidden md:flex flex-col bg-white border-r border-slate-300 h-[calc(100vh-4rem)] sticky top-16 overflow-y-auto transition-all duration-300 select-none z-20 shrink-0 ${
           collapsed ? 'w-18' : 'w-64'
         }`}
       >
@@ -450,7 +450,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Drawer container */}
           <div className="relative w-72 max-w-[80vw] bg-white h-full shadow-2xl flex flex-col z-10 animate-drawer-left">
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+            <div className="p-4 border-b border-slate-300 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-orange-500 text-white font-black text-xs flex items-center justify-center">
                   POS

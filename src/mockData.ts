@@ -23,6 +23,7 @@ export const OUTLETS: Outlet[] = [
     address: 'Plot 18 Lagos Avenue, East Legon, Accra',
     receiptPrefix: 'RAD-01',
     managerName: 'Ama Serwaa (Showroom Director)',
+    active: true,
   },
   {
     id: 'inco-hardware',
@@ -32,6 +33,7 @@ export const OUTLETS: Outlet[] = [
     address: '12 Main Street, Koforidua',
     receiptPrefix: 'INC-01',
     managerName: 'Yaw Boakye (Manager)',
+    active: true,
   },
   {
     id: 'apex-electricals',
@@ -41,6 +43,7 @@ export const OUTLETS: Outlet[] = [
     address: 'Harper Road, Kumasi',
     receiptPrefix: 'APX-01',
     managerName: 'Kofi Mensah (Manager)',
+    active: true,
   },
 ];
 
@@ -1268,6 +1271,7 @@ export const INITIAL_USERS: UserAccount[] = [
     outletId: 'all-outlets',
     active: true,
     pinCode: '1234',
+    password: 'Radiance#2026',
     lastLogin: '05/09/2026 11:42',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
     mustChangePasswordOnNextLogin: false,
@@ -1282,6 +1286,7 @@ export const INITIAL_USERS: UserAccount[] = [
     outletId: 'inco-hardware',
     active: true,
     pinCode: '4321',
+    password: 'Radiance#2026',
     lastLogin: '05/09/2026 09:15',
     avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80',
     mustChangePasswordOnNextLogin: false,
@@ -1296,6 +1301,7 @@ export const INITIAL_USERS: UserAccount[] = [
     outletId: 'apex-electricals',
     active: true,
     pinCode: '7788',
+    password: 'Radiance#2026',
     lastLogin: '05/09/2026 10:30',
     avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80',
     mustChangePasswordOnNextLogin: false,
@@ -1310,6 +1316,7 @@ export const INITIAL_USERS: UserAccount[] = [
     outletId: 'inco-hardware',
     active: true,
     pinCode: '2580',
+    password: 'Radiance#2026',
     lastLogin: '05/09/2026 08:00',
     avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80',
     mustChangePasswordOnNextLogin: true,
@@ -1326,6 +1333,7 @@ export const INITIAL_USERS: UserAccount[] = [
     outletId: 'apex-electricals',
     active: true,
     pinCode: '9012',
+    password: 'Radiance#2026',
     lastLogin: '04/09/2026 16:40',
     avatarUrl: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=120&auto=format&fit=crop&q=80',
     mustChangePasswordOnNextLogin: false,

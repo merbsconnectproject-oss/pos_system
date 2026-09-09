@@ -579,7 +579,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
   return (
     <div className="p-3 sm:p-5 md:p-6 space-y-6 max-w-[1600px] mx-auto">
       {/* 1. TOP HEADER & INTERACTIVE FILTERS */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-300 shadow-2xs">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span
@@ -604,7 +604,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         {/* Global Controls */}
         <div className="flex flex-wrap items-center gap-2.5 self-start lg:self-auto">
           {/* Outlet Filter */}
-          <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200/80">
+          <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-300">
             <Store className="w-3.5 h-3.5 text-slate-500 ml-1.5" />
             <select
               value={selectedOutlet}
@@ -621,7 +621,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           </div>
 
           {/* Time Range Selector */}
-          <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200/80">
+          <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-300">
             <Calendar className="w-3.5 h-3.5 text-slate-500 ml-1.5" />
             {(['7d', '30d', 'mtd', 'qtd', 'ytd'] as const).map((rng) => (
               <button
@@ -651,7 +651,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
 
           <button
             onClick={() => setPrintModalOpen(true)}
-            className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer transition-all"
+            className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer transition-all"
             title="Generate printable executive report"
           >
             <Printer className="w-3.5 h-3.5 text-slate-500" />
@@ -660,7 +660,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
 
           <button
             onClick={handleExportCsv}
-            className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer transition-all"
+            className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer transition-all"
             title="Export CSV data"
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
@@ -670,8 +670,8 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
       </div>
 
       {/* QUICK SNAPSHOT ROW (Streamlined, Solid Darker Shade KPI Cards) */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-4">
-        <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-100">
+      <div className="bg-white p-5 rounded-2xl border border-slate-300 shadow-2xs space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-200">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-600">
               <Zap className="w-4 h-4 fill-orange-500" />
@@ -681,7 +681,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                 <h2 className="text-sm font-black text-slate-900 tracking-tight">
                   Quick Snapshot
                 </h2>
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300">
                   Live Vitals
                 </span>
               </div>
@@ -1017,7 +1017,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
       {/* 3. CORE FINANCIAL SCORECARDS (6 KPI TILES) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
         {/* Gross Revenue */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Gross Revenue</span>
             <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded font-mono font-bold">
@@ -1034,7 +1034,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* Gross Profit & Margin */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Gross Margin</span>
             <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded font-mono font-bold">
@@ -1051,7 +1051,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* Operating Expenses */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Total OpEx</span>
             <span className="text-[10px] text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded font-mono font-bold">
@@ -1068,7 +1068,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* Average Order Value (AOV) */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Average Ticket (AOV)</span>
             <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded font-mono font-bold">
@@ -1085,7 +1085,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* Active Installments Financed */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Credit Receivables</span>
             <span className="text-[10px] text-purple-600 bg-purple-50 px-1.5 py-0.2 rounded font-mono font-bold">
@@ -1102,7 +1102,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* Returns & Swap Rate */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Return &amp; Swap Rate</span>
             <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded font-mono font-bold">
@@ -1122,9 +1122,9 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
       {/* 4. PRIMARY ANALYTICS CHARTS GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* CHART 1: SALES & GROSS MARGIN VELOCITY */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+        <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
                 <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
                   <span>Sales &amp; Margin Velocity</span>
@@ -1187,9 +1187,9 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* CHART 2: MULTI-OUTLET COMPARISON MATRIX */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+        <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
                 <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
                   <span>Multi-Outlet Performance Matrix</span>
@@ -1247,9 +1247,9 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* CHART 3: PRODUCT CATEGORY CONTRIBUTION & MARGIN DENSITY */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+        <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
                 <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
                   <span>Category Revenue &amp; Margin Density</span>
@@ -1295,7 +1295,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                 {categoryData.map((cat) => (
                   <div
                     key={cat.name}
-                    className="flex items-center justify-between text-xs p-1.5 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-colors"
+                    className="flex items-center justify-between text-xs p-1.5 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-colors"
                   >
                     <div className="flex items-center gap-2 truncate">
                       <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
@@ -1333,9 +1333,9 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* CHART 4: PAYMENT CHANNELS & SETTLEMENT VELOCITY */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+        <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
                 <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
                   <span>Payment Channels &amp; Liquidity</span>
@@ -1371,7 +1371,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                 </div>
               ))}
 
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/60 mt-3 flex items-center justify-between text-xs">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-300 mt-3 flex items-center justify-between text-xs">
                 <span className="text-slate-600 font-medium">Digital vs Cash Split:</span>
                 <span className="font-bold text-slate-900">64% Digital (MoMo / Card / Bank) • 36% Cash Float</span>
               </div>
@@ -1400,9 +1400,9 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* CHART 5: CUSTOMER INSTALLMENT CREDIT AGING */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+        <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
                 <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
                   <span>Installment Credit &amp; Debtor Aging</span>
@@ -1418,7 +1418,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
 
             <div className="space-y-3 mt-4">
               {installmentAgingData.map((stage) => (
-                <div key={stage.stage} className="p-3 rounded-xl border border-slate-100 bg-slate-50/70 flex items-center justify-between text-xs">
+                <div key={stage.stage} className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: stage.color }} />
                     <div>
@@ -1461,9 +1461,9 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* CHART 6: TOP SELLING PRODUCTS & INVENTORY TURNOVER */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+        <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
                 <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
                   <span>Top Product Velocity &amp; Fast Movers</span>
@@ -1481,7 +1481,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
               {topProductsData.map((prod, idx) => (
                 <div
                   key={prod.name}
-                  className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors text-xs"
+                  className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors text-xs"
                 >
                   <div className="flex items-center gap-2.5 truncate">
                     <span className="w-5 h-5 rounded-md bg-slate-200 text-slate-700 font-mono font-bold flex items-center justify-center text-[10px] shrink-0">
@@ -1530,9 +1530,9 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
       {/* 5. PRINT-READY OFFICIAL REPORT MODAL */}
       {printModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-6 my-auto max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl border border-slate-300 space-y-6 my-auto max-h-[90vh] overflow-y-auto">
             {/* Report Header */}
-            <div className="flex items-start justify-between border-b border-slate-200 pb-5">
+            <div className="flex items-start justify-between border-b border-slate-300 pb-5">
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-xl font-black text-slate-900">Radiance POS</span>
@@ -1560,7 +1560,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
                 1. Profit &amp; Loss Statement Summary
               </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-300 text-xs">
                 <div>
                   <div className="text-slate-400">Gross Sales:</div>
                   <div className="text-sm font-black text-slate-900">GH₵ {metrics.grossRevenue.toLocaleString()}</div>
@@ -1597,7 +1597,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
               </h3>
               <div className="space-y-2">
                 {(aiInferences?.strategicRecommendations || []).map((rec, i) => (
-                  <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs flex items-center justify-between">
+                  <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-300 text-xs flex items-center justify-between">
                     <div>
                       <span className="font-bold text-slate-900">[{rec.priority}] {rec.title}: </span>
                       <span className="text-slate-600">{rec.details}</span>
@@ -1609,7 +1609,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-300">
               <button
                 onClick={() => setPrintModalOpen(false)}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"

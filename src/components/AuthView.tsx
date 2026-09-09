@@ -1,0 +1,597 @@
+import React, { useState } from 'react';
+import {
+  Store,
+  User,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  ArrowLeft,
+  AlertCircle,
+  CheckCircle2,
+  MailCheck,
+  KeyRound,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react';
+import { UserAccount, Outlet } from '../types';
+
+export type AuthScreen = 'sign-in' | 'forgot-password' | 'reset-sent' | 'set-password';
+
+interface AuthViewProps {
+  users: UserAccount[];
+  outlets: Outlet[];
+  companyName: string;
+  accentColor: string;
+  /** Called once credentials are accepted and any mandatory password update is done. */
+  onAuthenticated: (user: UserAccount) => void;
+  /** Persists a changed / newly set password back into the user directory. */
+  onUpdateUserPassword: (userId: string, newPassword: string) => void;
+  onAddAuditLog: (entry: {
+    actor: string;
+    action: string;
+    entity: string;
+    outletName: string;
+    details: string;
+  }) => void;
+}
+
+export const AuthView: React.FC<AuthViewProps> = ({
+  users,
+  outlets,
+  companyName,
+  accentColor,
+  onAuthenticated,
+  onUpdateUserPassword,
+  onAddAuditLog,
+}) => {
+  const [screen, setScreen] = useState<AuthScreen>('sign-in');
+
+  // Sign-in form
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // Forgot-password form
+  const [recoveryContact, setRecoveryContact] = useState('');
+  const [recoveryTarget, setRecoveryTarget] = useState<UserAccount | null>(null);
+
+  // Mandatory password update
+  const [pendingUser, setPendingUser] = useState<UserAccount | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const findUser = (value: string) => {
+    const needle = value.trim().toLowerCase();
+    if (!needle) return undefined;
+    return users.find(
+      (u) => u.username.toLowerCase() === needle || u.email.toLowerCase() === needle
+    );
+  };
+
+  const outletNameFor = (user: UserAccount) =>
+    user.outletId === 'all-outlets'
+      ? 'All Outlets (HQ)'
+      : outlets.find((o) => o.id === user.outletId)?.name || 'Unassigned Branch';
+
+  const resetFeedback = () => {
+    setError(null);
+    setNotice(null);
+  };
+
+  const handleSignIn = (e: React.FormEvent) => {
+    e.preventDefault();
+    resetFeedback();
+
+    const user = findUser(identifier);
+    if (!user) {
+      setError('No account matches that username or email address.');
+      return;
+    }
+    if (!user.active) {
+      setError('This account is suspended. Contact a system administrator to restore access.');
+      return;
+    }
+
+    const accepted =
+      (user.password && password === user.password) ||
+      (user.tempPassword && password === user.tempPassword);
+
+    if (!accepted) {
+      setError('Incorrect password. Please try again or reset your password.');
+      return;
+    }
+
+    // Branch must still exist and be open for business before the session starts.
+    const branch = outlets.find((o) => o.id === user.outletId);
+    if (user.outletId !== 'all-outlets' && branch && branch.active === false) {
+      setError(
+        `Your assigned branch (${branch.name}) is currently deactivated. Contact a system administrator.`
+      );
+      return;
+    }
+
+    if (user.mustChangePasswordOnNextLogin) {
+      setPendingUser(user);
+      setNewPassword('');
+      setConfirmPassword('');
+      setScreen('set-password');
+      return;
+    }
+
+    onAuthenticated(user);
+  };
+
+  const handleRequestReset = (e: React.FormEvent) => {
+    e.preventDefault();
+    resetFeedback();
+
+    const user = findUser(recoveryContact);
+    if (!user) {
+      setError('We could not find an account with that username or email address.');
+      return;
+    }
+
+    setRecoveryTarget(user);
+    onAddAuditLog({
+      actor: user.fullName,
+      action: 'PASSWORD_RESET_REQUESTED',
+      entity: `User: ${user.username}`,
+      outletName: outletNameFor(user),
+      details: `Self-service password reset requested from the sign-in screen for ${user.email}.`,
+    });
+    setScreen('reset-sent');
+  };
+
+  const handleSetPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    resetFeedback();
+    if (!pendingUser) return;
+
+    if (newPassword.length < 8) {
+      setError('Your new password must contain at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('The two passwords do not match. Please retype them carefully.');
+      return;
+    }
+    if (newPassword === password) {
+      setError('Your new password cannot be the same as your temporary password.');
+      return;
+    }
+
+    onUpdateUserPassword(pendingUser.id, newPassword);
+    onAddAuditLog({
+      actor: pendingUser.fullName,
+      action: 'USER_PASSWORD_CHANGE_COMPLETED',
+      entity: `User: ${pendingUser.username}`,
+      outletName: outletNameFor(pendingUser),
+      details: 'Completed the mandatory password update prompted at sign-in.',
+    });
+
+    onAuthenticated({
+      ...pendingUser,
+      password: newPassword,
+      tempPassword: undefined,
+      mustChangePasswordOnNextLogin: false,
+    });
+  };
+
+  const goToSignIn = () => {
+    resetFeedback();
+    setPassword('');
+    setPendingUser(null);
+    setScreen('sign-in');
+  };
+
+  const fieldClass =
+    'w-full pl-10 pr-3 py-2.5 text-sm bg-white border border-slate-300 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:border-slate-500 focus:ring-2 focus:ring-slate-900/10 transition-colors';
+
+  return (
+    <div className="min-h-screen bg-[#f8f9fa] text-slate-800 font-sans lg:grid lg:grid-cols-2">
+      {/* LEFT: BRAND PANEL */}
+      <div className="relative hidden lg:flex flex-col justify-between bg-slate-900 text-white p-10 xl:p-14 overflow-hidden">
+        <div
+          className="absolute -top-24 -right-24 w-96 h-96 rounded-full opacity-25 blur-3xl"
+          style={{ backgroundColor: accentColor }}
+        />
+        <div
+          className="absolute -bottom-32 -left-20 w-96 h-96 rounded-full opacity-15 blur-3xl"
+          style={{ backgroundColor: accentColor }}
+        />
+
+        <div className="relative">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg"
+              style={{ backgroundColor: accentColor }}
+            >
+              <Store className="w-6 h-6 text-white stroke-[2.5]" />
+            </div>
+            <div>
+              <div className="text-lg font-black tracking-tight leading-none">Radiance POS</div>
+              <div className="text-[11px] text-slate-400 font-medium tracking-wide">
+                Multi-Outlet Retail OS
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative space-y-6 max-w-md">
+          <h1 className="text-3xl xl:text-4xl font-black tracking-tight leading-tight">
+            One terminal for every branch you run.
+          </h1>
+          <p className="text-sm text-slate-300 leading-relaxed">
+            Sign in to reach your point of sale, live stock positions, credit ledgers and branch
+            profit &amp; loss — all scoped to the outlets your role is assigned to.
+          </p>
+
+          <div className="space-y-3 pt-2">
+            {[
+              { icon: ShieldCheck, label: 'Role-based access', copy: 'Cashiers, managers and storekeepers each see only their own capabilities.' },
+              { icon: Store, label: 'Branch-scoped data', copy: 'Your session opens on the outlet assigned to your account.' },
+              { icon: KeyRound, label: 'Enforced credentials', copy: 'Temporary passwords must be replaced before the terminal unlocks.' },
+            ].map(({ icon: Icon, label, copy }) => (
+              <div
+                key={label}
+                className="flex items-start gap-3 bg-white/5 border border-white/10 rounded-xl p-3.5"
+              >
+                <Icon className="w-4 h-4 mt-0.5 shrink-0" style={{ color: accentColor }} />
+                <div>
+                  <div className="text-xs font-bold">{label}</div>
+                  <div className="text-[11px] text-slate-400 leading-snug">{copy}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="relative flex items-center gap-2 text-[11px] text-slate-500">
+          <Sparkles className="w-3.5 h-3.5" style={{ color: accentColor }} />
+          <span>
+            {companyName} • {outlets.filter((o) => o.active !== false).length} active branches
+          </span>
+        </div>
+      </div>
+
+      {/* RIGHT: FORM PANEL */}
+      <div className="flex items-center justify-center p-5 sm:p-8 min-h-screen lg:min-h-0">
+        <div className="w-full max-w-md space-y-6">
+          {/* Compact brand mark for small screens */}
+          <div className="flex items-center gap-3 lg:hidden">
+            <div
+              className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-xs"
+              style={{ backgroundColor: accentColor }}
+            >
+              <Store className="w-5 h-5 text-white stroke-[2.5]" />
+            </div>
+            <div>
+              <div className="text-base font-black tracking-tight leading-none text-slate-900">
+                Radiance POS
+              </div>
+              <div className="text-[11px] text-slate-500 font-medium">Multi-Outlet Retail OS</div>
+            </div>
+          </div>
+
+          {/* ---------------- SIGN IN ---------------- */}
+          {screen === 'sign-in' && (
+            <div className="bg-white border border-slate-300 rounded-2xl shadow-xs p-6 sm:p-7 space-y-5">
+              <div>
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">Sign in</h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Use the staff credentials issued by your system administrator.
+                </p>
+              </div>
+
+              {error && (
+                <div className="flex items-start gap-2 bg-rose-50 border border-rose-300 text-rose-800 rounded-xl px-3 py-2.5 text-xs font-medium">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {notice && (
+                <div className="flex items-start gap-2 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl px-3 py-2.5 text-xs font-medium">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{notice}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSignIn} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Username or email</label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type="text"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
+                      placeholder="kasante"
+                      autoComplete="username"
+                      className={fieldClass}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700">Password</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetFeedback();
+                        setRecoveryContact(identifier);
+                        setScreen('forgot-password');
+                      }}
+                      className="text-[11px] font-bold text-slate-500 hover:text-slate-900 underline cursor-pointer"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                      className={`${fieldClass} pr-10`}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2 text-xs text-slate-600 font-medium cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={rememberDevice}
+                    onChange={(e) => setRememberDevice(e.target.checked)}
+                    className="w-4 h-4 rounded cursor-pointer"
+                    style={{ accentColor }}
+                  />
+                  <span>Keep me signed in on this terminal</span>
+                </label>
+
+                <button
+                  type="submit"
+                  className="w-full flex items-center justify-center gap-2 text-white text-sm font-bold py-2.5 rounded-xl shadow-xs transition-opacity hover:opacity-95 cursor-pointer"
+                  style={{ backgroundColor: accentColor }}
+                >
+                  <span>Sign in to terminal</span>
+                  <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                </button>
+              </form>
+
+              <div className="pt-4 border-t border-slate-200 space-y-2">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  Demo accounts
+                </div>
+                <div className="grid gap-1.5">
+                  {users.slice(0, 3).map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => {
+                        resetFeedback();
+                        setIdentifier(u.username);
+                        setPassword(u.tempPassword || u.password || '');
+                      }}
+                      className="flex items-center justify-between gap-3 text-left px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
+                    >
+                      <span className="text-[11px] font-bold text-slate-700">
+                        {u.fullName}
+                        <span className="text-slate-400 font-mono font-medium"> @{u.username}</span>
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-medium shrink-0">
+                        {outletNameFor(u)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Click a row to fill the form. Seeded password:{' '}
+                  <span className="font-mono text-slate-600">Radiance#2026</span>
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ---------------- FORGOT PASSWORD ---------------- */}
+          {screen === 'forgot-password' && (
+            <div className="bg-white border border-slate-300 rounded-2xl shadow-xs p-6 sm:p-7 space-y-5">
+              <div>
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                  Reset your password
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Tell us who you are and we will send reset instructions to the email on your staff
+                  record.
+                </p>
+              </div>
+
+              {error && (
+                <div className="flex items-start gap-2 bg-rose-50 border border-rose-300 text-rose-800 rounded-xl px-3 py-2.5 text-xs font-medium">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleRequestReset} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Username or email</label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type="text"
+                      value={recoveryContact}
+                      onChange={(e) => setRecoveryContact(e.target.value)}
+                      placeholder="kasante"
+                      className={fieldClass}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full flex items-center justify-center gap-2 text-white text-sm font-bold py-2.5 rounded-xl shadow-xs transition-opacity hover:opacity-95 cursor-pointer"
+                  style={{ backgroundColor: accentColor }}
+                >
+                  <span>Send reset instructions</span>
+                  <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                </button>
+              </form>
+
+              <button
+                type="button"
+                onClick={goToSignIn}
+                className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to sign in</span>
+              </button>
+            </div>
+          )}
+
+          {/* ---------------- RESET REQUEST SENT ---------------- */}
+          {screen === 'reset-sent' && (
+            <div className="bg-white border border-slate-300 rounded-2xl shadow-xs p-6 sm:p-7 space-y-5 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-300 flex items-center justify-center mx-auto">
+                <MailCheck className="w-7 h-7 text-emerald-600" />
+              </div>
+              <div className="space-y-1.5">
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">Check your inbox</h2>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  If an account exists for that identifier, reset instructions are on their way to{' '}
+                  <span className="font-bold text-slate-700">
+                    {recoveryTarget ? recoveryTarget.email : 'the registered address'}
+                  </span>
+                  . Your administrator can also issue a temporary password from Settings → User
+                  Accounts.
+                </p>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-3 text-left text-[11px] text-slate-600 leading-relaxed">
+                The request has been written to the security audit trail. If you do not receive the
+                email within a few minutes, check your spam folder or contact your branch manager.
+              </div>
+
+              <button
+                type="button"
+                onClick={goToSignIn}
+                className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 border border-slate-300 rounded-xl py-2.5 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to sign in</span>
+              </button>
+            </div>
+          )}
+
+          {/* ---------------- MANDATORY PASSWORD UPDATE ---------------- */}
+          {screen === 'set-password' && pendingUser && (
+            <div className="bg-white border border-slate-300 rounded-2xl shadow-xs p-6 sm:p-7 space-y-5">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-300 flex items-center justify-center shrink-0">
+                  <KeyRound className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 tracking-tight">
+                    Set a new password
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Welcome, {pendingUser.fullName}. Your account is on a temporary password and must
+                    be updated before the terminal unlocks.
+                  </p>
+                </div>
+              </div>
+
+              {error && (
+                <div className="flex items-start gap-2 bg-rose-50 border border-rose-300 text-rose-800 rounded-xl px-3 py-2.5 text-xs font-medium">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSetPassword} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">New password</label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="At least 8 characters"
+                      autoComplete="new-password"
+                      className={`${fieldClass} pr-10`}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Confirm new password</label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Retype the new password"
+                      autoComplete="new-password"
+                      className={fieldClass}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full flex items-center justify-center gap-2 text-white text-sm font-bold py-2.5 rounded-xl shadow-xs transition-opacity hover:opacity-95 cursor-pointer"
+                  style={{ backgroundColor: accentColor }}
+                >
+                  <span>Update password &amp; continue</span>
+                  <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                </button>
+              </form>
+
+              <button
+                type="button"
+                onClick={goToSignIn}
+                className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Cancel and sign in as someone else</span>
+              </button>
+            </div>
+          )}
+
+          <p className="text-center text-[11px] text-slate-400">
+            Protected terminal • All sign-in activity is recorded in the audit trail
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};

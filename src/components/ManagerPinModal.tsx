@@ -40,7 +40,7 @@ export const ManagerPinModal: React.FC<ManagerPinModalProps> = ({
     >
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden border border-slate-200 animate-modal-card"
+        className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden border border-slate-300 animate-modal-card"
       >
         <div className="bg-amber-500 text-white p-4 flex items-center justify-between">
           <div className="flex items-center gap-2">

@@ -90,7 +90,7 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
     >
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-200 animate-modal-card"
+        className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-300 animate-modal-card"
       >
         <div className="bg-[#1e293b] text-white p-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -185,7 +185,7 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
           </div>
 
           {/* PRD BR-4 Weighted Average Cost Calculation Box */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+          <div className="bg-slate-50 border border-slate-300 rounded-xl p-3.5 space-y-2">
             <div className="flex items-center gap-1.5 text-slate-800 font-bold">
               <Calculator className="w-4 h-4 text-orange-500" />
               <span>Weighted Average Costing</span>
@@ -204,12 +204,12 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
                 <strong className="text-orange-600 font-black">GH₵ {weightedAvgCost.toFixed(2)}</strong>
               </div>
             </div>
-            <div className="text-[10px] text-slate-400 border-t border-slate-200 pt-1.5">
+            <div className="text-[10px] text-slate-400 border-t border-slate-300 pt-1.5">
               Stock at {currentOutlet.name} will increase from {currentStock} to {currentStock + qtyReceived} {product?.baseUnit}.
             </div>
           </div>
 
-          <div className="flex gap-2 pt-2 border-t border-slate-100">
+          <div className="flex gap-2 pt-2 border-t border-slate-200">
             <button
               type="button"
               onClick={onClose}

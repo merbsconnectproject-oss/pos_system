@@ -215,7 +215,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   return (
     <div className="p-3 sm:p-5 md:p-6 space-y-5 max-w-[1600px] mx-auto">
       {/* 1. TOP HEADER & QUICK STATS BAR */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-2xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-300 shadow-2xs">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
             Executive Dashboard
@@ -233,7 +233,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <button
                 type="button"
                 onClick={() => setShowAccentPicker((prev) => !prev)}
-                className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold px-2.5 py-2 rounded-xl transition-colors cursor-pointer shadow-2xs"
+                className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold px-2.5 py-2 rounded-xl transition-colors cursor-pointer shadow-2xs"
                 title="Switch Brand Accent"
               >
                 <span
@@ -245,7 +245,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </button>
 
               {showAccentPicker && (
-                <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-2.5 space-y-2 animate-in fade-in zoom-in-95">
+                <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-300 rounded-2xl shadow-xl z-30 p-2.5 space-y-2 animate-in fade-in zoom-in-95">
                   <div className="text-[10px] font-black uppercase text-slate-400 px-1">
                     Brand Accent
                   </div>
@@ -276,7 +276,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="relative">
             <button
               onClick={() => setDateRangeOpen(!dateRangeOpen)}
-              className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold px-3 py-2 rounded-xl shadow-2xs transition-colors cursor-pointer"
+              className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold px-3 py-2 rounded-xl shadow-2xs transition-colors cursor-pointer"
             >
               <Calendar className="w-3.5 h-3.5 text-slate-400" />
               <span>{dateRange}</span>
@@ -284,7 +284,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </button>
 
             {dateRangeOpen && (
-              <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-2 text-xs divide-y divide-slate-100 animate-in fade-in zoom-in-95">
+              <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-300 rounded-2xl shadow-xl z-30 p-2 text-xs divide-y divide-slate-200 animate-in fade-in zoom-in-95">
                 <div className="px-3 py-1 text-[10px] font-black uppercase text-slate-400">
                   Filter Analytics Period
                 </div>
@@ -364,7 +364,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       )}
 
       {/* 3. METRIC CARDS HEADER & SCOPE FILTERS */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-2xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-300 shadow-2xs">
         <div className="flex items-center gap-2">
           <div className="w-2.5 h-2.5 rounded-full bg-slate-900" />
           <h2 className="text-sm font-black text-slate-900 tracking-tight">
@@ -386,7 +386,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 categoryFilter === tab.id
                   ? 'bg-slate-900 text-white shadow-xs'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/60'
+                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-300'
               }`}
             >
               <span>{tab.label}</span>
@@ -447,8 +447,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* 6. BOTTOM ROW: TOP SELLING PRODUCTS & RECENT COMPLETED SALES */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Top Selling Products */}
-        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+        <div className="bg-white rounded-2xl border border-slate-300 shadow-2xs p-5">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200">
             <div className="flex items-center gap-2">
               <Package className="w-4 h-4 text-orange-500" />
               <h3 className="font-black text-sm text-slate-900">Top Velocity Products</h3>
@@ -465,13 +465,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {outletProducts.slice(0, 4).map((p) => (
               <div
                 key={p.id}
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition-colors border border-slate-100"
+                className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition-colors border border-slate-200"
               >
                 <div className="flex items-center gap-3">
                   <img
                     src={p.imageUrl}
                     alt={p.name}
-                    className="w-10 h-10 rounded-xl object-cover border border-slate-200"
+                    className="w-10 h-10 rounded-xl object-cover border border-slate-300"
                   />
                   <div>
                     <div className="font-bold text-xs text-slate-900">{p.name}</div>
@@ -492,8 +492,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {/* Recent Completed Sales */}
-        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+        <div className="bg-white rounded-2xl border border-slate-300 shadow-2xs p-5">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200">
             <div className="flex items-center gap-2">
               <ShoppingBag className="w-4 h-4 text-orange-500" />
               <h3 className="font-black text-sm text-slate-900">Recent Completed Orders</h3>
@@ -510,7 +510,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {outletSales.slice(0, 4).map((s) => (
               <div
                 key={s.id}
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition-colors border border-slate-100"
+                className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition-colors border border-slate-200"
               >
                 <div>
                   <div className="flex items-center gap-2">

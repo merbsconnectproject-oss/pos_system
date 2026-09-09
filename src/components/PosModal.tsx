@@ -503,7 +503,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search electrical items or SKU..."
-                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-orange-500 shadow-2xs"
+                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-orange-500 shadow-2xs"
                 />
               </div>
 
@@ -516,7 +516,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
                       selectedCategory === cat
                         ? 'bg-orange-500 text-white shadow-xs'
-                        : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                        : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-300'
                     }`}
                   >
                     {cat}
@@ -537,7 +537,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                   <div
                     key={p.id}
                     onClick={() => !isOutOfStock && handleAddToCart(p)}
-                    className={`bg-white rounded-xl border border-slate-200/90 p-3 flex flex-col justify-between cursor-pointer transition-all hover:shadow-md hover:border-orange-300 group ${
+                    className={`bg-white rounded-xl border border-slate-300 p-3 flex flex-col justify-between cursor-pointer transition-all hover:shadow-md hover:border-orange-300 group ${
                       isOutOfStock ? 'opacity-50 cursor-not-allowed bg-slate-50' : ''
                     }`}
                   >
@@ -569,7 +569,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                       </div>
                     </div>
 
-                    <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
+                    <div className="mt-3 pt-2 border-t border-slate-200 flex items-center justify-between">
                       <div>
                         <div className="text-sm font-black text-slate-900">
                           GH₵ {p.retailPrice.toFixed(2)}
@@ -592,7 +592,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                             <button
                               key={u.name}
                               onClick={() => handleAddToCart(p, uIdx)}
-                              className="text-[9px] font-bold bg-slate-100 hover:bg-orange-100 hover:text-orange-700 px-1.5 py-1 rounded border border-slate-200"
+                              className="text-[9px] font-bold bg-slate-100 hover:bg-orange-100 hover:text-orange-700 px-1.5 py-1 rounded border border-slate-300"
                               title={`Add as ${u.name}`}
                             >
                               {u.conversionFactor > 1 ? `${u.conversionFactor}x` : '1x'}
@@ -608,7 +608,7 @@ export const PosModal: React.FC<PosModalProps> = ({
 
             {/* Mobile Cart Floating Bar (visible when cart has items on smaller screens) */}
             {cart.length > 0 && !mobileCartDrawerOpen && (
-              <div className="lg:hidden p-3 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-xl flex items-center justify-between z-10 shrink-0">
+              <div className="lg:hidden p-3 bg-white/95 backdrop-blur-md border-t border-slate-300 shadow-xl flex items-center justify-between z-10 shrink-0">
                 <div>
                   <div className="text-[11px] font-bold text-slate-500">
                     {cart.reduce((a, b) => a + b.quantity, 0)} items in cart
@@ -640,14 +640,14 @@ export const PosModal: React.FC<PosModalProps> = ({
 
           {/* RIGHT: CART & CHECKOUT DRAWER */}
           <div
-            className={`w-full lg:w-[440px] bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col justify-between shrink-0 shadow-lg ${
+            className={`w-full lg:w-[440px] bg-white border-t lg:border-t-0 lg:border-l border-slate-300 flex flex-col justify-between shrink-0 shadow-lg ${
               mobileCartDrawerOpen
                 ? 'fixed inset-0 z-50 lg:relative lg:inset-auto flex animate-sheet-up'
                 : 'hidden lg:flex'
             }`}
           >
             {/* Mobile-only header to close drawer */}
-            <div className="lg:hidden flex items-center justify-between p-3.5 border-b border-slate-200 bg-slate-900 text-white">
+            <div className="lg:hidden flex items-center justify-between p-3.5 border-b border-slate-300 bg-slate-900 text-white">
               <div className="font-black text-sm flex items-center gap-2">
                 <ShoppingCart className="w-4 h-4 text-orange-400" />
                 <span>Order Cart ({cart.length} items)</span>
@@ -661,7 +661,7 @@ export const PosModal: React.FC<PosModalProps> = ({
             </div>
 
             {/* Customer Lookup & Classification (FR-CUST-03) */}
-            <div className="p-3 border-b border-slate-200 bg-slate-50/70 space-y-2">
+            <div className="p-3 border-b border-slate-300 bg-slate-50/70 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5 text-orange-500" />
@@ -696,14 +696,14 @@ export const PosModal: React.FC<PosModalProps> = ({
                     value={customerSearchPhone}
                     onChange={(e) => handleCustomerPhoneLookup(e.target.value)}
                     placeholder="Type phone: e.g. 0244567890 (Yaw Mensah)"
-                    className="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-orange-500 font-mono"
+                    className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white focus:outline-orange-500 font-mono"
                   />
                 </div>
               )}
             </div>
 
             {/* Cart Items List */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2.5 divide-y divide-slate-100">
+            <div className="flex-1 overflow-y-auto p-3 space-y-2.5 divide-y divide-slate-200">
               {cart.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2 py-12">
                   <ShoppingCart className="w-10 h-10 stroke-[1.5] text-slate-300" />
@@ -775,7 +775,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                           className={`w-16 text-right font-bold text-xs border rounded px-1.5 py-0.5 ${
                             item.unitPrice < item.product.floorPrice * item.conversionFactor
                               ? 'border-amber-400 bg-amber-50 text-amber-900 font-black'
-                              : 'border-slate-200 bg-white'
+                              : 'border-slate-300 bg-white'
                           }`}
                         />
                       </div>
@@ -790,7 +790,7 @@ export const PosModal: React.FC<PosModalProps> = ({
             </div>
 
             {/* Cart Footer: Subtotal, Total, Hold and Pay (F2) */}
-            <div className="p-4 border-t border-slate-200 bg-slate-50/90 space-y-3">
+            <div className="p-4 border-t border-slate-300 bg-slate-50/90 space-y-3">
               <div className="space-y-1.5 text-xs text-slate-600">
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
@@ -802,7 +802,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                     <span className="font-mono">- GH₵ {discountTotal.toFixed(2)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-base font-black text-slate-900 pt-1 border-t border-slate-200">
+                <div className="flex justify-between text-base font-black text-slate-900 pt-1 border-t border-slate-300">
                   <span>TOTAL DUE:</span>
                   <span className="text-orange-600 font-mono text-xl">GH₵ {total.toFixed(2)}</span>
                 </div>
@@ -843,7 +843,7 @@ export const PosModal: React.FC<PosModalProps> = ({
         >
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-200 flex flex-col animate-modal-card"
+            className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-300 flex flex-col animate-modal-card"
           >
             <div className="bg-[#1e293b] text-white p-4 flex items-center justify-between">
               <div>
@@ -858,7 +858,7 @@ export const PosModal: React.FC<PosModalProps> = ({
             </div>
 
             {/* Payment Method Tabs */}
-            <div className="grid grid-cols-3 border-b border-slate-200 bg-slate-50 text-xs font-bold">
+            <div className="grid grid-cols-3 border-b border-slate-300 bg-slate-50 text-xs font-bold">
               <button
                 onClick={() => setActivePaymentTab('cash')}
                 className={`py-3 flex items-center justify-center gap-1.5 transition-colors ${
@@ -914,7 +914,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                         key={denom}
                         type="button"
                         onClick={() => setCashTendered(denom.toString())}
-                        className="py-2 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 font-black rounded-lg border border-slate-200 text-xs"
+                        className="py-2 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 font-black rounded-lg border border-slate-300 text-xs"
                       >
                         GH₵ {denom}
                       </button>
@@ -923,7 +923,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                 </div>
 
                 {/* Change Due Display */}
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex justify-between items-center">
+                <div className="bg-slate-50 border border-slate-300 rounded-xl p-4 flex justify-between items-center">
                   <span className="font-bold text-slate-700">Change Due to Customer:</span>
                   <span className="text-xl font-black text-emerald-600 font-mono">
                     GH₵ {changeDue.toFixed(2)}
@@ -946,7 +946,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                         className={`py-2 rounded-lg font-bold border text-xs ${
                           momoProvider === prov
                             ? 'bg-amber-500 text-white border-amber-500 shadow-2xs'
-                            : 'bg-white text-slate-700 border-slate-200'
+                            : 'bg-white text-slate-700 border-slate-300'
                         }`}
                       >
                         {prov}
@@ -1034,7 +1034,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                   />
                 </div>
 
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex justify-between font-bold">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-300 flex justify-between font-bold">
                   <span>Split Sum: GH₵ {(splitCashAmount + splitMomoAmount).toFixed(2)}</span>
                   <span>Required: GH₵ {total.toFixed(2)}</span>
                 </div>
@@ -1042,7 +1042,7 @@ export const PosModal: React.FC<PosModalProps> = ({
             )}
 
             {/* Payment Modal Footer */}
-            <div className="p-4 border-t border-slate-200 bg-slate-50 flex gap-2">
+            <div className="p-4 border-t border-slate-300 bg-slate-50 flex gap-2">
               <button
                 type="button"
                 onClick={() => setPaymentModalOpen(false)}
@@ -1070,7 +1070,7 @@ export const PosModal: React.FC<PosModalProps> = ({
         >
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-5 border border-slate-200 space-y-4 animate-modal-card"
+            className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-5 border border-slate-300 space-y-4 animate-modal-card"
           >
             <div className="flex items-center justify-between border-b pb-2">
               <div className="flex items-center gap-1.5 text-emerald-600 font-black text-sm">

@@ -307,7 +307,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs flex flex-col lg:flex-row gap-3 items-center justify-between">
+      <div className="bg-white rounded-xl p-4 border border-slate-300 shadow-xs flex flex-col lg:flex-row gap-3 items-center justify-between">
         <div className="relative w-full lg:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <input
@@ -321,7 +321,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 ? 'Search cables, switches, breakers, solar, SKU...'
                 : 'Search all catalogs, brands, SKU...'
             }
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-orange-500"
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-orange-500"
           />
         </div>
 
@@ -359,7 +359,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="text-xs font-semibold bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700"
+            className="text-xs font-semibold bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-700"
           >
             {categories.map((c) => (
               <option key={c} value={c}>
@@ -393,10 +393,10 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       </div>
 
       {/* Products Table with Per-Outlet Breakdown & Price Tiers */}
-      <div className="bg-white rounded-xl border border-slate-200/90 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-300 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 uppercase text-[10px] tracking-wider">
+            <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-300 uppercase text-[10px] tracking-wider">
               <tr>
                 <th className="py-3 px-4">Item Details</th>
                 <th className="py-3 px-4">Category / Brand</th>
@@ -415,7 +415,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 <th className="py-3 px-4 text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-200">
               {filteredProducts.map((p) => {
                 const storeKey = p.outletId || (currentOutlet.id === 'all-outlets' ? 'inco-hardware' : currentOutlet.id);
                 const stockOnHand = p.stock[storeKey] || 0;
@@ -430,7 +430,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                         <img
                           src={p.imageUrl}
                           alt={p.name}
-                          className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0"
+                          className="w-10 h-10 rounded-lg object-cover border border-slate-300 shrink-0"
                         />
                         <div>
                           <div className="font-bold text-slate-800 text-xs">{p.name}</div>
@@ -564,7 +564,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         >
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl w-full max-w-xl shadow-2xl p-6 border border-slate-200 max-h-[90vh] overflow-y-auto animate-modal-card"
+            className="bg-white rounded-2xl w-full max-w-xl shadow-2xl p-6 border border-slate-300 max-h-[90vh] overflow-y-auto animate-modal-card"
           >
             <div className="flex justify-between items-center mb-4 border-b pb-2">
               <div>
@@ -587,7 +587,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
                       newProdStore === 'inco-hardware'
                         ? 'border-amber-500 bg-amber-50/50 ring-2 ring-amber-500/20'
-                        : 'border-slate-200 hover:bg-slate-50'
+                        : 'border-slate-300 hover:bg-slate-50'
                     }`}
                   >
                     <div className="font-black text-slate-800 text-xs">Inco Hardware</div>
@@ -599,7 +599,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
                       newProdStore === 'apex-electricals'
                         ? 'border-blue-500 bg-blue-50/50 ring-2 ring-blue-500/20'
-                        : 'border-slate-200 hover:bg-slate-50'
+                        : 'border-slate-300 hover:bg-slate-50'
                     }`}
                   >
                     <div className="font-black text-slate-800 text-xs">Apex Electricals</div>
@@ -703,7 +703,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               </div>
 
               {/* Price Tiers (BR-10 & FR-PROD-02) */}
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-300 space-y-2">
                 <div className="font-bold text-slate-800">Multi-Tier Pricing (Ghana Cedis GH₵)</div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
@@ -746,7 +746,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               </div>
 
               {/* Store Initial Stock & Cost */}
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-300 space-y-2">
                 <div className="font-bold text-slate-800">
                   Initial Stock & Unit Cost for {newProdStore === 'inco-hardware' ? 'Inco Hardware' : 'Apex Electricals'}
                 </div>
@@ -784,7 +784,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 </div>
               </div>
 
-              <div className="flex gap-2 pt-2 border-t border-slate-100">
+              <div className="flex gap-2 pt-2 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setAddModalOpen(false)}

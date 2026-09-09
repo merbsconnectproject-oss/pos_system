@@ -333,41 +333,27 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
       {/* 1. TOP HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-300">
         <div>
           <div className="flex items-center gap-2">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center border shadow-2xs"
-              style={{
-                backgroundColor: 'var(--accent-50, #fff7ed)',
-                color: 'var(--accent, #c55200)',
-                borderColor: 'var(--accent-200, #fed7aa)',
-              }}
-            >
-              <ArrowRightLeft className="w-5 h-5 stroke-[2.5]" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-black text-slate-900 tracking-tight">
-                  Goods Returns &amp; Swaps (Exchanges)
-                </h1>
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
-                  Inventory Reconciled
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Process customer goods returns, product swaps with price difference balancing, and automated stock restocks.
-              </p>
-            </div>
+            <h1 className="text-2xl font-black text-slate-800 tracking-tight">
+              Goods Returns &amp; Swaps (Exchanges)
+            </h1>
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300">
+              Inventory Reconciled
+            </span>
           </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Process customer goods returns, product swaps with price difference balancing, and automated stock restocks.
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleExportCsv}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 shadow-2xs transition-all cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export CSV</span>
@@ -387,7 +373,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
       {/* 2. SUMMARY METRICS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Swaps & Exchanges */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Swaps &amp; Exchanges</span>
             <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
@@ -403,7 +389,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
         </div>
 
         {/* Pure Returns (Refunds) */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Refunds Processed</span>
             <div className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center">
@@ -421,7 +407,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
         </div>
 
         {/* Total Returned Goods Value */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Returned Value</span>
             <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
@@ -439,7 +425,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
         </div>
 
         {/* Swapped Out Merchandise */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Swapped Outflow</span>
             <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -458,7 +444,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
       </div>
 
       {/* 3. FILTERS & SEARCH */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <input
@@ -466,7 +452,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by reference # (SWAP/RET), receipt #, customer, or phone..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20"
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
           />
         </div>
 
@@ -493,7 +479,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
         <select
           value={outletFilter}
           onChange={(e) => setOutletFilter(e.target.value)}
-          className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-hidden"
+          className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-700 focus:outline-hidden"
         >
           <option value="all">All Outlets</option>
           {outlets.map((o) => (
@@ -505,10 +491,10 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
       </div>
 
       {/* 4. TRANSACTIONS LEDGER TABLE */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-300 shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
+            <thead className="bg-slate-100 text-slate-600 border-b border-slate-300 font-bold uppercase tracking-wider text-[10px]">
               <tr>
                 <th className="py-3 px-4">Ref # / Date</th>
                 <th className="py-3 px-4">Original Sale / Customer</th>
@@ -518,7 +504,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                 <th className="py-3 px-4 text-center">Voucher</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+            <tbody className="divide-y divide-slate-200 font-medium text-slate-700">
               {filteredRecords.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-slate-400">
@@ -643,8 +629,8 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
       {/* 5. MODAL: PROCESS RETURN OR SWAP */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 max-h-[92vh] flex flex-col">
-            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-300 overflow-hidden animate-in fade-in zoom-in-95 max-h-[92vh] flex flex-col">
+            <div className="p-4 bg-slate-50 border-b border-slate-300 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center">
                   <ArrowRightLeft className="w-4 h-4 stroke-[2.5]" />
@@ -666,7 +652,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
 
             <form onSubmit={handleSubmitReturnOrSwap} className="p-5 space-y-5 overflow-y-auto flex-1">
               {/* Section 1: Original Receipt & Customer */}
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-300 space-y-3">
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                   <Receipt className="w-3.5 h-3.5 text-orange-500" />
                   <span>1. Original Purchase Reference</span>
@@ -680,7 +666,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                     <select
                       value={selectedSaleId}
                       onChange={(e) => handleSelectSale(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden font-medium"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-hidden font-medium"
                     >
                       {sales.map((s) => (
                         <option key={s.id} value={s.id}>
@@ -698,7 +684,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                       type="text"
                       value={customReceiptNumber}
                       onChange={(e) => setCustomReceiptNumber(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden font-mono"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-hidden font-mono"
                       required
                     />
                   </div>
@@ -712,7 +698,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
                       placeholder="Customer Name"
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-hidden"
                       required
                     />
                   </div>
@@ -732,7 +718,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                 </div>
 
                 {returnItems.map((item, idx) => (
-                  <div key={idx} className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2.5">
+                  <div key={idx} className="bg-slate-50 p-3.5 rounded-xl border border-slate-300 space-y-2.5">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                       <div className="sm:col-span-2">
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
@@ -751,7 +737,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                             };
                             setReturnItems(updated);
                           }}
-                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden"
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-hidden"
                         >
                           {products.map((p) => (
                             <option key={p.id} value={p.id}>
@@ -775,7 +761,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                               updated[idx].quantity = parseInt(e.target.value) || 1;
                               setReturnItems(updated);
                             }}
-                            className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-center font-mono"
+                            className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg text-center font-mono"
                           />
                         </div>
 
@@ -792,7 +778,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                               updated[idx].unitPrice = parseFloat(e.target.value) || 0;
                               setReturnItems(updated);
                             }}
-                            className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-right font-mono"
+                            className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg text-right font-mono"
                           />
                         </div>
                       </div>
@@ -810,7 +796,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                             updated[idx].reason = e.target.value as ReturnReason;
                             setReturnItems(updated);
                           }}
-                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden"
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-hidden"
                         >
                           {RETURN_REASONS.map((r) => (
                             <option key={r} value={r}>
@@ -831,7 +817,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                             updated[idx].disposition = e.target.value as ReturnDisposition;
                             setReturnItems(updated);
                           }}
-                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden font-bold"
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-hidden font-bold"
                         >
                           <option value="RESTOCK">✓ Restock Into Inventory (Increases Stock)</option>
                           <option value="DAMAGED_WRITE_OFF">⚠ Damaged / Write-Off (Do Not Restock)</option>
@@ -849,7 +835,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                           setReturnItems(updated);
                         }}
                         placeholder="Condition notes / inspection findings..."
-                        className="w-full px-2.5 py-1 text-xs bg-white border border-slate-200 rounded-lg"
+                        className="w-full px-2.5 py-1 text-xs bg-white border border-slate-300 rounded-lg"
                       />
                     </div>
                   </div>
@@ -898,7 +884,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                             };
                             setSwapItems(updated);
                           }}
-                          className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden"
+                          className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-hidden"
                         >
                           {products.map((p) => (
                             <option key={p.id} value={p.id}>
@@ -916,7 +902,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                             updated[idx].quantity = parseInt(e.target.value) || 1;
                             setSwapItems(updated);
                           }}
-                          className="w-16 px-2 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-center font-mono"
+                          className="w-16 px-2 py-1.5 text-xs bg-white border border-slate-300 rounded-lg text-center font-mono"
                           title="Quantity"
                         />
 
@@ -958,12 +944,12 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
               </div>
 
               {/* Section 4: Settlement Reconciliation */}
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-300 space-y-3">
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-700">
                   4. Financial Settlement &amp; Net Reconciliation
                 </h4>
 
-                <div className="p-3 rounded-xl bg-white border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="p-3 rounded-xl bg-white border border-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <div className="text-[11px] text-slate-500">
                       Returned Value:{' '}
@@ -995,7 +981,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                       <select
                         value={settlementMethod}
                         onChange={(e) => setSettlementMethod(e.target.value as any)}
-                        className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 focus:outline-hidden"
+                        className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg font-bold text-slate-800 focus:outline-hidden"
                       >
                         <option value="Mobile Money">Mobile Money (MoMo)</option>
                         <option value="Cash">Cash (Drawer Float)</option>
@@ -1012,13 +998,13 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                     value={transactionNotes}
                     onChange={(e) => setTransactionNotes(e.target.value)}
                     placeholder="Transaction authorization notes or comments..."
-                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg"
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg"
                   />
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="pt-3 flex items-center justify-end gap-2 shrink-0 border-t border-slate-100">
+              <div className="pt-3 flex items-center justify-end gap-2 shrink-0 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
@@ -1042,7 +1028,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
       {/* 6. MODAL: PRINTABLE OFFICIAL RETURN & SWAP VOUCHER */}
       {selectedVoucher && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 p-6 space-y-4 font-mono text-xs">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-300 overflow-hidden animate-in fade-in zoom-in-95 p-6 space-y-4 font-mono text-xs">
             <div className="text-center border-b border-dashed border-slate-300 pb-3 space-y-1 font-sans">
               <h3 className="font-black text-base text-slate-900">RADIANCE LIGHTING</h3>
               <p className="text-[11px] text-slate-500">Showroom East Legon • Accra, Ghana</p>

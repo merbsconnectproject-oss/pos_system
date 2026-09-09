@@ -226,7 +226,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto animate-fade-in">
       {/* 1. TOP HEADER & PRIMARY ACTIONS */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-300">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-300">
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">
@@ -340,11 +340,53 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
         </div>
       </div>
 
-      {/* 3. CATEGORY SPEND BREAKDOWN & SEARCH/FILTERS */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* 3. SEARCH & FILTERS TOOLBAR */}
+      <div className="bg-white rounded-xl p-4 border border-slate-300 shadow-xs flex flex-col lg:flex-row gap-3 items-center justify-between">
+        <div className="relative w-full lg:w-96">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search description, payee, or reference #..."
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg font-semibold text-slate-700 focus:outline-hidden"
+          >
+            <option value="ALL">All Categories</option>
+            {EXPENSE_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={outletFilter}
+            onChange={(e) => setOutletFilter(e.target.value)}
+            className="px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg font-semibold text-slate-700 focus:outline-hidden"
+          >
+            <option value="all">All Outlets</option>
+            {outlets.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* 4. CATEGORY SPEND BREAKDOWN & EXPENSE LEDGER */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Left: Category Spend Breakdown */}
         <div className="lg:col-span-1 bg-white p-5 rounded-2xl border border-slate-300 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-300">
             <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
               <PieChart className="w-4 h-4 text-orange-500" />
               <span>Expense Allocation</span>
@@ -354,7 +396,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
             </span>
           </div>
 
-          <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+          <div className="space-y-3 max-h-[390px] overflow-y-auto pr-1">
             {categoryBreakdown.map((item) => (
               <div key={item.category} className="space-y-1">
                 <div className="flex items-center justify-between text-xs">
@@ -379,54 +421,17 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
           </div>
         </div>
 
-        {/* Right: Expenses Table with Filters */}
-        <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-300 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
-            {/* Search Input */}
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search description, payee, or reference #..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-              />
-            </div>
-
-            {/* Category Filter */}
-            <div className="flex items-center gap-2">
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-700 focus:outline-hidden"
-              >
-                <option value="ALL">All Categories</option>
-                {EXPENSE_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-
-              {/* Outlet Filter */}
-              <select
-                value={outletFilter}
-                onChange={(e) => setOutletFilter(e.target.value)}
-                className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-700 focus:outline-hidden"
-              >
-                <option value="all">All Outlets</option>
-                {outlets.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+        {/* Right: Expenses Ledger */}
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-300 shadow-xs overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-300 bg-slate-50/70">
+            <h2 className="text-sm font-black text-slate-900">Expense Ledger</h2>
+            <span className="text-[11px] text-slate-500 font-medium">
+              {filteredExpenses.length} {filteredExpenses.length === 1 ? 'entry' : 'entries'}
+            </span>
           </div>
 
           {/* Ledger Table */}
-          <div className="overflow-x-auto border border-slate-300 rounded-xl">
+          <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-100 text-slate-600 border-b border-slate-300 font-bold uppercase tracking-wider text-[10px]">
                 <tr>
@@ -448,7 +453,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                 ) : (
                   filteredExpenses.map((exp) => (
                     <tr key={exp.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-2.5 px-3 font-mono">
+                      <td className="py-2.5 px-3 font-mono whitespace-nowrap">
                         <div className="font-bold text-slate-900">{exp.date}</div>
                         <div className="text-[10px] text-slate-400">{exp.referenceNumber}</div>
                       </td>
@@ -470,11 +475,11 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                         <div className="text-[10px] text-slate-400">{exp.outletName}</div>
                       </td>
                       <td className="py-2.5 px-3">
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300 whitespace-nowrap">
                           {exp.paymentMethod}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-600">
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-600 whitespace-nowrap">
                         GH₵ {exp.amount.toFixed(2)}
                       </td>
                       <td className="py-2.5 px-3 text-center">
@@ -495,11 +500,11 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
         </div>
       </div>
 
-      {/* 4. MODAL: RECORD NEW EXPENSE */}
+      {/* 5. MODAL: RECORD NEW EXPENSE */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
-            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-300 overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-4 bg-slate-50 border-b border-slate-300 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center">
                   <Plus className="w-4 h-4 stroke-[3]" />
@@ -526,7 +531,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                   <select
                     value={formCategory}
                     onChange={(e) => setFormCategory(e.target.value as ExpenseCategory)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-medium"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
                     required
                   >
                     {EXPENSE_CATEGORIES.map((cat) => (
@@ -544,7 +549,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                   <select
                     value={formOutletId}
                     onChange={(e) => setFormOutletId(e.target.value as OutletId)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-medium"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
                   >
                     {outlets.map((o) => (
                       <option key={o.id} value={o.id}>
@@ -564,7 +569,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
                   placeholder="e.g. ECG Power Bill for Display Showroom"
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-medium"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
                   required
                 />
               </div>
@@ -581,7 +586,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                     value={formAmount}
                     onChange={(e) => setFormAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-mono font-bold"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-mono font-bold"
                     required
                   />
                 </div>
@@ -594,7 +599,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                     type="date"
                     value={formDate}
                     onChange={(e) => setFormDate(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-medium"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
                     required
                   />
                 </div>
@@ -610,7 +615,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                     value={formPayee}
                     onChange={(e) => setFormPayee(e.target.value)}
                     placeholder="e.g. ECG / Star Courier"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-medium"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
                     required
                   />
                 </div>
@@ -622,7 +627,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                   <select
                     value={formPaymentMethod}
                     onChange={(e) => setFormPaymentMethod(e.target.value as any)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-medium"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
                   >
                     <option value="Cash (Drawer)">Cash (Drawer Float)</option>
                     <option value="Mobile Money">Mobile Money (MoMo)</option>
@@ -643,7 +648,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                     value={formRef}
                     onChange={(e) => setFormRef(e.target.value)}
                     placeholder="e.g. INV-9942 or REC-002"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-mono"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-mono"
                   />
                 </div>
 
@@ -669,7 +674,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
                   placeholder="Additional context or approval reference..."
-                  className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-medium"
+                  className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
                 />
               </div>
 
@@ -697,8 +702,8 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
       {/* 5. MODAL: PRINTABLE P&L STATEMENT */}
       {statementPrintModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 p-6 space-y-4">
-            <div className="border-b border-slate-200 pb-4 text-center space-y-1">
+          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-300 overflow-hidden animate-in fade-in zoom-in-95 p-6 space-y-4">
+            <div className="border-b border-slate-300 pb-4 text-center space-y-1">
               <h2 className="text-base font-black uppercase text-slate-900 tracking-wider">
                 Radiance Lighting &amp; Outlets
               </h2>
@@ -711,15 +716,15 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
             </div>
 
             <div className="space-y-3 text-xs">
-              <div className="flex justify-between py-1.5 border-b border-slate-100 font-bold">
+              <div className="flex justify-between py-1.5 border-b border-slate-200 font-bold">
                 <span className="text-slate-700">Gross Sales Revenue:</span>
                 <span className="font-mono text-slate-900">GH₵ {totalRevenue.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-100 text-slate-600">
+              <div className="flex justify-between py-1.5 border-b border-slate-200 text-slate-600">
                 <span>Less: Cost of Goods Sold (COGS):</span>
                 <span className="font-mono text-teal-700">- GH₵ {totalCogs.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-200 font-black text-slate-900 bg-slate-50 px-2 rounded-lg">
+              <div className="flex justify-between py-1.5 border-b border-slate-300 font-black text-slate-900 bg-slate-50 px-2 rounded-lg">
                 <span>GROSS PROFIT:</span>
                 <span className="font-mono">GH₵ {grossProfit.toFixed(2)} ({grossMarginPct.toFixed(1)}%)</span>
               </div>
@@ -736,7 +741,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                 ))}
               </div>
 
-              <div className="flex justify-between py-1.5 border-b border-slate-100 font-bold text-rose-600">
+              <div className="flex justify-between py-1.5 border-b border-slate-200 font-bold text-rose-600">
                 <span>Total Operating Expenses:</span>
                 <span className="font-mono">- GH₵ {totalOperatingExpenses.toFixed(2)}</span>
               </div>
@@ -751,7 +756,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
               </div>
             </div>
 
-            <div className="pt-4 flex items-center justify-end gap-2 border-t border-slate-100">
+            <div className="pt-4 flex items-center justify-end gap-2 border-t border-slate-200">
               <button
                 onClick={() => setStatementPrintModalOpen(false)}
                 className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"

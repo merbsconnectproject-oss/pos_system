@@ -47,7 +47,7 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
     >
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-200 animate-modal-card"
+        className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-300 animate-modal-card"
       >
         {/* Header */}
         <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
@@ -64,7 +64,7 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
         </div>
 
         <div className="p-5 space-y-4">
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs flex justify-between items-center">
+          <div className="bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs flex justify-between items-center">
             <div>
               <div className="font-bold text-slate-800">{currentOutlet.name} • Terminal #01</div>
               <div className="text-slate-500">Cashier: Kwame A.</div>
@@ -150,7 +150,7 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
           ) : (
             /* Variance Revealed Screen */
             <div className="space-y-4 text-xs">
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+              <div className="bg-slate-50 border border-slate-300 rounded-xl p-4 space-y-2">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Expected Drawer Cash:</span>
                   <span className="font-bold text-slate-800">
@@ -161,7 +161,7 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
                   <span className="text-slate-500">Your Counted Cash:</span>
                   <span className="font-bold text-slate-800">GH₵ {countedNum.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between pt-2 border-t border-slate-200 text-sm font-black">
+                <div className="flex justify-between pt-2 border-t border-slate-300 text-sm font-black">
                   <span>Variance:</span>
                   <span
                     className={

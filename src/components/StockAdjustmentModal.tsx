@@ -75,7 +75,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
     >
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-200 animate-modal-card"
+        className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-300 animate-modal-card"
       >
         <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -91,7 +91,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
         </div>
 
         <form onSubmit={handleAdjust} className="p-5 space-y-4 text-xs">
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
+          <div className="bg-slate-50 border border-slate-300 rounded-xl p-3 space-y-1">
             <div className="font-bold text-slate-800 text-sm">{product.name}</div>
             <div className="text-slate-500 font-mono">{product.sku}</div>
             <div className="text-slate-600 pt-1">
@@ -153,7 +153,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
             />
           </div>
 
-          <div className="flex gap-2 pt-2 border-t border-slate-100">
+          <div className="flex gap-2 pt-2 border-t border-slate-200">
             <button
               type="button"
               onClick={onClose}

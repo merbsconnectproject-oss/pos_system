@@ -77,10 +77,10 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
         >
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-white h-full shadow-2xl flex flex-col justify-between overflow-y-auto border-l border-slate-200 animate-drawer-right"
+            className="w-full max-w-sm bg-white h-full shadow-2xl flex flex-col justify-between overflow-y-auto border-l border-slate-300 animate-drawer-right"
           >
             {/* Drawer Header */}
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+            <div className="p-4 border-b border-slate-300 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
                 <Settings className="w-5 h-5 text-orange-500" />
                 <h3 className="font-extrabold text-slate-800 text-base">Settings & Appearance</h3>
@@ -155,7 +155,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                     value={customHex}
                     onChange={(e) => setCustomHex(e.target.value)}
                     placeholder="#ff9f43"
-                    className="flex-1 px-3 py-1.5 text-xs font-mono border border-slate-200 rounded-lg"
+                    className="flex-1 px-3 py-1.5 text-xs font-mono border border-slate-300 rounded-lg"
                   />
                   <button
                     type="submit"
@@ -166,7 +166,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                 </form>
 
                 {/* Live Preview Panel (Per Screen K-06 requirement) */}
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+                <div className="p-3 bg-slate-50 border border-slate-300 rounded-xl space-y-2 text-xs">
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Live Token Preview</span>
                   <div className="flex items-center gap-2">
                     <button
@@ -186,7 +186,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
               </div>
 
               {/* Section 2: Receipt & Printer Configuration */}
-              <div className="space-y-3 pt-4 border-t border-slate-100">
+              <div className="space-y-3 pt-4 border-t border-slate-200">
                 <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                   <Printer className="w-4 h-4 text-orange-500" />
                   Thermal Printer Layout
@@ -200,7 +200,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                       className={`py-2 text-xs font-bold rounded-lg border transition-all ${
                         receiptWidth === w
                           ? 'border-orange-500 bg-orange-50 text-orange-600'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                          : 'border-slate-300 text-slate-600 hover:bg-slate-50'
                       }`}
                     >
                       {w} Standard
@@ -213,7 +213,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
               </div>
 
               {/* Section 3: Two Outlets Configuration */}
-              <div className="space-y-3 pt-4 border-t border-slate-100">
+              <div className="space-y-3 pt-4 border-t border-slate-200">
                 <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                   <Store className="w-4 h-4 text-orange-500" />
                   Configured Outlets ({outlets.length})
@@ -223,7 +223,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                   {outlets.map((outlet) => (
                     <div
                       key={outlet.id}
-                      className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-0.5"
+                      className="p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs space-y-0.5"
                     >
                       <div className="font-bold text-slate-800 flex items-center justify-between">
                         <span>{outlet.name}</span>
@@ -239,7 +239,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
             </div>
 
             {/* Drawer Footer */}
-            <div className="p-4 border-t border-slate-200 bg-slate-50 text-center">
+            <div className="p-4 border-t border-slate-300 bg-slate-50 text-center">
               <span className="text-[11px] text-slate-400">
                 DreamsPOS v1.0 • Stage 1 Certified
               </span>

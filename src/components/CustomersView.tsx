@@ -70,7 +70,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, onAddCu
       </div>
 
       {/* Search */}
-      <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex items-center justify-between">
+      <div className="bg-white rounded-xl p-4 border border-slate-300 shadow-xs flex items-center justify-between">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <input
@@ -78,16 +78,16 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, onAddCu
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by name, phone, or trade type..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-orange-500"
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-orange-500"
           />
         </div>
         <div className="text-xs text-slate-500 font-bold">{filtered.length} Customers</div>
       </div>
 
       {/* Customer Grid / Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-300 shadow-xs overflow-hidden">
         <table className="w-full text-left text-xs">
-          <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+          <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-300">
             <tr>
               <th className="py-3 px-4">Customer Name</th>
               <th className="py-3 px-4">Phone Number</th>
@@ -98,7 +98,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, onAddCu
               <th className="py-3 px-4">Notes</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-200">
             {filtered.map((c) => (
               <tr key={c.id} className="hover:bg-slate-50 transition-colors">
                 <td className="py-3 px-4 font-bold text-slate-800">{c.name}</td>
@@ -144,7 +144,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, onAddCu
         >
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-5 border border-slate-200 animate-modal-card"
+            className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-5 border border-slate-300 animate-modal-card"
           >
             <h3 className="font-black text-base text-slate-800 mb-3">Add New Customer</h3>
             <form onSubmit={handleSubmit} className="space-y-3 text-xs">

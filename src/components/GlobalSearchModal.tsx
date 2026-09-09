@@ -51,10 +51,10 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     >
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden border border-slate-200 animate-command-palette"
+        className="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden border border-slate-300 animate-command-palette"
       >
         {/* Search Input Bar */}
-        <div className="p-4 border-b border-slate-200 flex items-center gap-3">
+        <div className="p-4 border-b border-slate-300 flex items-center gap-3">
           <Search className="w-5 h-5 text-orange-500 shrink-0" />
           <input
             type="text"
@@ -64,7 +64,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             placeholder="Search electrical products, SKU, or shortcuts..."
             className="w-full text-sm font-semibold text-slate-800 focus:outline-none placeholder:text-slate-400"
           />
-          <kbd className="text-[10px] bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded font-mono text-slate-500">
+          <kbd className="text-[10px] bg-slate-100 border border-slate-300 px-1.5 py-0.5 rounded font-mono text-slate-500">
             ESC
           </kbd>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 cursor-pointer">
@@ -132,7 +132,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                       <img
                         src={p.imageUrl}
                         alt={p.name}
-                        className="w-8 h-8 rounded-md object-cover bg-slate-100 border border-slate-200"
+                        className="w-8 h-8 rounded-md object-cover bg-slate-100 border border-slate-300"
                       />
                       <div>
                         <div className="font-bold text-slate-800">{p.name}</div>

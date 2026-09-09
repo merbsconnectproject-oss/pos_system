@@ -92,7 +92,7 @@ export const StockMovementsView: React.FC<StockMovementsViewProps> = ({
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col sm:flex-row gap-3 items-center justify-between">
+      <div className="bg-white rounded-xl p-4 border border-slate-300 shadow-xs flex flex-col sm:flex-row gap-3 items-center justify-between">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <input
@@ -100,7 +100,7 @@ export const StockMovementsView: React.FC<StockMovementsViewProps> = ({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search product, ref #, or reason..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-orange-500"
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-orange-500"
           />
         </div>
 
@@ -109,7 +109,7 @@ export const StockMovementsView: React.FC<StockMovementsViewProps> = ({
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="text-xs font-semibold bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700"
+            className="text-xs font-semibold bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-700"
           >
             <option value="ALL">All Movement Types</option>
             <option value="RECEIPT">RECEIPT (Goods In)</option>
@@ -123,10 +123,10 @@ export const StockMovementsView: React.FC<StockMovementsViewProps> = ({
       </div>
 
       {/* Movements Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-300 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+            <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-300">
               <tr>
                 <th className="py-3 px-4">Date & Time</th>
                 <th className="py-3 px-4">Outlet</th>
@@ -139,7 +139,7 @@ export const StockMovementsView: React.FC<StockMovementsViewProps> = ({
                 <th className="py-3 px-4">User</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-200">
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-8 text-center text-slate-400">

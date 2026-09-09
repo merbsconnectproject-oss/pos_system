@@ -17,10 +17,20 @@ import {
   ShieldCheck,
   User,
   Sparkles,
+  LogOut,
 } from 'lucide-react';
-import { Outlet, OutletId } from '../types';
+import { Outlet, OutletId, UserAccount } from '../types';
+
+const ROLE_LABELS: Record<string, string> = {
+  super_admin: 'Administrator',
+  branch_manager: 'Branch Manager',
+  cashier: 'POS Cashier',
+  storekeeper: 'Storekeeper',
+};
 
 interface HeaderProps {
+  currentUser: UserAccount;
+  onSignOut: () => void;
   outlets: Outlet[];
   currentOutlet: Outlet;
   onSelectOutlet: (id: OutletId) => void;
@@ -35,6 +45,8 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
+  currentUser,
+  onSignOut,
   outlets,
   currentOutlet,
   onSelectOutlet,
@@ -49,6 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [outletDropdownOpen, setOutletDropdownOpen] = useState(false);
   const [addNewDropdownOpen, setAddNewDropdownOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState<string>('');
 
   useEffect(() => {
@@ -72,7 +85,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="h-16 bg-white/95 backdrop-blur-md border-b border-slate-200/90 px-3 sm:px-5 flex items-center justify-between sticky top-0 z-30 shadow-2xs select-none">
+    <header className="h-16 bg-white/95 backdrop-blur-md border-b border-slate-300 px-3 sm:px-5 flex items-center justify-between sticky top-0 z-30 shadow-2xs select-none">
       {/* LEFT: Mobile Menu, Brand, Desktop Toggle & Search */}
       <div className="flex items-center gap-2 sm:gap-4">
         {/* Mobile Hamburger Button */}
@@ -118,7 +131,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Desktop Sidebar Collapse Toggle Button */}
         <button
           onClick={onToggleSidebar}
-          className="hidden md:flex w-7 h-7 rounded-lg border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 text-slate-600 items-center justify-center shadow-2xs transition-all cursor-pointer"
+          className="hidden md:flex w-7 h-7 rounded-lg border border-slate-300 hover:border-slate-300 bg-white hover:bg-slate-50 text-slate-600 items-center justify-center shadow-2xs transition-all cursor-pointer"
           title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
         >
           {sidebarCollapsed ? (
@@ -131,13 +144,13 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Search Bar Trigger */}
         <div
           onClick={onOpenSearch}
-          className="hidden lg:flex items-center gap-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 rounded-xl px-3.5 py-1.5 w-64 xl:w-72 cursor-pointer text-slate-400 text-xs transition-all shadow-2xs hover:border-slate-300"
+          className="hidden lg:flex items-center gap-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-300 rounded-xl px-3.5 py-1.5 w-64 xl:w-72 cursor-pointer text-slate-400 text-xs transition-all shadow-2xs hover:border-slate-300"
         >
           <Search className="w-3.5 h-3.5 text-slate-400" />
           <span className="flex-1 text-slate-500 font-medium truncate">
             Search electricals, SKU...
           </span>
-          <kbd className="text-[10px] font-mono font-bold bg-white text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded shadow-2xs">
+          <kbd className="text-[10px] font-mono font-bold bg-white text-slate-500 border border-slate-300 px-1.5 py-0.5 rounded shadow-2xs">
             ⌘K
           </kbd>
         </div>
@@ -146,7 +159,7 @@ export const Header: React.FC<HeaderProps> = ({
       {/* RIGHT: Active Outlet Switcher, Actions, POS, Live Clock & Profile */}
       <div className="flex items-center gap-1.5 sm:gap-3">
         {/* Live POS Clock */}
-        <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 text-xs font-mono">
+        <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-300 rounded-lg text-slate-600 text-xs font-mono">
           <Clock className="w-3.5 h-3.5 text-orange-500 animate-pulse" />
           <span className="font-bold">{currentTime || '08:00:00 AM'}</span>
         </div>
@@ -167,7 +180,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {outletDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 py-2 divide-y divide-slate-100 animate-in fade-in zoom-in-95">
+            <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-300 rounded-2xl shadow-xl z-50 py-2 divide-y divide-slate-200 animate-in fade-in zoom-in-95">
               <div className="px-3.5 py-1.5 text-[10px] font-black uppercase text-slate-400 tracking-wider">
                 Select Active Branch
               </div>
@@ -213,7 +226,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {addNewDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-52 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 p-1.5 text-xs text-slate-700 font-medium animate-in fade-in zoom-in-95">
+            <div className="absolute right-0 mt-2 w-52 bg-white border border-slate-300 rounded-2xl shadow-xl z-50 p-1.5 text-xs text-slate-700 font-medium animate-in fade-in zoom-in-95">
               <button
                 onClick={() => {
                   onOpenAddNew('product');
@@ -273,7 +286,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Fullscreen Button */}
         <button
           onClick={handleFullscreen}
-          className="w-8 h-8 rounded-xl border border-transparent hover:border-slate-200 hover:bg-slate-100 items-center justify-center text-slate-500 hover:text-slate-800 transition-colors hidden md:flex cursor-pointer"
+          className="w-8 h-8 rounded-xl border border-transparent hover:border-slate-300 hover:bg-slate-100 items-center justify-center text-slate-500 hover:text-slate-800 transition-colors hidden md:flex cursor-pointer"
           title="Toggle Fullscreen Mode"
         >
           <Maximize2 className="w-4 h-4" />
@@ -282,30 +295,83 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Settings Drawer Button */}
         <button
           onClick={onOpenSettings}
-          className="w-8 h-8 rounded-xl border border-transparent hover:border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+          className="w-8 h-8 rounded-xl border border-transparent hover:border-slate-300 hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
           title="System Settings & Appearance"
         >
           <Settings className="w-4 h-4" />
         </button>
 
-        {/* User Avatar Badge */}
-        <div
-          onClick={onOpenUserProfile}
-          className="flex items-center gap-2 pl-1 cursor-pointer hover:opacity-90 transition-opacity"
-          title="Account & System Settings"
-        >
-          <div className="relative">
-            <img
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
-              alt="Admin Profile"
-              className="w-8 h-8 rounded-xl object-cover border border-slate-200 shadow-2xs"
-            />
-            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></span>
-          </div>
-          <div className="hidden 2xl:flex flex-col text-left">
-            <span className="text-xs font-black text-slate-800 leading-none">Kwame A.</span>
-            <span className="text-[10px] text-slate-400 font-medium">Administrator</span>
-          </div>
+        {/* Signed-in User Menu */}
+        <div className="relative pl-1">
+          <button
+            onClick={() => setUserMenuOpen((v) => !v)}
+            className="flex items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity"
+            title="Account, profile & sign out"
+          >
+            <div className="relative">
+              <img
+                src={
+                  currentUser.avatarUrl ||
+                  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'
+                }
+                alt={currentUser.fullName}
+                className="w-8 h-8 rounded-xl object-cover border border-slate-300 shadow-2xs"
+              />
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></span>
+            </div>
+            <div className="hidden 2xl:flex flex-col text-left">
+              <span className="text-xs font-black text-slate-800 leading-none">
+                {currentUser.fullName}
+              </span>
+              <span className="text-[10px] text-slate-400 font-medium">
+                {ROLE_LABELS[currentUser.role] || currentUser.role}
+              </span>
+            </div>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden 2xl:block" />
+          </button>
+
+          {userMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setUserMenuOpen(false)} />
+              <div className="absolute right-0 top-11 z-40 w-60 bg-white rounded-xl border border-slate-300 shadow-lg p-2 text-xs">
+                <div className="px-3 py-2.5 border-b border-slate-200">
+                  <div className="font-black text-slate-900">{currentUser.fullName}</div>
+                  <div className="text-[11px] text-slate-500 font-mono">@{currentUser.username}</div>
+                  <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-slate-500">
+                    <Store className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span className="truncate">
+                      {currentUser.outletId === 'all-outlets'
+                        ? 'All Outlets (HQ)'
+                        : outlets.find((o) => o.id === currentUser.outletId)?.name ||
+                          'Unassigned Branch'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    onOpenUserProfile?.();
+                  }}
+                  className="w-full text-left px-3 py-2 mt-1 rounded-lg hover:bg-slate-50 flex items-center gap-2 font-bold text-slate-700 cursor-pointer"
+                >
+                  <User className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Account &amp; Settings</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    onSignOut();
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-rose-50 flex items-center gap-2 font-bold text-rose-600 cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign out</span>
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </header>

@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import {
-  CalendarClock,
   CheckCircle2,
   AlertTriangle,
   Clock,
@@ -318,41 +317,27 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
       {/* 1. TOP HEADER & ACTIONS */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-300">
         <div>
           <div className="flex items-center gap-2">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center border shadow-2xs"
-              style={{
-                backgroundColor: 'var(--accent-50, #fff7ed)',
-                color: 'var(--accent, #c55200)',
-                borderColor: 'var(--accent-200, #fed7aa)',
-              }}
-            >
-              <CalendarClock className="w-5 h-5 stroke-[2.5]" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-black text-slate-900 tracking-tight">
-                  Customer Installment Plans
-                </h1>
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
-                  Layaway &amp; Credit
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Enable customers to purchase high-value lighting fixtures &amp; systems on scheduled payment installments.
-              </p>
-            </div>
+            <h1 className="text-2xl font-black text-slate-800 tracking-tight">
+              Customer Installment Plans
+            </h1>
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300">
+              Layaway &amp; Credit
+            </span>
           </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Enable customers to purchase high-value lighting fixtures &amp; systems on scheduled payment installments.
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleExportInstallmentsCsv}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 shadow-2xs transition-all cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export CSV</span>
@@ -372,7 +357,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
       {/* 2. SUMMARY METRICS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Book Value */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Total Credit Book</span>
             <div className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center">
@@ -390,7 +375,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
         </div>
 
         {/* Amount Collected */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Collected to Date</span>
             <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -408,7 +393,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
         </div>
 
         {/* Outstanding Receivables */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Outstanding Receivables</span>
             <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -426,7 +411,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
         </div>
 
         {/* Overdue Alerts */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Overdue Plans</span>
             <div
@@ -453,7 +438,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
       </div>
 
       {/* 3. SEARCH & STATUS FILTER TABS */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         {/* Search */}
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
@@ -462,7 +447,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by customer name, phone, or plan number (e.g. INST-2026)..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20"
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
           />
         </div>
 
@@ -493,7 +478,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
         <select
           value={outletFilter}
           onChange={(e) => setOutletFilter(e.target.value)}
-          className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-hidden"
+          className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-700 focus:outline-hidden"
         >
           <option value="all">All Outlets</option>
           {outlets.map((o) => (
@@ -507,7 +492,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
       {/* 4. INSTALLMENT PLANS LIST */}
       <div className="space-y-4">
         {filteredPlans.length === 0 ? (
-          <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-400">
+          <div className="bg-white p-12 text-center rounded-2xl border border-slate-300 text-slate-400">
             No customer installment plans match your search or filter criteria.
           </div>
         ) : (
@@ -521,7 +506,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
             return (
               <div
                 key={plan.id}
-                className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden transition-all"
+                className="bg-white rounded-2xl border border-slate-300 shadow-2xs overflow-hidden transition-all"
               >
                 {/* Plan Card Header */}
                 <div
@@ -632,7 +617,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
 
                 {/* Expanded Details: Schedule & Items */}
                 {isExpanded && (
-                  <div className="border-t border-slate-100 p-5 bg-slate-50/50 space-y-5">
+                  <div className="border-t border-slate-200 p-5 bg-slate-50/50 space-y-5">
                     {/* Items on Plan */}
                     <div>
                       <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2">
@@ -642,7 +627,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                         {plan.items.map((item, idx) => (
                           <div
                             key={idx}
-                            className="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between text-xs"
+                            className="bg-white p-3 rounded-xl border border-slate-300 flex items-center justify-between text-xs"
                           >
                             <div>
                               <div className="font-bold text-slate-900 truncate max-w-[180px]">
@@ -671,9 +656,9 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                         </span>
                       </div>
 
-                      <div className="overflow-x-auto bg-white rounded-xl border border-slate-200">
+                      <div className="overflow-x-auto bg-white rounded-xl border border-slate-300">
                         <table className="w-full text-left text-xs">
-                          <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
+                          <thead className="bg-slate-50 text-slate-500 border-b border-slate-300 font-bold uppercase tracking-wider text-[10px]">
                             <tr>
                               <th className="py-2.5 px-3">Instalment #</th>
                               <th className="py-2.5 px-3">Due Date</th>
@@ -684,7 +669,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                               <th className="py-2.5 px-3 text-right">Action</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                          <tbody className="divide-y divide-slate-200 font-medium text-slate-700">
                             {plan.schedule.map((item) => {
                               const isItemOverdue =
                                 item.status !== 'PAID' &&
@@ -785,8 +770,8 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
       {/* 5. MODAL: RECORD INSTALLMENT PAYMENT */}
       {paymentModalOpen && activePlanForPayment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
-            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-300 overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-4 bg-slate-50 border-b border-slate-300 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
                   <CheckCircle2 className="w-4 h-4 stroke-[3]" />
@@ -805,7 +790,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
             </div>
 
             <form onSubmit={handleSubmitPayment} className="p-5 space-y-4">
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-1">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-300 text-xs space-y-1">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Customer:</span>
                   <strong className="text-slate-900">{activePlanForPayment.customerName}</strong>
@@ -832,7 +817,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                     const item = activePlanForPayment.schedule.find((s) => s.installmentNumber === num);
                     if (item) setPaymentAmount((item.expectedAmount - item.paidAmount).toString());
                   }}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-medium"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
                 >
                   {activePlanForPayment.schedule.map((s) => (
                     <option key={s.installmentNumber} value={s.installmentNumber}>
@@ -854,7 +839,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                   max={activePlanForPayment.remainingBalance}
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-mono font-black text-slate-900"
+                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-mono font-black text-slate-900"
                   required
                 />
               </div>
@@ -867,7 +852,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                   <select
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-medium"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
                   >
                     <option value="momo">MTN / Telecel MoMo</option>
                     <option value="cash">Cash (Register Drawer)</option>
@@ -885,7 +870,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                     value={paymentReference}
                     onChange={(e) => setPaymentReference(e.target.value)}
                     placeholder="e.g. MOM-44910"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-mono"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-mono"
                   />
                 </div>
               </div>
@@ -914,8 +899,8 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
       {/* 6. MODAL: CREATE NEW INSTALLMENT PLAN */}
       {createModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 max-h-[90vh] flex flex-col">
-            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-300 overflow-hidden animate-in fade-in zoom-in-95 max-h-[90vh] flex flex-col">
+            <div className="p-4 bg-slate-50 border-b border-slate-300 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center">
                   <Plus className="w-4 h-4 stroke-[3]" />
@@ -942,7 +927,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                   <select
                     value={selectedCustomerId}
                     onChange={(e) => setSelectedCustomerId(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-medium"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
                     required
                   >
                     {customers.map((c) => (
@@ -960,7 +945,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                   <select
                     value={planOutletId}
                     onChange={(e) => setPlanOutletId(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-medium"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
                   >
                     {outlets.map((o) => (
                       <option key={o.id} value={o.id}>
@@ -991,7 +976,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                           };
                           setPlanSelectedItems(newItems);
                         }}
-                        className="flex-1 px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-medium"
+                        className="flex-1 px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
                       >
                         {products.map((p) => (
                           <option key={p.id} value={p.id}>
@@ -1012,7 +997,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                           };
                           setPlanSelectedItems(newItems);
                         }}
-                        className="w-16 px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono text-center"
+                        className="w-16 px-2 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl font-mono text-center"
                         title="Quantity"
                       />
 
@@ -1066,7 +1051,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                     min="0"
                     value={planDownPayment}
                     onChange={(e) => setPlanDownPayment(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-mono font-bold"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-mono font-bold"
                     required
                   />
                 </div>
@@ -1078,7 +1063,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                   <select
                     value={planFrequency}
                     onChange={(e) => setPlanFrequency(e.target.value as any)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-medium"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
                   >
                     <option value="weekly">Weekly</option>
                     <option value="biweekly">Bi-weekly (Fortnightly)</option>
@@ -1093,7 +1078,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                   <select
                     value={planInstallmentCount}
                     onChange={(e) => setPlanInstallmentCount(parseInt(e.target.value))}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-medium"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
                   >
                     <option value={2}>2 Installments</option>
                     <option value={3}>3 Installments</option>
@@ -1112,11 +1097,11 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                   value={planNotes}
                   onChange={(e) => setPlanNotes(e.target.value)}
                   placeholder="e.g. Electrical installation contractor agreement for Airport Hills residence..."
-                  className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden font-medium"
+                  className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
                 />
               </div>
 
-              <div className="pt-3 flex items-center justify-end gap-2 shrink-0 border-t border-slate-100">
+              <div className="pt-3 flex items-center justify-end gap-2 shrink-0 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setCreateModalOpen(false)}
@@ -1140,7 +1125,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
       {/* 7. MODAL: PRINTABLE OFFICIAL INSTALLMENT RECEIPT */}
       {paymentReceiptSlip && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 p-6 space-y-4 font-mono text-xs">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl border border-slate-300 overflow-hidden animate-in fade-in zoom-in-95 p-6 space-y-4 font-mono text-xs">
             <div className="text-center border-b border-dashed border-slate-300 pb-3 space-y-1 font-sans">
               <h3 className="font-black text-base text-slate-900">RADIANCE LIGHTING</h3>
               <p className="text-[11px] text-slate-500">Showroom East Legon • Accra, Ghana</p>

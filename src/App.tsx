@@ -20,6 +20,7 @@ import { ExpensesAccountingView } from './components/ExpensesAccountingView';
 import { InstallmentsView } from './components/InstallmentsView';
 import { ReturnsExchangesView } from './components/ReturnsExchangesView';
 import { AnalyticsReportsView } from './components/AnalyticsReportsView';
+import { AuthView } from './components/AuthView';
 import {
   OUTLETS,
   INITIAL_PRODUCTS,
@@ -54,8 +55,11 @@ import {
 } from './types';
 
 export default function App() {
-  const [outlets] = useState<Outlet[]>(OUTLETS);
+  const [outlets, setOutlets] = useState<Outlet[]>(OUTLETS);
   const [currentOutletId, setCurrentOutletId] = useState<OutletId>('radiance-lighting');
+
+  // Authenticated session (null until a staff member signs in)
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -506,6 +510,108 @@ export default function App() {
     );
   };
 
+  // ==========================================
+  // AUTH SESSION
+  // ==========================================
+  const appendAuditLog = (entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) => {
+    const stamped: AuditLogEntry = {
+      ...entry,
+      id: `aud-${Date.now()}`,
+      timestamp:
+        new Date().toLocaleDateString('en-GB') +
+        ' ' +
+        new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+    setAuditLogs((prev) => [stamped, ...prev]);
+  };
+
+  const handleAuthenticated = (user: UserAccount) => {
+    const signedInAt =
+      new Date().toLocaleDateString('en-GB') +
+      ' ' +
+      new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === user.id
+          ? {
+              ...u,
+              ...user,
+              lastLogin: signedInAt,
+            }
+          : u
+      )
+    );
+
+    // Open the session on the branch this account is assigned to.
+    const scopedOutlet =
+      user.outletId === 'all-outlets'
+        ? outlets[0]?.id || 'all-outlets'
+        : outlets.find((o) => o.id === user.outletId)?.id || outlets[0]?.id;
+    if (scopedOutlet) setCurrentOutletId(scopedOutlet);
+
+    setCurrentUser({ ...user, lastLogin: signedInAt });
+    setActiveTab('dashboard');
+
+    appendAuditLog({
+      actor: user.fullName,
+      action: 'USER_SIGN_IN',
+      entity: `User: ${user.username}`,
+      outletName:
+        user.outletId === 'all-outlets'
+          ? 'All Outlets (HQ)'
+          : outlets.find((o) => o.id === user.outletId)?.name || 'Unassigned Branch',
+      details: `Signed in to the terminal as ${user.role.replace('_', ' ')}.`,
+    });
+  };
+
+  const handleSignOut = () => {
+    if (currentUser) {
+      appendAuditLog({
+        actor: currentUser.fullName,
+        action: 'USER_SIGN_OUT',
+        entity: `User: ${currentUser.username}`,
+        outletName: currentOutlet.name,
+        details: 'Ended the terminal session.',
+      });
+    }
+    setCurrentUser(null);
+    setPosOpen(false);
+    setSettingsOpen(false);
+    setSearchOpen(false);
+    setShiftModalOpen(false);
+  };
+
+  const handleUpdateUserPassword = (userId: string, newPassword: string) => {
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === userId
+          ? {
+              ...u,
+              password: newPassword,
+              tempPassword: undefined,
+              mustChangePasswordOnNextLogin: false,
+              passwordResetAt:
+                new Date().toLocaleDateString('en-GB') +
+                ' ' +
+                new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            }
+          : u
+      )
+    );
+  };
+
+  // ==========================================
+  // STORES & BRANCHES (Settings → Stores & Branches)
+  // ==========================================
+  const handleAddOutlet = (outlet: Outlet) => {
+    setOutlets((prev) => [...prev, outlet]);
+  };
+
+  const handleUpdateOutlet = (outletId: OutletId, changes: Partial<Outlet>) => {
+    setOutlets((prev) => prev.map((o) => (o.id === outletId ? { ...o, ...changes } : o)));
+  };
+
   const handleOpenAddNew = (action: string) => {
     if (action === 'product') {
       setActiveTab('products');
@@ -518,10 +624,27 @@ export default function App() {
     }
   };
 
+  // Gate the whole application behind the sign-in flow.
+  if (!currentUser) {
+    return (
+      <AuthView
+        users={users}
+        outlets={outlets}
+        companyName={generalSettings.companyName}
+        accentColor={accentColor}
+        onAuthenticated={handleAuthenticated}
+        onUpdateUserPassword={handleUpdateUserPassword}
+        onAddAuditLog={appendAuditLog}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-slate-800 flex flex-col font-sans">
       {/* 1. TOP NAVBAR */}
       <Header
+        currentUser={currentUser}
+        onSignOut={handleSignOut}
         outlets={outlets}
         currentOutlet={currentOutlet}
         onSelectOutlet={setCurrentOutletId}
@@ -701,6 +824,9 @@ export default function App() {
             <SettingsView
               currentOutlet={currentOutlet}
               outlets={outlets}
+              onAddOutlet={handleAddOutlet}
+              onUpdateOutlet={handleUpdateOutlet}
+              currentUser={currentUser}
               users={users}
               onUpdateUsers={setUsers}
               rolesPermissions={rolesPermissions}

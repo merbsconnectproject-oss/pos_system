@@ -187,20 +187,72 @@
   will-change: transform, opacity;
 }
 
+/* Isolated print surface: hidden on screen, the only thing that reaches paper. */
+#printable-receipt {
+  display: none;
+}
+
 @media print {
+  /* Hide the whole app shell, then re-reveal only the receipt document. */
   body * {
-    visibility: hidden;
+    visibility: hidden !important;
   }
-  #printable-receipt, #printable-receipt * {
-    visibility: visible;
+  #printable-receipt,
+  #printable-receipt * {
+    visibility: visible !important;
   }
   #printable-receipt {
+    display: block !important;
     position: absolute;
     left: 0;
     top: 0;
     width: 100%;
     margin: 0;
     padding: 0;
+    background: #ffffff;
+    color: #000000;
+  }
+
+  /* Release the app shell's scroll containers so a long receipt can paginate. */
+  #root,
+  #root > *,
+  #root main {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+  }
+
+  /* Crisp, ink-friendly thermal output */
+  #printable-receipt .receipt-doc {
+    /* Thermal-roll column: fills an 80mm roll, sits as a receipt strip on A4. */
+    width: 80mm;
+    max-width: 100%;
+    margin: 0 auto;
+    font-family: 'Courier New', ui-monospace, monospace;
+    font-size: 11px;
+    line-height: 1.45;
+    color: #000000;
+    overflow-wrap: anywhere;
+  }
+  #printable-receipt .receipt-doc * {
+    color: #000000 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  #printable-receipt .receipt-doc [class*="border"] {
+    border-color: #000000 !important;
+  }
+
+  @page {
+    margin: 6mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    height: auto !important;
+    overflow: visible !important;
   }
 }
 

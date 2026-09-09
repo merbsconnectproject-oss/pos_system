@@ -15,9 +15,9 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = ({ accentCo
   const yTicks = [100, 75, 50, 25, 0];
 
   return (
-    <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between h-full">
+    <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between h-full">
       {/* Chart Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div className="flex items-center gap-3">
           <div
             className="w-10 h-10 rounded-xl flex items-center justify-center border shadow-2xs"
@@ -43,7 +43,7 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = ({ accentCo
         </div>
 
         {/* Time Filters */}
-        <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl self-start sm:self-auto border border-slate-200/60">
+        <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl self-start sm:self-auto border border-slate-300">
           {ranges.map((range) => (
             <button
               key={range}
@@ -67,7 +67,7 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = ({ accentCo
 
       {/* Sub-header Legend */}
       <div className="flex items-center gap-3 py-3">
-        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-2xs">
+        <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 shadow-2xs">
           <span
             className="w-2.5 h-2.5 rounded-full"
             style={{ backgroundColor: accentColor || 'var(--chart-1, #c55200)' }}
@@ -75,7 +75,7 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = ({ accentCo
           <span className="text-xs text-slate-500 font-medium">Total POS Sales</span>
           <span className="text-xs font-black text-slate-900 ml-1 font-mono">GH₵ 48.9K</span>
         </div>
-        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-2xs">
+        <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 shadow-2xs">
           <span
             className="w-2.5 h-2.5 rounded-full"
             style={{ backgroundColor: 'var(--chart-2, #0f766e)' }}
@@ -94,7 +94,7 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = ({ accentCo
               <span className="text-[10px] font-mono font-bold text-slate-400 w-10 text-right pr-2">
                 {tick}K
               </span>
-              <div className="flex-1 border-b border-dashed border-slate-200/90"></div>
+              <div className="flex-1 border-b border-dashed border-slate-300"></div>
             </div>
           ))}
         </div>

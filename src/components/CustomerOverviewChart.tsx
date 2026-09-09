@@ -21,9 +21,9 @@ export const CustomerOverviewChart: React.FC<CustomerOverviewChartProps> = ({ ac
   ];
 
   return (
-    <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between h-full">
+    <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between h-full">
       {/* Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+      <div className="flex items-center justify-between pb-3 border-b border-slate-200">
         <div>
           <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
             <Users className="w-4 h-4 text-orange-500" />
@@ -35,13 +35,13 @@ export const CustomerOverviewChart: React.FC<CustomerOverviewChartProps> = ({ ac
         <div className="relative">
           <button
             onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-300 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
           >
             {filter}
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>
           {dropdownOpen && (
-            <div className="absolute right-0 mt-1 w-32 bg-white border border-slate-200 rounded-xl shadow-xl z-20 py-1 text-xs font-medium text-slate-700 animate-in fade-in zoom-in-95">
+            <div className="absolute right-0 mt-1 w-32 bg-white border border-slate-300 rounded-xl shadow-xl z-20 py-1 text-xs font-medium text-slate-700 animate-in fade-in zoom-in-95">
               {(['Today', 'This Week', 'This Month'] as const).map((t) => (
                 <button
                   key={t}
@@ -157,7 +157,7 @@ export const CustomerOverviewChart: React.FC<CustomerOverviewChartProps> = ({ ac
       </div>
 
       {/* Footer Banner */}
-      <div className="mt-2 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+      <div className="mt-2 pt-3 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
         <span className="flex items-center gap-1">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
           <span>Auto-Trade Price Rule (FR-CUST-04)</span>
