@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
@@ -63,6 +63,11 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const mainScrollRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    mainScrollRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+  }, [activeTab]);
 
   // Core entities state
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
@@ -640,7 +645,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa] text-slate-800 flex flex-col font-sans">
+    <div className="h-screen overflow-hidden bg-[#f8f9fa] text-slate-800 flex flex-col font-sans">
       {/* 1. TOP NAVBAR */}
       <Header
         currentUser={currentUser}
@@ -670,7 +675,7 @@ export default function App() {
           onCloseMobile={() => setMobileMenuOpen(false)}
         />
 
-        <main className="flex-1 overflow-y-auto bg-[#f8f9fa] pb-12">
+        <main ref={mainScrollRef} className="flex-1 overflow-y-auto bg-[#f8f9fa] pb-12">
           {/* Main Dashboard */}
           {activeTab === 'dashboard' && (
             <Dashboard

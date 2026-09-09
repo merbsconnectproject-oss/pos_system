@@ -216,37 +216,54 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
       {modalOpen && (
         <div
           onClick={() => setModalOpen(false)}
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-center justify-center p-4 animate-modal-backdrop"
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-center justify-center p-4 sm:p-6 animate-modal-backdrop"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 border border-slate-300 animate-modal-card"
+            className="bg-white rounded-xl w-full max-w-3xl shadow-2xl border border-slate-300 overflow-hidden animate-modal-card flex flex-col max-h-[92vh]"
           >
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="font-black text-base text-slate-800">Add Supplier</h3>
-              <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+            <div className="flex justify-between items-center px-6 py-5 sm:px-8 border-b border-slate-200 bg-slate-50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center">
+                  <Truck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-xl text-slate-900">Add Registered Supplier</h3>
+                  <p className="text-sm text-slate-500">Record commercial distributor details, payment terms, and product lines</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setModalOpen(false)} 
+                className="text-slate-400 hover:text-slate-700 p-2 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+
+            <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
               {/* Target Store */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Target Store *</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className="text-sm font-bold text-slate-800 block mb-2">Primary Supplier Outlet *</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <button
                     type="button"
                     onClick={() => {
                       setTargetStore('inco-hardware');
                       setCategorySupplied('Power & Hand Tools');
                     }}
-                    className={`p-2 rounded-lg border text-left cursor-pointer transition-all ${
+                    className={`p-4 rounded-xl border text-left cursor-pointer transition-all ${
                       targetStore === 'inco-hardware'
-                        ? 'border-amber-500 bg-amber-50/50 ring-2 ring-amber-500/20'
-                        : 'border-slate-300'
+                        ? 'border-amber-500 bg-amber-50/60 ring-2 ring-amber-500/20 shadow-xs'
+                        : 'border-slate-300 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="font-bold text-slate-800">Inco Hardware</div>
-                    <div className="text-[10px] text-slate-500">Hardware & Plumbing</div>
+                    <div className="font-black text-slate-900 text-sm flex items-center justify-between">
+                      <span>Inco Hardware</span>
+                      {targetStore === 'inco-hardware' && (
+                        <span className="text-[11px] font-bold text-amber-700 bg-amber-200/60 px-2 py-0.5 rounded">Selected</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">Hardware, Building Materials &amp; Plumbing</div>
                   </button>
                   <button
                     type="button"
@@ -254,115 +271,125 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
                       setTargetStore('apex-electricals');
                       setCategorySupplied('Cables & Switchgear');
                     }}
-                    className={`p-2 rounded-lg border text-left cursor-pointer transition-all ${
+                    className={`p-4 rounded-xl border text-left cursor-pointer transition-all ${
                       targetStore === 'apex-electricals'
-                        ? 'border-blue-500 bg-blue-50/50 ring-2 ring-blue-500/20'
-                        : 'border-slate-300'
+                        ? 'border-blue-500 bg-blue-50/60 ring-2 ring-blue-500/20 shadow-xs'
+                        : 'border-slate-300 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="font-bold text-slate-800">Apex Electricals</div>
-                    <div className="text-[10px] text-slate-500">Cables & Solar</div>
+                    <div className="font-black text-slate-900 text-sm flex items-center justify-between">
+                      <span>Apex Electricals</span>
+                      {targetStore === 'apex-electricals' && (
+                        <span className="text-[11px] font-bold text-blue-700 bg-blue-200/60 px-2 py-0.5 rounded">Selected</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">Cables, Panels, Solar &amp; Lighting</div>
                   </button>
                 </div>
               </div>
 
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Company / Supplier Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Somotex Ghana Ltd"
-                  className="w-full border border-slate-300 rounded-lg p-2"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Supplied Products / Lines</label>
-                <input
-                  type="text"
-                  value={categorySupplied}
-                  onChange={(e) => setCategorySupplied(e.target.value)}
-                  placeholder="e.g. PVC pipes, fittings, glue"
-                  className="w-full border border-slate-300 rounded-lg p-2"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Contact Representative *</label>
-                <input
-                  type="text"
-                  required
-                  value={contactPerson}
-                  onChange={(e) => setContactPerson(e.target.value)}
-                  placeholder="e.g. Evans Frimpong"
-                  className="w-full border border-slate-300 rounded-lg p-2"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Phone Number *</label>
+                  <label className="text-sm font-bold text-slate-800 block mb-1.5">Company / Supplier Legal Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Somotex Ghana Ltd / Nexans Cables"
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-orange-500 focus:ring-2 focus:ring-orange-500/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-bold text-slate-800 block mb-1.5">Supplied Products / Lines</label>
+                  <input
+                    type="text"
+                    value={categorySupplied}
+                    onChange={(e) => setCategorySupplied(e.target.value)}
+                    placeholder="e.g. PVC pipes, fittings, adhesives, armored cables"
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-orange-500 focus:ring-2 focus:ring-orange-500/20"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                  <label className="text-sm font-bold text-slate-800 block mb-1.5">Contact Representative *</label>
+                  <input
+                    type="text"
+                    required
+                    value={contactPerson}
+                    onChange={(e) => setContactPerson(e.target.value)}
+                    placeholder="e.g. Evans Frimpong (Key Account Exec)"
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-orange-500 focus:ring-2 focus:ring-orange-500/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-bold text-slate-800 block mb-1.5">Phone Number *</label>
                   <input
                     type="tel"
                     required
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="024 456 7890"
-                    className="w-full border border-slate-300 rounded-lg p-2 font-mono"
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono text-slate-800 focus:outline-orange-500 focus:ring-2 focus:ring-orange-500/20"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Payment Terms</label>
+                  <label className="text-sm font-bold text-slate-800 block mb-1.5">Standard Payment Terms *</label>
                   <select
                     value={paymentTerms}
                     onChange={(e) => setPaymentTerms(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white font-medium text-slate-800 focus:outline-orange-500"
                   >
-                    <option value="Cash on Delivery">Cash on Delivery</option>
-                    <option value="Net 14">Net 14 Days</option>
-                    <option value="Net 30">Net 30 Days</option>
-                    <option value="Net 60">Net 60 Days</option>
+                    <option value="Cash on Delivery">Cash on Delivery (COD)</option>
+                    <option value="Net 14">Net 14 Days Credit</option>
+                    <option value="Net 30">Net 30 Days Credit</option>
+                    <option value="Net 60">Net 60 Days Credit</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-bold text-slate-800 block mb-1.5">Official Accounts Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="orders@somotexgh.com"
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-orange-500 focus:ring-2 focus:ring-orange-500/20"
+                  />
                 </div>
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Email</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="sales@vendor.com"
-                  className="w-full border border-slate-300 rounded-lg p-2"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Warehouse / Factory Address</label>
+                <label className="text-sm font-bold text-slate-800 block mb-1.5">Warehouse / Dispatch Depot Address</label>
                 <input
                   type="text"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  placeholder="e.g. Heavy Industrial Area, Tema"
-                  className="w-full border border-slate-300 rounded-lg p-2"
+                  placeholder="e.g. Heavy Industrial Area, Plot 44B, Tema Harbour Road"
+                  className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-orange-500 focus:ring-2 focus:ring-orange-500/20"
                 />
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="flex-1 py-2 rounded-lg border border-slate-300 font-bold text-slate-600 cursor-pointer hover:bg-slate-50"
+                  className="sm:w-1/3 py-3 rounded-lg border border-slate-300 font-bold text-sm text-slate-600 cursor-pointer hover:bg-slate-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold cursor-pointer shadow-xs"
+                  className="sm:w-2/3 py-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm cursor-pointer shadow-xs transition-colors"
                 >
-                  Save Supplier
+                  Save Supplier Profile
                 </button>
               </div>
             </form>

@@ -357,7 +357,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
       {/* 2. SUMMARY METRICS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Book Value */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs flex flex-col justify-between">
+        <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Total Credit Book</span>
             <div className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center">
@@ -375,7 +375,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
         </div>
 
         {/* Amount Collected */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs flex flex-col justify-between">
+        <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Collected to Date</span>
             <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -393,7 +393,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
         </div>
 
         {/* Outstanding Receivables */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs flex flex-col justify-between">
+        <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Outstanding Receivables</span>
             <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -411,7 +411,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
         </div>
 
         {/* Overdue Alerts */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs flex flex-col justify-between">
+        <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Overdue Plans</span>
             <div
@@ -769,44 +769,44 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
 
       {/* 5. MODAL: RECORD INSTALLMENT PAYMENT */}
       {paymentModalOpen && activePlanForPayment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-300 overflow-hidden animate-in fade-in zoom-in-95">
-            <div className="p-4 bg-slate-50 border-b border-slate-300 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                  <CheckCircle2 className="w-4 h-4 stroke-[3]" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-xs animate-modal-backdrop">
+          <div className="bg-white w-full max-w-xl rounded-xl shadow-2xl border border-slate-300 overflow-hidden animate-modal-card flex flex-col max-h-[92vh]">
+            <div className="px-6 py-5 sm:px-8 bg-slate-900 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5 stroke-[3]" />
                 </div>
                 <div>
-                  <h3 className="font-black text-slate-900 text-sm">Record Installment Payment</h3>
-                  <p className="text-[11px] text-slate-500 font-mono">{activePlanForPayment.planNumber}</p>
+                  <h3 className="font-black text-xl leading-tight">Record Installment Payment</h3>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">{activePlanForPayment.planNumber}</p>
                 </div>
               </div>
               <button
                 onClick={() => setPaymentModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold p-1"
+                className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSubmitPayment} className="p-5 space-y-4">
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-300 text-xs space-y-1">
+            <form onSubmit={handleSubmitPayment} className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-300 text-sm space-y-2">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Customer:</span>
                   <strong className="text-slate-900">{activePlanForPayment.customerName}</strong>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Total Contract:</span>
-                  <span className="font-mono text-slate-900">GH₵ {activePlanForPayment.totalAmount.toFixed(2)}</span>
+                  <span className="font-mono font-bold text-slate-900">GH₵ {activePlanForPayment.totalAmount.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-blue-700 font-bold">
+                <div className="flex justify-between text-blue-700 font-black text-base border-t border-slate-200 pt-2">
                   <span>Current Outstanding:</span>
                   <span className="font-mono">GH₵ {activePlanForPayment.remainingBalance.toFixed(2)}</span>
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                <label className="block text-sm font-bold text-slate-800 mb-1.5">
                   Select Installment Tranche *
                 </label>
                 <select
@@ -817,7 +817,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                     const item = activePlanForPayment.schedule.find((s) => s.installmentNumber === num);
                     if (item) setPaymentAmount((item.expectedAmount - item.paidAmount).toString());
                   }}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
+                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-900"
                 >
                   {activePlanForPayment.schedule.map((s) => (
                     <option key={s.installmentNumber} value={s.installmentNumber}>
@@ -829,7 +829,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                <label className="block text-sm font-bold text-slate-800 mb-1.5">
                   Payment Amount (GH₵) *
                 </label>
                 <input
@@ -839,20 +839,20 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                   max={activePlanForPayment.remainingBalance}
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-mono font-black text-slate-900"
+                  className="w-full px-3.5 py-2.5 text-base bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-mono font-black text-slate-900"
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  <label className="block text-sm font-bold text-slate-800 mb-1.5">
                     Payment Channel *
                   </label>
                   <select
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-800"
                   >
                     <option value="momo">MTN / Telecel MoMo</option>
                     <option value="cash">Cash (Register Drawer)</option>
@@ -862,7 +862,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  <label className="block text-sm font-bold text-slate-800 mb-1.5">
                     Reference / TxID
                   </label>
                   <input
@@ -870,22 +870,22 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                     value={paymentReference}
                     onChange={(e) => setPaymentReference(e.target.value)}
                     placeholder="e.g. MOM-44910"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-mono"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-mono text-slate-900"
                   />
                 </div>
               </div>
 
-              <div className="pt-3 flex items-center justify-end gap-2">
+              <div className="pt-3 flex flex-col sm:flex-row items-center justify-end gap-3 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setPaymentModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                  className="w-full sm:w-auto px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-black text-white rounded-xl shadow-xs transition-all cursor-pointer hover:opacity-95"
+                  className="w-full sm:w-auto px-6 py-2.5 text-sm font-black text-white rounded-lg shadow-xs transition-all cursor-pointer hover:opacity-95"
                   style={{ backgroundColor: accentColor || 'var(--accent, #c55200)' }}
                 >
                   Confirm &amp; Issue Receipt
@@ -898,36 +898,36 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
 
       {/* 6. MODAL: CREATE NEW INSTALLMENT PLAN */}
       {createModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-300 overflow-hidden animate-in fade-in zoom-in-95 max-h-[90vh] flex flex-col">
-            <div className="p-4 bg-slate-50 border-b border-slate-300 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center">
-                  <Plus className="w-4 h-4 stroke-[3]" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-xs animate-modal-backdrop">
+          <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl border border-slate-300 overflow-hidden animate-modal-card max-h-[92vh] flex flex-col">
+            <div className="px-6 py-5 sm:px-8 bg-slate-900 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center">
+                  <Plus className="w-5 h-5 stroke-[3]" />
                 </div>
                 <div>
-                  <h3 className="font-black text-slate-900 text-sm">Create New Customer Installment Agreement</h3>
-                  <p className="text-[11px] text-slate-500">Configure layaway terms, down payment, and installment frequency</p>
+                  <h3 className="font-black text-xl leading-tight">Create Customer Installment Agreement</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Configure layaway terms, initial deposit, and payment frequency</p>
                 </div>
               </div>
               <button
                 onClick={() => setCreateModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold p-1"
+                className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleCreatePlanSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleCreatePlanSubmit} className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  <label className="block text-sm font-bold text-slate-800 mb-1.5">
                     Select Customer *
                   </label>
                   <select
                     value={selectedCustomerId}
                     onChange={(e) => setSelectedCustomerId(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-800"
                     required
                   >
                     {customers.map((c) => (
@@ -939,13 +939,13 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  <label className="block text-sm font-bold text-slate-800 mb-1.5">
                     Store Outlet *
                   </label>
                   <select
                     value={planOutletId}
                     onChange={(e) => setPlanOutletId(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-800"
                   >
                     {outlets.map((o) => (
                       <option key={o.id} value={o.id}>
@@ -958,12 +958,12 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
 
               {/* Items in Agreement */}
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                <label className="block text-sm font-bold text-slate-800 mb-2">
                   Lighting Goods &amp; Items to Finance *
                 </label>
-                <div className="space-y-2">
+                <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
                   {planSelectedItems.map((item, index) => (
-                    <div key={index} className="flex items-center gap-2">
+                    <div key={index} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                       <select
                         value={item.productId}
                         onChange={(e) => {
@@ -976,7 +976,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                           };
                           setPlanSelectedItems(newItems);
                         }}
-                        className="flex-1 px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
+                        className="flex-1 px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-900"
                       >
                         {products.map((p) => (
                           <option key={p.id} value={p.id}>
@@ -985,37 +985,39 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                         ))}
                       </select>
 
-                      <input
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) => {
-                          const newItems = [...planSelectedItems];
-                          newItems[index] = {
-                            ...newItems[index],
-                            quantity: parseInt(e.target.value) || 1,
-                          };
-                          setPlanSelectedItems(newItems);
-                        }}
-                        className="w-16 px-2 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl font-mono text-center"
-                        title="Quantity"
-                      />
-
-                      <span className="text-xs font-mono font-bold text-slate-900 w-24 text-right">
-                        GH₵ {(item.quantity * item.unitPrice).toFixed(2)}
-                      </span>
-
-                      {planSelectedItems.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPlanSelectedItems(planSelectedItems.filter((_, i) => i !== index));
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const newItems = [...planSelectedItems];
+                            newItems[index] = {
+                              ...newItems[index],
+                              quantity: parseInt(e.target.value) || 1,
+                            };
+                            setPlanSelectedItems(newItems);
                           }}
-                          className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
-                        >
-                          ✕
-                        </button>
-                      )}
+                          className="w-20 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg font-mono text-center font-bold text-slate-900"
+                          title="Quantity"
+                        />
+
+                        <span className="text-sm font-mono font-bold text-slate-900 w-28 text-right shrink-0">
+                          GH₵ {(item.quantity * item.unitPrice).toFixed(2)}
+                        </span>
+
+                        {planSelectedItems.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPlanSelectedItems(planSelectedItems.filter((_, i) => i !== index));
+                            }}
+                            className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-white cursor-pointer"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
 
@@ -1031,18 +1033,18 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                         },
                       ]);
                     }}
-                    className="text-xs font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 cursor-pointer pt-1"
+                    className="text-sm font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1.5 cursor-pointer pt-2"
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus className="w-4 h-4" />
                     <span>Add Another Fixture</span>
                   </button>
                 </div>
               </div>
 
               {/* Installment Plan Terms */}
-              <div className="grid grid-cols-3 gap-3 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 pt-1">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  <label className="block text-sm font-bold text-slate-800 mb-1.5">
                     Down Payment (GH₵) *
                   </label>
                   <input
@@ -1051,19 +1053,19 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                     min="0"
                     value={planDownPayment}
                     onChange={(e) => setPlanDownPayment(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-mono font-bold"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-mono font-bold text-slate-900"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  <label className="block text-sm font-bold text-slate-800 mb-1.5">
                     Payment Frequency *
                   </label>
                   <select
                     value={planFrequency}
                     onChange={(e) => setPlanFrequency(e.target.value as any)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-800"
                   >
                     <option value="weekly">Weekly</option>
                     <option value="biweekly">Bi-weekly (Fortnightly)</option>
@@ -1072,13 +1074,13 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  <label className="block text-sm font-bold text-slate-800 mb-1.5">
                     No. of Installments *
                   </label>
                   <select
                     value={planInstallmentCount}
                     onChange={(e) => setPlanInstallmentCount(parseInt(e.target.value))}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-800"
                   >
                     <option value={2}>2 Installments</option>
                     <option value={3}>3 Installments</option>
@@ -1089,29 +1091,29 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                <label className="block text-sm font-bold text-slate-800 mb-1.5">
                   Agreement Notes / Project Site
                 </label>
                 <textarea
-                  rows={2}
+                  rows={3}
                   value={planNotes}
                   onChange={(e) => setPlanNotes(e.target.value)}
                   placeholder="e.g. Electrical installation contractor agreement for Airport Hills residence..."
-                  className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden font-medium"
+                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-900"
                 />
               </div>
 
-              <div className="pt-3 flex items-center justify-end gap-2 shrink-0 border-t border-slate-200">
+              <div className="pt-3 flex flex-col sm:flex-row items-center justify-end gap-3 shrink-0 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setCreateModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  className="w-full sm:w-auto px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-300 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-black text-white rounded-xl shadow-xs transition-all cursor-pointer hover:opacity-95"
+                  className="w-full sm:w-auto px-6 py-2.5 text-sm font-black text-white rounded-lg shadow-xs transition-all cursor-pointer hover:opacity-95"
                   style={{ backgroundColor: accentColor || 'var(--accent, #c55200)' }}
                 >
                   Create Agreement &amp; Generate Schedule
@@ -1124,17 +1126,17 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
 
       {/* 7. MODAL: PRINTABLE OFFICIAL INSTALLMENT RECEIPT */}
       {paymentReceiptSlip && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl border border-slate-300 overflow-hidden animate-in fade-in zoom-in-95 p-6 space-y-4 font-mono text-xs">
-            <div className="text-center border-b border-dashed border-slate-300 pb-3 space-y-1 font-sans">
-              <h3 className="font-black text-base text-slate-900">RADIANCE LIGHTING</h3>
-              <p className="text-[11px] text-slate-500">Showroom East Legon • Accra, Ghana</p>
-              <div className="text-[10px] bg-slate-100 px-2 py-0.5 rounded inline-block font-mono">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-xs animate-modal-backdrop">
+          <div className="bg-white w-full max-w-md rounded-xl shadow-2xl border border-slate-300 overflow-hidden animate-modal-card p-6 sm:p-8 space-y-5 font-mono text-sm">
+            <div className="text-center border-b border-dashed border-slate-300 pb-4 space-y-1.5 font-sans">
+              <h3 className="font-black text-lg text-slate-900">RADIANCE LIGHTING</h3>
+              <p className="text-xs text-slate-500">Showroom East Legon • Accra, Ghana</p>
+              <div className="text-xs bg-slate-100 text-slate-700 px-3 py-1 rounded-full inline-block font-mono font-bold">
                 INSTALLMENT PAYMENT RECEIPT
               </div>
             </div>
 
-            <div className="space-y-1.5 border-b border-dashed border-slate-300 pb-3">
+            <div className="space-y-2 border-b border-dashed border-slate-300 pb-4">
               <div className="flex justify-between">
                 <span className="text-slate-500 font-sans">Receipt #:</span>
                 <span className="font-bold text-slate-900">{paymentReceiptSlip.receiptNumber}</span>
@@ -1157,52 +1159,52 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
               </div>
             </div>
 
-            <div className="space-y-1.5 border-b border-dashed border-slate-300 pb-3">
-              <div className="flex justify-between text-sm font-black">
+            <div className="space-y-2 border-b border-dashed border-slate-300 pb-4">
+              <div className="flex justify-between text-base font-black">
                 <span className="font-sans">AMOUNT PAID:</span>
                 <span className="text-emerald-700">GH₵ {paymentReceiptSlip.amountPaid.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-slate-600 text-[11px]">
+              <div className="flex justify-between text-slate-600 text-xs">
                 <span className="font-sans">Payment Method:</span>
-                <span>{paymentReceiptSlip.method}</span>
+                <span className="font-bold">{paymentReceiptSlip.method}</span>
               </div>
               {paymentReceiptSlip.reference && (
-                <div className="flex justify-between text-slate-600 text-[11px]">
+                <div className="flex justify-between text-slate-600 text-xs">
                   <span className="font-sans">Ref / TxID:</span>
                   <span>{paymentReceiptSlip.reference}</span>
                 </div>
               )}
             </div>
 
-            <div className="space-y-1.5 border-b border-dashed border-slate-300 pb-3">
-              <div className="flex justify-between">
+            <div className="space-y-2 border-b border-dashed border-slate-300 pb-4">
+              <div className="flex justify-between text-xs">
                 <span className="text-slate-500 font-sans">Total Agreement:</span>
                 <span>GH₵ {paymentReceiptSlip.plan.totalAmount.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between font-bold text-blue-700">
+              <div className="flex justify-between font-bold text-blue-700 text-sm">
                 <span className="font-sans">REMAINING BALANCE:</span>
                 <span>GH₵ {paymentReceiptSlip.newBalance.toFixed(2)}</span>
               </div>
             </div>
 
-            <div className="text-center text-[10px] text-slate-400 font-sans space-y-1 pt-1">
+            <div className="text-center text-xs text-slate-500 font-sans space-y-1 pt-1">
               <p>Thank you for partnering with Radiance Lighting!</p>
-              <p>Quality Architectural Luminaires &amp; Power Systems</p>
+              <p className="text-[11px] text-slate-400">Quality Architectural Luminaires &amp; Power Systems</p>
             </div>
 
-            <div className="flex items-center gap-2 pt-2 font-sans">
+            <div className="flex items-center gap-3 pt-3 font-sans">
               <button
                 onClick={() => setPaymentReceiptSlip(null)}
-                className="flex-1 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                className="flex-1 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-300 cursor-pointer"
               >
                 Done
               </button>
               <button
                 onClick={() => window.print()}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-black text-white rounded-xl shadow-xs"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-black text-white rounded-lg shadow-xs cursor-pointer"
                 style={{ backgroundColor: accentColor || 'var(--accent, #c55200)' }}
               >
-                <Printer className="w-3.5 h-3.5" />
+                <Printer className="w-4 h-4" />
                 <span>Print Slip</span>
               </button>
             </div>

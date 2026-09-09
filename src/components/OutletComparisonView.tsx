@@ -47,7 +47,7 @@ interface OutletMetrics {
   revenuePerItem: number;
   // Profile
   theme: {
-    gradient: string;
+    headerBg: string;
     badgeBg: string;
     border: string;
     accentText: string;
@@ -80,7 +80,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
       let archetype = 'General Trade Branch';
       let topDriver = 'Fast-moving installation essentials and standard retail lines.';
       let theme = {
-        gradient: 'from-slate-800 to-slate-900',
+        headerBg: 'bg-slate-900',
         badgeBg: 'bg-slate-100 text-slate-800 border-slate-300',
         border: 'border-slate-300',
         accentText: 'text-slate-900',
@@ -94,12 +94,6 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
         baseMarginPct = 40.0;
         archetype = 'High-Value Architectural Showroom';
         topDriver = 'Italian chandeliers, 48V magnetic track lights, and luxury pendants with premium retail margins.';
-        theme = {
-          gradient: 'from-amber-600 via-amber-700 to-stone-900',
-          badgeBg: 'bg-amber-100 text-amber-900 border-amber-300',
-          border: 'border-amber-200',
-          accentText: 'text-amber-600',
-        };
       } else if (outlet.id === 'inco-hardware') {
         baseRevenue = 32450.0;
         baseOrders = 95;
@@ -108,12 +102,6 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
         baseMarginPct = 28.5;
         archetype = 'Bulk Contractor & Electrical Supply';
         topDriver = '2.5mm Twin & Earth Cable accounts for 41% of daily volume, supplied by Nexans Ghana.';
-        theme = {
-          gradient: 'from-orange-500 via-orange-600 to-amber-700',
-          badgeBg: 'bg-orange-100 text-orange-900 border-orange-300',
-          border: 'border-orange-200',
-          accentText: 'text-orange-600',
-        };
       } else if (outlet.id === 'apex-electricals') {
         baseRevenue = 16538.0;
         baseOrders = 77;
@@ -122,12 +110,6 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
         baseMarginPct = 32.0;
         archetype = 'Commercial & Urban Trade Counter';
         topDriver = 'PVC Conduit 20mm & 13A Single Sockets lead unit velocity in Kumasi trade branch.';
-        theme = {
-          gradient: 'from-teal-700 via-teal-800 to-slate-900',
-          badgeBg: 'bg-teal-100 text-teal-900 border-teal-300',
-          border: 'border-teal-200',
-          accentText: 'text-teal-700',
-        };
       }
 
       // Dynamic sales added in session
@@ -208,10 +190,10 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
       {/* Header with Metric Mode Segmented Switcher */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-300 shadow-2xs">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-[-0.025em]">
             Multi-Outlet Comparison
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-sm font-normal text-slate-500 mt-1 tracking-normal">
             Comparative performance and operational analysis across all enterprise retail branches.
           </p>
         </div>
@@ -311,7 +293,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
             >
               {/* Branch Header Banner */}
               <div
-                className={`p-5 bg-gradient-to-r ${theme.gradient} text-white flex justify-between items-start`}
+                className={`p-5 ${theme.headerBg} text-white flex justify-between items-start`}
               >
                 <div>
                   <div className="flex items-center gap-1.5 flex-wrap">

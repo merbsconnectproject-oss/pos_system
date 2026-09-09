@@ -35,6 +35,26 @@ function getGenAI(): GoogleGenAI | null {
   return genAIClient;
 }
 
+// In-memory cache to conserve API quota and prevent redundant model calls
+interface InferenceCacheItem {
+  timestamp: number;
+  data: any;
+}
+const inferenceCache = new Map<string, InferenceCacheItem>();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache
+
+// Track model rate limits / quota exhaustion cooldowns in-memory
+const modelCooldowns = new Map<string, number>();
+function isModelAvailable(modelName: string): boolean {
+  const cooldownUntil = modelCooldowns.get(modelName);
+  if (!cooldownUntil) return true;
+  if (Date.now() > cooldownUntil) {
+    modelCooldowns.delete(modelName);
+    return true;
+  }
+  return false;
+}
+
 // 1. Health check
 app.get('/api/health', (req, res) => {
   res.json({
@@ -48,6 +68,12 @@ app.get('/api/health', (req, res) => {
 app.post('/api/analytics/ai-inference', async (req, res) => {
   try {
     const { metricsSummary, chartContext, customQuestion, outletName } = req.body;
+
+    const cacheKey = `${outletName || 'all'}_${(customQuestion || 'default').trim().toLowerCase()}`;
+    const cached = inferenceCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
+      return res.json(cached.data);
+    }
 
     const ai = getGenAI();
 
@@ -262,11 +288,16 @@ Generate a comprehensive, mathematically grounded, actionable retail analytics r
 }
 Return valid JSON only. Do not wrap in backticks or markdown if possible.`;
 
-    const candidateModels = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
+    // Prioritize gemini-3.1-flash-lite as fast, high-quota, resilient candidate
+    const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'];
     let responseText = '';
-    let usedModel = 'gemini-3.8-flash';
+    let usedModel = 'gemini-3.1-flash-lite';
 
     for (const modelCandidate of candidateModels) {
+      if (!isModelAvailable(modelCandidate)) {
+        continue;
+      }
+
       try {
         const response = await ai.models.generateContent({
           model: modelCandidate,
@@ -280,13 +311,28 @@ Return valid JSON only. Do not wrap in backticks or markdown if possible.`;
           usedModel = modelCandidate;
           break;
         }
-      } catch (err) {
-        console.warn(`Model ${modelCandidate} unavailable, trying next candidate:`, (err as Error)?.message || err);
+      } catch (err: any) {
+        const errMsg = err?.message || String(err);
+        const isQuota = errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED') || err?.status === 429;
+        const isUnavailable = errMsg.includes('503') || errMsg.includes('UNAVAILABLE') || err?.status === 503;
+
+        if (isQuota) {
+          // Put model on cooldown for 5 minutes to prevent hammering rate limits
+          modelCooldowns.set(modelCandidate, Date.now() + 5 * 60 * 1000);
+          console.log(`[AI Inference] Model ${modelCandidate} quota limit reached (429). Rotating to alternate model.`);
+        } else if (isUnavailable) {
+          modelCooldowns.set(modelCandidate, Date.now() + 60 * 1000);
+          console.log(`[AI Inference] Model ${modelCandidate} temporarily busy (503). Rotating to alternate model.`);
+        } else {
+          console.log(`[AI Inference] Model ${modelCandidate} fallback triggered.`);
+        }
       }
     }
 
     if (!responseText) {
-      return res.json(generateFallbackInference());
+      const fallback = generateFallbackInference();
+      inferenceCache.set(cacheKey, { timestamp: Date.now(), data: fallback });
+      return res.json(fallback);
     }
 
     let parsedData;
@@ -298,17 +344,22 @@ Return valid JSON only. Do not wrap in backticks or markdown if possible.`;
       // Regex extraction fallback
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        parsedData = JSON.parse(jsonMatch[0]);
-        parsedData.isAiGenerated = true;
-        parsedData.modelUsed = usedModel;
+        try {
+          parsedData = JSON.parse(jsonMatch[0]);
+          parsedData.isAiGenerated = true;
+          parsedData.modelUsed = usedModel;
+        } catch {
+          parsedData = generateFallbackInference();
+        }
       } else {
         parsedData = generateFallbackInference();
       }
     }
 
+    inferenceCache.set(cacheKey, { timestamp: Date.now(), data: parsedData });
     return res.json(parsedData);
-  } catch (error) {
-    console.error('Error in /api/analytics/ai-inference:', error);
+  } catch (_error) {
+    console.log('[AI Inference] Returning robust smart rules analytics fallback');
     // Return robust heuristic inference so UI remains 100% operational
     return res.json({
       isAiGenerated: false,

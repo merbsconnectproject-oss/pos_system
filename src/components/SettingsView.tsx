@@ -872,7 +872,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* Module Tabs — aligned horizontally across the top of the page */}
-      <div className="bg-white rounded-2xl border border-slate-300 shadow-2xs p-1.5">
+      <div className="bg-white rounded-xl border border-slate-300 shadow-2xs p-1.5">
         <div className="flex flex-wrap items-stretch gap-1">
           {SETTINGS_TABS.map(({ key, label, hint, icon: Icon }) => {
             const isActive = activeTab === key;
@@ -919,7 +919,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <div className="space-y-6">
           {/* TAB 1: GENERAL STORE PROFILE & TAX */}
           {activeTab === 'general' && (
-            <div className="bg-white rounded-2xl border border-slate-300 p-6 shadow-2xs space-y-6">
+            <div className="bg-white rounded-xl border border-slate-300 p-6 shadow-2xs space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200">
                 <div>
                   <h2 className="text-base font-bold text-slate-900">
@@ -1077,7 +1077,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           {/* TAB 2: STORES & BRANCHES */}
           {activeTab === 'outlets' && (
-            <div className="bg-white rounded-2xl border border-slate-300 p-5 shadow-2xs space-y-5">
+            <div className="bg-white rounded-xl border border-slate-300 p-5 shadow-2xs space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
                 <div>
                   <h2 className="text-base font-bold text-slate-900">Stores &amp; Branch Network</h2>
@@ -1227,7 +1227,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           {/* TAB 3: USER ACCOUNTS & STAFF MANAGEMENT */}
           {activeTab === 'users' && (
-            <div className="bg-white rounded-2xl border border-slate-300 p-5 shadow-2xs space-y-5">
+            <div className="bg-white rounded-xl border border-slate-300 p-5 shadow-2xs space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
                 <div>
                   <h2 className="text-base font-bold text-slate-900">Staff Credentials &amp; Accounts</h2>
@@ -1421,7 +1421,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           {/* TAB 3: ROLES & PERMISSIONS MATRIX */}
           {activeTab === 'permissions' && (
-            <div className="bg-white rounded-2xl border border-slate-300 p-6 shadow-2xs space-y-6">
+            <div className="bg-white rounded-xl border border-slate-300 p-6 shadow-2xs space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
                 <div>
                   <h2 className="text-base font-bold text-slate-900">
@@ -1707,7 +1707,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           {/* TAB 4: SECURITY & MANAGER PIN */}
           {activeTab === 'security' && (
-            <div className="bg-white rounded-2xl border border-slate-300 p-6 shadow-2xs space-y-6">
+            <div className="bg-white rounded-xl border border-slate-300 p-6 shadow-2xs space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200">
                 <div>
                   <h2 className="text-base font-bold text-slate-900">Security &amp; Manager Override PIN</h2>
@@ -1823,7 +1823,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           {/* TAB 5: HARDWARE & RECEIPTS */}
           {activeTab === 'printers' && (
-            <div className="bg-white rounded-2xl border border-slate-300 p-6 shadow-2xs space-y-6">
+            <div className="bg-white rounded-xl border border-slate-300 p-6 shadow-2xs space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200">
                 <div>
                   <h2 className="text-base font-bold text-slate-900">Thermal Printer &amp; Receipt Design</h2>
@@ -1922,7 +1922,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
 
                 {/* Live Receipt Mockup Preview */}
-                <div className="lg:col-span-5 bg-slate-100 p-4 rounded-2xl border border-slate-300 flex flex-col items-center">
+                <div className="lg:col-span-5 bg-slate-100 p-4 rounded-xl border border-slate-300 flex flex-col items-center">
                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
                     Live Thermal Preview ({printerWidth})
                   </div>
@@ -1991,7 +1991,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           {/* TAB 6: APPEARANCE & THEME */}
           {activeTab === 'appearance' && (
-            <div className="bg-white rounded-2xl border border-slate-300 p-6 shadow-2xs space-y-6">
+            <div className="bg-white rounded-xl border border-slate-300 p-6 shadow-2xs space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200">
                 <div>
                   <h2 className="text-base font-bold text-slate-900">Visual Personalization &amp; Themes</h2>
@@ -2106,7 +2106,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           {/* TAB 7: BACKUP & ACCOUNTING EXPORT */}
           {activeTab === 'backup' && (
-            <div className="bg-white rounded-2xl border border-slate-300 p-6 shadow-2xs space-y-6">
+            <div className="bg-white rounded-xl border border-slate-300 p-6 shadow-2xs space-y-6">
               <div className="pb-4 border-b border-slate-200">
                 <h2 className="text-base font-bold text-slate-900">
                   Data Backup &amp; External Accounting Integration
@@ -2118,7 +2118,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Full System JSON Backup */}
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-300 space-y-3 flex flex-col justify-between">
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-300 space-y-3 flex flex-col justify-between">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
                       <Database className="w-4 h-4 text-orange-500" />
@@ -2138,7 +2138,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
 
                 {/* Accounting Compatibility */}
-                <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-200 space-y-3 flex flex-col justify-between">
+                <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-200 space-y-3 flex flex-col justify-between">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-xs font-bold text-emerald-950">
                       <FileText className="w-4 h-4 text-emerald-600" />
@@ -2230,123 +2230,125 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* SET UP / EDIT STORE BRANCH MODAL */}
       {isBranchModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-2xs z-50 flex items-center justify-center p-4 animate-modal-backdrop">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-300 animate-modal-zoom">
-            <div className="p-4 border-b border-slate-300 flex items-center justify-between bg-slate-50 shrink-0">
-              <div className="flex items-center gap-2">
-                <Store className="w-5 h-5 text-orange-500" />
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-center justify-center p-4 sm:p-6 animate-modal-backdrop">
+          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-300 animate-modal-card">
+            <div className="p-5 sm:p-6 border-b border-slate-300 flex items-center justify-between bg-slate-50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                  <Store className="w-5 h-5 text-orange-600" />
+                </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-sm">
+                  <h3 className="font-bold text-slate-900 text-base">
                     {editingBranch ? `Edit Branch — ${editingBranch.name}` : 'Set Up a New Store / Branch'}
                   </h3>
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-xs text-slate-500">
                     Register the shop profile, then tick the staff who will operate it.
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setIsBranchModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-md cursor-pointer"
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveBranch} className="p-5 space-y-5 overflow-y-auto flex-1">
+            <form onSubmit={handleSaveBranch} className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
               {/* Branch profile */}
-              <div className="space-y-3">
-                <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+              <div className="space-y-4">
+                <div className="text-xs font-black uppercase tracking-wider text-slate-400">
                   1. Branch Profile
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700">Store / Branch Name *</label>
+                    <label className="text-sm font-bold text-slate-700">Store / Branch Name *</label>
                     <input
                       type="text"
                       value={branchName}
                       onChange={(e) => setBranchName(e.target.value)}
                       placeholder="e.g. Radiance Lighting Takoradi"
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
+                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
                       required
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700">Town / City *</label>
+                    <label className="text-sm font-bold text-slate-700">Town / City *</label>
                     <input
                       type="text"
                       value={branchTown}
                       onChange={(e) => setBranchTown(e.target.value)}
                       placeholder="e.g. Takoradi"
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
+                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
                       required
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Street Address</label>
+                  <label className="text-sm font-bold text-slate-700">Street Address</label>
                   <input
                     type="text"
                     value={branchAddress}
                     onChange={(e) => setBranchAddress(e.target.value)}
                     placeholder="e.g. 24 Beach Road, Market Circle"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700">Branch Phone</label>
+                    <label className="text-sm font-bold text-slate-700">Branch Phone</label>
                     <input
                       type="text"
                       value={branchPhone}
                       onChange={(e) => setBranchPhone(e.target.value)}
                       placeholder="+233 24 000 0000"
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-mono"
+                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-mono"
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700">Receipt Prefix</label>
+                    <label className="text-sm font-bold text-slate-700">Receipt Prefix</label>
                     <input
                       type="text"
                       value={branchPrefix}
                       onChange={(e) => setBranchPrefix(e.target.value.toUpperCase())}
                       placeholder={branchName ? suggestReceiptPrefix(branchName) : 'e.g. TKD-01'}
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-mono"
+                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-mono"
                     />
-                    <p className="text-[10px] text-slate-400">
+                    <p className="text-xs text-slate-400">
                       Leave blank to auto-generate. Must be unique across branches.
                     </p>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700">Branch Manager</label>
+                    <label className="text-sm font-bold text-slate-700">Branch Manager</label>
                     <input
                       type="text"
                       value={branchManager}
                       onChange={(e) => setBranchManager(e.target.value)}
                       placeholder="e.g. Ama Serwaa (Manager)"
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
+                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Staff assignment */}
-              <div className="space-y-3 pt-4 border-t border-slate-200">
+              <div className="space-y-3.5 pt-4 border-t border-slate-200">
                 <div className="flex items-center justify-between">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  <div className="text-xs font-black uppercase tracking-wider text-slate-400">
                     2. Assign Staff to this Branch
                   </div>
-                  <span className="text-[11px] font-bold text-slate-500">
+                  <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md">
                     {branchStaffIds.length} selected
                   </span>
                 </div>
 
-                <div className="border border-slate-300 rounded-xl divide-y divide-slate-200 max-h-64 overflow-y-auto">
+                <div className="border border-slate-300 rounded-xl divide-y divide-slate-200 max-h-72 overflow-y-auto">
                   {users.map((u) => {
                     const checked = branchStaffIds.includes(u.id);
                     const currentBranchName =
@@ -2356,7 +2358,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     return (
                       <label
                         key={u.id}
-                        className="flex items-center gap-3 px-3.5 py-2.5 hover:bg-slate-50 cursor-pointer"
+                        className="flex items-center gap-3.5 px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors"
                       >
                         <input
                           type="checkbox"
@@ -2367,15 +2369,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         <img
                           src={u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80'}
                           alt={u.fullName}
-                          className="w-7 h-7 rounded-full object-cover border border-slate-300 shrink-0"
+                          className="w-9 h-9 rounded-full object-cover border border-slate-300 shrink-0"
                         />
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs font-bold text-slate-900 truncate">{u.fullName}</div>
-                          <div className="text-[10px] text-slate-400 font-mono truncate">
+                          <div className="text-sm font-bold text-slate-900 truncate">{u.fullName}</div>
+                          <div className="text-xs text-slate-500 font-mono truncate mt-0.5">
                             @{u.username} • {rolesPermissions.find((r) => r.role === u.role)?.roleTitle || u.role}
                           </div>
                         </div>
-                        <span className="text-[10px] text-slate-400 shrink-0 hidden sm:block">
+                        <span className="text-xs text-slate-400 shrink-0 hidden sm:block">
                           Currently: {currentBranchName}
                         </span>
                       </label>
@@ -2383,23 +2385,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   })}
                 </div>
 
-                <p className="text-[11px] text-slate-500">
+                <p className="text-xs text-slate-500">
                   Unticking a staff member who currently sits on this branch moves them back to the
                   All Outlets (HQ) scope — no account is deleted.
                 </p>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200">
+              <div className="flex items-center justify-end gap-3 pt-5 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setIsBranchModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 border border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 border border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-orange-500 hover:bg-orange-600 text-white shadow-xs transition-colors cursor-pointer"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-orange-500 hover:bg-orange-600 text-white shadow-xs transition-colors cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
                   <span>{editingBranch ? 'Save Branch Changes' : 'Create Branch'}</span>
@@ -2412,37 +2414,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* BRANCH STAFF ROSTER DRAWER */}
       {assignBranch && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-2xs z-50 flex items-center justify-center p-4 animate-modal-backdrop">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-300 animate-modal-zoom">
-            <div className="p-4 border-b border-slate-300 flex items-center justify-between bg-slate-50 shrink-0">
-              <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-orange-500" />
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-center justify-center p-4 sm:p-6 animate-modal-backdrop">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-300 animate-modal-card">
+            <div className="p-5 sm:p-6 border-b border-slate-300 flex items-center justify-between bg-slate-50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                  <Users className="w-5 h-5 text-orange-600" />
+                </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-sm">
+                  <h3 className="font-bold text-slate-900 text-base">
                     Staff Roster — {assignBranch.name}
                   </h3>
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-xs text-slate-500">
                     {staffCountForBranch(assignBranch.id)} assigned • {assignBranch.town}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setAssignBranch(null)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-md cursor-pointer"
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 border-b border-slate-200 shrink-0">
+            <div className="p-4 sm:p-5 border-b border-slate-200 shrink-0 bg-white">
               <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                 <input
                   type="text"
                   value={assignSearch}
                   onChange={(e) => setAssignSearch(e.target.value)}
                   placeholder="Search staff by name or username..."
-                  className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
                 />
               </div>
             </div>
@@ -2457,15 +2461,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 .map((u) => {
                   const assignedHere = u.outletId === assignBranch.id;
                   return (
-                    <div key={u.id} className="flex items-center gap-3 px-4 py-3">
+                    <div key={u.id} className="flex items-center gap-3.5 px-5 py-3.5 hover:bg-slate-50 transition-colors">
                       <img
                         src={u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80'}
                         alt={u.fullName}
-                        className="w-8 h-8 rounded-full object-cover border border-slate-300 shrink-0"
+                        className="w-10 h-10 rounded-full object-cover border border-slate-300 shrink-0"
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-bold text-slate-900 truncate">{u.fullName}</div>
-                        <div className="text-[10px] text-slate-400 font-mono truncate">
+                        <div className="text-sm font-bold text-slate-900 truncate">{u.fullName}</div>
+                        <div className="text-xs text-slate-500 font-mono truncate mt-0.5">
                           @{u.username} •{' '}
                           {u.outletId === 'all-outlets'
                             ? 'All Outlets (HQ)'
@@ -2476,7 +2480,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         onClick={() =>
                           handleSetUserBranch(u.id, assignedHere ? 'all-outlets' : assignBranch.id)
                         }
-                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer shrink-0 ${
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer shrink-0 ${
                           assignedHere
                             ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-300'
                             : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-300'
@@ -2489,10 +2493,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 })}
             </div>
 
-            <div className="p-4 border-t border-slate-200 flex justify-end shrink-0">
+            <div className="p-4 sm:p-5 border-t border-slate-200 flex justify-end shrink-0 bg-slate-50">
               <button
                 onClick={() => setAssignBranch(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 border border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
+                className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 border border-slate-300 hover:bg-white transition-colors cursor-pointer"
               >
                 Done
               </button>
@@ -2503,69 +2507,76 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* ADD / EDIT USER MODAL */}
       {isUserModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-2xs z-50 flex items-center justify-center p-4 animate-modal-backdrop">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-300 animate-modal-zoom">
-            <div className="p-4 border-b border-slate-300 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-orange-500" />
-                <h3 className="font-bold text-slate-900 text-sm">
-                  {editingUser ? 'Edit Staff Account' : 'Register New Staff Member'}
-                </h3>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-center justify-center p-4 sm:p-6 animate-modal-backdrop">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-300 animate-modal-card flex flex-col max-h-[92vh]">
+            <div className="p-5 sm:p-6 border-b border-slate-300 flex items-center justify-between bg-slate-50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                  <Users className="w-5 h-5 text-orange-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">
+                    {editingUser ? 'Edit Staff Account' : 'Register New Staff Member'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Configure staff roles, branch assignments, and access credentials
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setIsUserModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-md"
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveUser} className="p-5 space-y-4">
+            <form onSubmit={handleSaveUser} className="p-6 sm:p-8 space-y-5 overflow-y-auto flex-1">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Full Name</label>
+                <label className="text-sm font-bold text-slate-700">Full Name</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Kwame Asante"
                   value={userFullName}
                   onChange={(e) => setUserFullName(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                  className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Username</label>
+                  <label className="text-sm font-bold text-slate-700">Username</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. kasante"
                     value={userUsername}
                     onChange={(e) => setUserUsername(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-mono"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-mono"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">4-Digit PIN Code</label>
+                  <label className="text-sm font-bold text-slate-700">4-Digit PIN Code</label>
                   <input
                     type="password"
                     maxLength={4}
                     required
                     value={userPin}
                     onChange={(e) => setUserPin(e.target.value.replace(/\D/g, ''))}
-                    className="w-full px-3 py-2 text-xs text-center tracking-widest bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-mono font-bold"
+                    className="w-full px-3.5 py-2.5 text-sm text-center tracking-widest bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-mono font-bold"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">System Role</label>
+                  <label className="text-sm font-bold text-slate-700">System Role</label>
                   <select
                     value={userRole}
                     onChange={(e) => setUserRole(e.target.value as UserRole)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
                   >
                     <option value="cashier">POS Cashier</option>
                     <option value="branch_manager">Branch Manager</option>
@@ -2575,11 +2586,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Store Branch</label>
+                  <label className="text-sm font-bold text-slate-700">Store Branch</label>
                   <select
                     value={userOutlet}
                     onChange={(e) => setUserOutlet(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
                   >
                     {outlets.map((o) => (
                       <option key={o.id} value={o.id} disabled={o.active === false}>
@@ -2592,49 +2603,49 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Email Address</label>
+                  <label className="text-sm font-bold text-slate-700">Email Address</label>
                   <input
                     type="email"
                     placeholder="kwame@incohardware.com"
                     value={userEmail}
                     onChange={(e) => setUserEmail(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Phone Number</label>
+                  <label className="text-sm font-bold text-slate-700">Phone Number</label>
                   <input
                     type="text"
                     placeholder="+233 24 000 0000"
                     value={userPhone}
                     onChange={(e) => setUserPhone(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
                   />
                 </div>
               </div>
 
               {/* Password & Next-Login Security Controls */}
               {editingUser ? (
-                <div className="p-3.5 bg-slate-50 border border-slate-300 rounded-xl space-y-3">
+                <div className="p-4 sm:p-5 bg-slate-50 border border-slate-300 rounded-xl space-y-3.5">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                    <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
                       <KeyRound className="w-4 h-4 text-orange-500" />
                       <span>Password &amp; Login Security Policy</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleOpenResetPasswordModal(editingUser)}
-                      className="px-2.5 py-1 text-[11px] font-bold bg-white text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-50 cursor-pointer flex items-center gap-1.5 transition-colors"
+                      className="px-3 py-1.5 text-xs font-bold bg-white text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-50 cursor-pointer flex items-center gap-1.5 transition-colors"
                     >
-                      <RotateCcw className="w-3 h-3 text-orange-600" />
+                      <RotateCcw className="w-3.5 h-3.5 text-orange-600" />
                       <span>Reset Password...</span>
                     </button>
                   </div>
 
-                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <label className="flex items-start gap-3 cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={userMustChangePassword}
@@ -2642,17 +2653,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       className="mt-0.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500 w-4 h-4"
                     />
                     <div>
-                      <div className="text-xs font-bold text-slate-800">
+                      <div className="text-sm font-bold text-slate-800">
                         Require password update on next login
                       </div>
-                      <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                      <div className="text-xs text-slate-500 leading-normal mt-0.5">
                         Forces this user to establish new personal credentials immediately upon their next login attempt.
                       </div>
                     </div>
                   </label>
 
                   {editingUser.passwordResetAt && (
-                    <div className="text-[10px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-300">
+                    <div className="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-300">
                       <span>Last reset executed:</span>
                       <span className="font-bold text-slate-700 font-mono">
                         {editingUser.passwordResetAt}
@@ -2661,8 +2672,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   )}
                 </div>
               ) : (
-                <div className="p-3 bg-slate-50 border border-slate-300 rounded-xl">
-                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                <div className="p-4 sm:p-5 bg-slate-50 border border-slate-300 rounded-xl">
+                  <label className="flex items-start gap-3 cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={userMustChangePassword}
@@ -2670,10 +2681,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       className="mt-0.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500 w-4 h-4"
                     />
                     <div>
-                      <div className="text-xs font-bold text-slate-800">
+                      <div className="text-sm font-bold text-slate-800">
                         Require password change on first login
                       </div>
-                      <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                      <div className="text-xs text-slate-500 leading-normal mt-0.5">
                         Recommended security standard: newly onboarded staff are prompted to personalize their credentials.
                       </div>
                     </div>
@@ -2681,17 +2692,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               )}
 
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
+              <div className="flex justify-end gap-3 pt-5 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setIsUserModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                  className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-bold bg-orange-500 hover:bg-orange-600 text-white rounded-xl shadow-xs transition-colors cursor-pointer"
+                  className="px-5 py-2.5 text-sm font-bold bg-orange-500 hover:bg-orange-600 text-white rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
                   {editingUser ? 'Save User Changes' : 'Create Staff User'}
                 </button>
@@ -2703,86 +2714,86 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* RESET PASSWORD WORKFLOW MODAL */}
       {isResetPasswordModalOpen && targetUserForPasswordReset && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-2xs z-50 flex items-center justify-center p-4 animate-modal-backdrop">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-300 animate-modal-zoom">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-center justify-center p-4 sm:p-6 animate-modal-backdrop">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-300 animate-modal-card flex flex-col max-h-[92vh]">
             {/* Modal Header */}
-            <div className="p-4 border-b border-slate-300 flex items-center justify-between bg-gradient-to-r from-orange-50 to-amber-50">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-xs">
-                  <KeyRound className="w-4 h-4" />
+            <div className="p-5 sm:p-6 border-b border-slate-300 flex items-center justify-between bg-gradient-to-r from-orange-50 to-amber-50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                  <KeyRound className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-sm">
+                  <h3 className="font-bold text-slate-900 text-base">
                     Reset Staff Password
                   </h3>
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-xs text-slate-500">
                     Generate credentials &amp; configure login policy
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setIsResetPasswordModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-white/60 transition-colors cursor-pointer"
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-white/60 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-5 space-y-5">
+            <div className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
               {/* User Target Card */}
-              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-300">
+              <div className="flex items-center gap-3.5 p-4 bg-slate-50 rounded-xl border border-slate-300">
                 <img
                   src={
                     targetUserForPasswordReset.avatarUrl ||
                     'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80'
                   }
                   alt={targetUserForPasswordReset.fullName}
-                  className="w-10 h-10 rounded-full object-cover border border-slate-300 shrink-0"
+                  className="w-12 h-12 rounded-full object-cover border border-slate-300 shrink-0"
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <div className="font-bold text-slate-900 text-xs truncate">
+                    <div className="font-bold text-slate-900 text-sm truncate">
                       {targetUserForPasswordReset.fullName}
                     </div>
-                    <span className="text-[10px] font-mono text-slate-500 bg-slate-200/70 px-1.5 py-0.2 rounded">
+                    <span className="text-xs font-mono text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded">
                       @{targetUserForPasswordReset.username}
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-500 truncate mt-0.5">
+                  <div className="text-xs text-slate-500 truncate mt-0.5">
                     {targetUserForPasswordReset.email} • {targetUserForPasswordReset.phone}
                   </div>
                 </div>
               </div>
 
               {/* Temporary Password Field */}
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-800">
+                  <label className="text-sm font-bold text-slate-800">
                     Temporary Credentials
                   </label>
                   <button
                     type="button"
                     onClick={() => setTempPasswordInput(generateSecureTempPassword())}
-                    className="text-[11px] text-orange-600 hover:text-orange-700 font-bold flex items-center gap-1 cursor-pointer"
+                    className="text-xs text-orange-600 hover:text-orange-700 font-bold flex items-center gap-1.5 cursor-pointer"
                   >
-                    <RotateCcw className="w-3 h-3" />
+                    <RotateCcw className="w-3.5 h-3.5" />
                     <span>Regenerate Secure Password</span>
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
                   <div className="relative flex-1">
                     <input
                       type={showTempPassword ? 'text' : 'password'}
                       value={tempPasswordInput}
                       onChange={(e) => setTempPasswordInput(e.target.value)}
                       placeholder="Enter temporary password"
-                      className="w-full pl-3.5 pr-10 py-2.5 text-xs font-mono font-bold tracking-wider bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                      className="w-full pl-4 pr-12 py-3 text-sm font-mono font-bold tracking-wider bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
                     />
                     <button
                       type="button"
                       onClick={() => setShowTempPassword((prev) => !prev)}
-                      className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                      className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 cursor-pointer"
                       title={showTempPassword ? 'Hide password' : 'Show password'}
                     >
                       {showTempPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -2792,7 +2803,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <button
                     type="button"
                     onClick={handleCopyTempPassword}
-                    className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                    className={`px-4 py-3 rounded-xl text-sm font-bold border transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
                       copiedTempPassword
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
                         : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300'
@@ -2801,25 +2812,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   >
                     {copiedTempPassword ? (
                       <>
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <Check className="w-4 h-4 text-emerald-600" />
                         <span>Copied</span>
                       </>
                     ) : (
                       <>
-                        <Copy className="w-3.5 h-3.5 text-slate-500" />
+                        <Copy className="w-4 h-4 text-slate-500" />
                         <span>Copy</span>
                       </>
                     )}
                   </button>
                 </div>
-                <p className="text-[10px] text-slate-400">
+                <p className="text-xs text-slate-500">
                   Provide this temporary password to the team member for their initial entry.
                 </p>
               </div>
 
               {/* State-Based Flag: Require Password Update on Next Login */}
-              <div className="p-3.5 bg-orange-50/70 border border-orange-200 rounded-xl space-y-1.5">
-                <label className="flex items-start gap-3 cursor-pointer select-none">
+              <div className="p-4 sm:p-5 bg-orange-50/70 border border-orange-200 rounded-xl space-y-2">
+                <label className="flex items-start gap-3.5 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={mustChangeOnNextLogin}
@@ -2827,13 +2838,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     className="mt-0.5 rounded border-orange-300 text-orange-600 focus:ring-orange-500 w-4 h-4"
                   />
                   <div>
-                    <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                    <div className="text-sm font-bold text-slate-900 flex items-center gap-2.5">
                       <span>Require password update on next login</span>
-                      <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-orange-200 text-orange-800">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-orange-200 text-orange-800">
                         Enforced Policy
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">
                       When enabled, the user will be blocked from accessing POS terminal functions until they establish a new confidential password immediately after entering this temporary credential.
                     </p>
                   </div>
@@ -2841,24 +2852,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
 
               {/* Notification Simulation Checkbox */}
-              <div className="p-3 bg-slate-50 border border-slate-300 rounded-xl">
-                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <div className="p-4 bg-slate-50 border border-slate-300 rounded-xl">
+                <label className="flex items-center gap-3 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={dispatchNotification}
                     onChange={(e) => setDispatchNotification(e.target.checked)}
                     className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 w-4 h-4"
                   />
-                  <div className="text-xs text-slate-700">
+                  <div className="text-xs sm:text-sm text-slate-700">
                     <span className="font-bold">Dispatch notification alert</span> to{' '}
-                    <span className="font-mono text-slate-800">{targetUserForPasswordReset.email}</span>
+                    <span className="font-mono text-slate-900 font-bold">{targetUserForPasswordReset.email}</span>
                   </div>
                 </label>
               </div>
 
               {/* Audit Trail Notice */}
-              <div className="flex items-center gap-2 text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-300">
-                <Shield className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <div className="flex items-center gap-2.5 text-xs text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-300">
+                <Shield className="w-4 h-4 text-slate-400 shrink-0" />
                 <span>
                   This action will invalidate active sessions and be recorded in the enterprise Audit Log.
                 </span>
@@ -2866,20 +2877,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
 
             {/* Modal Footer Actions */}
-            <div className="p-4 bg-slate-50 border-t border-slate-300 flex justify-end gap-2.5">
+            <div className="p-4 sm:p-6 bg-slate-50 border-t border-slate-300 flex justify-end gap-3 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsResetPasswordModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200/70 rounded-xl transition-colors cursor-pointer"
+                className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-200/70 rounded-xl transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={() => handleConfirmPasswordReset()}
-                className="px-4 py-2 text-xs font-bold bg-orange-500 hover:bg-orange-600 text-white rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-2"
+                className="px-5 py-2.5 text-sm font-bold bg-orange-500 hover:bg-orange-600 text-white rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-2"
               >
-                <KeyRound className="w-3.5 h-3.5" />
+                <KeyRound className="w-4 h-4" />
                 <span>Confirm Password Reset</span>
               </button>
             </div>
@@ -2889,50 +2900,50 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* NEXT-LOGIN PASSWORD CHANGE SIMULATION MODAL */}
       {isNextLoginPromptOpen && simulatedUserForLoginPrompt && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 animate-modal-backdrop">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-300 animate-modal-zoom">
-            <div className="p-4 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-xs">
-                  <Lock className="w-4 h-4" />
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-center justify-center p-4 sm:p-6 animate-modal-backdrop">
+          <div className="bg-white rounded-xl shadow-2xl max-w-xl w-full overflow-hidden border border-slate-300 animate-modal-card flex flex-col max-h-[92vh]">
+            <div className="p-5 sm:p-6 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                  <Lock className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm leading-tight">
+                  <h3 className="font-bold text-base leading-tight">
                     Password Update Required
                   </h3>
-                  <span className="text-[10px] text-orange-200 font-mono">
+                  <span className="text-xs text-orange-200 font-mono">
                     Mandatory Next-Login Policy
                   </span>
                 </div>
               </div>
               <button
                 onClick={() => setIsNextLoginPromptOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-md"
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCompleteNextLoginPasswordChange} className="p-5 space-y-4">
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1">
-                <div className="font-bold flex items-center gap-1.5 text-amber-800">
+            <form onSubmit={handleCompleteNextLoginPasswordChange} className="p-6 sm:p-8 space-y-5 overflow-y-auto flex-1">
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs sm:text-sm text-amber-900 space-y-1.5">
+                <div className="font-bold flex items-center gap-2 text-amber-800">
                   <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
                   Security Notice for {simulatedUserForLoginPrompt.fullName}
                 </div>
-                <p className="text-[11px] text-amber-700 leading-relaxed">
+                <p className="text-xs text-amber-700 leading-relaxed">
                   Your system administrator reset your password and flagged your account to establish a confidential password on your next login.
                 </p>
               </div>
 
               {simError && (
-                <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-sm font-bold flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{simError}</span>
                 </div>
               )}
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">
+                <label className="text-sm font-bold text-slate-700">
                   Current / Temporary Password
                 </label>
                 <input
@@ -2941,12 +2952,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   value={simCurrentPass}
                   onChange={(e) => setSimCurrentPass(e.target.value)}
                   placeholder="Enter temporary password"
-                  className="w-full px-3.5 py-2 text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                  className="w-full px-4 py-2.5 text-sm font-mono bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">
+                <label className="text-sm font-bold text-slate-700">
                   New Personal Password
                 </label>
                 <div className="relative">
@@ -2957,12 +2968,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     value={simNewPass}
                     onChange={(e) => setSimNewPass(e.target.value)}
                     placeholder="Minimum 8 characters"
-                    className="w-full pl-3.5 pr-10 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                    className="w-full pl-4 pr-12 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
                   />
                   <button
                     type="button"
                     onClick={() => setSimShowPass((p) => !p)}
-                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                    className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
                   >
                     {simShowPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -2970,7 +2981,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">
+                <label className="text-sm font-bold text-slate-700">
                   Confirm New Password
                 </label>
                 <input
@@ -2980,21 +2991,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   value={simConfirmPass}
                   onChange={(e) => setSimConfirmPass(e.target.value)}
                   placeholder="Retype new password"
-                  className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                  className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setIsNextLoginPromptOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                  className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-bold bg-slate-900 hover:bg-black text-white rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                  className="px-5 py-2.5 text-sm font-bold bg-slate-900 hover:bg-black text-white rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-2"
                 >
                   <Check className="w-4 h-4 text-emerald-400" />
                   <span>Update Password &amp; Clear Flag</span>

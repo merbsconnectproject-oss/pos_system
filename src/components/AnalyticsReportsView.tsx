@@ -23,6 +23,7 @@ import {
   BarChart3,
   CheckCircle2,
   XCircle,
+  X,
   HelpCircle,
   Search,
   ChevronDown,
@@ -444,9 +445,8 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
       } else {
         throw new Error(`Server returned ${res.status}`);
       }
-    } catch (err) {
-      console.warn('AI Inference API call fallback:', err);
-      // Fallback local deterministic engine
+    } catch (_err) {
+      // Graceful fallback to local deterministic smart rules engine
       setAiInferences({
         isAiGenerated: false,
         modelUsed: 'Radiance POS Smart Rules Inference Engine (Deterministic Local)',
@@ -579,7 +579,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
   return (
     <div className="p-3 sm:p-5 md:p-6 space-y-6 max-w-[1600px] mx-auto">
       {/* 1. TOP HEADER & INTERACTIVE FILTERS */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-300 shadow-2xs">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-300 shadow-2xs">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span
@@ -590,13 +590,13 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
               Commercial Intelligence Hub
             </span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-[-0.025em] flex items-center gap-2">
             <span>Analytics &amp; Executive Reports</span>
-            <span className="text-xs bg-orange-100 text-orange-800 font-bold px-2 py-0.5 rounded-full border border-orange-200 flex items-center gap-1">
+            <span className="text-xs bg-orange-100 text-orange-800 font-bold px-2.5 py-0.5 rounded-full border border-orange-200 flex items-center gap-1">
               <Sparkles className="w-3 h-3 text-orange-600" /> AI-Inferred
             </span>
           </h1>
-          <p className="text-xs text-slate-500 max-w-2xl">
+          <p className="text-sm font-normal text-slate-500 max-w-2xl mt-1 tracking-normal">
             Real-time financial performance, multi-outlet commercial benchmarking, margin health, and AI-synthesized managerial inferences.
           </p>
         </div>
@@ -670,7 +670,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
       </div>
 
       {/* QUICK SNAPSHOT ROW (Streamlined, Solid Darker Shade KPI Cards) */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-300 shadow-2xs space-y-4">
+      <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-200">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-600">
@@ -694,72 +694,72 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1: Daily Revenue */}
-          <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm flex flex-col justify-between">
+          <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <DollarSign className="w-4 h-4 text-emerald-400" /> Daily Revenue
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <DollarSign className="w-4 h-4 text-emerald-600" /> Daily Revenue
                 </span>
-                <span className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-0.5">
+                <span className="text-xs font-mono font-bold text-emerald-600 flex items-center gap-0.5">
                   <ArrowUpRight className="w-3.5 h-3.5" /> {quickSnapshot.dailyTrend}
                 </span>
               </div>
-              <div className="text-2xl sm:text-3xl font-black font-mono text-white mt-3 tracking-tight">
+              <div className="text-2xl sm:text-3xl font-black font-mono text-slate-900 mt-3 tracking-tight">
                 GH₵ {quickSnapshot.dailyRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-800/80 text-xs text-slate-400 font-medium">
+            <div className="mt-4 pt-3 border-t border-slate-200 text-xs text-slate-500 font-medium">
               Goal: GH₵ {quickSnapshot.dailyTarget.toLocaleString()} ({quickSnapshot.dailyTargetPace}%)
             </div>
           </div>
 
           {/* Card 2: Profit Margin */}
-          <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm flex flex-col justify-between">
+          <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Percent className="w-4 h-4 text-orange-400" /> Gross Profit Margin
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Percent className="w-4 h-4 text-orange-600" /> Gross Profit Margin
                 </span>
               </div>
-              <div className="text-2xl sm:text-3xl font-black font-mono text-orange-400 mt-3 tracking-tight">
+              <div className="text-2xl sm:text-3xl font-black font-mono text-orange-600 mt-3 tracking-tight">
                 {quickSnapshot.profitMargin}%
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-800/80 text-xs text-slate-400 font-medium">
+            <div className="mt-4 pt-3 border-t border-slate-200 text-xs text-slate-500 font-medium">
               Profit Yield: GH₵ {metrics.grossProfit.toLocaleString()}
             </div>
           </div>
 
           {/* Card 3: Customer Retention */}
-          <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm flex flex-col justify-between">
+          <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Users className="w-4 h-4 text-purple-400" /> Customer Retention
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-purple-600" /> Customer Retention
                 </span>
               </div>
-              <div className="text-2xl sm:text-3xl font-black font-mono text-purple-300 mt-3 tracking-tight">
+              <div className="text-2xl sm:text-3xl font-black font-mono text-purple-700 mt-3 tracking-tight">
                 {quickSnapshot.retentionRate}%
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-800/80 text-xs text-emerald-400 font-medium">
+            <div className="mt-4 pt-3 border-t border-slate-200 text-xs text-emerald-700 font-medium">
               Trade &amp; Contractor Loyalty
             </div>
           </div>
 
           {/* Card 4: Average Order Value */}
-          <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm flex flex-col justify-between">
+          <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <ShoppingBag className="w-4 h-4 text-cyan-400" /> Average Ticket (AOV)
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <ShoppingBag className="w-4 h-4 text-teal-600" /> Average Ticket (AOV)
                 </span>
               </div>
-              <div className="text-2xl sm:text-3xl font-black font-mono text-cyan-300 mt-3 tracking-tight">
+              <div className="text-2xl sm:text-3xl font-black font-mono text-teal-700 mt-3 tracking-tight">
                 GH₵ {quickSnapshot.aov.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-800/80 text-xs text-slate-400 font-medium">
+            <div className="mt-4 pt-3 border-t border-slate-200 text-xs text-slate-500 font-medium">
               Volume: {metrics.totalTransactions} Completed Orders
             </div>
           </div>
@@ -767,50 +767,49 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
       </div>
 
       {/* 2. AI EXECUTIVE INFERENCE & STRATEGIC RECOMMENDATIONS PANEL */}
-      <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-stone-950 text-white rounded-3xl p-5 sm:p-6 border border-slate-800 shadow-xl relative overflow-hidden">
+      <div className="bg-white text-slate-800 rounded-xl p-5 sm:p-6 border border-orange-200 shadow-xs relative overflow-hidden">
         {/* Subtle decorative glow */}
         <div
-          className="absolute -top-24 -right-24 w-96 h-96 rounded-full blur-3xl opacity-20 pointer-events-none"
-          style={{ backgroundColor: accentColor }}
+          className="absolute -top-24 -right-24 w-96 h-96 rounded-full blur-3xl opacity-10 pointer-events-none bg-orange-400"
         />
 
         <div className="relative z-10 space-y-5">
           {/* AI Banner Top Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-orange-500/20 border border-orange-500/30 flex items-center justify-center text-orange-400 shadow-inner">
+              <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center text-orange-600 shadow-xs">
                 <Sparkles className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-base sm:text-lg font-black tracking-tight text-white flex items-center gap-2">
+                  <h2 className="text-base sm:text-lg font-black tracking-tight text-slate-900 flex items-center gap-2">
                     Executive Commercial Inference
                   </h2>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/10 text-orange-300 border border-orange-400/20">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 font-bold">
                     {aiInferences?.modelUsed || 'Gemini 3.8 Flash'}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-400">
+                <p className="text-[11px] text-slate-500">
                   Synthesized at {aiInferences?.generatedAt ? new Date(aiInferences.generatedAt).toLocaleTimeString() : 'Just now'} • Automated diagnostic analysis
                 </p>
               </div>
             </div>
 
             {/* Health Score Pill */}
-            <div className="flex items-center gap-3 self-start sm:self-auto bg-white/5 px-4 py-2 rounded-2xl border border-white/10">
+            <div className="flex items-center gap-3 self-start sm:self-auto bg-slate-50 px-4 py-2 rounded-xl border border-slate-200">
               <div className="text-right">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Financial Health
                 </div>
-                <div className="text-xs font-bold text-slate-300">
+                <div className="text-xs font-bold text-slate-700">
                   Commercial Vitality Grade
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <div className="text-2xl font-black text-emerald-400">
+                <div className="text-2xl font-black text-emerald-600">
                   {aiInferences?.financialHealthScore ?? 88}
                 </div>
-                <div className="text-xs font-black bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded-lg border border-emerald-500/30">
+                <div className="text-xs font-black bg-emerald-100 text-emerald-800 px-2 py-1 rounded-lg border border-emerald-300">
                   {aiInferences?.financialHealthGrade ?? 'A'}
                 </div>
               </div>
@@ -818,8 +817,8 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           </div>
 
           {/* AI Executive Summary Text */}
-          <div className="bg-white/5 p-4 sm:p-5 rounded-2xl border border-white/10">
-            <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
+          <div className="bg-orange-50/50 p-4 sm:p-5 rounded-xl border border-orange-200/80">
+            <p className="text-xs sm:text-sm text-slate-800 leading-relaxed font-medium">
               {aiInferences?.executiveSummary ||
                 `Operating performance across Radiance POS branches indicates strong revenue growth of GH₵ ${metrics.grossRevenue.toLocaleString()} with a ${metrics.grossMarginPct}% gross profit margin. Architectural lighting products at Radiance Lighting continue to bolster margin performance while Inco Hardware anchors turnover.`}
             </p>
@@ -828,8 +827,8 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           {/* Interactive AI Prompt & Preset Chips */}
           <div className="space-y-2.5 pt-1">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Lightbulb className="w-3.5 h-3.5 text-amber-400" /> Ask AI Commercial Analyst:
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                <Lightbulb className="w-3.5 h-3.5 text-amber-500" /> Ask AI Commercial Analyst:
               </span>
               <span className="text-[10px] text-slate-400 hidden sm:inline">
                 Click a preset or enter a targeted query
@@ -861,8 +860,8 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                   onClick={() => handlePresetClick(preset)}
                   className={`px-3 py-1.5 text-[11px] font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all border ${
                     activePreset === preset.label
-                      ? 'bg-orange-500 text-white border-orange-400'
-                      : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
+                      ? 'bg-orange-500 text-white border-orange-500 shadow-xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
                   }`}
                 >
                   {preset.label}
@@ -881,13 +880,13 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
               className="flex items-center gap-2"
             >
               <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={customQuestion}
                   onChange={(e) => setCustomQuestion(e.target.value)}
                   placeholder="Ask a specific question (e.g. 'How should we price magnetic track lights next month?')..."
-                  className="w-full bg-white/10 border border-white/15 focus:border-orange-500 focus:bg-white/15 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder:text-slate-400 outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-300 focus:border-orange-500 focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 outline-none transition-all"
                 />
               </div>
               <button
@@ -902,11 +901,11 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           </div>
 
           {/* Key Observations & Strategic Priorities Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2 border-t border-white/10">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2 border-t border-slate-200">
             {/* Left: Observations & Warnings */}
             <div className="space-y-3">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" /> Key Commercial Observations
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" /> Key Commercial Observations
               </div>
               <div className="space-y-2">
                 {(aiInferences?.keyObservations || [
@@ -914,8 +913,8 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                   `Mobile Money transaction settlement accounts for 48% of gross turnover.`,
                   `Returns & swaps restock compliance remains steady at 92%.`,
                 ]).map((obs, idx) => (
-                  <div key={idx} className="flex items-start gap-2 text-xs text-slate-300 bg-white/5 p-2.5 rounded-xl border border-white/5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0 mt-1.5" />
+                  <div key={idx} className="flex items-start gap-2 text-xs text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0 mt-1.5" />
                     <span>{obs}</span>
                   </div>
                 ))}
@@ -924,23 +923,23 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
               {/* Anomalies / Risks */}
               {aiInferences?.anomaliesAndRisks && aiInferences.anomaliesAndRisks.length > 0 && (
                 <div className="pt-2">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1 mb-2">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> Flagged Commercial Anomalies
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1 mb-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> Flagged Commercial Anomalies
                   </div>
                   <div className="space-y-2">
                     {aiInferences.anomaliesAndRisks.map((risk, idx) => (
                       <div
                         key={idx}
-                        className="bg-amber-950/30 border border-amber-500/30 p-2.5 rounded-xl text-xs space-y-1"
+                        className="bg-amber-50 border border-amber-200 p-2.5 rounded-xl text-xs space-y-1"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-amber-200">{risk.title}</span>
-                          <span className="text-[9px] uppercase font-black px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          <span className="font-bold text-amber-900">{risk.title}</span>
+                          <span className="text-[9px] uppercase font-black px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300">
                             {risk.severity} severity
                           </span>
                         </div>
-                        <p className="text-slate-300 text-[11px]">{risk.description}</p>
-                        <p className="text-amber-300/90 text-[11px] font-medium pt-0.5">
+                        <p className="text-slate-600 text-[11px]">{risk.description}</p>
+                        <p className="text-amber-800 text-[11px] font-semibold pt-0.5">
                           ↳ Action: {risk.suggestedAction}
                         </p>
                       </div>
@@ -952,8 +951,8 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
 
             {/* Right: Prescriptive Action Checklist */}
             <div className="space-y-3">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-orange-400" /> Prescriptive Action Plan
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-orange-500" /> Prescriptive Action Plan
               </div>
               <div className="space-y-2.5">
                 {(aiInferences?.strategicRecommendations || [
@@ -981,28 +980,28 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                 ]).map((rec, idx) => (
                   <div
                     key={idx}
-                    className="bg-white/5 border border-white/10 p-3 rounded-xl text-xs space-y-1.5 hover:bg-white/10 transition-colors"
+                    className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs space-y-1.5 hover:bg-slate-100/70 transition-colors"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span
                           className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${
                             rec.priority === 'P1'
-                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                              ? 'bg-rose-100 text-rose-700 border-rose-200'
                               : rec.priority === 'P2'
-                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                              : 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                              ? 'bg-amber-100 text-amber-700 border-amber-200'
+                              : 'bg-blue-100 text-blue-700 border-blue-200'
                           }`}
                         >
                           {rec.priority}
                         </span>
-                        <span className="font-bold text-white text-xs">{rec.title}</span>
+                        <span className="font-bold text-slate-900 text-xs">{rec.title}</span>
                       </div>
-                      <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                      <span className="text-[10px] font-mono text-emerald-700 font-bold">
                         {rec.impact}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-300">{rec.details}</p>
+                    <p className="text-[11px] text-slate-600">{rec.details}</p>
                     <div className="text-[10px] text-slate-400 font-mono">
                       Target Timeline: {rec.timeline}
                     </div>
@@ -1017,7 +1016,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
       {/* 3. CORE FINANCIAL SCORECARDS (6 KPI TILES) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
         {/* Gross Revenue */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Gross Revenue</span>
             <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded font-mono font-bold">
@@ -1034,7 +1033,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* Gross Profit & Margin */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Gross Margin</span>
             <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded font-mono font-bold">
@@ -1051,7 +1050,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* Operating Expenses */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Total OpEx</span>
             <span className="text-[10px] text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded font-mono font-bold">
@@ -1068,7 +1067,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* Average Order Value (AOV) */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Average Ticket (AOV)</span>
             <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded font-mono font-bold">
@@ -1085,7 +1084,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* Active Installments Financed */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Credit Receivables</span>
             <span className="text-[10px] text-purple-600 bg-purple-50 px-1.5 py-0.2 rounded font-mono font-bold">
@@ -1102,7 +1101,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* Returns & Swap Rate */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Return &amp; Swap Rate</span>
             <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded font-mono font-bold">
@@ -1122,7 +1121,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
       {/* 4. PRIMARY ANALYTICS CHARTS GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* CHART 1: SALES & GROSS MARGIN VELOCITY */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+        <div className="bg-white rounded-xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
@@ -1187,7 +1186,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* CHART 2: MULTI-OUTLET COMPARISON MATRIX */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+        <div className="bg-white rounded-xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
@@ -1247,7 +1246,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* CHART 3: PRODUCT CATEGORY CONTRIBUTION & MARGIN DENSITY */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+        <div className="bg-white rounded-xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
@@ -1333,7 +1332,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* CHART 4: PAYMENT CHANNELS & SETTLEMENT VELOCITY */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+        <div className="bg-white rounded-xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
@@ -1400,7 +1399,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* CHART 5: CUSTOMER INSTALLMENT CREDIT AGING */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+        <div className="bg-white rounded-xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
@@ -1461,7 +1460,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* CHART 6: TOP SELLING PRODUCTS & INVENTORY TURNOVER */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+        <div className="bg-white rounded-xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
@@ -1529,12 +1528,12 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
 
       {/* 5. PRINT-READY OFFICIAL REPORT MODAL */}
       {printModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl border border-slate-300 space-y-6 my-auto max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-center justify-center p-4 sm:p-6 animate-modal-backdrop">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-300 animate-modal-card">
             {/* Report Header */}
-            <div className="flex items-start justify-between border-b border-slate-300 pb-5">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
+            <div className="p-5 sm:p-6 border-b border-slate-300 flex items-start justify-between bg-slate-50 shrink-0">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
                   <span className="text-xl font-black text-slate-900">Radiance POS</span>
                   <span className="text-[10px] font-black uppercase text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
                     Official Executive Report
@@ -1548,77 +1547,88 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                 </p>
               </div>
 
-              <div className="text-right text-xs text-slate-500 font-mono">
-                <div>Date: {new Date().toLocaleDateString('en-GB')}</div>
-                <div>Time: {new Date().toLocaleTimeString()}</div>
-                <div>Ref: RPT-{Date.now().toString().slice(-6)}</div>
+              <div className="flex items-start gap-4">
+                <div className="text-right text-xs text-slate-500 font-mono hidden sm:block">
+                  <div>Date: {new Date().toLocaleDateString('en-GB')}</div>
+                  <div>Time: {new Date().toLocaleTimeString()}</div>
+                  <div>Ref: RPT-{Date.now().toString().slice(-6)}</div>
+                </div>
+                <button
+                  onClick={() => setPrintModalOpen(false)}
+                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
             </div>
 
-            {/* P&L Snapshot */}
-            <div className="space-y-3">
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
-                1. Profit &amp; Loss Statement Summary
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-300 text-xs">
-                <div>
-                  <div className="text-slate-400">Gross Sales:</div>
-                  <div className="text-sm font-black text-slate-900">GH₵ {metrics.grossRevenue.toLocaleString()}</div>
-                </div>
-                <div>
-                  <div className="text-slate-400">Cost of Goods (COGS):</div>
-                  <div className="text-sm font-black text-slate-900">GH₵ {metrics.estimatedCOGS.toLocaleString()}</div>
-                </div>
-                <div>
-                  <div className="text-slate-400">Gross Profit (Margin):</div>
-                  <div className="text-sm font-black text-emerald-700">GH₵ {metrics.grossProfit.toLocaleString()} ({metrics.grossMarginPct}%)</div>
-                </div>
-                <div>
-                  <div className="text-slate-400">Net Income:</div>
-                  <div className="text-sm font-black text-slate-900">GH₵ {metrics.netIncome.toLocaleString()} ({metrics.netMarginPct}%)</div>
-                </div>
-              </div>
-            </div>
-
-            {/* AI Executive Assessment */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
-                2. AI Executive Diagnostic Assessment
-              </h3>
-              <div className="p-4 bg-orange-50/70 rounded-2xl border border-orange-200 text-xs text-slate-800 leading-relaxed">
-                {aiInferences?.executiveSummary}
-              </div>
-            </div>
-
-            {/* Strategic Priorities */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
-                3. Managerial Directives &amp; Action Plan
-              </h3>
-              <div className="space-y-2">
-                {(aiInferences?.strategicRecommendations || []).map((rec, i) => (
-                  <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-300 text-xs flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-slate-900">[{rec.priority}] {rec.title}: </span>
-                      <span className="text-slate-600">{rec.details}</span>
-                    </div>
-                    <span className="font-mono text-emerald-700 font-bold shrink-0 ml-3">{rec.impact}</span>
+            {/* Modal Body */}
+            <div className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
+              {/* P&L Snapshot */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">
+                  1. Profit &amp; Loss Statement Summary
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-300 text-xs">
+                  <div>
+                    <div className="text-slate-400">Gross Sales:</div>
+                    <div className="text-sm font-black text-slate-900">GH₵ {metrics.grossRevenue.toLocaleString()}</div>
                   </div>
-                ))}
+                  <div>
+                    <div className="text-slate-400">Cost of Goods (COGS):</div>
+                    <div className="text-sm font-black text-slate-900">GH₵ {metrics.estimatedCOGS.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-400">Gross Profit (Margin):</div>
+                    <div className="text-sm font-black text-emerald-700">GH₵ {metrics.grossProfit.toLocaleString()} ({metrics.grossMarginPct}%)</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-400">Net Income:</div>
+                    <div className="text-sm font-black text-slate-900">GH₵ {metrics.netIncome.toLocaleString()} ({metrics.netMarginPct}%)</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* AI Executive Assessment */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">
+                  2. AI Executive Diagnostic Assessment
+                </h3>
+                <div className="p-4 bg-orange-50/70 rounded-xl border border-orange-200 text-xs text-slate-800 leading-relaxed">
+                  {aiInferences?.executiveSummary}
+                </div>
+              </div>
+
+              {/* Strategic Priorities */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">
+                  3. Managerial Directives &amp; Action Plan
+                </h3>
+                <div className="space-y-2">
+                  {(aiInferences?.strategicRecommendations || []).map((rec, i) => (
+                    <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-300 text-xs flex items-center justify-between">
+                      <div>
+                        <span className="font-bold text-slate-900">[{rec.priority}] {rec.title}: </span>
+                        <span className="text-slate-600">{rec.details}</span>
+                      </div>
+                      <span className="font-mono text-emerald-700 font-bold shrink-0 ml-3">{rec.impact}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-300">
+            <div className="p-4 sm:p-6 bg-slate-50 border-t border-slate-300 flex items-center justify-end gap-3 shrink-0">
               <button
                 onClick={() => setPrintModalOpen(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
+                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-xl cursor-pointer transition-colors"
               >
                 Close
               </button>
               <button
                 onClick={() => window.print()}
-                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-xl shadow-xs flex items-center gap-2 cursor-pointer transition-colors"
               >
                 <Printer className="w-4 h-4" />
                 <span>Print Document</span>

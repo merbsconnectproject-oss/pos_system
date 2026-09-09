@@ -46,12 +46,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const navContent = (
-    <div className="py-4 space-y-6 flex-1 flex flex-col justify-between">
+    <div className="py-3 space-y-6 flex-1 flex flex-col justify-between">
       <div className="space-y-6">
         {/* OVERVIEW SECTION */}
         <div>
           {!collapsed && (
-            <div className="px-5 text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+            <div className="px-4 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500 mb-2">
               Management
             </div>
           )}
@@ -127,7 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* POS & SALES SECTION */}
         <div>
           {!collapsed && (
-            <div className="px-5 text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+            <div className="px-4 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500 mb-2">
               Point of Sale
             </div>
           )}
@@ -212,7 +212,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* FINANCE & ACCOUNTS */}
         <div>
           {!collapsed && (
-            <div className="px-5 text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+            <div className="px-4 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500 mb-2">
               Finance &amp; Accounting
             </div>
           )}
@@ -260,7 +260,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* INVENTORY & LOGISTICS */}
         <div>
           {!collapsed && (
-            <div className="px-5 text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+            <div className="px-4 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500 mb-2">
               Inventory &amp; Stock
             </div>
           )}
@@ -327,7 +327,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* DIRECTORY & COMPLIANCE */}
         <div>
           {!collapsed && (
-            <div className="px-5 text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+            <div className="px-4 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500 mb-2">
               Partners &amp; Audit
             </div>
           )}
@@ -410,7 +410,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Bottom Pro Badge */}
       {!collapsed && (
         <div className="px-3 pt-4">
-          <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-3 rounded-xl border border-slate-700 shadow-xs space-y-1">
+          <div className="bg-slate-900 text-white p-3 rounded-xl border border-slate-800 shadow-2xs space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase text-orange-400 tracking-wider flex items-center gap-1">
                 <Sparkles className="w-3 h-3" /> DreamsPOS v2.6
@@ -432,7 +432,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <>
       {/* 1. DESKTOP SIDEBAR */}
       <aside
-        className={`hidden md:flex flex-col bg-white border-r border-slate-300 h-[calc(100vh-4rem)] sticky top-16 overflow-y-auto transition-all duration-300 select-none z-20 shrink-0 ${
+        className={`hidden md:flex flex-col bg-white border-r border-slate-300 h-full overflow-y-auto transition-all duration-300 select-none z-20 shrink-0 ${
           collapsed ? 'w-18' : 'w-64'
         }`}
       >

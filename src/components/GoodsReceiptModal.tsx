@@ -86,33 +86,38 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
   return (
     <div 
       onClick={onClose}
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-center justify-center p-4 animate-modal-backdrop"
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-center justify-center p-4 sm:p-6 animate-modal-backdrop"
     >
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-300 animate-modal-card"
+        className="bg-white rounded-xl w-full max-w-3xl shadow-2xl overflow-hidden border border-slate-300 animate-modal-card flex flex-col max-h-[92vh]"
       >
-        <div className="bg-[#1e293b] text-white p-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Truck className="w-5 h-5 text-orange-400" />
+        <div className="bg-slate-900 text-white px-6 py-5 sm:px-8 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center">
+              <Truck className="w-5 h-5" />
+            </div>
             <div>
-              <h3 className="font-black text-sm">Goods Receipt (GRN)</h3>
-              <p className="text-[11px] text-slate-300">Receiving inventory at {currentOutlet.name}</p>
+              <h3 className="font-black text-xl leading-tight">Goods Receipt Note (GRN)</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Posting inbound warehouse inventory for {currentOutlet.name}</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button 
+            onClick={onClose} 
+            className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleReceive} className="p-5 space-y-4 text-xs">
-          <div className="grid grid-cols-2 gap-3">
+        <form onSubmit={handleReceive} className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
-              <label className="font-bold text-slate-700 block mb-1">Select Supplier *</label>
+              <label className="text-sm font-bold text-slate-800 block mb-1.5">Originating Supplier *</label>
               <select
                 value={selectedSupplierId}
                 onChange={(e) => setSelectedSupplierId(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg p-2 bg-white font-medium"
+                className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white font-medium text-slate-800 focus:outline-orange-500"
               >
                 {storeSuppliers.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -123,39 +128,40 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
             </div>
 
             <div>
-              <label className="font-bold text-slate-700 block mb-1">Invoice / PO Reference *</label>
+              <label className="text-sm font-bold text-slate-800 block mb-1.5">Supplier Invoice / PO Ref *</label>
               <input
                 type="text"
                 required
                 value={invoiceRef}
                 onChange={(e) => setInvoiceRef(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg p-2 font-mono"
+                placeholder="e.g. INV-2025-0891"
+                className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono text-slate-800 focus:outline-orange-500 focus:ring-2 focus:ring-orange-500/20"
               />
             </div>
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">Select Product *</label>
+            <label className="text-sm font-bold text-slate-800 block mb-1.5">Catalogue Item Received *</label>
             <select
               value={selectedProductId}
               onChange={(e) => {
                 setSelectedProductId(e.target.value);
                 setUnitCost(0);
               }}
-              className="w-full border border-slate-300 rounded-lg p-2 bg-white font-medium"
+              className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white font-medium text-slate-800 focus:outline-orange-500"
             >
               {storeProducts.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} [{p.sku}] — On Hand: {p.stock[outletId] || 0} {p.baseUnit}
+                  {p.name} [{p.sku}] — Current Stock: {p.stock[outletId] || 0} {p.baseUnit}
                 </option>
               ))}
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
-              <label className="font-bold text-slate-700 block mb-1">
-                Quantity Received ({product?.baseUnit}) *
+              <label className="text-sm font-bold text-slate-800 block mb-1.5">
+                Quantity Inbound ({product?.baseUnit}) *
               </label>
               <input
                 type="number"
@@ -164,13 +170,13 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
                 required
                 value={qtyReceived}
                 onChange={(e) => setQtyReceived(parseFloat(e.target.value) || 0)}
-                className="w-full text-base font-black border border-slate-300 rounded-lg p-2"
+                className="w-full text-base font-black border border-slate-300 rounded-lg px-3.5 py-2.5 text-slate-900 focus:outline-orange-500"
               />
             </div>
 
             <div>
-              <label className="font-bold text-slate-700 block mb-1">
-                Unit Purchase Cost (GH₵) *
+              <label className="text-sm font-bold text-slate-800 block mb-1.5">
+                Batch Unit Purchase Cost (GH₵) *
               </label>
               <input
                 type="number"
@@ -179,50 +185,51 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
                 required
                 value={activeUnitCost}
                 onChange={(e) => setUnitCost(parseFloat(e.target.value) || 0)}
-                className="w-full text-base font-black border border-slate-300 rounded-lg p-2"
+                className="w-full text-base font-black border border-slate-300 rounded-lg px-3.5 py-2.5 text-slate-900 focus:outline-orange-500"
               />
             </div>
           </div>
 
           {/* PRD BR-4 Weighted Average Cost Calculation Box */}
-          <div className="bg-slate-50 border border-slate-300 rounded-xl p-3.5 space-y-2">
-            <div className="flex items-center gap-1.5 text-slate-800 font-bold">
-              <Calculator className="w-4 h-4 text-orange-500" />
-              <span>Weighted Average Costing</span>
+          <div className="bg-slate-50 border border-slate-300 rounded-xl p-5 space-y-3">
+            <div className="flex items-center gap-2 text-slate-800 font-black text-sm">
+              <Calculator className="w-5 h-5 text-orange-500" />
+              <span>Weighted Average Costing Valuation (AVCO)</span>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-600 pt-1">
-              <div>
-                <span className="text-slate-400 block">Current Avg Cost:</span>
-                <strong className="text-slate-800">GH₵ {currentAvgCost.toFixed(2)}</strong>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs pt-1">
+              <div className="bg-white p-3 rounded-lg border border-slate-200">
+                <span className="text-slate-500 block text-[11px]">Current Average Cost:</span>
+                <strong className="text-slate-900 text-sm">GH₵ {currentAvgCost.toFixed(2)}</strong>
               </div>
-              <div>
-                <span className="text-slate-400 block">New Unit Cost:</span>
-                <strong className="text-slate-800">GH₵ {activeUnitCost.toFixed(2)}</strong>
+              <div className="bg-white p-3 rounded-lg border border-slate-200">
+                <span className="text-slate-500 block text-[11px]">New Unit Delivery Cost:</span>
+                <strong className="text-slate-900 text-sm">GH₵ {activeUnitCost.toFixed(2)}</strong>
               </div>
-              <div>
-                <span className="text-slate-400 block">New Recomputed Avg:</span>
-                <strong className="text-orange-600 font-black">GH₵ {weightedAvgCost.toFixed(2)}</strong>
+              <div className="bg-orange-50/80 p-3 rounded-lg border border-orange-200">
+                <span className="text-orange-700 block text-[11px] font-medium">Recomputed Moving Avg:</span>
+                <strong className="text-orange-700 font-black text-base">GH₵ {weightedAvgCost.toFixed(2)}</strong>
               </div>
             </div>
-            <div className="text-[10px] text-slate-400 border-t border-slate-300 pt-1.5">
-              Stock at {currentOutlet.name} will increase from {currentStock} to {currentStock + qtyReceived} {product?.baseUnit}.
+            <div className="text-xs text-slate-500 border-t border-slate-200 pt-2.5 flex items-center justify-between">
+              <span>On-hand stock at {currentOutlet.name}</span>
+              <span className="font-bold text-slate-700">{currentStock} → {currentStock + qtyReceived} {product?.baseUnit}</span>
             </div>
           </div>
 
-          <div className="flex gap-2 pt-2 border-t border-slate-200">
+          <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-slate-200">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-slate-300 font-bold text-slate-600 hover:bg-slate-50"
+              className="sm:w-1/3 py-3 rounded-lg border border-slate-300 font-bold text-sm text-slate-600 hover:bg-slate-50 cursor-pointer transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-xs flex items-center justify-center gap-1.5"
+              className="sm:w-2/3 py-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-colors"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Post Goods Receipt</span>
+              <CheckCircle2 className="w-5 h-5" />
+              <span>Post Goods Receipt to Inventory</span>
             </button>
           </div>
         </form>

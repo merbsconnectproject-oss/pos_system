@@ -423,7 +423,7 @@ export const PosModal: React.FC<PosModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-60 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-modal-backdrop">
-      <div className="bg-slate-100 rounded-2xl w-full max-w-[1550px] h-[95vh] flex flex-col overflow-hidden shadow-2xl border border-slate-300 animate-modal-card">
+      <div className="bg-slate-100 rounded-xl w-full max-w-[1550px] h-[95vh] flex flex-col overflow-hidden shadow-2xl border border-slate-300 animate-modal-card">
         {/* POS Top Bar */}
         <div className="bg-[#1e293b] text-white px-4 py-2.5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -839,38 +839,41 @@ export const PosModal: React.FC<PosModalProps> = ({
       {paymentModalOpen && (
         <div 
           onClick={() => setPaymentModalOpen(false)}
-          className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-70 flex items-center justify-center p-4 animate-modal-backdrop"
+          className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-70 flex items-center justify-center p-4 sm:p-6 animate-modal-backdrop"
         >
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-300 flex flex-col animate-modal-card"
+            className="bg-white rounded-xl w-full max-w-2xl shadow-2xl overflow-hidden border border-slate-300 flex flex-col max-h-[92vh] animate-modal-card"
           >
-            <div className="bg-[#1e293b] text-white p-4 flex items-center justify-between">
+            <div className="bg-slate-900 text-white px-6 py-5 sm:px-8 flex items-center justify-between shrink-0">
               <div>
-                <h3 className="font-black text-sm">Collect Payment</h3>
-                <p className="text-[11px] text-slate-300">
-                  Total Payable: <strong className="text-orange-400 text-sm">GH₵ {total.toFixed(2)}</strong>
+                <h3 className="font-black text-xl leading-tight">Collect Payment</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Total Payable: <strong className="text-orange-400 text-sm font-black">GH₵ {total.toFixed(2)}</strong>
                 </p>
               </div>
-              <button onClick={() => setPaymentModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button 
+                onClick={() => setPaymentModalOpen(false)} 
+                className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Payment Method Tabs */}
-            <div className="grid grid-cols-3 border-b border-slate-300 bg-slate-50 text-xs font-bold">
+            <div className="grid grid-cols-3 border-b border-slate-300 bg-slate-50 text-sm font-bold shrink-0">
               <button
                 onClick={() => setActivePaymentTab('cash')}
-                className={`py-3 flex items-center justify-center gap-1.5 transition-colors ${
-                  activePaymentTab === 'cash' ? 'bg-white text-orange-600 border-b-2 border-orange-500' : 'text-slate-600 hover:bg-slate-100'
+                className={`py-3.5 flex items-center justify-center gap-2 transition-colors cursor-pointer ${
+                  activePaymentTab === 'cash' ? 'bg-white text-orange-600 border-b-2 border-orange-500 font-black' : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <DollarSign className="w-4 h-4" /> Cash (Cedis)
               </button>
               <button
                 onClick={() => setActivePaymentTab('momo')}
-                className={`py-3 flex items-center justify-center gap-1.5 transition-colors ${
-                  activePaymentTab === 'momo' ? 'bg-white text-orange-600 border-b-2 border-orange-500' : 'text-slate-600 hover:bg-slate-100'
+                className={`py-3.5 flex items-center justify-center gap-2 transition-colors cursor-pointer ${
+                  activePaymentTab === 'momo' ? 'bg-white text-orange-600 border-b-2 border-orange-500 font-black' : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <Smartphone className="w-4 h-4" /> Mobile Money
@@ -881,181 +884,183 @@ export const PosModal: React.FC<PosModalProps> = ({
                   setSplitCashAmount(Math.round(total / 2));
                   setSplitMomoAmount(Number((total - Math.round(total / 2)).toFixed(2)));
                 }}
-                className={`py-3 flex items-center justify-center gap-1.5 transition-colors ${
-                  activePaymentTab === 'split' ? 'bg-white text-orange-600 border-b-2 border-orange-500' : 'text-slate-600 hover:bg-slate-100'
+                className={`py-3.5 flex items-center justify-center gap-2 transition-colors cursor-pointer ${
+                  activePaymentTab === 'split' ? 'bg-white text-orange-600 border-b-2 border-orange-500 font-black' : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <Calculator className="w-4 h-4" /> Split Payment
               </button>
             </div>
 
-            {/* Tab 1: CASH */}
-            {activePaymentTab === 'cash' && (
-              <div className="p-5 space-y-4 text-xs">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Cash Tendered (GH₵) *</label>
-                  <input
-                    type="number"
-                    step="any"
-                    autoFocus
-                    value={cashTendered}
-                    onChange={(e) => setCashTendered(e.target.value)}
-                    placeholder={`e.g. ${Math.ceil(total / 10) * 10}`}
-                    className="w-full text-2xl font-black font-mono border border-slate-300 rounded-xl p-3 text-center"
-                  />
-                </div>
+            <div className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
+              {/* Tab 1: CASH */}
+              {activePaymentTab === 'cash' && (
+                <div className="space-y-6">
+                  <div>
+                    <label className="text-sm font-bold text-slate-800 block mb-2">Cash Tendered (GH₵) *</label>
+                    <input
+                      type="number"
+                      step="any"
+                      autoFocus
+                      value={cashTendered}
+                      onChange={(e) => setCashTendered(e.target.value)}
+                      placeholder={`e.g. ${Math.ceil(total / 10) * 10}`}
+                      className="w-full text-3xl font-black font-mono border border-slate-300 rounded-lg p-3.5 text-center text-slate-900 focus:outline-orange-500"
+                    />
+                  </div>
 
-                {/* Ghana Cedi Quick Denominations */}
-                <div>
-                  <span className="text-[11px] text-slate-500 font-semibold block mb-1.5">Quick Ghana Cedi Notes:</span>
-                  <div className="grid grid-cols-5 gap-2">
-                    {[10, 20, 50, 100, 200].map((denom) => (
-                      <button
-                        key={denom}
-                        type="button"
-                        onClick={() => setCashTendered(denom.toString())}
-                        className="py-2 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 font-black rounded-lg border border-slate-300 text-xs"
-                      >
-                        GH₵ {denom}
-                      </button>
-                    ))}
+                  {/* Ghana Cedi Quick Denominations */}
+                  <div>
+                    <span className="text-xs text-slate-500 font-bold uppercase tracking-wider block mb-2">Quick Ghana Cedi Notes:</span>
+                    <div className="grid grid-cols-5 gap-2.5">
+                      {[10, 20, 50, 100, 200].map((denom) => (
+                        <button
+                          key={denom}
+                          type="button"
+                          onClick={() => setCashTendered(denom.toString())}
+                          className="py-3 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 font-black rounded-lg border border-slate-300 text-sm cursor-pointer transition-colors"
+                        >
+                          GH₵ {denom}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Change Due Display */}
+                  <div className="bg-slate-50 border border-slate-300 rounded-xl p-5 flex justify-between items-center">
+                    <span className="font-bold text-slate-700 text-base">Change Due to Customer:</span>
+                    <span className="text-2xl font-black text-emerald-600 font-mono">
+                      GH₵ {changeDue.toFixed(2)}
+                    </span>
                   </div>
                 </div>
+              )}
 
-                {/* Change Due Display */}
-                <div className="bg-slate-50 border border-slate-300 rounded-xl p-4 flex justify-between items-center">
-                  <span className="font-bold text-slate-700">Change Due to Customer:</span>
-                  <span className="text-xl font-black text-emerald-600 font-mono">
-                    GH₵ {changeDue.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Tab 2: MOBILE MONEY (FR-SALE-10 to FR-SALE-15) */}
-            {activePaymentTab === 'momo' && (
-              <div className="p-5 space-y-4 text-xs">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Select MoMo Network Provider *</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['MTN MoMo', 'Telecel Cash', 'AT Money'] as const).map((prov) => (
-                      <button
-                        key={prov}
-                        type="button"
-                        onClick={() => setMomoProvider(prov)}
-                        className={`py-2 rounded-lg font-bold border text-xs ${
-                          momoProvider === prov
-                            ? 'bg-amber-500 text-white border-amber-500 shadow-2xs'
-                            : 'bg-white text-slate-700 border-slate-300'
-                        }`}
-                      >
-                        {prov}
-                      </button>
-                    ))}
+              {/* Tab 2: MOBILE MONEY (FR-SALE-10 to FR-SALE-15) */}
+              {activePaymentTab === 'momo' && (
+                <div className="space-y-6">
+                  <div>
+                    <label className="text-sm font-bold text-slate-800 block mb-2">Select MoMo Network Provider *</label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {(['MTN MoMo', 'Telecel Cash', 'AT Money'] as const).map((prov) => (
+                        <button
+                          key={prov}
+                          type="button"
+                          onClick={() => setMomoProvider(prov)}
+                          className={`py-3 rounded-lg font-bold border text-sm cursor-pointer transition-all ${
+                            momoProvider === prov
+                              ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
+                              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          {prov}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Customer Phone Number</label>
-                  <input
-                    type="tel"
-                    value={momoPhone}
-                    onChange={(e) => setMomoPhone(e.target.value)}
-                    placeholder="0244123456"
-                    className="w-full border border-slate-300 rounded-lg p-2 font-mono"
-                  />
-                </div>
+                  <div>
+                    <label className="text-sm font-bold text-slate-800 block mb-1.5">Customer Phone Number</label>
+                    <input
+                      type="tel"
+                      value={momoPhone}
+                      onChange={(e) => setMomoPhone(e.target.value)}
+                      placeholder="0244123456"
+                      className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-orange-500"
+                    />
+                  </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">
-                    MoMo Transaction Reference ID (Mandatory) *
+                  <div>
+                    <label className="text-sm font-bold text-slate-800 block mb-1.5">
+                      MoMo Transaction Reference ID (Mandatory) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={momoReference}
+                      onChange={(e) => setMomoReference(e.target.value)}
+                      placeholder="e.g. MM-2026-984210"
+                      className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono uppercase focus:outline-orange-500"
+                    />
+                    <span className="text-xs text-slate-400 mt-1.5 block">
+                      Verify transaction ID from the shop phone / merchant SMS before proceeding.
+                    </span>
+                  </div>
+
+                  <label className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 p-4 rounded-xl cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={momoVerified}
+                      onChange={(e) => setMomoVerified(e.target.checked)}
+                      className="w-5 h-5 accent-emerald-600 rounded cursor-pointer"
+                    />
+                    <span className="font-bold text-emerald-900 text-sm">
+                      I verify payment confirmation received on the shop phone / merchant terminal
+                    </span>
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={momoReference}
-                    onChange={(e) => setMomoReference(e.target.value)}
-                    placeholder="e.g. MM-2026-984210"
-                    className="w-full border border-slate-300 rounded-lg p-2 font-mono uppercase"
-                  />
-                  <span className="text-[10px] text-slate-400 mt-1 block">
-                    Check the transaction ID from customer SMS or drawer phone before confirming.
-                  </span>
                 </div>
+              )}
 
-                <label className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 p-3 rounded-xl cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={momoVerified}
-                    onChange={(e) => setMomoVerified(e.target.checked)}
-                    className="w-4 h-4 accent-emerald-600 rounded"
-                  />
-                  <span className="font-bold text-emerald-900 text-xs">
-                    I verify payment received on the shop phone / merchant terminal
-                  </span>
-                </label>
-              </div>
-            )}
+              {/* Tab 3: SPLIT PAYMENT */}
+              {activePaymentTab === 'split' && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                      <label className="text-sm font-bold text-slate-800 block mb-1.5">Part 1: Cash Amount (GH₵)</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={splitCashAmount}
+                        onChange={(e) => setSplitCashAmount(parseFloat(e.target.value) || 0)}
+                        className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-base font-bold text-slate-900 focus:outline-orange-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-bold text-slate-800 block mb-1.5">Part 2: MoMo Amount (GH₵)</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={splitMomoAmount}
+                        onChange={(e) => setSplitMomoAmount(parseFloat(e.target.value) || 0)}
+                        className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-base font-bold text-amber-700 focus:outline-orange-500"
+                      />
+                    </div>
+                  </div>
 
-            {/* Tab 3: SPLIT PAYMENT */}
-            {activePaymentTab === 'split' && (
-              <div className="p-5 space-y-4 text-xs">
-                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">Part 1: Cash Amount (GH₵)</label>
+                    <label className="text-sm font-bold text-slate-800 block mb-1.5">MoMo Transaction Ref ID</label>
                     <input
-                      type="number"
-                      step="any"
-                      value={splitCashAmount}
-                      onChange={(e) => setSplitCashAmount(parseFloat(e.target.value) || 0)}
-                      className="w-full border border-slate-300 rounded-lg p-2 font-bold"
+                      type="text"
+                      value={splitMomoRef}
+                      onChange={(e) => setSplitMomoRef(e.target.value)}
+                      placeholder="Ref ID for the MoMo portion"
+                      className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-orange-500"
                     />
                   </div>
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">Part 2: MoMo Amount (GH₵)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={splitMomoAmount}
-                      onChange={(e) => setSplitMomoAmount(parseFloat(e.target.value) || 0)}
-                      className="w-full border border-slate-300 rounded-lg p-2 font-bold text-amber-700"
-                    />
+
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-300 flex justify-between items-center text-sm font-bold">
+                    <span>Split Total: <strong className="text-slate-900">GH₵ {(splitCashAmount + splitMomoAmount).toFixed(2)}</strong></span>
+                    <span>Total Required: <strong className="text-orange-600">GH₵ {total.toFixed(2)}</strong></span>
                   </div>
                 </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">MoMo Transaction Ref ID</label>
-                  <input
-                    type="text"
-                    value={splitMomoRef}
-                    onChange={(e) => setSplitMomoRef(e.target.value)}
-                    placeholder="Ref ID for the MoMo portion"
-                    className="w-full border border-slate-300 rounded-lg p-2 font-mono"
-                  />
-                </div>
-
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-300 flex justify-between font-bold">
-                  <span>Split Sum: GH₵ {(splitCashAmount + splitMomoAmount).toFixed(2)}</span>
-                  <span>Required: GH₵ {total.toFixed(2)}</span>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Payment Modal Footer */}
-            <div className="p-4 border-t border-slate-300 bg-slate-50 flex gap-2">
+            <div className="p-5 sm:px-8 border-t border-slate-300 bg-slate-50 flex flex-col sm:flex-row gap-3 shrink-0">
               <button
                 type="button"
                 onClick={() => setPaymentModalOpen(false)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-300 font-bold text-slate-600 hover:bg-slate-100 text-xs"
+                className="sm:w-1/3 py-3 rounded-lg border border-slate-300 font-bold text-slate-600 hover:bg-slate-100 text-sm cursor-pointer transition-colors"
               >
                 Back to Cart
               </button>
               <button
                 type="button"
                 onClick={handleFinalizeSale}
-                className="flex-2 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm shadow-md"
+                className="sm:w-2/3 py-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-black text-sm shadow-md cursor-pointer transition-colors"
               >
-                Complete Sale & Issue Receipt
+                Complete Sale &amp; Issue Receipt
               </button>
             </div>
           </div>
@@ -1066,46 +1071,46 @@ export const PosModal: React.FC<PosModalProps> = ({
       {completedSale && (
         <div 
           onClick={() => setCompletedSale(null)}
-          className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-80 flex items-center justify-center p-4 animate-modal-backdrop"
+          className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-80 flex items-center justify-center p-4 sm:p-6 animate-modal-backdrop"
         >
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-5 border border-slate-300 space-y-4 animate-modal-card"
+            className="bg-white rounded-xl w-full max-w-lg shadow-2xl p-6 sm:p-8 border border-slate-300 space-y-5 animate-modal-card flex flex-col max-h-[92vh] overflow-y-auto"
           >
-            <div className="flex items-center justify-between border-b pb-2">
-              <div className="flex items-center gap-1.5 text-emerald-600 font-black text-sm">
-                <CheckCircle2 className="w-5 h-5" />
+            <div className="flex items-center justify-between border-b pb-3 shrink-0">
+              <div className="flex items-center gap-2 text-emerald-600 font-black text-base">
+                <CheckCircle2 className="w-6 h-6" />
                 <span>Sale Completed Successfully</span>
               </div>
-              <button onClick={() => setCompletedSale(null)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setCompletedSale(null)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* PRD §9 Thermal Receipt Form */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-dashed border-slate-300 font-mono text-xs text-slate-800 space-y-2 select-text">
+            <div className="bg-slate-50 p-5 rounded-xl border border-dashed border-slate-300 font-mono text-xs text-slate-800 space-y-3 select-text">
               {receiptReprint && (
-                <div className="text-center font-black text-red-600 border border-red-300 bg-red-50 py-1 tracking-widest text-[11px]">
+                <div className="text-center font-black text-red-600 border border-red-300 bg-red-50 py-1.5 tracking-widest text-xs">
                   *** REPRINT ***
                 </div>
               )}
               <div className="text-center">
-                <div className="font-black text-base uppercase">{completedSale.outletName}</div>
-                <div className="text-[10px] text-slate-500">
+                <div className="font-black text-lg uppercase tracking-wider">{completedSale.outletName}</div>
+                <div className="text-xs text-slate-500 mt-0.5">
                   {completedSale.outletId === 'inco-hardware' ? '12 Main Street, Koforidua' : 'Harper Road, Kumasi'}
                 </div>
-                <div className="text-[10px] text-slate-500">
+                <div className="text-xs text-slate-500">
                   Tel: {completedSale.outletId === 'inco-hardware' ? '+233 24 000 0002' : '+233 24 000 0003'}
                 </div>
               </div>
 
-              <div className="border-t border-b border-dashed border-slate-300 py-1.5 space-y-0.5 text-[11px]">
+              <div className="border-t border-b border-dashed border-slate-300 py-2.5 space-y-1 text-xs">
                 <div className="flex justify-between">
-                  <span>Receipt:</span>
+                  <span>Receipt No:</span>
                   <span className="font-bold">{completedSale.receiptNumber}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Date:</span>
+                  <span>Date &amp; Time:</span>
                   <span>{completedSale.createdAt}</span>
                 </div>
                 <div className="flex justify-between">
@@ -1119,12 +1124,12 @@ export const PosModal: React.FC<PosModalProps> = ({
               </div>
 
               {/* Items */}
-              <div className="space-y-1.5 py-1">
+              <div className="space-y-2 py-1.5">
                 {completedSale.items.map((it, idx) => (
-                  <div key={idx} className="flex justify-between text-[11px]">
+                  <div key={idx} className="flex justify-between text-xs">
                     <div>
-                      <div>{it.product.name}</div>
-                      <div className="text-[10px] text-slate-500">
+                      <div className="font-bold">{it.product.name}</div>
+                      <div className="text-[11px] text-slate-500">
                         {it.quantity} {it.selectedUnit} x GH₵ {it.unitPrice.toFixed(2)}
                       </div>
                     </div>
@@ -1134,38 +1139,38 @@ export const PosModal: React.FC<PosModalProps> = ({
               </div>
 
               {/* Totals */}
-              <div className="border-t border-dashed border-slate-300 pt-2 space-y-1 text-xs">
+              <div className="border-t border-dashed border-slate-300 pt-3 space-y-1.5 text-xs">
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
                   <span>GH₵ {completedSale.subtotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between font-black text-sm pt-1 border-t border-slate-300">
+                <div className="flex justify-between font-black text-base pt-1.5 border-t border-slate-300">
                   <span>TOTAL:</span>
                   <span>GH₵ {completedSale.total.toFixed(2)}</span>
                 </div>
                 {completedSale.payments.map((p, i) => (
-                  <div key={i} className="flex justify-between text-[11px] text-slate-600">
+                  <div key={i} className="flex justify-between text-xs text-slate-600">
                     <span>Paid via {p.provider || p.method}:</span>
                     <span>GH₵ {p.amount.toFixed(2)}</span>
                   </div>
                 ))}
                 {completedSale.changeDue > 0 && (
-                  <div className="flex justify-between text-[11px] text-emerald-700 font-bold">
+                  <div className="flex justify-between text-xs text-emerald-700 font-bold">
                     <span>Change Due:</span>
                     <span>GH₵ {completedSale.changeDue.toFixed(2)}</span>
                   </div>
                 )}
               </div>
 
-              <div className="text-center pt-3 text-[10px] text-slate-400">
+              <div className="text-center pt-3 text-xs text-slate-400">
                 Thank you for your business!
               </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-3 pt-1 shrink-0">
               <button
                 onClick={() => setReceiptReprint(true)}
-                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-xl text-xs font-bold"
+                className="sm:w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-lg text-sm font-bold cursor-pointer transition-colors"
               >
                 Mark Reprint
               </button>
@@ -1173,9 +1178,9 @@ export const PosModal: React.FC<PosModalProps> = ({
                 onClick={() => {
                   window.print();
                 }}
-                className="flex-1 bg-slate-900 hover:bg-black text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
+                className="sm:w-1/2 bg-slate-900 hover:bg-black text-white py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-xs"
               >
-                <Printer className="w-4 h-4" />
+                <Printer className="w-5 h-5" />
                 <span>Print Receipt</span>
               </button>
             </div>

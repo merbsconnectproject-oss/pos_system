@@ -263,14 +263,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-slate-800 tracking-tight">Product Catalogue & Stock</h1>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-[-0.025em]">Product Catalogue &amp; Stock</h1>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-sm font-normal text-slate-500 mt-1 tracking-normal">
             {currentOutlet.id === 'inco-hardware' && (
-              <span>Dedicated catalog: <strong>Power Tools, Hand Tools, Plumbing, Paints & Safety Equipment</strong></span>
+              <span>Dedicated catalog: <strong>Power Tools, Hand Tools, Plumbing, Paints &amp; Safety Equipment</strong></span>
             )}
             {currentOutlet.id === 'apex-electricals' && (
-              <span>Dedicated catalog: <strong>Copper Cables, Sockets, Switchgear, Breakers, Solar & Lighting</strong></span>
+              <span>Dedicated catalog: <strong>Copper Cables, Sockets, Switchgear, Breakers, Solar &amp; Lighting</strong></span>
             )}
             {currentOutlet.id === 'all-outlets' && (
               <span>Multi-Store Central View: Showing both independent store inventories with separate product lines.</span>
@@ -560,86 +560,101 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       {addModalOpen && (
         <div 
           onClick={() => setAddModalOpen(false)}
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-center justify-center p-4 animate-modal-backdrop"
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-center justify-center p-4 sm:p-6 animate-modal-backdrop"
         >
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl w-full max-w-xl shadow-2xl p-6 border border-slate-300 max-h-[90vh] overflow-y-auto animate-modal-card"
+            className="bg-white rounded-xl w-full max-w-4xl shadow-2xl border border-slate-300 max-h-[92vh] flex flex-col overflow-hidden animate-modal-card"
           >
-            <div className="flex justify-between items-center mb-4 border-b pb-2">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center px-6 py-5 sm:px-8 border-b border-slate-200 bg-slate-50 shrink-0">
               <div>
-                <h3 className="font-black text-lg text-slate-800">Add New Store Product</h3>
-                <p className="text-xs text-slate-500">Create item for Inco Hardware or Apex Electricals inventory</p>
+                <h3 className="font-black text-xl text-slate-900">Add New Store Product</h3>
+                <p className="text-sm text-slate-500 mt-0.5">Register catalogue items with multi-tier pricing and initial inventory balances</p>
               </div>
-              <button onClick={() => setAddModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+              <button 
+                onClick={() => setAddModalOpen(false)} 
+                className="text-slate-400 hover:text-slate-700 p-2 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateProduct} className="space-y-4 text-xs">
+            <form onSubmit={handleCreateProduct} className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
               {/* Target Store Selector */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Target Store *</label>
-                <div className="grid grid-cols-2 gap-3">
+                <label className="text-sm font-bold text-slate-800 block mb-2">Target Store Location *</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <button
                     type="button"
                     onClick={() => handleStoreChange('inco-hardware')}
-                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                    className={`p-4 rounded-xl border text-left cursor-pointer transition-all ${
                       newProdStore === 'inco-hardware'
-                        ? 'border-amber-500 bg-amber-50/50 ring-2 ring-amber-500/20'
+                        ? 'border-amber-500 bg-amber-50/60 ring-2 ring-amber-500/20 shadow-xs'
                         : 'border-slate-300 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="font-black text-slate-800 text-xs">Inco Hardware</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Tools, Building, Plumbing & Paints</div>
+                    <div className="font-black text-slate-900 text-sm flex items-center justify-between">
+                      <span>Inco Hardware</span>
+                      {newProdStore === 'inco-hardware' && (
+                        <span className="text-[11px] font-bold text-amber-700 bg-amber-200/60 px-2 py-0.5 rounded">Selected</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">Tools, Building, Plumbing Supplies &amp; Paints</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleStoreChange('apex-electricals')}
-                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                    className={`p-4 rounded-xl border text-left cursor-pointer transition-all ${
                       newProdStore === 'apex-electricals'
-                        ? 'border-blue-500 bg-blue-50/50 ring-2 ring-blue-500/20'
+                        ? 'border-blue-500 bg-blue-50/60 ring-2 ring-blue-500/20 shadow-xs'
                         : 'border-slate-300 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="font-black text-slate-800 text-xs">Apex Electricals</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Cables, Switchgear, Solar & Lighting</div>
+                    <div className="font-black text-slate-900 text-sm flex items-center justify-between">
+                      <span>Apex Electricals</span>
+                      {newProdStore === 'apex-electricals' && (
+                        <span className="text-[11px] font-bold text-blue-700 bg-blue-200/60 px-2 py-0.5 rounded">Selected</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">Cables, Switchgear, Solar &amp; Industrial Lighting</div>
                   </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Basic Information */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Product Name *</label>
+                  <label className="text-sm font-bold text-slate-800 block mb-1.5">Product Name *</label>
                   <input
                     type="text"
                     required
                     value={newProdName}
                     onChange={(e) => setNewProdName(e.target.value)}
-                    placeholder={newProdStore === 'inco-hardware' ? 'e.g. Total 1000W Rotary Hammer' : 'e.g. 6.0mm Twin & Earth Cable'}
-                    className="w-full border border-slate-300 rounded-lg p-2"
+                    placeholder={newProdStore === 'inco-hardware' ? 'e.g. Total 1000W Rotary Hammer SDS-Plus' : 'e.g. 6.0mm Twin & Earth PVC Cable 100m'}
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-orange-500 focus:ring-2 focus:ring-orange-500/20"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">SKU Code *</label>
+                  <label className="text-sm font-bold text-slate-800 block mb-1.5">SKU / Item Code *</label>
                   <input
                     type="text"
                     required
                     value={newProdSku}
                     onChange={(e) => setNewProdSku(e.target.value)}
                     placeholder={newProdStore === 'inco-hardware' ? 'INC-TLS-005' : 'APX-CAB-005'}
-                    className="w-full border border-slate-300 rounded-lg p-2 font-mono"
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono text-slate-800 uppercase focus:outline-orange-500 focus:ring-2 focus:ring-orange-500/20"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Category</label>
+                  <label className="text-sm font-bold text-slate-800 block mb-1.5">Category *</label>
                   <select
                     value={newProdCategory}
                     onChange={(e) => setNewProdCategory(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-orange-500"
                   >
                     {newProdStore === 'inco-hardware' ? (
                       <>
@@ -663,20 +678,21 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Brand / Manufacturer</label>
+                  <label className="text-sm font-bold text-slate-800 block mb-1.5">Brand / Manufacturer</label>
                   <input
                     type="text"
                     value={newProdBrand}
                     onChange={(e) => setNewProdBrand(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg p-2"
+                    placeholder="e.g. Total, Schneider, Philips"
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-orange-500"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Base Inventory Unit</label>
+                  <label className="text-sm font-bold text-slate-800 block mb-1.5">Base Inventory Unit *</label>
                   <select
                     value={newProdBaseUnit}
                     onChange={(e) => setNewProdBaseUnit(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg p-2 bg-white font-mono"
+                    className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white font-mono text-slate-800 focus:outline-orange-500"
                   >
                     {newProdStore === 'inco-hardware' ? (
                       <>
@@ -703,98 +719,101 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               </div>
 
               {/* Price Tiers (BR-10 & FR-PROD-02) */}
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-300 space-y-2">
-                <div className="font-bold text-slate-800">Multi-Tier Pricing (Ghana Cedis GH₵)</div>
-                <div className="grid grid-cols-3 gap-3">
+              <div className="bg-slate-50 p-5 rounded-xl border border-slate-300 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-black text-sm text-slate-900">Multi-Tier Pricing Structure (Ghana Cedis GH₵)</div>
+                  <span className="text-xs text-slate-500 font-medium">Auto-applied at checkout by customer tier</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-[11px] text-slate-600 block mb-0.5">Retail Price (GH₵) *</label>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Retail Price (GH₵) *</label>
                     <input
                       type="number"
                       step="any"
                       required
                       value={newProdRetailPrice}
                       onChange={(e) => setNewProdRetailPrice(parseFloat(e.target.value) || 0)}
-                      className="w-full font-bold border border-slate-300 rounded-lg p-2 bg-white"
+                      className="w-full font-bold text-base border border-slate-300 rounded-lg px-3.5 py-2.5 bg-white text-slate-900 focus:outline-orange-500"
                     />
+                    <span className="text-[11px] text-slate-500 mt-1 block">Standard walk-in customer rate</span>
                   </div>
                   <div>
-                    <label className="text-[11px] text-slate-600 block mb-0.5">Trade Price (GH₵) *</label>
+                    <label className="text-xs font-bold text-blue-800 block mb-1">Trade Price (GH₵) *</label>
                     <input
                       type="number"
                       step="any"
                       required
                       value={newProdTradePrice}
                       onChange={(e) => setNewProdTradePrice(parseFloat(e.target.value) || 0)}
-                      className="w-full font-bold text-blue-600 border border-slate-300 rounded-lg p-2 bg-white"
+                      className="w-full font-bold text-base text-blue-700 border border-slate-300 rounded-lg px-3.5 py-2.5 bg-white focus:outline-blue-500"
                     />
+                    <span className="text-[11px] text-blue-600 mt-1 block">Contractors &amp; verified artisans</span>
                   </div>
                   <div>
-                    <label className="text-[11px] text-slate-600 block mb-0.5">Floor Price (GH₵) *</label>
+                    <label className="text-xs font-bold text-amber-800 block mb-1">Floor Price (GH₵) *</label>
                     <input
                       type="number"
                       step="any"
                       required
                       value={newProdFloorPrice}
                       onChange={(e) => setNewProdFloorPrice(parseFloat(e.target.value) || 0)}
-                      className="w-full font-bold text-amber-600 border border-slate-300 rounded-lg p-2 bg-white"
+                      className="w-full font-bold text-base text-amber-700 border border-slate-300 rounded-lg px-3.5 py-2.5 bg-white focus:outline-amber-500"
                     />
+                    <span className="text-[11px] text-amber-600 mt-1 block">Requires Manager PIN if sold below</span>
                   </div>
                 </div>
-                <p className="text-[10px] text-slate-400">
-                  Floor price enforces manager PIN prompt if cashier enters lower price at POS checkout.
-                </p>
               </div>
 
               {/* Store Initial Stock & Cost */}
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-300 space-y-2">
-                <div className="font-bold text-slate-800">
-                  Initial Stock & Unit Cost for {newProdStore === 'inco-hardware' ? 'Inco Hardware' : 'Apex Electricals'}
+              <div className="bg-slate-50 p-5 rounded-xl border border-slate-300 space-y-3">
+                <div className="font-black text-sm text-slate-900">
+                  Initial Stock &amp; Valuation for {newProdStore === 'inco-hardware' ? 'Inco Hardware' : 'Apex Electricals'}
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-[11px] text-slate-600 block mb-0.5">Initial Stock:</label>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Opening Stock Quantity:</label>
                     <input
                       type="number"
                       step="any"
                       value={newProdStock}
                       onChange={(e) => setNewProdStock(parseFloat(e.target.value) || 0)}
-                      className="w-full font-bold border border-slate-300 rounded-lg p-2 bg-white"
+                      className="w-full font-bold text-base border border-slate-300 rounded-lg px-3.5 py-2.5 bg-white text-slate-900 focus:outline-orange-500"
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] text-slate-600 block mb-0.5">Weighted Cost (GH₵):</label>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Weighted Unit Cost (GH₵):</label>
                     <input
                       type="number"
                       step="any"
                       value={newProdCost}
                       onChange={(e) => setNewProdCost(parseFloat(e.target.value) || 0)}
-                      className="w-full font-bold border border-slate-300 rounded-lg p-2 bg-white"
+                      className="w-full font-bold text-base border border-slate-300 rounded-lg px-3.5 py-2.5 bg-white text-slate-900 focus:outline-orange-500"
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] text-slate-600 block mb-0.5">Min Stock Alert:</label>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Minimum Alert Threshold:</label>
                     <input
                       type="number"
                       step="any"
                       value={newProdMinAlert}
                       onChange={(e) => setNewProdMinAlert(parseFloat(e.target.value) || 0)}
-                      className="w-full font-bold border border-slate-300 rounded-lg p-2 bg-white"
+                      className="w-full font-bold text-base border border-slate-300 rounded-lg px-3.5 py-2.5 bg-white text-slate-900 focus:outline-orange-500"
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="flex gap-2 pt-2 border-t border-slate-200">
+              <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setAddModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-300 font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  className="sm:w-1/3 py-3 rounded-lg border border-slate-300 font-bold text-sm text-slate-600 hover:bg-slate-50 cursor-pointer transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold cursor-pointer shadow-xs"
+                  className="sm:w-2/3 py-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm cursor-pointer shadow-xs transition-colors"
                 >
                   Save Product to {newProdStore === 'inco-hardware' ? 'Inco Hardware' : 'Apex Electricals'}
                 </button>
