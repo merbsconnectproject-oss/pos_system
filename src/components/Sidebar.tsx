@@ -29,6 +29,20 @@ interface SidebarProps {
   onOpenShift: () => void;
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
+  permissions: {
+    canOpenTerminal: boolean;
+    canBlindCloseShift: boolean;
+    canProcessRefund: boolean;
+    canViewCostPrices: boolean;
+    canAddProducts: boolean;
+    canAdjustStock: boolean;
+    canReceiveGoods: boolean;
+    canCreateCustomer: boolean;
+    canAssignCreditLimit: boolean;
+    canViewExecutiveReports: boolean;
+    canViewAuditLogs: boolean;
+    canModifySystemSettings: boolean;
+  };
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -39,7 +53,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenShift,
   mobileOpen = false,
   onCloseMobile,
+  permissions,
 }) => {
+  const productTabs = ['products', 'products-import', 'products-setup', 'products-bulk-price'];
+  const inventoryTabs = [
+    'inventory',
+    'inventory-low-stock',
+    'inventory-valuation',
+    'inventory-exceptions',
+    'inventory-count',
+    'inventory-transfer',
+  ];
+  const productActive = productTabs.includes(activeTab);
+  const inventoryActive = inventoryTabs.includes(activeTab);
+
   const handleNavClick = (tab: string) => {
     onSelectTab(tab);
     if (onCloseMobile) onCloseMobile();
@@ -63,17 +90,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
               }`}
-              title="Admin Dashboard"
+              title="Dashboard"
             >
               <LayoutDashboard
                 className={`w-4 h-4 shrink-0 ${
                   activeTab === 'dashboard' ? 'text-white' : 'text-slate-400'
                 }`}
               />
-              {!collapsed && <span>Admin Dashboard</span>}
+              {!collapsed && <span>Dashboard</span>}
             </button>
 
-            <button
+            {permissions.canViewExecutiveReports && <button
               onClick={() => handleNavClick('analytics')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'analytics'
@@ -101,9 +128,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <Sparkles className="w-2.5 h-2.5" /> AI
                 </span>
               )}
-            </button>
+            </button>}
 
-            <button
+            {permissions.canViewExecutiveReports && <button
               onClick={() => handleNavClick('outlet-comparison')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'outlet-comparison'
@@ -120,20 +147,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 {!collapsed && <span>Outlet Comparison</span>}
               </div>
-            </button>
+            </button>}
+
+            {permissions.canViewExecutiveReports && <button
+              onClick={() => handleNavClick('reports')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'reports' ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+              }`}
+              title="Business Reports"
+            >
+              <FileText className={`w-4 h-4 shrink-0 ${activeTab === 'reports' ? 'text-white' : 'text-slate-400'}`} />
+              {!collapsed && <span>Business Reports</span>}
+            </button>}
           </div>
         </div>
 
-        {/* POS & SALES SECTION */}
-        <div>
+        {/* SALES & POS SECTION */}
+        {(permissions.canOpenTerminal || permissions.canBlindCloseShift || permissions.canProcessRefund) && <div>
           {!collapsed && (
             <div className="px-4 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500 mb-2">
-              Point of Sale
+              Sales &amp; Point of Sale
             </div>
           )}
           <div className="px-2.5 space-y-1">
             {/* Quick POS Launch Button */}
-            <button
+            {permissions.canOpenTerminal && <button
               onClick={() => {
                 onOpenPos();
                 if (onCloseMobile) onCloseMobile();
@@ -145,16 +183,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <Monitor className="w-4 h-4 text-orange-400 group-hover:scale-110 transition-transform shrink-0" />
                 {!collapsed && <span>Open Terminal</span>}
               </div>
-            </button>
+            </button>}
 
-            <button
+            {(permissions.canBlindCloseShift || permissions.canViewExecutiveReports) && <button
               onClick={() => handleNavClick('sales-history')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'sales-history'
                   ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
               }`}
-              title="Sales & Receipts"
+              title="Sales History"
             >
               <div className="flex items-center gap-3">
                 <FileText
@@ -162,11 +200,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     activeTab === 'sales-history' ? 'text-white' : 'text-slate-400'
                   }`}
                 />
-                {!collapsed && <span>Receipts &amp; Voids</span>}
+                {!collapsed && <span>Sales History</span>}
               </div>
-            </button>
+            </button>}
 
-            <button
+            {(permissions.canBlindCloseShift || permissions.canViewExecutiveReports) && <button
               onClick={() => {
                 onOpenShift();
                 if (onCloseMobile) onCloseMobile();
@@ -186,9 +224,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 {!collapsed && <span>Cashier Shifts</span>}
               </div>
-            </button>
+            </button>}
 
-            <button
+            {permissions.canProcessRefund && <button
               onClick={() => handleNavClick('returns-exchanges')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'returns-exchanges'
@@ -205,19 +243,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 {!collapsed && <span>Returns &amp; Swaps</span>}
               </div>
-            </button>
+            </button>}
           </div>
-        </div>
+        </div>}
 
         {/* FINANCE & ACCOUNTS */}
-        <div>
+        {(permissions.canBlindCloseShift || permissions.canViewExecutiveReports || permissions.canAssignCreditLimit) && <div>
           {!collapsed && (
             <div className="px-4 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500 mb-2">
               Finance &amp; Accounting
             </div>
           )}
           <div className="px-2.5 space-y-1">
-            <button
+            {(permissions.canBlindCloseShift || permissions.canViewExecutiveReports) && <button
+              onClick={() => handleNavClick('cash-control')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'cash-control' ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+              }`}
+              title="Cash Control and End of Day"
+            >
+              <Wallet className={`w-4 h-4 shrink-0 ${activeTab === 'cash-control' ? 'text-white' : 'text-slate-400'}`} />
+              {!collapsed && <span>Cash Control</span>}
+            </button>}
+            {permissions.canViewExecutiveReports && <button
               onClick={() => handleNavClick('expenses')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'expenses'
@@ -234,9 +282,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 {!collapsed && <span>Expenses &amp; P&amp;L</span>}
               </div>
-            </button>
+            </button>}
 
-            <button
+            {permissions.canAssignCreditLimit && <button
               onClick={() => handleNavClick('installments')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'installments'
@@ -253,22 +301,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 {!collapsed && <span>Installment Plans</span>}
               </div>
-            </button>
+            </button>}
           </div>
-        </div>
+        </div>}
 
         {/* INVENTORY & LOGISTICS */}
-        <div>
+        {(permissions.canAddProducts || permissions.canViewCostPrices || permissions.canAdjustStock || permissions.canReceiveGoods) && <div>
           {!collapsed && (
             <div className="px-4 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500 mb-2">
               Inventory &amp; Stock
             </div>
           )}
           <div className="px-2.5 space-y-1">
-            <button
+            {(permissions.canAddProducts || permissions.canViewCostPrices) && <button
               onClick={() => handleNavClick('products')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'products'
+                productActive
                   ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
               }`}
@@ -277,14 +325,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="flex items-center gap-3">
                 <Package
                   className={`w-4 h-4 shrink-0 ${
-                    activeTab === 'products' ? 'text-white' : 'text-slate-400'
+                    productActive ? 'text-white' : 'text-slate-400'
                   }`}
                 />
                 {!collapsed && <span>Product Catalogue</span>}
               </div>
-            </button>
+            </button>}
 
-            <button
+            {(permissions.canAdjustStock || permissions.canViewCostPrices) && <button
+              onClick={() => handleNavClick('inventory')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                inventoryActive
+                  ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+              }`}
+              title="Stock On Hand"
+            >
+              <div className="flex items-center gap-3">
+                <Layers
+                  className={`w-4 h-4 shrink-0 ${
+                    inventoryActive ? 'text-white' : 'text-slate-400'
+                  }`}
+                />
+                {!collapsed && <span>Stock On Hand</span>}
+              </div>
+            </button>}
+
+            {permissions.canReceiveGoods && <button
               onClick={() => handleNavClick('goods-receipt')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'goods-receipt'
@@ -301,9 +368,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 {!collapsed && <span>Goods Receipt (GRN)</span>}
               </div>
-            </button>
+            </button>}
 
-            <button
+            {(permissions.canAdjustStock || permissions.canViewCostPrices) && <button
               onClick={() => handleNavClick('stock-movements')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'stock-movements'
@@ -320,19 +387,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 {!collapsed && <span>Stock Movements</span>}
               </div>
-            </button>
+            </button>}
           </div>
-        </div>
+        </div>}
 
         {/* DIRECTORY & COMPLIANCE */}
-        <div>
+        {(permissions.canCreateCustomer || permissions.canReceiveGoods || permissions.canViewAuditLogs) && <div>
           {!collapsed && (
             <div className="px-4 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500 mb-2">
               Partners &amp; Audit
             </div>
           )}
           <div className="px-2.5 space-y-1">
-            <button
+            {permissions.canCreateCustomer && <button
               onClick={() => handleNavClick('customers')}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'customers'
@@ -347,9 +414,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }`}
               />
               {!collapsed && <span>Customers (Trade)</span>}
-            </button>
+            </button>}
 
-            <button
+            {permissions.canReceiveGoods && <button
               onClick={() => handleNavClick('suppliers')}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'suppliers'
@@ -364,9 +431,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }`}
               />
               {!collapsed && <span>Suppliers Directory</span>}
-            </button>
+            </button>}
 
-            <button
+            {permissions.canViewAuditLogs && <button
               onClick={() => handleNavClick('audit-log')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'audit-log'
@@ -383,9 +450,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 {!collapsed && <span>Audit Trail</span>}
               </div>
-            </button>
+            </button>}
 
-            <button
+            {permissions.canModifySystemSettings && <button
               onClick={() => handleNavClick('settings')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'settings'
@@ -402,9 +469,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 {!collapsed && <span>System Settings</span>}
               </div>
-            </button>
+            </button>}
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* Bottom Pro Badge */}

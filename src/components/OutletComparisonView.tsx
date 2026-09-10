@@ -46,12 +46,6 @@ interface OutletMetrics {
   avgDiscountPerSale: number;
   revenuePerItem: number;
   // Profile
-  theme: {
-    headerBg: string;
-    badgeBg: string;
-    border: string;
-    accentText: string;
-  };
   topDriver: string;
   archetype: string;
 }
@@ -79,12 +73,6 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
       let baseMarginPct = 30.0;
       let archetype = 'General Trade Branch';
       let topDriver = 'Fast-moving installation essentials and standard retail lines.';
-      let theme = {
-        headerBg: 'bg-slate-900',
-        badgeBg: 'bg-slate-100 text-slate-800 border-slate-300',
-        border: 'border-slate-300',
-        accentText: 'text-slate-900',
-      };
 
       if (outlet.id === 'radiance-lighting') {
         baseRevenue = 34850.0;
@@ -172,7 +160,6 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
         avgProfitPerSale,
         avgDiscountPerSale,
         revenuePerItem,
-        theme,
         topDriver,
         archetype,
       };
@@ -228,7 +215,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              <Scale className="w-3.5 h-3.5 text-blue-600" />
+              <Scale className="w-3.5 h-3.5 text-slate-500" />
               <span>Average Per Sale (Unit Economics)</span>
             </button>
           </div>
@@ -237,19 +224,9 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
 
       {/* Contextual Mode Explanation Banner */}
       <div
-        className={`p-4 rounded-2xl border text-xs flex items-start gap-3 transition-colors ${
-          metricMode === 'total'
-            ? 'bg-amber-50/70 border-amber-200/80 text-amber-950'
-            : 'bg-blue-50/70 border-blue-200/80 text-blue-950'
-        }`}
+        className="p-4 rounded-2xl border border-slate-200 bg-slate-50/80 text-xs flex items-start gap-3 transition-colors"
       >
-        <div
-          className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-            metricMode === 'total'
-              ? 'bg-amber-200/70 text-amber-800'
-              : 'bg-blue-200/70 text-blue-800'
-          }`}
-        >
+        <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 mt-0.5 bg-white border border-slate-200 text-slate-600">
           {metricMode === 'total' ? (
             <BarChart3 className="w-4 h-4" />
           ) : (
@@ -264,9 +241,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                 : 'Average Per Sale Mode: Ticket Size & Unit Economics'}
             </span>
             <span
-              className={`text-[10px] font-mono px-2 py-0.2 rounded-full font-bold uppercase ${
-                metricMode === 'total' ? 'bg-amber-200 text-amber-900' : 'bg-blue-200 text-blue-900'
-              }`}
+              className="text-[10px] font-mono px-2 py-0.2 rounded-full font-bold uppercase bg-white text-slate-700 border border-slate-200"
             >
               {metricMode === 'total' ? 'Aggregate Scale' : 'Per-Transaction Analysis'}
             </span>
@@ -282,7 +257,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
       {/* Side-by-Side Outlet Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {outletMetricsList.map((metric, idx) => {
-          const { outlet, theme } = metric;
+          const { outlet } = metric;
           const isAovLeader = metric.avgOrderValue === maxAOV;
           const isRevenueLeader = metric.totalRevenue === maxTotalRevenue;
 
@@ -291,36 +266,34 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
               key={outlet.id}
               className="bg-white rounded-2xl border border-slate-300 shadow-2xs hover:shadow-xs transition-all overflow-hidden flex flex-col justify-between"
             >
-              {/* Branch Header Banner */}
-              <div
-                className={`p-5 ${theme.headerBg} text-white flex justify-between items-start`}
-              >
+              {/* Branch Header */}
+              <div className="p-5 bg-white border-b border-slate-200 text-slate-900 flex justify-between items-start">
                 <div>
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded">
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded">
                       Outlet {idx + 1} • {outlet.town}
                     </span>
                     {metricMode === 'total' && isRevenueLeader && (
-                      <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-500/90 text-white px-2 py-0.5 rounded">
-                        ★ Revenue Leader
+                      <span className="text-[10px] font-black uppercase tracking-wider bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded">
+                        Revenue Leader
                       </span>
                     )}
                     {metricMode === 'average' && isAovLeader && (
-                      <span className="text-[10px] font-black uppercase tracking-wider bg-yellow-400 text-slate-900 px-2 py-0.5 rounded">
-                        ★ Highest AOV
+                      <span className="text-[10px] font-black uppercase tracking-wider bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded">
+                        Highest AOV
                       </span>
                     )}
                   </div>
                   <h2 className="text-xl font-black mt-1.5 tracking-tight">{outlet.name}</h2>
-                  <p className="text-xs text-white/80 mt-0.5">
+                  <p className="text-xs text-slate-500 mt-0.5">
                     {outlet.address} • Prefix: {outlet.receiptPrefix}
                   </p>
-                  <p className="text-[11px] text-white/70 italic mt-1 font-medium">
+                  <p className="text-[11px] text-slate-500 italic mt-1 font-medium">
                     {metric.archetype}
                   </p>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/20 shrink-0">
-                  <Store className="w-5 h-5 text-white/90" />
+                <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-200 shrink-0">
+                  <Store className="w-5 h-5 text-orange-600" />
                 </div>
               </div>
 
@@ -330,10 +303,10 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                   /* ================= TOTAL VALUES MODE ================= */
                   <div className="space-y-4">
                     {/* Primary Hero Metric: Total Gross Revenue */}
-                    <div className="p-3.5 bg-slate-900 text-white rounded-xl">
-                      <div className="flex justify-between items-center text-[11px] text-slate-400 font-semibold">
+                    <div className="p-3.5 bg-slate-950 text-white rounded-xl border border-slate-900">
+                      <div className="flex justify-between items-center text-[11px] text-slate-200 font-semibold">
                         <span>Total Gross Revenue</span>
-                        <span className="text-emerald-400 font-mono font-bold">
+                        <span className="text-orange-300 font-mono font-bold">
                           {((metric.totalRevenue / maxTotalRevenue) * 100).toFixed(0)}% of Max
                         </span>
                       </div>
@@ -351,8 +324,8 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
 
                     {/* Secondary Metrics Grid */}
                     <div className="grid grid-cols-2 gap-2.5 text-xs">
-                      <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-white">
-                        <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">
+                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-900 text-white">
+                        <span className="text-slate-200 block text-[10px] font-bold uppercase tracking-wider">
                           Completed Orders
                         </span>
                         <strong className="text-base font-black text-white block mt-1 font-mono">
@@ -360,17 +333,17 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                         </strong>
                       </div>
 
-                      <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-white">
-                        <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">
+                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-900 text-white">
+                        <span className="text-slate-200 block text-[10px] font-bold uppercase tracking-wider">
                           Gross Profit ({metric.marginPct.toFixed(0)}%)
                         </span>
-                        <strong className="text-base font-black text-emerald-400 block mt-1 font-mono">
+                        <strong className="text-base font-black text-emerald-300 block mt-1 font-mono">
                           GH₵ {metric.grossProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </strong>
                       </div>
 
-                      <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-white">
-                        <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">
+                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-900 text-white">
+                        <span className="text-slate-200 block text-[10px] font-bold uppercase tracking-wider">
                           Stock Valuation
                         </span>
                         <strong className="text-base font-black text-white block mt-1 font-mono">
@@ -378,13 +351,13 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                         </strong>
                       </div>
 
-                      <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-white">
-                        <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">
+                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-900 text-white">
+                        <span className="text-slate-200 block text-[10px] font-bold uppercase tracking-wider">
                           Low Stock Alerts
                         </span>
                         <strong
                           className={`text-base font-black block mt-1 font-mono ${
-                            metric.lowStockCount > 5 ? 'text-rose-400' : 'text-amber-400'
+                            metric.lowStockCount > 5 ? 'text-rose-300' : 'text-amber-300'
                           }`}
                         >
                           {metric.lowStockCount} Products
@@ -396,10 +369,10 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                   /* ================= AVERAGE PER SALE MODE ================= */
                   <div className="space-y-4">
                     {/* Primary Hero Metric: Average Order Value (AOV) */}
-                    <div className="p-3.5 bg-slate-900 text-white rounded-xl border border-slate-800">
-                      <div className="flex justify-between items-center text-[11px] text-slate-400 font-semibold">
+                    <div className="p-3.5 bg-slate-950 text-white rounded-xl border border-slate-900">
+                      <div className="flex justify-between items-center text-[11px] text-slate-200 font-semibold">
                         <span>Average Order Value (AOV)</span>
-                        <span className="text-cyan-400 font-mono font-bold">
+                        <span className="text-orange-300 font-mono font-bold">
                           {((metric.avgOrderValue / maxAOV) * 100).toFixed(0)}% of Max
                         </span>
                       </div>
@@ -410,7 +383,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                       {/* Visual Relative Scale Bar */}
                       <div className="w-full bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
                         <div
-                          className="bg-cyan-400 h-1.5 rounded-full transition-all duration-500"
+                          className="bg-orange-500 h-1.5 rounded-full transition-all duration-500"
                           style={{ width: `${(metric.avgOrderValue / maxAOV) * 100}%` }}
                         />
                       </div>
@@ -418,8 +391,8 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
 
                     {/* Secondary Per-Sale Unit Economics Grid */}
                     <div className="grid grid-cols-2 gap-2.5 text-xs">
-                      <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-white">
-                        <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">
+                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-900 text-white">
+                        <span className="text-slate-200 block text-[10px] font-bold uppercase tracking-wider">
                           Basket Items
                         </span>
                         <strong className="text-base font-black text-white block mt-1 font-mono">
@@ -427,17 +400,17 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                         </strong>
                       </div>
 
-                      <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-white">
-                        <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">
+                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-900 text-white">
+                        <span className="text-slate-200 block text-[10px] font-bold uppercase tracking-wider">
                           Profit Per Sale
                         </span>
-                        <strong className="text-base font-black text-emerald-400 block mt-1 font-mono">
+                        <strong className="text-base font-black text-emerald-300 block mt-1 font-mono">
                           GH₵ {metric.avgProfitPerSale.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </strong>
                       </div>
 
-                      <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-white">
-                        <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">
+                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-900 text-white">
+                        <span className="text-slate-200 block text-[10px] font-bold uppercase tracking-wider">
                           Avg Discount
                         </span>
                         <strong className="text-base font-black text-white block mt-1 font-mono">
@@ -445,11 +418,11 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                         </strong>
                       </div>
 
-                      <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-white">
-                        <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">
+                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-900 text-white">
+                        <span className="text-slate-200 block text-[10px] font-bold uppercase tracking-wider">
                           Revenue / Unit
                         </span>
-                        <strong className="text-base font-black text-cyan-400 block mt-1 font-mono">
+                        <strong className="text-base font-black text-white block mt-1 font-mono">
                           GH₵ {metric.revenuePerItem.toFixed(2)}
                         </strong>
                       </div>
@@ -504,11 +477,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
           <div className="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl self-start sm:self-auto flex items-center gap-2">
             <span>Current Display:</span>
             <span
-              className={`font-black uppercase text-[10px] px-2 py-0.5 rounded-md ${
-                metricMode === 'total'
-                  ? 'bg-orange-600 text-white'
-                  : 'bg-blue-600 text-white'
-              }`}
+              className="font-black uppercase text-[10px] px-2 py-0.5 rounded-md bg-white text-slate-700 border border-slate-200"
             >
               {metricMode === 'total' ? 'Total Cumulative' : 'Per-Sale Averages'}
             </span>
@@ -533,7 +502,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-200 font-medium">
               {/* Row 1: Gross Revenue / AOV */}
-              <tr className={metricMode === 'total' ? 'bg-orange-50/30' : 'bg-blue-50/30'}>
+              <tr className="bg-slate-50/70">
                 <td className="py-3 px-4 font-bold text-slate-800 flex items-center gap-2">
                   <DollarSign className="w-4 h-4 text-emerald-600 shrink-0" />
                   <div>
@@ -558,7 +527,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
               </tr>
 
               {/* Row 2: Sales Count / Items per Sale */}
-              <tr className={metricMode === 'total' ? 'bg-orange-50/20' : 'bg-blue-50/20'}>
+              <tr className="bg-slate-50/40">
                 <td className="py-3 px-4 font-bold text-slate-800 flex items-center gap-2">
                   <ShoppingBag className="w-4 h-4 text-orange-600 shrink-0" />
                   <div>
@@ -608,7 +577,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
               {/* Row 4: Discount Impact */}
               <tr>
                 <td className="py-3 px-4 font-bold text-slate-800 flex items-center gap-2">
-                  <Percent className="w-4 h-4 text-blue-600 shrink-0" />
+                  <Percent className="w-4 h-4 text-slate-500 shrink-0" />
                   <div>
                     <span>{metricMode === 'total' ? 'Total Discounts Conceded' : 'Avg Discount / Ticket'}</span>
                     <span className="block text-[10px] text-slate-400 font-normal">
@@ -631,7 +600,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
               {/* Row 5: Stock Assets Valuation */}
               <tr>
                 <td className="py-3 px-4 font-bold text-slate-800 flex items-center gap-2">
-                  <Package className="w-4 h-4 text-purple-600 shrink-0" />
+                  <Package className="w-4 h-4 text-slate-500 shrink-0" />
                   <div>
                     <span>Warehouse Stock Valuation</span>
                     <span className="block text-[10px] text-slate-400 font-normal">
@@ -663,7 +632,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
           <div className="p-3.5 bg-slate-800/80 rounded-xl border border-slate-700/80">
-            <span className="text-amber-400 font-bold block mb-1">
+            <span className="text-slate-100 font-bold block mb-1">
               1. Volume vs Ticket Size Trade-off
             </span>
             <p className="text-slate-300 leading-relaxed text-[11px]">
@@ -672,7 +641,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
           </div>
 
           <div className="p-3.5 bg-slate-800/80 rounded-xl border border-slate-700/80">
-            <span className="text-emerald-400 font-bold block mb-1">
+            <span className="text-emerald-300 font-bold block mb-1">
               2. Unit Margin Preservation
             </span>
             <p className="text-slate-300 leading-relaxed text-[11px]">
@@ -681,7 +650,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
           </div>
 
           <div className="p-3.5 bg-slate-800/80 rounded-xl border border-slate-700/80">
-            <span className="text-blue-400 font-bold block mb-1">
+            <span className="text-slate-100 font-bold block mb-1">
               3. Procurement & Stock Buffer Alignment
             </span>
             <p className="text-slate-300 leading-relaxed text-[11px]">
@@ -693,4 +662,3 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
     </div>
   );
 };
-

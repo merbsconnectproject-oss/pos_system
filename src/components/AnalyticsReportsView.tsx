@@ -38,6 +38,7 @@ import {
 import {
   ResponsiveContainer,
   ComposedChart,
+  LineChart,
   AreaChart,
   BarChart,
   PieChart,
@@ -99,24 +100,34 @@ interface AiInferenceData {
   }>;
 }
 
+const MiniSparkline: React.FC<{ data: Array<{ name: string; value: number }>; color: string }> = ({ data, color }) => (
+  <div className="h-8 w-full" aria-hidden="true">
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={data} margin={{ top: 3, right: 0, left: 0, bottom: 2 }}>
+        <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={false} activeDot={false} />
+      </LineChart>
+    </ResponsiveContainer>
+  </div>
+);
+
 const CATEGORY_COLORS: Record<string, string> = {
-  'Lighting & Lamps': '#d97706', // Warm Amber
-  'Cables & Wires': '#2563eb', // Blue
-  'Protection & Breakers': '#dc2626', // Crimson
-  'Switches & Sockets': '#059669', // Emerald
-  'Hardware & Tools': '#4b5563', // Slate
-  'Solar & Inverters': '#eab308', // Yellow
-  'Plumbing & Pipes': '#0891b2', // Cyan
-  'Fasteners & Fixings': '#7c3aed', // Purple
+  'Lighting & Lamps': '#F97316',
+  'Cables & Wires': '#EA580C',
+  'Protection & Breakers': '#64748B',
+  'Switches & Sockets': '#475569',
+  'Hardware & Tools': '#334155',
+  'Solar & Inverters': '#94A3B8',
+  'Plumbing & Pipes': '#CBD5E1',
+  'Fasteners & Fixings': '#C2410C',
   'Other': '#64748b',
 };
 
 const PAYMENT_COLORS: Record<string, string> = {
-  'Mobile Money': '#d97706',
-  'Cash': '#059669',
-  'Bank Card / POS': '#2563eb',
-  'Installment Credit': '#7c3aed',
-  'Bank Transfer': '#0891b2',
+  'Mobile Money': '#F97316',
+  'Cash': '#64748B',
+  'Bank Card / POS': '#475569',
+  'Installment Credit': '#94A3B8',
+  'Bank Transfer': '#334155',
 };
 
 export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
@@ -141,6 +152,10 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
   const [aiInferences, setAiInferences] = useState<AiInferenceData | null>(null);
   const [customQuestion, setCustomQuestion] = useState('');
   const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [activeSnapshot, setActiveSnapshot] = useState<'dailyRevenue' | 'profitMargin' | 'retentionRate' | 'aov'>('dailyRevenue');
+  const [expandedObservation, setExpandedObservation] = useState<number | null>(0);
+  const [expandedRecommendation, setExpandedRecommendation] = useState<number | null>(0);
+  const [answerPanelOpen, setAnswerPanelOpen] = useState(false);
   const [printModalOpen, setPrintModalOpen] = useState(false);
 
   // Sync outlet filter if currentOutlet changes
@@ -282,6 +297,13 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
     };
   }, [selectedOutlet, filteredSales, metrics]);
 
+  const snapshotSeries = useMemo(() => ({
+    dailyRevenue: [82, 88, 84, 94, 91, 100, 96].map((value, index) => ({ name: `${index + 1}`, value: Math.round(quickSnapshot.dailyRevenue * (value / 100)) })),
+    profitMargin: [31, 34, 33, 36, 35, 37, quickSnapshot.profitMargin].map((value, index) => ({ name: `${index + 1}`, value })),
+    retentionRate: [74, 76, 75, 79, 78, 80, quickSnapshot.retentionRate].map((value, index) => ({ name: `${index + 1}`, value })),
+    aov: [88, 94, 91, 98, 96, 103, 100].map((value, index) => ({ name: `${index + 1}`, value: Math.round(quickSnapshot.aov * (value / 100)) })),
+  }), [quickSnapshot]);
+
   // Chart 1: Sales & Margin Velocity Data (14-day chronological curve)
   const salesVelocityData = useMemo(() => {
     const days = [
@@ -308,6 +330,15 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
       };
     });
   }, [selectedOutlet]);
+
+  const operatingPerformanceData = useMemo(
+    () => salesVelocityData.map((point, index) => ({
+      name: point.name.replace('Day ', 'D'),
+      sales: point.revenue,
+      expenses: Math.round(metrics.totalOpex / 14 + (index % 4) * 95),
+    })),
+    [salesVelocityData, metrics.totalOpex]
+  );
 
   // Chart 2: Multi-Outlet Comparative Data
   const outletComparisonData = useMemo(() => {
@@ -379,10 +410,10 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
   // Chart 5: Installment Credit Aging
   const installmentAgingData = useMemo(() => {
     return [
-      { stage: 'Current (< 30 Days)', count: 8, balance: 11400, color: '#10b981' },
-      { stage: 'Due in 7 Days', count: 3, balance: 3900, color: '#3b82f6' },
-      { stage: 'Grace Window (1-7 Days Late)', count: 2, balance: 2100, color: '#f59e0b' },
-      { stage: 'Overdue (> 14 Days)', count: 1, balance: 800, color: '#ef4444' },
+      { stage: 'Current (< 30 Days)', count: 8, balance: 11400, color: '#64748B' },
+      { stage: 'Due in 7 Days', count: 3, balance: 3900, color: '#94A3B8' },
+      { stage: 'Grace Window (1-7 Days Late)', count: 2, balance: 2100, color: '#F97316' },
+      { stage: 'Overdue (> 14 Days)', count: 1, balance: 800, color: '#DC2626' },
     ];
   }, []);
 
@@ -517,6 +548,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
   const handlePresetClick = (preset: { label: string; query: string }) => {
     setActivePreset(preset.label);
     setCustomQuestion(preset.query);
+    setAnswerPanelOpen(true);
     fetchAiInference(preset.query);
   };
 
@@ -577,9 +609,9 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
   };
 
   return (
-    <div className="p-3 sm:p-5 md:p-6 space-y-6 max-w-[1600px] mx-auto">
+    <div className="analytics-page p-4 sm:p-5 md:p-6 space-y-5 max-w-[1600px] mx-auto">
       {/* 1. TOP HEADER & INTERACTIVE FILTERS */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-300 shadow-2xs">
+      <div className="analytics-header flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span
@@ -590,9 +622,9 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
               Commercial Intelligence Hub
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-[-0.025em] flex items-center gap-2">
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 flex items-center gap-2">
             <span>Analytics &amp; Executive Reports</span>
-            <span className="text-xs bg-orange-100 text-orange-800 font-bold px-2.5 py-0.5 rounded-full border border-orange-200 flex items-center gap-1">
+            <span className="text-[10px] bg-orange-50 text-orange-700 font-bold px-2 py-1 rounded-md border border-orange-200 flex items-center gap-1">
               <Sparkles className="w-3 h-3 text-orange-600" /> AI-Inferred
             </span>
           </h1>
@@ -642,7 +674,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           <button
             onClick={() => fetchAiInference()}
             disabled={aiLoading}
-            className="px-3.5 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-black rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+            className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-black rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
             title="Re-run Gemini AI inference on active metrics"
           >
             <Sparkles className={`w-3.5 h-3.5 ${aiLoading ? 'animate-spin' : ''}`} />
@@ -670,7 +702,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
       </div>
 
       {/* QUICK SNAPSHOT ROW (Streamlined, Solid Darker Shade KPI Cards) */}
-      <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs space-y-4">
+      <div className="analytics-snapshot bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-200">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-600">
@@ -694,84 +726,84 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1: Daily Revenue */}
-          <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+          <div role="button" tabIndex={0} onClick={() => setActiveSnapshot('dailyRevenue')} onKeyDown={(e) => e.key === 'Enter' && setActiveSnapshot('dailyRevenue')} className={`bg-white p-5 rounded-xl border shadow-xs hover:shadow-sm transition-shadow flex flex-col justify-between cursor-pointer ${activeSnapshot === 'dailyRevenue' ? 'border-orange-300' : 'border-slate-200'}`}>
             <div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                   <DollarSign className="w-4 h-4 text-emerald-600" /> Daily Revenue
                 </span>
                 <span className="text-xs font-mono font-bold text-emerald-600 flex items-center gap-0.5">
                   <ArrowUpRight className="w-3.5 h-3.5" /> {quickSnapshot.dailyTrend}
                 </span>
               </div>
-              <div className="text-2xl sm:text-3xl font-black font-mono text-slate-900 mt-3 tracking-tight">
+              <div className="text-2xl sm:text-3xl font-black font-mono text-white mt-3 tracking-tight">
                 GH₵ {quickSnapshot.dailyRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-200 text-xs text-slate-500 font-medium">
+            <div className="mt-4 pt-3 border-t border-slate-800 text-xs text-slate-400 font-medium">
               Goal: GH₵ {quickSnapshot.dailyTarget.toLocaleString()} ({quickSnapshot.dailyTargetPace}%)
             </div>
+            {activeSnapshot === 'dailyRevenue' && <MiniSparkline data={snapshotSeries.dailyRevenue} color="#F97316" />}
           </div>
 
           {/* Card 2: Profit Margin */}
-          <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+          <div role="button" tabIndex={0} onClick={() => setActiveSnapshot('profitMargin')} onKeyDown={(e) => e.key === 'Enter' && setActiveSnapshot('profitMargin')} className={`bg-white p-5 rounded-xl border shadow-xs hover:shadow-sm transition-shadow flex flex-col justify-between cursor-pointer ${activeSnapshot === 'profitMargin' ? 'border-orange-300' : 'border-slate-200'}`}>
             <div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                   <Percent className="w-4 h-4 text-orange-600" /> Gross Profit Margin
                 </span>
               </div>
-              <div className="text-2xl sm:text-3xl font-black font-mono text-orange-600 mt-3 tracking-tight">
+              <div className="text-2xl sm:text-3xl font-black font-mono text-white mt-3 tracking-tight">
                 {quickSnapshot.profitMargin}%
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-200 text-xs text-slate-500 font-medium">
+            <div className="mt-4 pt-3 border-t border-slate-800 text-xs text-slate-400 font-medium">
               Profit Yield: GH₵ {metrics.grossProfit.toLocaleString()}
             </div>
+            {activeSnapshot === 'profitMargin' && <MiniSparkline data={snapshotSeries.profitMargin} color="#F97316" />}
           </div>
 
           {/* Card 3: Customer Retention */}
-          <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+          <div role="button" tabIndex={0} onClick={() => setActiveSnapshot('retentionRate')} onKeyDown={(e) => e.key === 'Enter' && setActiveSnapshot('retentionRate')} className={`bg-white p-5 rounded-xl border shadow-xs hover:shadow-sm transition-shadow flex flex-col justify-between cursor-pointer ${activeSnapshot === 'retentionRate' ? 'border-orange-300' : 'border-slate-200'}`}>
             <div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Users className="w-4 h-4 text-purple-600" /> Customer Retention
+                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-slate-500" /> Customer Retention
                 </span>
               </div>
-              <div className="text-2xl sm:text-3xl font-black font-mono text-purple-700 mt-3 tracking-tight">
+              <div className="text-2xl sm:text-3xl font-black font-mono text-white mt-3 tracking-tight">
                 {quickSnapshot.retentionRate}%
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-200 text-xs text-emerald-700 font-medium">
+            <div className="mt-4 pt-3 border-t border-slate-800 text-xs text-emerald-300 font-medium">
               Trade &amp; Contractor Loyalty
             </div>
+            {activeSnapshot === 'retentionRate' && <MiniSparkline data={snapshotSeries.retentionRate} color="#64748B" />}
           </div>
 
           {/* Card 4: Average Order Value */}
-          <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
+          <div role="button" tabIndex={0} onClick={() => setActiveSnapshot('aov')} onKeyDown={(e) => e.key === 'Enter' && setActiveSnapshot('aov')} className={`bg-white p-5 rounded-xl border shadow-xs hover:shadow-sm transition-shadow flex flex-col justify-between cursor-pointer ${activeSnapshot === 'aov' ? 'border-orange-300' : 'border-slate-200'}`}>
             <div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <ShoppingBag className="w-4 h-4 text-teal-600" /> Average Ticket (AOV)
+                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <ShoppingBag className="w-4 h-4 text-slate-500" /> Average Ticket (AOV)
                 </span>
               </div>
-              <div className="text-2xl sm:text-3xl font-black font-mono text-teal-700 mt-3 tracking-tight">
+              <div className="text-2xl sm:text-3xl font-black font-mono text-white mt-3 tracking-tight">
                 GH₵ {quickSnapshot.aov.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-200 text-xs text-slate-500 font-medium">
+            <div className="mt-4 pt-3 border-t border-slate-800 text-xs text-slate-400 font-medium">
               Volume: {metrics.totalTransactions} Completed Orders
             </div>
+            {activeSnapshot === 'aov' && <MiniSparkline data={snapshotSeries.aov} color="#64748B" />}
           </div>
         </div>
       </div>
 
       {/* 2. AI EXECUTIVE INFERENCE & STRATEGIC RECOMMENDATIONS PANEL */}
-      <div className="bg-white text-slate-800 rounded-xl p-5 sm:p-6 border border-orange-200 shadow-xs relative overflow-hidden">
-        {/* Subtle decorative glow */}
-        <div
-          className="absolute -top-24 -right-24 w-96 h-96 rounded-full blur-3xl opacity-10 pointer-events-none bg-orange-400"
-        />
+      <div className="analytics-inference bg-white text-slate-800 rounded-xl p-5 sm:p-6 border border-slate-200 shadow-xs overflow-hidden">
 
         <div className="relative z-10 space-y-5">
           {/* AI Banner Top Bar */}
@@ -816,24 +848,79 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
             </div>
           </div>
 
-          {/* AI Executive Summary Text */}
-          <div className="bg-orange-50/50 p-4 sm:p-5 rounded-xl border border-orange-200/80">
-            <p className="text-xs sm:text-sm text-slate-800 leading-relaxed font-medium">
-              {aiInferences?.executiveSummary ||
-                `Operating performance across Radiance POS branches indicates strong revenue growth of GH₵ ${metrics.grossRevenue.toLocaleString()} with a ${metrics.grossMarginPct}% gross profit margin. Architectural lighting products at Radiance Lighting continue to bolster margin performance while Inco Hardware anchors turnover.`}
-            </p>
+          {/* Compact performance workspace */}
+          <div className="grid grid-cols-1 xl:grid-cols-[1.25fr_0.75fr] gap-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Sales vs Operating Expenses</h3>
+                  <p className="text-[11px] text-slate-500">Daily movement across the selected period</p>
+                </div>
+                <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" /> Sales</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-500" /> OpEx</span>
+                </div>
+              </div>
+              <div className="h-44">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={operatingPerformanceData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                    <CartesianGrid stroke="#E2E8F0" strokeDasharray="0" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
+                    <Tooltip formatter={(value: number) => `GH₵ ${value.toLocaleString()}`} contentStyle={{ border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 11 }} />
+                    <Bar dataKey="sales" fill="#F97316" radius={[3, 3, 0, 0]} barSize={16} />
+                    <Line type="monotone" dataKey="expenses" stroke="#64748B" strokeWidth={2} dot={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Financial signals</h3>
+                  <p className="text-[11px] text-slate-500">Select a row to inspect the driver</p>
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">AI summary</span>
+              </div>
+              <div className="space-y-2">
+                {[
+                  { label: 'Margin health', value: `${metrics.grossMarginPct}%`, detail: `Gross profit is GH₵ ${metrics.grossProfit.toLocaleString()} on current sales.`, tone: 'text-emerald-700' },
+                  { label: 'Cash exposure', value: `GH₵ ${(metrics.activeCreditReceivables / 1000).toFixed(1)}k`, detail: 'Active installment receivables require regular collection follow-up.', tone: 'text-slate-900' },
+                  { label: 'Revenue pace', value: quickSnapshot.dailyTrend, detail: `Daily revenue is tracking at ${quickSnapshot.dailyTargetPace}% of the selected target.`, tone: 'text-orange-700' },
+                ].map((signal, index) => (
+                  <button key={signal.label} type="button" onClick={() => setExpandedObservation(expandedObservation === index ? null : index)} className="w-full text-left bg-white border border-slate-200 rounded-lg px-3 py-2.5 hover:border-slate-300 transition-colors">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-bold text-slate-700">{signal.label}</span>
+                      <span className={`text-sm font-black font-mono ${signal.tone}`}>{signal.value}</span>
+                    </div>
+                    {expandedObservation === index && <p className="text-[11px] text-slate-500 mt-1.5 pr-4">{signal.detail}</p>}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Interactive AI Prompt & Preset Chips */}
           <div className="space-y-2.5 pt-1">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-                <Lightbulb className="w-3.5 h-3.5 text-amber-500" /> Ask AI Commercial Analyst:
+                <Lightbulb className="w-3.5 h-3.5 text-orange-600" /> Ask AI Commercial Analyst:
               </span>
               <span className="text-[10px] text-slate-400 hidden sm:inline">
                 Click a preset or enter a targeted query
               </span>
             </div>
+
+            {answerPanelOpen && activePreset && (
+              <div className="bg-slate-900 text-white rounded-xl p-3.5 border border-slate-800 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="flex items-center justify-between gap-3 mb-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-orange-300">Analyst response</span>
+                  <button type="button" onClick={() => setAnswerPanelOpen(false)} className="text-slate-400 hover:text-white cursor-pointer" aria-label="Close analyst response"><X className="w-4 h-4" /></button>
+                </div>
+                <p className="text-xs leading-relaxed text-slate-200">{aiInferences?.executiveSummary || 'The analyst is preparing a response from the selected commercial signals.'}</p>
+              </div>
+            )}
 
             {/* Preset Buttons */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
@@ -913,33 +1000,33 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                   `Mobile Money transaction settlement accounts for 48% of gross turnover.`,
                   `Returns & swaps restock compliance remains steady at 92%.`,
                 ]).map((obs, idx) => (
-                  <div key={idx} className="flex items-start gap-2 text-xs text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0 mt-1.5" />
-                    <span>{obs}</span>
-                  </div>
+                  <button key={idx} type="button" onClick={() => setExpandedObservation(expandedObservation === idx + 3 ? null : idx + 3)} className="w-full flex items-center justify-between gap-3 text-left text-xs text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-200 hover:bg-white transition-colors">
+                    <span className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0 mt-1.5" /><span className="font-semibold">{obs}</span></span>
+                    <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${expandedObservation === idx + 3 ? 'rotate-180' : ''}`} />
+                  </button>
                 ))}
               </div>
 
               {/* Anomalies / Risks */}
               {aiInferences?.anomaliesAndRisks && aiInferences.anomaliesAndRisks.length > 0 && (
                 <div className="pt-2">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1 mb-2">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> Flagged Commercial Anomalies
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-red-700 flex items-center gap-1 mb-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-600" /> Flagged Commercial Anomalies
                   </div>
                   <div className="space-y-2">
                     {aiInferences.anomaliesAndRisks.map((risk, idx) => (
                       <div
                         key={idx}
-                        className="bg-amber-50 border border-amber-200 p-2.5 rounded-xl text-xs space-y-1"
+                        className="bg-red-50 border border-red-200 p-2.5 rounded-xl text-xs space-y-1"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-amber-900">{risk.title}</span>
-                          <span className="text-[9px] uppercase font-black px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                          <span className="font-bold text-red-900">{risk.title}</span>
+                          <span className="text-[9px] uppercase font-black px-1.5 py-0.2 rounded bg-red-100 text-red-800 border border-red-300">
                             {risk.severity} severity
                           </span>
                         </div>
                         <p className="text-slate-600 text-[11px]">{risk.description}</p>
-                        <p className="text-amber-800 text-[11px] font-semibold pt-0.5">
+                        <p className="text-red-800 text-[11px] font-semibold pt-0.5">
                           ↳ Action: {risk.suggestedAction}
                         </p>
                       </div>
@@ -978,9 +1065,11 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                     details: 'Implement tiered trade discount pricing for registered electrical contractors.',
                   },
                 ]).map((rec, idx) => (
-                  <div
+                  <button
+                    type="button"
+                    onClick={() => setExpandedRecommendation(expandedRecommendation === idx ? null : idx)}
                     key={idx}
-                    className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs space-y-1.5 hover:bg-slate-100/70 transition-colors"
+                    className="w-full text-left bg-slate-50 border border-slate-200 p-3 rounded-lg text-xs space-y-1.5 hover:bg-white transition-colors"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -989,23 +1078,18 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                             rec.priority === 'P1'
                               ? 'bg-rose-100 text-rose-700 border-rose-200'
                               : rec.priority === 'P2'
-                              ? 'bg-amber-100 text-amber-700 border-amber-200'
-                              : 'bg-blue-100 text-blue-700 border-blue-200'
+                              ? 'bg-slate-100 text-slate-700 border-slate-200'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
                           }`}
                         >
                           {rec.priority}
                         </span>
                         <span className="font-bold text-slate-900 text-xs">{rec.title}</span>
                       </div>
-                      <span className="text-[10px] font-mono text-emerald-700 font-bold">
-                        {rec.impact}
-                      </span>
+                      <span className="flex items-center gap-2"><span className="text-[10px] font-mono text-emerald-700 font-bold">{rec.impact}</span><ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expandedRecommendation === idx ? 'rotate-180' : ''}`} /></span>
                     </div>
-                    <p className="text-[11px] text-slate-600">{rec.details}</p>
-                    <div className="text-[10px] text-slate-400 font-mono">
-                      Target Timeline: {rec.timeline}
-                    </div>
-                  </div>
+                    {expandedRecommendation === idx && <><p className="text-[11px] text-slate-600">{rec.details}</p><div className="text-[10px] text-slate-400 font-mono">Target Timeline: {rec.timeline}</div></>}
+                  </button>
                 ))}
               </div>
             </div>
@@ -1014,16 +1098,16 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
       </div>
 
       {/* 3. CORE FINANCIAL SCORECARDS (6 KPI TILES) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
+      <div className="analytics-scorecards grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
         {/* Gross Revenue */}
-        <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
+          <div className="analytics-metric-card bg-white p-4 rounded-xl border border-slate-200 shadow-xs hover:shadow-sm transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Gross Revenue</span>
             <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded font-mono font-bold">
               +14.2%
             </span>
           </div>
-          <div className="text-xl font-black text-slate-900 tracking-tight">
+          <div className="text-xl font-black text-white tracking-tight">
             GH₵ {metrics.grossRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
@@ -1033,7 +1117,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* Gross Profit & Margin */}
-        <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
+          <div className="analytics-metric-card bg-white p-4 rounded-xl border border-slate-200 shadow-xs hover:shadow-sm transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Gross Margin</span>
             <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded font-mono font-bold">
@@ -1050,14 +1134,14 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* Operating Expenses */}
-        <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
+          <div className="analytics-metric-card bg-white p-4 rounded-xl border border-slate-200 shadow-xs hover:shadow-sm transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Total OpEx</span>
-            <span className="text-[10px] text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded font-mono font-bold">
+            <span className="text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded font-mono font-bold">
               P&amp;L Deduct
             </span>
           </div>
-          <div className="text-xl font-black text-rose-700 tracking-tight">
+          <div className="text-xl font-black text-white tracking-tight">
             GH₵ {metrics.totalOpex.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
@@ -1067,14 +1151,14 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* Average Order Value (AOV) */}
-        <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
+          <div className="analytics-metric-card bg-white p-4 rounded-xl border border-slate-200 shadow-xs hover:shadow-sm transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Average Ticket (AOV)</span>
-            <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded font-mono font-bold">
+            <span className="text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded font-mono font-bold">
               Per Sale
             </span>
           </div>
-          <div className="text-xl font-black text-blue-700 tracking-tight">
+          <div className="text-xl font-black text-white tracking-tight">
             GH₵ {metrics.averageOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
@@ -1084,31 +1168,31 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
 
         {/* Active Installments Financed */}
-        <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
+          <div className="analytics-metric-card bg-white p-4 rounded-xl border border-slate-200 shadow-xs hover:shadow-sm transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Credit Receivables</span>
-            <span className="text-[10px] text-purple-600 bg-purple-50 px-1.5 py-0.2 rounded font-mono font-bold">
+            <span className="text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded font-mono font-bold">
               Active Plans
             </span>
           </div>
-          <div className="text-xl font-black text-purple-700 tracking-tight">
+          <div className="text-xl font-black text-white tracking-tight">
             GH₵ {metrics.activeCreditReceivables.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
             <span>3 Active Contracts</span>
-            <span className="font-bold text-purple-600">84% Current</span>
+            <span className="font-bold text-slate-700">84% Current</span>
           </div>
         </div>
 
         {/* Returns & Swap Rate */}
-        <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow">
+          <div className="analytics-metric-card bg-white p-4 rounded-xl border border-slate-200 shadow-xs hover:shadow-sm transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Return &amp; Swap Rate</span>
-            <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded font-mono font-bold">
+            <span className="text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded font-mono font-bold">
               Restock 92%
             </span>
           </div>
-          <div className="text-xl font-black text-amber-700 tracking-tight">
+          <div className="text-xl font-black text-white tracking-tight">
             {metrics.returnRatePct}%
           </div>
           <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
@@ -1119,7 +1203,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
       </div>
 
       {/* 4. PRIMARY ANALYTICS CHARTS GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="analytics-chart-grid grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* CHART 1: SALES & GROSS MARGIN VELOCITY */}
         <div className="bg-white rounded-xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
           <div>
@@ -1147,7 +1231,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                   <YAxis yAxisId="left" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#10b981' }} axisLine={false} tickLine={false} unit="%" />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} unit="%" />
                   <Tooltip
                     contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px' }}
                     formatter={(value: any, name: string) => [
@@ -1158,29 +1242,29 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                   <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
                   <Area yAxisId="left" type="monotone" dataKey="revenue" fill="#fdba74" fillOpacity={0.3} stroke="#f97316" strokeWidth={2} name="revenue" />
                   <Bar yAxisId="left" dataKey="cogs" fill="#cbd5e1" barSize={12} radius={[4, 4, 0, 0]} name="cogs" />
-                  <Line yAxisId="right" type="monotone" dataKey="margin" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3 }} name="margin" />
+                  <Line yAxisId="right" type="monotone" dataKey="margin" stroke="#64748B" strokeWidth={2.5} dot={{ r: 3 }} name="margin" />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>
 
           {/* AI INFERENCE CALLOUT CARD */}
-          <div className="mt-4 bg-orange-50/70 border border-orange-200/80 rounded-xl p-3.5 space-y-1.5">
+          <div className="analytics-callout mt-4 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-orange-950 flex items-center gap-1.5">
+              <span className="font-bold text-slate-900 flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-orange-600" /> AI Chart Inference:
               </span>
-              <span className="text-[10px] font-bold text-orange-800 bg-orange-100 px-2 py-0.5 rounded-full uppercase">
+              <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded-full uppercase">
                 {getChartInference('revenue-velocity')?.trend || 'Bullish Pattern'}
               </span>
             </div>
-            <p className="text-xs text-orange-900/90 leading-relaxed">
+            <p className="text-xs text-slate-700 leading-relaxed">
               {getChartInference('revenue-velocity')?.inference ||
                 `Gross margin has stabilized above 34% driven by premium architectural chandelier sales and bundled accessories at Radiance Lighting.`}
             </p>
-            <div className="text-[11px] text-orange-950/80 font-medium pt-1 border-t border-orange-200/60 flex items-center justify-between">
+            <div className="text-[11px] text-slate-600 font-medium pt-1 border-t border-slate-200 flex items-center justify-between">
               <span>Driver: {getChartInference('revenue-velocity')?.keyDriver || 'Contractor commercial fit-outs and high-margin bespoke chandeliers'}</span>
-              <span className="font-bold text-orange-800">Action: Stock 24V drivers →</span>
+              <span className="font-bold text-orange-700">Action: Stock 24V drivers →</span>
             </div>
           </div>
         </div>
@@ -1192,7 +1276,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
               <div>
                 <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
                   <span>Multi-Outlet Performance Matrix</span>
-                  <span className="text-[10px] bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-full border border-blue-200">
+                  <span className="text-[10px] bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-full border border-slate-200">
                     3 Store Outlets
                   </span>
                 </h3>
@@ -1218,29 +1302,29 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                   />
                   <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
                   <Bar dataKey="revenue" fill="#f97316" radius={[6, 6, 0, 0]} name="revenue" />
-                  <Bar dataKey="profit" fill="#10b981" radius={[6, 6, 0, 0]} name="profit" />
+                  <Bar dataKey="profit" fill="#64748B" radius={[6, 6, 0, 0]} name="profit" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
           {/* AI INFERENCE CALLOUT CARD */}
-          <div className="mt-4 bg-blue-50/70 border border-blue-200/80 rounded-xl p-3.5 space-y-1.5">
+          <div className="analytics-callout mt-4 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-blue-950 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-blue-600" /> AI Outlet Benchmarking:
+              <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-orange-600" /> AI Outlet Benchmarking:
               </span>
-              <span className="text-[10px] font-bold text-blue-800 bg-blue-100 px-2 py-0.5 rounded-full uppercase">
+              <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded-full uppercase">
                 {getChartInference('outlet-comparison')?.trend || 'Margin Divergence'}
               </span>
             </div>
-            <p className="text-xs text-blue-900/90 leading-relaxed">
+            <p className="text-xs text-slate-700 leading-relaxed">
               {getChartInference('outlet-comparison')?.inference ||
                 `Radiance Lighting achieves the highest average basket size (GH₵ 1,245) and gross margin (40%), while Inco Hardware leads overall transaction volume.`}
             </p>
-            <div className="text-[11px] text-blue-950/80 font-medium pt-1 border-t border-blue-200/60 flex items-center justify-between">
+            <div className="text-[11px] text-slate-600 font-medium pt-1 border-t border-slate-200 flex items-center justify-between">
               <span>Driver: {getChartInference('outlet-comparison')?.keyDriver || 'East Legon residential affluent fit-outs vs Tema industrial volume'}</span>
-              <span className="font-bold text-blue-800">Action: Cross-sell downlights →</span>
+              <span className="font-bold text-orange-700">Action: Cross-sell downlights →</span>
             </div>
           </div>
         </div>
@@ -1252,7 +1336,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
               <div>
                 <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
                   <span>Category Revenue &amp; Margin Density</span>
-                  <span className="text-[10px] bg-amber-50 text-amber-700 font-bold px-2 py-0.5 rounded-full border border-amber-200">
+                  <span className="text-[10px] bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-full border border-slate-200">
                     6 Categories
                   </span>
                 </h3>
@@ -1311,22 +1395,22 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           </div>
 
           {/* AI INFERENCE CALLOUT CARD */}
-          <div className="mt-4 bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-3.5 space-y-1.5">
+          <div className="analytics-callout mt-4 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-emerald-950 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> AI Category Analysis:
+              <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-orange-600" /> AI Category Analysis:
               </span>
-              <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full uppercase">
+              <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded-full uppercase">
                 {getChartInference('category-contribution')?.trend || 'Margin Driver'}
               </span>
             </div>
-            <p className="text-xs text-emerald-900/90 leading-relaxed">
+            <p className="text-xs text-slate-700 leading-relaxed">
               {getChartInference('category-contribution')?.inference ||
                 `Lighting & Lamps provides 35% of total gross turnover and generates the highest margin yield at 42.5%, outperforming raw electrical cables.`}
             </p>
-            <div className="text-[11px] text-emerald-950/80 font-medium pt-1 border-t border-emerald-200/60 flex items-center justify-between">
+            <div className="text-[11px] text-slate-600 font-medium pt-1 border-t border-slate-200 flex items-center justify-between">
               <span>Driver: {getChartInference('category-contribution')?.keyDriver || 'Premium aesthetics and smart switchgear demand'}</span>
-              <span className="font-bold text-emerald-800">Action: Bundle accessories →</span>
+              <span className="font-bold text-orange-700">Action: Bundle accessories →</span>
             </div>
           </div>
         </div>
@@ -1338,7 +1422,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
               <div>
                 <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
                   <span>Payment Channels &amp; Liquidity</span>
-                  <span className="text-[10px] bg-purple-50 text-purple-700 font-bold px-2 py-0.5 rounded-full border border-purple-200">
+                  <span className="text-[10px] bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-full border border-slate-200">
                     Settlement Split
                   </span>
                 </h3>
@@ -1378,22 +1462,22 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           </div>
 
           {/* AI INFERENCE CALLOUT CARD */}
-          <div className="mt-4 bg-purple-50/70 border border-purple-200/80 rounded-xl p-3.5 space-y-1.5">
+          <div className="analytics-callout mt-4 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-purple-950 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-purple-600" /> AI Cash Flow Inference:
+              <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-orange-600" /> AI Cash Flow Inference:
               </span>
-              <span className="text-[10px] font-bold text-purple-800 bg-purple-100 px-2 py-0.5 rounded-full uppercase">
+              <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded-full uppercase">
                 {getChartInference('payment-channels')?.trend || 'Low Cash Risk'}
               </span>
             </div>
-            <p className="text-xs text-purple-900/90 leading-relaxed">
+            <p className="text-xs text-slate-700 leading-relaxed">
               {getChartInference('payment-channels')?.inference ||
                 `Mobile Money (48%) is the dominant settlement rail. This significantly mitigates cashier drawer theft risks and accelerates end-of-shift blind balancing.`}
             </p>
-            <div className="text-[11px] text-purple-950/80 font-medium pt-1 border-t border-purple-200/60 flex items-center justify-between">
+            <div className="text-[11px] text-slate-600 font-medium pt-1 border-t border-slate-200 flex items-center justify-between">
               <span>Driver: {getChartInference('payment-channels')?.keyDriver || 'Contractor on-site QR and bank wire verification'}</span>
-              <span className="font-bold text-purple-800">Action: Pre-fund merchant floats →</span>
+              <span className="font-bold text-orange-700">Action: Pre-fund merchant floats →</span>
             </div>
           </div>
         </div>
@@ -1405,7 +1489,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
               <div>
                 <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
                   <span>Installment Credit &amp; Debtor Aging</span>
-                  <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-full border border-indigo-200">
+                  <span className="text-[10px] bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-full border border-slate-200">
                     Receivables
                   </span>
                 </h3>
@@ -1439,22 +1523,22 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           </div>
 
           {/* AI INFERENCE CALLOUT CARD */}
-          <div className="mt-4 bg-indigo-50/70 border border-indigo-200/80 rounded-xl p-3.5 space-y-1.5">
+          <div className="analytics-callout mt-4 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-indigo-950 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> AI Debtor Inference:
+              <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-orange-600" /> AI Debtor Inference:
               </span>
-              <span className="text-[10px] font-bold text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded-full uppercase">
+              <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded-full uppercase">
                 {getChartInference('installment-credit')?.trend || 'Moderate Caution'}
               </span>
             </div>
-            <p className="text-xs text-indigo-900/90 leading-relaxed">
+            <p className="text-xs text-slate-700 leading-relaxed">
               {getChartInference('installment-credit')?.inference ||
                 `84% of installment plans are current. Only GH₵ 2,900 is in grace or overdue status, reflecting solid down payments (30%+) and verified contractor phones.`}
             </p>
-            <div className="text-[11px] text-indigo-950/80 font-medium pt-1 border-t border-indigo-200/60 flex items-center justify-between">
+            <div className="text-[11px] text-slate-600 font-medium pt-1 border-t border-slate-200 flex items-center justify-between">
               <span>Driver: {getChartInference('installment-credit')?.keyDriver || 'Customer home renovation multi-room lighting financing'}</span>
-              <span className="font-bold text-indigo-800">Action: Trigger SMS 48h prior →</span>
+              <span className="font-bold text-orange-700">Action: Trigger SMS 48h prior →</span>
             </div>
           </div>
         </div>

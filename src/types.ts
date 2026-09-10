@@ -151,7 +151,7 @@ export interface Supplier {
 
 export interface ShiftInfo {
   id: string;
-  outletId: 'inco-hardware' | 'apex-electricals';
+  outletId: OutletId;
   terminalId: string;
   cashier: string;
   isOpen: boolean;

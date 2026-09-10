@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Printer, X, Download } from 'lucide-react';
+import { Search, Printer, X, Download, Filter } from 'lucide-react';
 import { CompletedSale, Outlet, StockMovement } from '../types';
 import { ManagerPinModal } from './ManagerPinModal';
 import { exportToCsv } from '../utils/csvExport';
@@ -125,6 +125,13 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'COMPLETED' | 'VOIDED'>('ALL');
+  const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | 'CUSTOM'>('ALL');
+  const [dateStart, setDateStart] = useState('');
+  const [dateEnd, setDateEnd] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('ALL');
+  const [cashierFilter, setCashierFilter] = useState('ALL');
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
   const [viewingReceipt, setViewingReceipt] = useState<CompletedSale | null>(null);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [printTarget, setPrintTarget] = useState<CompletedSale | null>(null);
@@ -140,15 +147,41 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
   const totalCompletedValue = completedSales.reduce((sum, s) => sum + s.total, 0);
   const totalVoidedValue = voidedSales.reduce((sum, s) => sum + s.total, 0);
   const avgTicket = completedSales.length > 0 ? totalCompletedValue / completedSales.length : 0;
+  const cashiers = Array.from(new Set(outletSales.map((sale) => sale.cashierName))).sort();
 
   const filteredSales = outletSales.filter((s) => {
     const matchesStatus = statusFilter === 'ALL' || s.status === statusFilter;
+    const now = new Date();
+    const todayGb = now.toLocaleDateString('en-GB');
+    const todayIso = now.toISOString().slice(0, 10);
+    const saleDate = s.createdAt.includes('/')
+      ? s.createdAt.slice(0, 10).split('/').reverse().join('-')
+      : s.createdAt.slice(0, 10);
+    const matchesDate = dateFilter === 'ALL'
+      || (dateFilter === 'TODAY' && (s.createdAt.startsWith(todayGb) || s.createdAt.startsWith(todayIso)))
+      || (dateFilter === 'CUSTOM' && (!dateStart || saleDate >= dateStart) && (!dateEnd || saleDate <= dateEnd));
+    const matchesPayment = paymentFilter === 'ALL' || s.payments.some((payment) => payment.method === paymentFilter);
+    const matchesCashier = cashierFilter === 'ALL' || s.cashierName === cashierFilter;
+    const matchesMin = !minAmount || s.total >= Number(minAmount);
+    const matchesMax = !maxAmount || s.total <= Number(maxAmount);
     const matchesSearch =
       s.receiptNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (s.customerPhone && s.customerPhone.includes(searchTerm));
-    return matchesStatus && matchesSearch;
+    return matchesStatus && matchesDate && matchesPayment && matchesCashier && matchesMin && matchesMax && matchesSearch;
   });
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('ALL');
+    setDateFilter('ALL');
+    setDateStart('');
+    setDateEnd('');
+    setPaymentFilter('ALL');
+    setCashierFilter('ALL');
+    setMinAmount('');
+    setMaxAmount('');
+  };
 
   const selectedSale = filteredSales.find((s) => s.id === selectedSaleId) || null;
 
@@ -357,8 +390,8 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
         </div>
       </div>
 
-      {/* Search & Status Filter Bar */}
-      <div className="bg-white rounded-xl p-4 border border-slate-300 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* Search & transaction filter bar */}
+      <div className="bg-white rounded-xl p-4 border border-slate-300 shadow-xs space-y-3">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <input
@@ -370,7 +403,42 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-slate-500 mr-1">
+            <Filter className="w-3.5 h-3.5" /> Filters
+          </div>
+          <select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value as 'ALL' | 'TODAY' | 'CUSTOM')}
+            className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-orange-500"
+            aria-label="Filter sales by date"
+          >
+            <option value="ALL">All dates</option>
+            <option value="TODAY">Today</option>
+            <option value="CUSTOM">Custom range</option>
+          </select>
+          {dateFilter === 'CUSTOM' && <>
+            <input type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-orange-500" aria-label="Sales start date" />
+            <span className="text-xs text-slate-400 font-bold">to</span>
+            <input type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-orange-500" aria-label="Sales end date" />
+          </>}
+          <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value)} className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-orange-500" aria-label="Filter sales by payment method">
+            <option value="ALL">All payment methods</option>
+            <option value="cash">Cash</option>
+            <option value="momo">Mobile Money</option>
+            <option value="card">Card</option>
+            <option value="transfer">Bank Transfer</option>
+          </select>
+          <select value={cashierFilter} onChange={(e) => setCashierFilter(e.target.value)} className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-orange-500" aria-label="Filter sales by cashier">
+            <option value="ALL">All cashiers</option>
+            {cashiers.map((cashier) => <option key={cashier} value={cashier}>{cashier}</option>)}
+          </select>
+          <input type="number" min="0" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} placeholder="Min GH₵" className="w-24 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-orange-500" aria-label="Minimum sale amount" />
+          <input type="number" min="0" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} placeholder="Max GH₵" className="w-24 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-orange-500" aria-label="Maximum sale amount" />
+          <button type="button" onClick={clearFilters} className="px-2.5 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">Clear</button>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
           <span className="text-[11px] text-slate-500 font-medium">
             {selectedSale ? (
               <>
@@ -390,7 +458,7 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              All ({outletSales.length})
+              All ({filteredSales.length})
             </button>
             <button
               onClick={() => setStatusFilter('COMPLETED')}

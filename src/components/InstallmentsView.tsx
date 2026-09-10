@@ -317,7 +317,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
+    <div className="installments-page p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
       {/* 1. TOP HEADER & ACTIONS */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-300">
         <div>
@@ -357,15 +357,15 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
       {/* 2. SUMMARY METRICS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Book Value */}
-        <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs flex flex-col justify-between">
+        <div className="installments-metric-card bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Total Credit Book</span>
-            <div className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-white/10 text-orange-300 flex items-center justify-center">
               <Layers className="w-4 h-4" />
             </div>
           </div>
           <div>
-            <div className="text-2xl font-black text-slate-900 font-mono">
+            <div className="text-2xl font-black text-white font-mono">
               GH₵ {totalBookValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="text-[11px] text-slate-400 mt-1 font-medium">
@@ -375,33 +375,33 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
         </div>
 
         {/* Amount Collected */}
-        <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs flex flex-col justify-between">
+        <div className="installments-metric-card bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Collected to Date</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-white/10 text-emerald-300 flex items-center justify-center">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
           <div>
-            <div className="text-2xl font-black text-emerald-600 font-mono">
+            <div className="text-2xl font-black text-white font-mono">
               GH₵ {totalCollected.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <div className="text-[11px] text-emerald-700 font-medium mt-1">
+            <div className="text-[11px] text-emerald-300 font-medium mt-1">
               {totalBookValue > 0 ? ((totalCollected / totalBookValue) * 100).toFixed(1) : 0}% recovery rate
             </div>
           </div>
         </div>
 
         {/* Outstanding Receivables */}
-        <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs flex flex-col justify-between">
+        <div className="installments-metric-card bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Outstanding Receivables</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-white/10 text-slate-300 flex items-center justify-center">
               <Clock className="w-4 h-4" />
             </div>
           </div>
           <div>
-            <div className="text-2xl font-black text-blue-700 font-mono">
+            <div className="text-2xl font-black text-white font-mono">
               GH₵ {totalBalanceDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="text-[11px] text-slate-400 mt-1 font-medium">
@@ -411,12 +411,12 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
         </div>
 
         {/* Overdue Alerts */}
-        <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-2xs flex flex-col justify-between">
+        <div className="installments-metric-card bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Overdue Plans</span>
             <div
               className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                overdueCount > 0 ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-400'
+                overdueCount > 0 ? 'bg-rose-500/15 text-rose-300' : 'bg-white/10 text-slate-400'
               }`}
             >
               <AlertTriangle className="w-4 h-4" />
@@ -425,7 +425,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
           <div>
             <div
               className={`text-2xl font-black font-mono ${
-                overdueCount > 0 ? 'text-rose-600' : 'text-slate-800'
+                overdueCount > 0 ? 'text-rose-300' : 'text-white'
               }`}
             >
               {overdueCount} {overdueCount === 1 ? 'Customer' : 'Customers'}

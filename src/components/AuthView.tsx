@@ -13,10 +13,19 @@ import {
   KeyRound,
   ShieldCheck,
   Sparkles,
+  MapPin,
+  Activity,
+  RotateCcw,
 } from 'lucide-react';
-import { UserAccount, Outlet } from '../types';
+import { UserAccount, Outlet, OutletId } from '../types';
 
-export type AuthScreen = 'sign-in' | 'forgot-password' | 'reset-sent' | 'set-password';
+export type AuthScreen =
+  | 'sign-in'
+  | 'outlet-select'
+  | 'forgot-password'
+  | 'reset-sent'
+  | 'set-password'
+  | 'account-disabled';
 
 interface AuthViewProps {
   users: UserAccount[];
@@ -24,7 +33,7 @@ interface AuthViewProps {
   companyName: string;
   accentColor: string;
   /** Called once credentials are accepted and any mandatory password update is done. */
-  onAuthenticated: (user: UserAccount) => void;
+  onAuthenticated: (user: UserAccount, selectedOutletId?: OutletId) => void;
   /** Persists a changed / newly set password back into the user directory. */
   onUpdateUserPassword: (userId: string, newPassword: string) => void;
   onAddAuditLog: (entry: {
@@ -54,13 +63,16 @@ export const AuthView: React.FC<AuthViewProps> = ({
   const [rememberDevice, setRememberDevice] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [attemptsRemaining, setAttemptsRemaining] = useState(3);
 
   // Forgot-password form
   const [recoveryContact, setRecoveryContact] = useState('');
   const [recoveryTarget, setRecoveryTarget] = useState<UserAccount | null>(null);
+  const [disabledUser, setDisabledUser] = useState<UserAccount | null>(null);
 
   // Mandatory password update
   const [pendingUser, setPendingUser] = useState<UserAccount | null>(null);
+  const [outletSelectUser, setOutletSelectUser] = useState<UserAccount | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -82,17 +94,50 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setNotice(null);
   };
 
+  const activeSelectableOutlets = outlets.filter(
+    (outlet) => outlet.active !== false && outlet.id !== 'all-outlets'
+  );
+
+  const continueWithUser = (user: UserAccount, selectedOutletId?: OutletId) => {
+    setAttemptsRemaining(3);
+    onAuthenticated(user, selectedOutletId);
+  };
+
+  const beginAuthenticatedFlow = (user: UserAccount) => {
+    if (user.outletId === 'all-outlets') {
+      setOutletSelectUser(user);
+      setScreen('outlet-select');
+      return;
+    }
+    continueWithUser(user, user.outletId);
+  };
+
+  const passwordStrength = (() => {
+    let score = 0;
+    if (newPassword.length >= 8) score += 1;
+    if (/[A-Z]/.test(newPassword) && /[a-z]/.test(newPassword)) score += 1;
+    if (/\d/.test(newPassword)) score += 1;
+    if (/[^A-Za-z0-9]/.test(newPassword)) score += 1;
+    return score;
+  })();
+
+  const passwordStrengthLabel =
+    passwordStrength <= 1 ? 'Weak' : passwordStrength === 2 ? 'Fair' : passwordStrength === 3 ? 'Good' : 'Strong';
+
   const handleSignIn = (e: React.FormEvent) => {
     e.preventDefault();
     resetFeedback();
 
     const user = findUser(identifier);
     if (!user) {
-      setError('No account matches that username or email address.');
+      const nextAttempts = Math.max(0, attemptsRemaining - 1);
+      setAttemptsRemaining(nextAttempts);
+      setError(`No account matches that username or email address. ${nextAttempts} attempt${nextAttempts === 1 ? '' : 's'} remaining.`);
       return;
     }
     if (!user.active) {
-      setError('This account is suspended. Contact a system administrator to restore access.');
+      setDisabledUser(user);
+      setScreen('account-disabled');
       return;
     }
 
@@ -101,7 +146,9 @@ export const AuthView: React.FC<AuthViewProps> = ({
       (user.tempPassword && password === user.tempPassword);
 
     if (!accepted) {
-      setError('Incorrect password. Please try again or reset your password.');
+      const nextAttempts = Math.max(0, attemptsRemaining - 1);
+      setAttemptsRemaining(nextAttempts);
+      setError(`Incorrect password. ${nextAttempts} attempt${nextAttempts === 1 ? '' : 's'} remaining before this terminal slows sign-in attempts.`);
       return;
     }
 
@@ -122,7 +169,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
       return;
     }
 
-    onAuthenticated(user);
+    beginAuthenticatedFlow(user);
   };
 
   const handleRequestReset = (e: React.FormEvent) => {
@@ -144,6 +191,30 @@ export const AuthView: React.FC<AuthViewProps> = ({
       details: `Self-service password reset requested from the sign-in screen for ${user.email}.`,
     });
     setScreen('reset-sent');
+  };
+
+  const handleOpenResetToken = () => {
+    const user = recoveryTarget || findUser(recoveryContact);
+    if (!user) return;
+    setPendingUser(user);
+    setPassword(user.tempPassword || '');
+    setNewPassword('');
+    setConfirmPassword('');
+    resetFeedback();
+    setScreen('set-password');
+  };
+
+  const handleResendReset = () => {
+    if (!recoveryTarget) return;
+    resetFeedback();
+    onAddAuditLog({
+      actor: recoveryTarget.fullName,
+      action: 'PASSWORD_RESET_RESENT',
+      entity: `User: ${recoveryTarget.username}`,
+      outletName: outletNameFor(recoveryTarget),
+      details: `Self-service password reset instructions resent to ${recoveryTarget.email}.`,
+    });
+    setNotice('Reset instructions have been resent.');
   };
 
   const handleSetPassword = (e: React.FormEvent) => {
@@ -173,7 +244,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
       details: 'Completed the mandatory password update prompted at sign-in.',
     });
 
-    onAuthenticated({
+    beginAuthenticatedFlow({
       ...pendingUser,
       password: newPassword,
       tempPassword: undefined,
@@ -185,6 +256,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
     resetFeedback();
     setPassword('');
     setPendingUser(null);
+    setOutletSelectUser(null);
+    setDisabledUser(null);
     setScreen('sign-in');
   };
 
@@ -410,6 +483,82 @@ export const AuthView: React.FC<AuthViewProps> = ({
             </div>
           )}
 
+          {/* ---------------- OUTLET SELECT ---------------- */}
+          {screen === 'outlet-select' && outletSelectUser && (
+            <div className="bg-white border border-slate-300 rounded-2xl shadow-xs p-6 sm:p-7 space-y-5">
+              <div>
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">Choose working outlet</h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Select the branch for this session. Transactional screens will be scoped to this outlet.
+                </p>
+              </div>
+
+              <div className="grid gap-3">
+                {activeSelectableOutlets.map((outlet) => (
+                  <button
+                    key={outlet.id}
+                    type="button"
+                    onClick={() => continueWithUser(outletSelectUser, outlet.id)}
+                    className="text-left rounded-2xl border border-slate-300 bg-white p-4 hover:border-orange-300 hover:bg-orange-50/30 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center">
+                          <Store className="w-5 h-5 text-orange-600" />
+                        </div>
+                        <div>
+                          <div className="font-black text-sm text-slate-900">{outlet.name}</div>
+                          <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{outlet.town}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-1">{outlet.address}</div>
+                        </div>
+                      </div>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                        <Activity className="w-3 h-3" />
+                        Open shift ready
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={goToSignIn}
+                className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to sign in</span>
+              </button>
+            </div>
+          )}
+
+          {/* ---------------- ACCOUNT DISABLED ---------------- */}
+          {screen === 'account-disabled' && (
+            <div className="bg-white border border-slate-300 rounded-2xl shadow-xs p-6 sm:p-7 space-y-5 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center mx-auto">
+                <AlertCircle className="w-7 h-7 text-rose-600" />
+              </div>
+              <div className="space-y-1.5">
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">Account disabled</h2>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  {disabledUser ? `${disabledUser.fullName}'s account` : 'This account'} cannot sign in.
+                  Contact a system administrator to restore access or assign the user to an active outlet.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={goToSignIn}
+                className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 border border-slate-300 rounded-xl py-2.5 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to sign in</span>
+              </button>
+            </div>
+          )}
+
           {/* ---------------- FORGOT PASSWORD ---------------- */}
           {screen === 'forgot-password' && (
             <div className="bg-white border border-slate-300 rounded-2xl shadow-xs p-6 sm:p-7 space-y-5">
@@ -490,6 +639,32 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 email within a few minutes, check your spam folder or contact your branch manager.
               </div>
 
+              {notice && (
+                <div className="flex items-start gap-2 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl px-3 py-2.5 text-xs font-medium text-left">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{notice}</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleOpenResetToken}
+                className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white rounded-xl py-2.5 transition-opacity hover:opacity-95 cursor-pointer"
+                style={{ backgroundColor: accentColor }}
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Open reset link</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleResendReset}
+                className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 border border-slate-300 rounded-xl py-2.5 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Resend instructions</span>
+              </button>
+
               <button
                 type="button"
                 onClick={goToSignIn}
@@ -547,6 +722,20 @@ export const AuthView: React.FC<AuthViewProps> = ({
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${Math.max(1, passwordStrength) * 25}%`,
+                          backgroundColor: passwordStrength >= 3 ? '#16a34a' : accentColor,
+                        }}
+                      />
+                    </div>
+                    <div className="text-[10px] font-bold text-slate-500">
+                      Password strength: <span className="text-slate-800">{passwordStrengthLabel}</span>
+                    </div>
                   </div>
                 </div>
 

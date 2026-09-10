@@ -55,10 +55,11 @@
     --success-soft: #eefaf1;
     --success-border: #b6e3c4;
     --success-on-soft: #14532d;
-    --warning: #b45309;
-    --warning-soft: #fffaeb;
-    --warning-border: #f5d9a1;
-    --warning-on-soft: #713f12;
+    /* Informational states stay neutral; amber is reserved out of the UI palette. */
+    --warning: #475569;
+    --warning-soft: #f1f5f9;
+    --warning-border: #cbd5e1;
+    --warning-on-soft: #1e293b;
     --danger: #b3261e;
     --danger-soft: #fdf2f1;
     --danger-border: #f2c4c0;
@@ -157,6 +158,25 @@
     font-feature-settings: 'tnum' on, 'zero' on;
     letter-spacing: -0.01em;
   }
+}
+
+/* Application palette guardrails. Charts use inline series colours and are intentionally excluded. */
+@layer utilities {
+  [class*="bg-amber-"], [class*="bg-yellow-"], [class*="bg-blue-"], [class*="bg-indigo-"], [class*="bg-purple-"], [class*="bg-violet-"], [class*="bg-teal-"], [class*="bg-cyan-"] {
+    background-color: #f1f5f9 !important;
+  }
+  [class*="text-amber-"], [class*="text-yellow-"], [class*="text-blue-"], [class*="text-indigo-"], [class*="text-purple-"], [class*="text-violet-"], [class*="text-teal-"], [class*="text-cyan-"] {
+    color: #475569 !important;
+  }
+  [class*="border-amber-"], [class*="border-yellow-"], [class*="border-blue-"], [class*="border-indigo-"], [class*="border-purple-"], [class*="border-violet-"], [class*="border-teal-"], [class*="border-cyan-"] {
+    border-color: #cbd5e1 !important;
+  }
+  [class*="ring-amber-"], [class*="ring-yellow-"], [class*="ring-blue-"], [class*="ring-indigo-"], [class*="ring-purple-"], [class*="ring-violet-"], [class*="ring-teal-"], [class*="ring-cyan-"] {
+    --tw-ring-color: #cbd5e1 !important;
+  }
+  [class*="bg-rose-"] { background-color: #fdf2f1 !important; }
+  [class*="text-rose-"], [class*="text-red-"] { color: #b3261e !important; }
+  [class*="border-rose-"], [class*="border-red-"] { border-color: #f2c4c0 !important; }
 }
 
 /* Custom scrollbars */
@@ -266,6 +286,69 @@
   will-change: transform, opacity;
 }
 
+/* Analytics surfaces use one restrained shell; chart series keep their own semantic colors. */
+.analytics-page .analytics-header,
+.analytics-page .analytics-snapshot,
+.analytics-page .analytics-inference,
+.analytics-page .analytics-scorecards > div,
+.analytics-page .analytics-chart-grid > div {
+  border-color: var(--border);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}
+
+.analytics-page .analytics-scorecards > div,
+.analytics-page .analytics-chart-grid > div {
+  border-radius: 0.75rem;
+}
+
+.analytics-page .analytics-snapshot .grid > div,
+.analytics-page .analytics-scorecards > div {
+  background: #020617;
+  border-color: #1e293b;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.12);
+}
+
+.analytics-page .analytics-scorecards > div .text-slate-400 {
+  color: #cbd5e1;
+}
+
+.analytics-page .analytics-scorecards > div .text-slate-500 {
+  color: #94a3b8;
+}
+
+.analytics-page .analytics-scorecards > div .text-slate-700 {
+  color: #cbd5e1;
+}
+
+.returns-page .returns-metric-card {
+  background: #020617;
+  border-color: #1e293b;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.12);
+}
+
+.returns-page .returns-metric-card .text-slate-500 {
+  color: #cbd5e1;
+}
+
+.returns-page .returns-metric-card .text-slate-900,
+.returns-page .returns-metric-card .text-slate-800 {
+  color: #ffffff;
+}
+
+.installments-page .installments-metric-card {
+  background: #020617;
+  border-color: #1e293b;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.12);
+}
+
+.installments-page .installments-metric-card .text-slate-500 {
+  color: #cbd5e1;
+}
+
+.analytics-page .analytics-callout {
+  border-color: var(--border);
+}
+
 /* Isolated print surface: hidden on screen, the only thing that reaches paper. */
 #printable-receipt {
   display: none;
@@ -334,4 +417,3 @@
     overflow: visible !important;
   }
 }
-

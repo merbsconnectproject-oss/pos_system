@@ -1,9 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
+import { AlertTriangle, ArrowLeft, Home, LockKeyhole, RotateCcw, ServerCrash, ShieldCheck, WifiOff } from 'lucide-react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { PosModal } from './components/PosModal';
 import { ProductsView } from './components/ProductsView';
+import { InventoryView } from './components/InventoryView';
 import { ShiftsModal } from './components/ShiftsModal';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { GlobalSearchModal } from './components/GlobalSearchModal';
@@ -20,6 +22,8 @@ import { ExpensesAccountingView } from './components/ExpensesAccountingView';
 import { InstallmentsView } from './components/InstallmentsView';
 import { ReturnsExchangesView } from './components/ReturnsExchangesView';
 import { AnalyticsReportsView } from './components/AnalyticsReportsView';
+import { CashControlView } from './components/CashControlView';
+import { ReportsView } from './components/ReportsView';
 import { AuthView } from './components/AuthView';
 import {
   OUTLETS,
@@ -60,14 +64,28 @@ export default function App() {
 
   // Authenticated session (null until a staff member signs in)
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [sessionLockReason, setSessionLockReason] = useState<'manual' | 'expired' | null>(null);
+  const [unlockPin, setUnlockPin] = useState('');
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [appErrorReference, setAppErrorReference] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [posOpen, setPosOpen] = useState(false);
+  const [isOffline, setIsOffline] = useState(() => typeof navigator !== 'undefined' && !navigator.onLine);
   const mainScrollRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     mainScrollRef.current?.scrollTo({ top: 0, behavior: 'instant' });
   }, [activeTab]);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
+  }, []);
 
   // Core entities state
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
@@ -89,6 +107,9 @@ export default function App() {
 
   // Shift & Cash Drawer state (PRD BR-14)
   const [shiftInfo, setShiftInfo] = useState<ShiftInfo>({
+    id: 'shift-demo-001',
+    outletId: currentOutletId,
+    terminalId: '01',
     isOpen: true,
     openedAt: '08:00 AM',
     cashier: 'Kwame A. (Admin)',
@@ -97,7 +118,6 @@ export default function App() {
   });
 
   // Modals state
-  const [posOpen, setPosOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
@@ -108,6 +128,66 @@ export default function App() {
   const [accentColor, setAccentColor] = useState<string>('#c55200');
 
   const currentOutlet = outlets.find((o) => o.id === currentOutletId) || outlets[0];
+  const currentPermissions = rolesPermissions.find((item) => item.role === currentUser?.role)?.permissions;
+  const handleSelectOutlet = (outletId: OutletId) => {
+    if (currentUser && currentUser.outletId !== 'all-outlets' && outletId !== currentUser.outletId) return;
+    setCurrentOutletId(outletId);
+  };
+  const validTabs = new Set([
+    'dashboard',
+    'outlet-comparison',
+    'analytics',
+    'cash-control',
+    'reports',
+    'products',
+    'products-import',
+    'products-setup',
+    'products-bulk-price',
+    'inventory',
+    'inventory-low-stock',
+    'inventory-valuation',
+    'inventory-exceptions',
+    'inventory-count',
+    'inventory-transfer',
+    'goods-receipt',
+    'stock-movements',
+    'sales-history',
+    'customers',
+    'suppliers',
+    'audit-log',
+    'expenses',
+    'installments',
+    'returns-exchanges',
+    'settings',
+    'server-error',
+    'denied',
+  ]);
+
+  const hasTabAccess = (tab: string) => {
+    if (!currentPermissions) return true;
+    if (['analytics', 'outlet-comparison', 'reports'].includes(tab)) return currentPermissions.canViewExecutiveReports;
+    if (['settings'].includes(tab)) return currentPermissions.canModifySystemSettings;
+    if (tab === 'audit-log') return currentPermissions.canViewAuditLogs;
+    if (['products', 'products-import', 'products-setup', 'products-bulk-price'].includes(tab)) return currentPermissions.canAddProducts || currentPermissions.canViewCostPrices;
+    if (['inventory', 'inventory-low-stock', 'inventory-valuation', 'inventory-exceptions', 'inventory-count', 'inventory-transfer'].includes(tab)) return currentPermissions.canAdjustStock || currentPermissions.canViewCostPrices;
+    if (tab === 'goods-receipt') return currentPermissions.canReceiveGoods;
+    if (tab === 'stock-movements') return currentPermissions.canAdjustStock || currentPermissions.canViewCostPrices;
+    if (tab === 'customers') return currentPermissions.canCreateCustomer;
+    if (tab === 'suppliers') return currentPermissions.canReceiveGoods;
+    if (tab === 'returns-exchanges') return currentPermissions.canProcessRefund;
+    if (tab === 'expenses') return currentUser?.role === 'super_admin' || currentUser?.role === 'branch_manager';
+    if (tab === 'installments') return currentPermissions.canAssignCreditLimit;
+    if (tab === 'cash-control' || tab === 'shifts') return currentPermissions.canBlindCloseShift || currentPermissions.canViewExecutiveReports;
+    return true;
+  };
+
+  useEffect(() => {
+    if (currentUser && activeTab !== 'denied' && validTabs.has(activeTab) && !hasTabAccess(activeTab)) setActiveTab('denied');
+  }, [activeTab, currentUser, rolesPermissions]);
+
+  useEffect(() => {
+    if (currentUser && currentPermissions && !currentPermissions.canOpenTerminal) setPosOpen(false);
+  }, [currentUser, currentPermissions]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--primary-accent', accentColor);
@@ -115,17 +195,84 @@ export default function App() {
     document.documentElement.style.setProperty('--chart-1', accentColor);
   }, [accentColor]);
 
+  useEffect(() => {
+    const handleUnhandledError = () => {
+      setAppErrorReference(`ERR-${Date.now().toString().slice(-6)}`);
+      setActiveTab('server-error');
+    };
+    window.addEventListener('error', handleUnhandledError);
+    window.addEventListener('unhandledrejection', handleUnhandledError);
+    return () => {
+      window.removeEventListener('error', handleUnhandledError);
+      window.removeEventListener('unhandledrejection', handleUnhandledError);
+    };
+  }, []);
+
   // Global ⌘K keyboard shortcut listener
   useEffect(() => {
     const handleGlobalKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setSearchOpen((prev) => !prev);
+      } else if (e.key === 'F2' && currentUser && currentPermissions?.canOpenTerminal) {
+        e.preventDefault();
+        setPosOpen(true);
+      } else if (e.key === 'F4' && currentUser && (currentPermissions?.canBlindCloseShift || currentPermissions?.canViewExecutiveReports)) {
+        e.preventDefault();
+        setShiftModalOpen(true);
+      } else if (e.key === 'F9' && currentUser) {
+        e.preventDefault();
+        setSessionLockReason('manual');
+      } else if (e.key === 'Escape') {
+        setSearchOpen(false);
+        setSettingsOpen(false);
+        setShiftModalOpen(false);
       }
     };
     window.addEventListener('keydown', handleGlobalKey);
     return () => window.removeEventListener('keydown', handleGlobalKey);
-  }, []);
+  }, [currentUser, currentPermissions]);
+
+  useEffect(() => {
+    if (!currentUser || sessionLockReason) return;
+    const idleTimeoutMs = 15 * 60 * 1000;
+    let timeoutId = window.setTimeout(() => {
+      setSessionLockReason('expired');
+      appendAuditLog({
+        actor: currentUser.fullName,
+        action: 'SESSION_EXPIRED_LOCK',
+        entity: `User: ${currentUser.username}`,
+        outletName: currentOutlet.name,
+        details: 'Idle timeout reached. The terminal was locked without ending the shift.',
+      });
+    }, idleTimeoutMs);
+
+    const resetIdleTimer = () => {
+      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        setSessionLockReason('expired');
+        appendAuditLog({
+          actor: currentUser.fullName,
+          action: 'SESSION_EXPIRED_LOCK',
+          entity: `User: ${currentUser.username}`,
+          outletName: currentOutlet.name,
+          details: 'Idle timeout reached. The terminal was locked without ending the shift.',
+        });
+      }, idleTimeoutMs);
+    };
+
+    window.addEventListener('mousemove', resetIdleTimer);
+    window.addEventListener('keydown', resetIdleTimer);
+    window.addEventListener('click', resetIdleTimer);
+    window.addEventListener('touchstart', resetIdleTimer);
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener('mousemove', resetIdleTimer);
+      window.removeEventListener('keydown', resetIdleTimer);
+      window.removeEventListener('click', resetIdleTimer);
+      window.removeEventListener('touchstart', resetIdleTimer);
+    };
+  }, [currentUser, sessionLockReason, currentOutlet.name]);
 
   // PRD BR-1 & BR-2: Sale Completed handler
   const handleSaleCompleted = (sale: CompletedSale) => {
@@ -468,8 +615,58 @@ export default function App() {
     setProducts((prev) => [newProd, ...prev]);
   };
 
+  const handleAddCustomer = (customer: Customer) => {
+    setCustomers((prev) => [customer, ...prev]);
+  };
+
+  const handleUpdateCustomer = (updatedCustomer: Customer) => {
+    setCustomers((prev) =>
+      prev.map((customer) => (customer.id === updatedCustomer.id ? updatedCustomer : customer))
+    );
+    appendAuditLog({
+      actor: currentUser?.fullName || 'System',
+      action: 'CUSTOMER_UPDATED',
+      entity: `${updatedCustomer.name} (${updatedCustomer.phone})`,
+      outletName: currentOutlet.name,
+      details: 'Customer profile or price-level mapping was updated.',
+    });
+  };
+
+  const handleAddSupplier = (supplier: Supplier) => {
+    setSuppliers((prev) => [supplier, ...prev]);
+  };
+
+  const handleUpdateSupplier = (updatedSupplier: Supplier) => {
+    setSuppliers((prev) =>
+      prev.map((supplier) => (supplier.id === updatedSupplier.id ? updatedSupplier : supplier))
+    );
+    appendAuditLog({
+      actor: currentUser?.fullName || 'System',
+      action: 'SUPPLIER_UPDATED',
+      entity: `${updatedSupplier.name} (${updatedSupplier.phone})`,
+      outletName: currentOutlet.name,
+      details: 'Supplier profile, payment terms or outlet assignment was updated.',
+    });
+  };
+
+  const handleUpdateProduct = (updatedProduct: Product) => {
+    setProducts((prev) =>
+      prev.map((product) => (product.id === updatedProduct.id ? updatedProduct : product))
+    );
+    appendAuditLog({
+      actor: currentUser?.fullName || 'System',
+      action: 'PRODUCT_UPDATED',
+      entity: `${updatedProduct.name} (${updatedProduct.sku})`,
+      outletName: currentOutlet.name,
+      details: 'Product identity, pricing, units, barcode or stock settings were updated.',
+    });
+  };
+
   const handleStartShift = (openingFloat: number) => {
     setShiftInfo({
+      id: `shift-${Date.now()}`,
+      outletId: currentOutlet.id,
+      terminalId: '01',
       isOpen: true,
       openedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       cashier: 'Kwame A. (Admin)',
@@ -530,7 +727,7 @@ export default function App() {
     setAuditLogs((prev) => [stamped, ...prev]);
   };
 
-  const handleAuthenticated = (user: UserAccount) => {
+  const handleAuthenticated = (user: UserAccount, selectedOutletId?: OutletId) => {
     const signedInAt =
       new Date().toLocaleDateString('en-GB') +
       ' ' +
@@ -550,9 +747,10 @@ export default function App() {
 
     // Open the session on the branch this account is assigned to.
     const scopedOutlet =
-      user.outletId === 'all-outlets'
-        ? outlets[0]?.id || 'all-outlets'
-        : outlets.find((o) => o.id === user.outletId)?.id || outlets[0]?.id;
+      selectedOutletId ||
+      (user.outletId === 'all-outlets'
+        ? outlets.find((o) => o.id !== 'all-outlets' && o.active !== false)?.id || outlets[0]?.id
+        : outlets.find((o) => o.id === user.outletId)?.id || outlets[0]?.id);
     if (scopedOutlet) setCurrentOutletId(scopedOutlet);
 
     setCurrentUser({ ...user, lastLogin: signedInAt });
@@ -563,10 +761,48 @@ export default function App() {
       action: 'USER_SIGN_IN',
       entity: `User: ${user.username}`,
       outletName:
-        user.outletId === 'all-outlets'
+        selectedOutletId
+          ? outlets.find((o) => o.id === selectedOutletId)?.name || 'Selected Branch'
+          : user.outletId === 'all-outlets'
           ? 'All Outlets (HQ)'
           : outlets.find((o) => o.id === user.outletId)?.name || 'Unassigned Branch',
       details: `Signed in to the terminal as ${user.role.replace('_', ' ')}.`,
+    });
+  };
+
+  const handleLockSession = (reason: 'manual' | 'expired' = 'manual') => {
+    if (!currentUser) return;
+    setUnlockPin('');
+    setUnlockError(null);
+    setSessionLockReason(reason);
+    appendAuditLog({
+      actor: currentUser.fullName,
+      action: reason === 'expired' ? 'SESSION_EXPIRED_LOCK' : 'SCREEN_LOCK',
+      entity: `User: ${currentUser.username}`,
+      outletName: currentOutlet.name,
+      details:
+        reason === 'expired'
+          ? 'Idle timeout reached. The terminal was locked without ending the shift.'
+          : 'Locked the terminal without ending the active shift.',
+    });
+  };
+
+  const handleUnlockSession = (e: FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    if (unlockPin !== currentUser.pinCode) {
+      setUnlockError('Incorrect PIN. Enter the shift owner PIN to unlock this terminal.');
+      return;
+    }
+    setSessionLockReason(null);
+    setUnlockPin('');
+    setUnlockError(null);
+    appendAuditLog({
+      actor: currentUser.fullName,
+      action: 'SCREEN_UNLOCK',
+      entity: `User: ${currentUser.username}`,
+      outletName: currentOutlet.name,
+      details: 'Unlocked the terminal with the shift owner PIN.',
     });
   };
 
@@ -581,6 +817,9 @@ export default function App() {
       });
     }
     setCurrentUser(null);
+    setSessionLockReason(null);
+    setUnlockPin('');
+    setUnlockError(null);
     setPosOpen(false);
     setSettingsOpen(false);
     setSearchOpen(false);
@@ -619,13 +858,13 @@ export default function App() {
 
   const handleOpenAddNew = (action: string) => {
     if (action === 'product') {
-      setActiveTab('products');
+      setActiveTab(hasTabAccess('products') ? 'products' : 'denied');
     } else if (action === 'shift') {
-      setShiftModalOpen(true);
+      if (hasTabAccess('shifts')) setShiftModalOpen(true); else setActiveTab('denied');
     } else if (action === 'customer') {
-      setActiveTab('customers');
+      setActiveTab(hasTabAccess('customers') ? 'customers' : 'denied');
     } else if (action === 'supplier') {
-      setActiveTab('suppliers');
+      setActiveTab(hasTabAccess('suppliers') ? 'suppliers' : 'denied');
     }
   };
 
@@ -652,15 +891,21 @@ export default function App() {
         onSignOut={handleSignOut}
         outlets={outlets}
         currentOutlet={currentOutlet}
-        onSelectOutlet={setCurrentOutletId}
+        onSelectOutlet={handleSelectOutlet}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
         onOpenMobileMenu={() => setMobileMenuOpen(true)}
-        onOpenPos={() => setPosOpen(true)}
+        onOpenPos={() => currentPermissions?.canOpenTerminal && setPosOpen(true)}
         onOpenSearch={() => setSearchOpen(true)}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => setSettingsOpen(currentPermissions?.canModifySystemSettings === true)}
         onOpenAddNew={handleOpenAddNew}
-        onOpenUserProfile={() => setActiveTab('settings')}
+        canOpenTerminal={currentPermissions?.canOpenTerminal === true}
+        canModifySystemSettings={currentPermissions?.canModifySystemSettings === true}
+        canAddProducts={currentPermissions?.canAddProducts === true}
+        canCreateCustomer={currentPermissions?.canCreateCustomer === true}
+        canReceiveGoods={currentPermissions?.canReceiveGoods === true}
+        onOpenUserProfile={() => setActiveTab(hasTabAccess('settings') ? 'settings' : 'denied')}
+        onLockSession={() => handleLockSession('manual')}
       />
 
       {/* 2. MAIN APP SHELL: SIDEBAR + CONTENT VIEW */}
@@ -669,25 +914,31 @@ export default function App() {
           collapsed={sidebarCollapsed}
           activeTab={activeTab}
           onSelectTab={setActiveTab}
-          onOpenPos={() => setPosOpen(true)}
-          onOpenShift={() => setShiftModalOpen(true)}
+          onOpenPos={() => currentPermissions?.canOpenTerminal && setPosOpen(true)}
+          onOpenShift={() => (currentPermissions?.canBlindCloseShift || currentPermissions?.canViewExecutiveReports) && setShiftModalOpen(true)}
           mobileOpen={mobileMenuOpen}
           onCloseMobile={() => setMobileMenuOpen(false)}
+          permissions={currentPermissions || INITIAL_ROLES_PERMISSIONS[0].permissions}
         />
 
         <main ref={mainScrollRef} className="flex-1 overflow-y-auto bg-[#f8f9fa] pb-12">
+          {isOffline && <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800"><WifiOff className="h-4 w-4" /> Offline mode: committed work remains available and new transactions will queue for sync.</div>}
           {/* Main Dashboard */}
           {activeTab === 'dashboard' && (
             <Dashboard
               products={products}
               currentOutlet={currentOutlet}
+              outlets={outlets}
               sales={sales}
-              onOpenPos={() => setPosOpen(true)}
+              currentUser={currentUser}
+              shiftInfo={shiftInfo}
+              onOpenPos={() => currentPermissions?.canOpenTerminal && setPosOpen(true)}
               onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
+              onOpenShift={() => (currentPermissions?.canBlindCloseShift || currentPermissions?.canViewExecutiveReports) && setShiftModalOpen(true)}
               onViewAllLowStock={() => setActiveTab('products')}
+              onSelectOutlet={handleSelectOutlet}
               onSelectTab={setActiveTab}
               accentColor={accentColor}
-              onChangeAccent={setAccentColor}
             />
           )}
 
@@ -714,15 +965,169 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'cash-control' && (
+            <CashControlView
+              shiftInfo={shiftInfo}
+              sales={sales}
+              movements={movements}
+              currentOutlet={currentOutlet}
+              outlets={outlets}
+              onOpenShift={() => (currentPermissions?.canBlindCloseShift || currentPermissions?.canViewExecutiveReports) && setShiftModalOpen(true)}
+              onCloseShift={handleCloseShift}
+              onAddMovement={(movement) => {
+                setMovements((prev) => [movement, ...prev]);
+                setShiftInfo((prev) => ({
+                  ...prev,
+                  expectedCash: prev.expectedCash + movement.quantity,
+                }));
+                setAuditLogs((prev) => [{
+                  id: `aud-${Date.now()}`,
+                  timestamp: new Date().toLocaleString('en-GB'),
+                  actor: movement.user,
+                  action: 'CASH_MOVEMENT_RECORDED',
+                  entity: movement.id,
+                  outletName: currentOutlet.name,
+                  details: movement.reason || movement.type,
+                }, ...prev]);
+              }}
+            />
+          )}
+
+          {activeTab === 'reports' && (
+            <ReportsView
+              products={products}
+              sales={sales}
+              movements={movements}
+              outlets={outlets}
+              currentOutlet={currentOutlet}
+              currentUser={currentUser}
+            />
+          )}
+
           {/* Product Catalogue & Per-Outlet Stock (BR-1, BR-10) */}
           {activeTab === 'products' && (
             <ProductsView
               products={products}
               currentOutlet={currentOutlet}
+              outlets={outlets}
               onAddProduct={handleAddProduct}
+              onUpdateProduct={handleUpdateProduct}
               onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
               onOpenAdjustment={(product) => setAdjustmentTargetProduct(product)}
               onToggleActive={handleToggleActive}
+            />
+          )}
+
+          {activeTab === 'products-import' && (
+            <ProductsView
+              products={products}
+              currentOutlet={currentOutlet}
+              outlets={outlets}
+              mode="import"
+              onAddProduct={handleAddProduct}
+              onUpdateProduct={handleUpdateProduct}
+              onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
+              onOpenAdjustment={(product) => setAdjustmentTargetProduct(product)}
+              onToggleActive={handleToggleActive}
+            />
+          )}
+
+          {activeTab === 'products-setup' && (
+            <ProductsView
+              products={products}
+              currentOutlet={currentOutlet}
+              outlets={outlets}
+              mode="setup"
+              onAddProduct={handleAddProduct}
+              onUpdateProduct={handleUpdateProduct}
+              onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
+              onOpenAdjustment={(product) => setAdjustmentTargetProduct(product)}
+              onToggleActive={handleToggleActive}
+            />
+          )}
+
+          {activeTab === 'products-bulk-price' && (
+            <ProductsView
+              products={products}
+              currentOutlet={currentOutlet}
+              outlets={outlets}
+              mode="bulk-price"
+              onAddProduct={handleAddProduct}
+              onUpdateProduct={handleUpdateProduct}
+              onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
+              onOpenAdjustment={(product) => setAdjustmentTargetProduct(product)}
+              onToggleActive={handleToggleActive}
+            />
+          )}
+
+          {activeTab === 'inventory' && (
+            <InventoryView
+              products={products}
+              movements={movements}
+              currentOutlet={currentOutlet}
+              outlets={outlets}
+              onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
+              onOpenAdjustment={(product) => setAdjustmentTargetProduct(product)}
+            />
+          )}
+
+          {activeTab === 'inventory-low-stock' && (
+            <InventoryView
+              products={products}
+              movements={movements}
+              currentOutlet={currentOutlet}
+              outlets={outlets}
+              mode="low-stock"
+              onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
+              onOpenAdjustment={(product) => setAdjustmentTargetProduct(product)}
+            />
+          )}
+
+          {activeTab === 'inventory-valuation' && (
+            <InventoryView
+              products={products}
+              movements={movements}
+              currentOutlet={currentOutlet}
+              outlets={outlets}
+              mode="valuation"
+              onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
+              onOpenAdjustment={(product) => setAdjustmentTargetProduct(product)}
+            />
+          )}
+
+          {activeTab === 'inventory-exceptions' && (
+            <InventoryView
+              products={products}
+              movements={movements}
+              currentOutlet={currentOutlet}
+              outlets={outlets}
+              mode="exceptions"
+              onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
+              onOpenAdjustment={(product) => setAdjustmentTargetProduct(product)}
+            />
+          )}
+
+          {activeTab === 'inventory-count' && (
+            <InventoryView
+              products={products}
+              movements={movements}
+              currentOutlet={currentOutlet}
+              outlets={outlets}
+              mode="count"
+              onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
+              onOpenAdjustment={(product) => setAdjustmentTargetProduct(product)}
+            />
+          )}
+
+          {activeTab === 'inventory-transfer' && (
+            <InventoryView
+              products={products}
+              movements={movements}
+              currentOutlet={currentOutlet}
+              outlets={outlets}
+              mode="transfer"
+              onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
+              onOpenAdjustment={(product) => setAdjustmentTargetProduct(product)}
             />
           )}
 
@@ -766,7 +1171,10 @@ export default function App() {
           {activeTab === 'customers' && (
             <CustomersView
               customers={customers}
-              onAddCustomer={(c) => setCustomers([c, ...customers])}
+              sales={sales}
+              outlets={outlets}
+              onAddCustomer={handleAddCustomer}
+              onUpdateCustomer={handleUpdateCustomer}
             />
           )}
 
@@ -774,8 +1182,12 @@ export default function App() {
           {activeTab === 'suppliers' && (
             <SuppliersView
               suppliers={suppliers}
+              products={products}
+              movements={movements}
               currentOutlet={currentOutlet}
-              onAddSupplier={(s) => setSuppliers([s, ...suppliers])}
+              outlets={outlets}
+              onAddSupplier={handleAddSupplier}
+              onUpdateSupplier={handleUpdateSupplier}
               onReceiveStock={() => setGoodsReceiptModalOpen(true)}
             />
           )}
@@ -860,8 +1272,144 @@ export default function App() {
               onChangeAccent={setAccentColor}
             />
           )}
+
+          {activeTab === 'denied' && (
+            <div className="min-h-[70vh] flex items-center justify-center p-6"><div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-8 text-center shadow-xs"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-700"><ShieldCheck className="h-6 w-6" /></div><h1 className="mt-5 text-xl font-black text-slate-900">Permission required</h1><p className="mt-2 text-sm text-slate-500">Your role does not include access to this screen. Ask an administrator to grant the required permission.</p><button type="button" onClick={() => setActiveTab('dashboard')} className="mt-6 inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-xs font-bold text-white"><Home className="h-4 w-4" /> Back to dashboard</button></div></div>
+          )}
+
+          {activeTab === 'server-error' && (
+            <div className="min-h-[70vh] flex items-center justify-center p-6">
+              <div className="w-full max-w-lg bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-xs">
+                <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto">
+                  <ServerCrash className="w-7 h-7" />
+                </div>
+                <h1 className="text-xl font-black text-slate-900 mt-5">Server error</h1>
+                <p className="text-sm text-slate-500 mt-2">
+                  Something unrecoverable happened. Retry the current screen or return to the dashboard.
+                </p>
+                <div className="mt-4 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                  Reference code: <span className="font-mono font-bold text-slate-700">{appErrorReference || 'ERR-500'}</span>
+                </div>
+                <div className="mt-6 grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppErrorReference(null);
+                      setActiveTab('dashboard');
+                    }}
+                    className="py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-50 flex items-center justify-center gap-2"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Retry</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppErrorReference(null);
+                      setActiveTab('dashboard');
+                    }}
+                    className="py-2.5 rounded-xl bg-orange-500 text-white font-bold text-xs hover:bg-orange-600 flex items-center justify-center gap-2"
+                  >
+                    <Home className="w-4 h-4" />
+                    <span>Dashboard</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!validTabs.has(activeTab) && (
+            <div className="min-h-[70vh] flex items-center justify-center p-6">
+              <div className="w-full max-w-lg bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-xs">
+                <div className="w-14 h-14 rounded-2xl bg-slate-50 border border-slate-200 text-slate-500 flex items-center justify-center mx-auto">
+                  <AlertTriangle className="w-7 h-7" />
+                </div>
+                <h1 className="text-xl font-black text-slate-900 mt-5">Page not found</h1>
+                <p className="text-sm text-slate-500 mt-2">
+                  The requested screen is not available in this workspace.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('dashboard')}
+                  className="mt-6 px-5 py-2.5 rounded-xl bg-orange-500 text-white font-bold text-xs hover:bg-orange-600 inline-flex items-center justify-center gap-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to dashboard</span>
+                </button>
+              </div>
+            </div>
+          )}
         </main>
       </div>
+
+      {currentUser && sessionLockReason && (
+        <div className="fixed inset-0 z-90 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <form
+            onSubmit={handleUnlockSession}
+            className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-7 shadow-2xl text-center"
+          >
+            <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center mx-auto">
+              <LockKeyhole className="w-8 h-8 text-orange-600" />
+            </div>
+            <h2 className="text-xl font-black text-slate-900 mt-5">
+              {sessionLockReason === 'expired' ? 'Session expired' : 'Screen locked'}
+            </h2>
+            <p className="text-sm text-slate-500 mt-2">
+              {sessionLockReason === 'expired'
+                ? 'This terminal was locked after idle timeout. The active shift and cart state remain intact.'
+                : 'Unlock with the shift owner PIN to continue without ending the shift.'}
+            </p>
+            <div className="mt-5 flex items-center justify-center gap-3 text-left bg-slate-50 border border-slate-200 rounded-xl p-3">
+              <img
+                src={
+                  currentUser.avatarUrl ||
+                  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'
+                }
+                alt={currentUser.fullName}
+                className="w-10 h-10 rounded-xl object-cover border border-slate-200"
+              />
+              <div>
+                <div className="text-sm font-black text-slate-900">{currentUser.fullName}</div>
+                <div className="text-xs text-slate-500">{currentOutlet.name}</div>
+              </div>
+            </div>
+            <div className="mt-5">
+              <label className="text-xs font-bold text-slate-700 block mb-2 text-left">
+                Unlock PIN
+              </label>
+              <input
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                value={unlockPin}
+                onChange={(e) => {
+                  setUnlockError(null);
+                  setUnlockPin(e.target.value.replace(/\D/g, '').slice(0, 6));
+                }}
+                className="w-full text-center text-3xl tracking-widest font-black py-3.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:outline-orange-500 text-slate-900"
+                autoFocus
+              />
+              {unlockError && (
+                <p className="text-xs text-rose-600 font-bold mt-2">{unlockError}</p>
+              )}
+            </div>
+            <button
+              type="submit"
+              className="mt-5 w-full py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm flex items-center justify-center gap-2"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Unlock terminal</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="mt-3 w-full py-2.5 rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-50 font-bold text-xs"
+            >
+              Switch user
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* 3. MODALS & POPUPS */}
       {/* Full POS Checkout Terminal (Screen C-01) */}
@@ -871,6 +1419,9 @@ export default function App() {
         products={products}
         currentOutlet={currentOutlet}
         customers={customers}
+        shiftInfo={shiftInfo}
+        onOpenShift={() => (currentPermissions?.canBlindCloseShift || currentPermissions?.canViewExecutiveReports) && setShiftModalOpen(true)}
+        onAddCustomer={(customer) => setCustomers((prev) => [customer, ...prev])}
         onSaleCompleted={handleSaleCompleted}
       />
 
@@ -921,15 +1472,15 @@ export default function App() {
         products={products}
         onSelectProduct={() => {
           setSearchOpen(false);
-          setActiveTab('products');
+          setActiveTab(hasTabAccess('products') ? 'products' : 'denied');
         }}
         onOpenPos={() => {
           setSearchOpen(false);
-          setPosOpen(true);
+          if (currentPermissions?.canOpenTerminal) setPosOpen(true);
         }}
         onOpenShift={() => {
           setSearchOpen(false);
-          setShiftModalOpen(true);
+          if (currentPermissions?.canBlindCloseShift || currentPermissions?.canViewExecutiveReports) setShiftModalOpen(true);
         }}
       />
     </div>

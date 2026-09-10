@@ -18,6 +18,7 @@ import {
   User,
   Sparkles,
   LogOut,
+  LockKeyhole,
 } from 'lucide-react';
 import { Outlet, OutletId, UserAccount } from '../types';
 
@@ -42,6 +43,12 @@ interface HeaderProps {
   onOpenSettings: () => void;
   onOpenAddNew: (action: string) => void;
   onOpenUserProfile?: () => void;
+  onLockSession?: () => void;
+  canOpenTerminal: boolean;
+  canModifySystemSettings: boolean;
+  canAddProducts: boolean;
+  canCreateCustomer: boolean;
+  canReceiveGoods: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -58,11 +65,20 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   onOpenAddNew,
   onOpenUserProfile,
+  onLockSession,
+  canOpenTerminal,
+  canModifySystemSettings,
+  canAddProducts,
+  canCreateCustomer,
+  canReceiveGoods,
 }) => {
   const [outletDropdownOpen, setOutletDropdownOpen] = useState(false);
   const [addNewDropdownOpen, setAddNewDropdownOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState<string>('');
+  const accessibleOutlets = currentUser.outletId === 'all-outlets'
+    ? outlets
+    : outlets.filter((outlet) => outlet.id === currentUser.outletId);
 
   useEffect(() => {
     const updateTime = () => {
@@ -171,12 +187,12 @@ export const Header: React.FC<HeaderProps> = ({
               setOutletDropdownOpen(!outletDropdownOpen);
               setAddNewDropdownOpen(false);
             }}
-            className="flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-xs font-bold px-3 py-2 rounded-lg transition-all cursor-pointer"
+            className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold px-3 py-2 rounded-lg transition-all cursor-pointer"
           >
-            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-            <Store className="w-6 h-6 shrink-0 text-emerald-600" strokeWidth={2} />
+            <span className="w-2 h-2 rounded-full bg-slate-500 shrink-0"></span>
+            <Store className="w-6 h-6 shrink-0 text-slate-500" strokeWidth={2} />
             <span className="max-w-[85px] sm:max-w-[130px] truncate">{currentOutlet.name}</span>
-            <ChevronDown className="w-6 h-6 shrink-0 text-emerald-600" strokeWidth={2} />
+            <ChevronDown className="w-6 h-6 shrink-0 text-slate-500" strokeWidth={2} />
           </button>
 
           {outletDropdownOpen && (
@@ -185,7 +201,7 @@ export const Header: React.FC<HeaderProps> = ({
                 Select Active Branch
               </div>
               <div className="p-2 space-y-1">
-                {outlets.map((outlet) => (
+                {accessibleOutlets.map((outlet) => (
                   <button
                     key={outlet.id}
                     onClick={() => {
@@ -215,7 +231,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Quick 'Add New' Dropdown */}
-        <div className="relative">
+        {canAddProducts || canCreateCustomer || canReceiveGoods || canOpenTerminal ? <div className="relative">
           <button
             onClick={() => {
               setAddNewDropdownOpen(!addNewDropdownOpen);
@@ -229,7 +245,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {addNewDropdownOpen && (
             <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl z-50 p-2 text-xs text-slate-700 font-medium">
-              <button
+              {canAddProducts && <button
                 onClick={() => {
                   onOpenAddNew('product');
                   setAddNewDropdownOpen(false);
@@ -237,8 +253,8 @@ export const Header: React.FC<HeaderProps> = ({
                 className="w-full text-left px-4 py-2 rounded-lg hover:bg-orange-50 hover:text-orange-600 flex items-center justify-between cursor-pointer"
               >
                 <span>+ Add Product</span>
-              </button>
-              <button
+              </button>}
+              {canCreateCustomer && <button
                 onClick={() => {
                   onOpenAddNew('customer');
                   setAddNewDropdownOpen(false);
@@ -246,8 +262,8 @@ export const Header: React.FC<HeaderProps> = ({
                 className="w-full text-left px-4 py-2 rounded-lg hover:bg-orange-50 hover:text-orange-600 flex items-center justify-between cursor-pointer"
               >
                 <span>+ Register Customer</span>
-              </button>
-              <button
+              </button>}
+              {canReceiveGoods && <button
                 onClick={() => {
                   onOpenAddNew('supplier');
                   setAddNewDropdownOpen(false);
@@ -255,8 +271,8 @@ export const Header: React.FC<HeaderProps> = ({
                 className="w-full text-left px-4 py-2 rounded-lg hover:bg-orange-50 hover:text-orange-600 flex items-center justify-between cursor-pointer"
               >
                 <span>+ Add Supplier</span>
-              </button>
-              <button
+              </button>}
+              {canOpenTerminal && <button
                 onClick={() => {
                   onOpenAddNew('shift');
                   setAddNewDropdownOpen(false);
@@ -264,13 +280,13 @@ export const Header: React.FC<HeaderProps> = ({
                 className="w-full text-left px-4 py-2 rounded-lg hover:bg-orange-50 hover:text-orange-600 flex items-center justify-between cursor-pointer"
               >
                 <span>+ Cash Drawer / Shift</span>
-              </button>
+              </button>}
             </div>
           )}
-        </div>
+        </div> : null}
 
         {/* Big POS Terminal Button */}
-        <button
+        {canOpenTerminal && <button
           onClick={onOpenPos}
           className="flex items-center gap-2 bg-slate-900 hover:bg-black text-white text-xs font-black px-4 py-2 rounded-lg transition-all cursor-pointer"
           title="Launch Fullscreen POS Terminal (F2)"
@@ -280,28 +296,28 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="hidden md:inline text-xs bg-white/10 text-orange-300 font-mono px-1.5 py-0.5 rounded">
             F2
           </span>
-        </button>
+        </button>}
 
         {/* Divider */}
         <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
 
         {/* Fullscreen Button */}
-        <button
+        {canModifySystemSettings && <button
           onClick={handleFullscreen}
           className="w-8 h-8 rounded-lg border border-transparent hover:border-slate-200 hover:bg-slate-100 items-center justify-center text-slate-500 hover:text-slate-800 transition-colors hidden md:flex cursor-pointer"
           title="Toggle Fullscreen Mode"
         >
           <Maximize2 className="w-6 h-6 shrink-0" strokeWidth={2} />
-        </button>
+        </button>}
 
         {/* Settings Drawer Button */}
-        <button
+        {canModifySystemSettings && <button
           onClick={onOpenSettings}
           className="w-8 h-8 rounded-lg border border-transparent hover:border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
           title="System Settings & Appearance"
         >
           <Settings className="w-6 h-6 shrink-0" strokeWidth={2} />
-        </button>
+        </button>}
 
         {/* Signed-in User Menu */}
         <div className="relative pl-1">
@@ -359,6 +375,17 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <User className="w-6 h-6 shrink-0 text-slate-400" strokeWidth={2} />
                   <span>Account &amp; Settings</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    onLockSession?.();
+                  }}
+                  className="w-full text-left px-4 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-2 font-bold text-slate-700 cursor-pointer"
+                >
+                  <LockKeyhole className="w-6 h-6 shrink-0 text-slate-400" strokeWidth={2} />
+                  <span>Lock screen</span>
                 </button>
 
                 <button
