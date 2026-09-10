@@ -1,122 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Printer, X, Download, Filter } from 'lucide-react';
+import { Search, Printer, X, Download, Filter, Eye, FileText } from 'lucide-react';
 import { CompletedSale, Outlet, StockMovement } from '../types';
 import { ManagerPinModal } from './ManagerPinModal';
 import { exportToCsv } from '../utils/csvExport';
+import { ThermalReceiptSlip } from './ThermalReceiptSlip';
+import { ReceiptPrintModal } from './ReceiptPrintModal';
 
 interface SalesHistoryViewProps {
   sales: CompletedSale[];
   currentOutlet: Outlet;
   onVoidSale: (saleId: string, reason: string, approver: string, reversingMovements: StockMovement[]) => void;
 }
-
-const OUTLET_ADDRESSES: Record<string, { address: string; tel: string }> = {
-  'inco-hardware': { address: '12 Main Street, Koforidua', tel: '+233 24 000 0002' },
-  'apex-electricals': { address: 'Harper Road, Kumasi', tel: '+233 24 000 0003' },
-};
-
-/**
- * Thermal receipt body. Rendered both inside the on-screen preview modal and
- * inside the isolated `#printable-receipt` node that the print stylesheet targets.
- */
-const ReceiptDocument: React.FC<{ sale: CompletedSale; isReprint?: boolean }> = ({
-  sale,
-  isReprint,
-}) => {
-  const outletInfo = OUTLET_ADDRESSES[sale.outletId] || { address: '', tel: '' };
-
-  return (
-    <div className="receipt-doc font-mono text-xs space-y-2 select-text">
-      {isReprint && (
-        <div className="text-center font-black text-red-600 border border-red-400 bg-red-50 py-1 tracking-widest">
-          *** REPRINT ***
-        </div>
-      )}
-
-      {sale.status === 'VOIDED' && (
-        <div className="text-center font-black text-red-600 border border-red-400 bg-red-50 py-1 tracking-widest">
-          *** VOIDED ***
-        </div>
-      )}
-
-      <div className="text-center">
-        <div className="font-black text-base uppercase">{sale.outletName}</div>
-        <div className="text-[10px] text-slate-500">{outletInfo.address}</div>
-        <div className="text-[10px] text-slate-500">Tel: {outletInfo.tel}</div>
-      </div>
-
-      <div className="border-t border-b border-dashed border-slate-400 py-1.5 space-y-0.5 text-[11px]">
-        <div className="flex justify-between">
-          <span>Receipt:</span>
-          <span className="font-bold">{sale.receiptNumber}</span>
-        </div>
-        <div className="flex justify-between">
-          <span>Date:</span>
-          <span>{sale.createdAt}</span>
-        </div>
-        <div className="flex justify-between">
-          <span>Cashier:</span>
-          <span>{sale.cashierName}</span>
-        </div>
-        <div className="flex justify-between">
-          <span>Customer:</span>
-          <span>{sale.customerName}</span>
-        </div>
-      </div>
-
-      {/* Items */}
-      <div className="space-y-1 py-1">
-        {sale.items.map((it, idx) => (
-          <div key={idx} className="flex justify-between gap-2 text-[11px]">
-            <div className="min-w-0">
-              <div>{it.product.name}</div>
-              <div className="text-[10px] text-slate-500">
-                {it.quantity} x GH₵ {it.unitPrice.toFixed(2)}
-              </div>
-            </div>
-            <span className="font-bold whitespace-nowrap shrink-0">
-              GH₵ {it.lineTotal.toFixed(2)}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* Totals */}
-      <div className="border-t border-dashed border-slate-400 pt-2 space-y-1 text-xs">
-        <div className="flex justify-between">
-          <span>Subtotal:</span>
-          <span>GH₵ {sale.subtotal.toFixed(2)}</span>
-        </div>
-        {sale.discount > 0 && (
-          <div className="flex justify-between">
-            <span>Discount:</span>
-            <span>- GH₵ {sale.discount.toFixed(2)}</span>
-          </div>
-        )}
-        {sale.tax > 0 && (
-          <div className="flex justify-between">
-            <span>Tax:</span>
-            <span>GH₵ {sale.tax.toFixed(2)}</span>
-          </div>
-        )}
-        <div className="flex justify-between font-black text-sm pt-1 border-t border-slate-400">
-          <span>TOTAL:</span>
-          <span>GH₵ {sale.total.toFixed(2)}</span>
-        </div>
-        {sale.payments.map((p, i) => (
-          <div key={i} className="flex justify-between text-[11px] text-slate-600">
-            <span>Paid via {p.provider || p.method}:</span>
-            <span>GH₵ {p.amount.toFixed(2)}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="text-center pt-3 text-[10px] text-slate-500">
-        Thank you for your business!
-      </div>
-    </div>
-  );
-};
 
 export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
   sales,
@@ -135,6 +29,7 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
   const [viewingReceipt, setViewingReceipt] = useState<CompletedSale | null>(null);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [printTarget, setPrintTarget] = useState<CompletedSale | null>(null);
+  const [paperWidth, setPaperWidth] = useState<'80mm' | '58mm'>('80mm');
   const [isReprint, setIsReprint] = useState(false);
   const [voidingSale, setVoidingSale] = useState<CompletedSale | null>(null);
   const [voidReasonCode, setVoidReasonCode] = useState<'CASHIER_ERROR' | 'CUSTOMER_RETURN' | 'DEFECTIVE_PRODUCT' | 'DUPLICATE_ENTRY'>('CASHIER_ERROR');
@@ -198,10 +93,11 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
   }, [printTarget]);
 
   // Prints the currently selected receipt (or the one open in the preview modal).
-  const handlePrintReceipt = (sale?: CompletedSale) => {
+  const handlePrintReceipt = (sale?: CompletedSale, width?: '80mm' | '58mm') => {
     const target = sale || viewingReceipt || selectedSale;
     if (!target) return;
     setSelectedSaleId(target.id);
+    if (width) setPaperWidth(width);
     // Anything printed from the history log is by definition a reprint.
     setIsReprint(true);
     setPrintTarget(target);
@@ -311,6 +207,25 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
 
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <button
+            onClick={() => {
+              if (selectedSale) {
+                setViewingReceipt(selectedSale);
+                setIsReprint(true);
+              }
+            }}
+            disabled={!selectedSale}
+            className="flex items-center gap-2 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-slate-700 border border-slate-300 text-xs font-bold px-3.5 py-2 rounded-lg shadow-2xs transition-colors cursor-pointer"
+            title={
+              selectedSale
+                ? `Open dedicated thermal slip view for ${selectedSale.receiptNumber}`
+                : 'Select a receipt row in the table below to view thermal slip'
+            }
+          >
+            <Eye className="w-4 h-4 text-slate-600" />
+            <span>View Thermal Slip</span>
+          </button>
+
+          <button
             onClick={() => handlePrintReceipt()}
             disabled={!selectedSale}
             className="flex items-center gap-2 bg-slate-900 hover:bg-black disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-xs transition-colors cursor-pointer"
@@ -321,7 +236,7 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
             }
           >
             <Printer className="w-4 h-4 stroke-[2.5]" />
-            <span>{selectedSale ? `Print ${selectedSale.receiptNumber}` : 'Print Receipt'}</span>
+            <span>{selectedSale ? `Print ${selectedSale.receiptNumber}` : 'Print Thermal Slip'}</span>
           </button>
 
           <button
@@ -561,11 +476,21 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
                           setViewingReceipt(sale);
                           setIsReprint(true);
                         }}
-                        className="px-2 py-1 text-[11px] font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-md transition-colors cursor-pointer flex items-center gap-1"
-                        title="Preview & print thermal receipt (reprint)"
+                        className="px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-md transition-colors cursor-pointer flex items-center gap-1.5"
+                        title="Open dedicated print-friendly thermal receipt slip"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-orange-600" />
+                        <span>Receipt Slip</span>
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePrintReceipt(sale);
+                        }}
+                        className="p-1 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-300 rounded-md transition-colors cursor-pointer"
+                        title="Direct print thermal slip"
                       >
                         <Printer className="w-3.5 h-3.5" />
-                        <span>Receipt</span>
                       </button>
                       {sale.status === 'COMPLETED' && (
                         <button
@@ -588,49 +513,31 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
         </div>
       </div>
 
-      {/* Thermal Receipt Preview Modal (PRD §9) */}
+      {/* Dedicated Print-Friendly Receipt Modal (PRD §9) */}
       {viewingReceipt && (
-        <div
-          onClick={() => setViewingReceipt(null)}
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-center justify-center p-4 animate-modal-backdrop"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden border border-slate-300 p-5 space-y-4 animate-modal-card"
-          >
-            <div className="flex items-center justify-between border-b border-slate-300 pb-2">
-              <div>
-                <h3 className="font-black text-slate-800 text-sm">Receipt Preview</h3>
-                <p className="text-[11px] text-slate-500 font-mono">{viewingReceipt.receiptNumber}</p>
-              </div>
-              <button
-                onClick={() => setViewingReceipt(null)}
-                className="text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Thermal Print Receipt Design */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-dashed border-slate-400 text-slate-800 max-h-[55vh] overflow-y-auto">
-              <ReceiptDocument sale={viewingReceipt} isReprint={isReprint} />
-            </div>
-
-            <button
-              onClick={() => handlePrintReceipt(viewingReceipt)}
-              className="w-full bg-slate-900 hover:bg-black text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Print to Thermal Printer</span>
-            </button>
-          </div>
-        </div>
+        <ReceiptPrintModal
+          isOpen={Boolean(viewingReceipt)}
+          sale={viewingReceipt}
+          onClose={() => setViewingReceipt(null)}
+          onPrint={(targetSale, width) => handlePrintReceipt(targetSale, width)}
+          isReprint={isReprint}
+          allSales={filteredSales}
+          onSelectSale={(newSale) => {
+            setSelectedSaleId(newSale.id);
+            setViewingReceipt(newSale);
+          }}
+        />
       )}
 
       {/* Isolated print surface — the only node the print stylesheet keeps visible */}
       {printTarget && (
         <div id="printable-receipt" aria-hidden="true">
-          <ReceiptDocument sale={printTarget} isReprint={isReprint} />
+          <ThermalReceiptSlip
+            sale={printTarget}
+            isReprint={isReprint}
+            paperWidth={paperWidth}
+            showBarcode={true}
+          />
         </div>
       )}
 

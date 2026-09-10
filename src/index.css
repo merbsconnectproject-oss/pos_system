@@ -350,7 +350,8 @@
 }
 
 /* Isolated print surface: hidden on screen, the only thing that reaches paper. */
-#printable-receipt {
+#printable-receipt,
+#printable-barcode-labels {
   display: none;
 }
 
@@ -360,7 +361,9 @@
     visibility: hidden !important;
   }
   #printable-receipt,
-  #printable-receipt * {
+  #printable-receipt *,
+  #printable-barcode-labels,
+  #printable-barcode-labels * {
     visibility: visible !important;
   }
   #printable-receipt {
@@ -371,11 +374,26 @@
     width: 100%;
     margin: 0;
     padding: 0;
-    background: #ffffff;
-    color: #000000;
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  #printable-barcode-labels {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
-  /* Release the app shell's scroll containers so a long receipt can paginate. */
+  /* Release the app shell's scroll containers so a long receipt can paginate cleanly. */
   #root,
   #root > *,
   #root main {
@@ -385,29 +403,188 @@
     min-height: 0 !important;
   }
 
-  /* Crisp, ink-friendly thermal output */
+  /* Crisp, ink-saving black & white thermal output (PRD §9) */
   #printable-receipt .receipt-doc {
-    /* Thermal-roll column: fills an 80mm roll, sits as a receipt strip on A4. */
-    width: 80mm;
-    max-width: 100%;
     margin: 0 auto;
-    font-family: 'Courier New', ui-monospace, monospace;
-    font-size: 11px;
-    line-height: 1.45;
-    color: #000000;
+    font-family: var(--font-mono), 'JetBrains Mono', 'Courier New', ui-monospace, monospace;
+    line-height: 1.35;
+    color: #000000 !important;
+    background: #ffffff !important;
     overflow-wrap: anywhere;
+    text-rendering: geometricPrecision;
+    -webkit-font-smoothing: antialiased;
   }
+
+  /* Standard 80mm roll width */
+  #printable-receipt .receipt-doc,
+  #printable-receipt .receipt-doc.slip-80mm {
+    width: 76mm !important;
+    max-width: 76mm !important;
+    font-size: 10.5px !important;
+    padding: 2mm 1mm !important;
+  }
+
+  /* Compact 58mm roll width */
+  #printable-receipt .receipt-doc.slip-58mm {
+    width: 52mm !important;
+    max-width: 52mm !important;
+    font-size: 9px !important;
+    padding: 1mm !important;
+  }
+
+  /* Force 100% ink-saving: NO background colors, NO gradients, NO shadows */
   #printable-receipt .receipt-doc * {
     color: #000000 !important;
     background: transparent !important;
     box-shadow: none !important;
+    text-shadow: none !important;
+    -webkit-filter: none !important;
+    filter: none !important;
   }
+
+  /* Ensure sharp thermal border dividers */
   #printable-receipt .receipt-doc [class*="border"] {
     border-color: #000000 !important;
   }
 
+  /* Prevent awkward item page breaks */
+  #printable-receipt .receipt-doc .break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Crisp thermal barcode rendering in print */
+  #printable-receipt .receipt-doc svg rect {
+    fill: #000000 !important;
+  }
+  #printable-receipt .receipt-doc svg rect[fill="#ffffff"],
+  #printable-receipt .receipt-doc svg rect.qr-quiet-zone {
+    fill: #ffffff !important;
+  }
+
+  /* Product Barcode Label Print Styles */
+  #printable-barcode-labels .barcode-print-container {
+    display: flex;
+    flex-wrap: wrap;
+    background: #ffffff !important;
+    width: 100%;
+  }
+
+  /* Thermal roll format: single continuous roll, page break after every label */
+  #printable-barcode-labels .barcode-print-container.roll-40x25 .barcode-label-slip,
+  #printable-barcode-labels .barcode-print-container.roll-50x30 .barcode-label-slip,
+  #printable-barcode-labels .barcode-print-container.roll-60x40 .barcode-label-slip {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    margin: 0 auto !important;
+    padding: 1.5mm 1mm !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    border: none !important;
+  }
+
+  /* Sheet A4 (24 labels: 3 columns x 8 rows) */
+  #printable-barcode-labels .barcode-print-container.sheet-a4-24 {
+    display: grid !important;
+    grid-template-columns: repeat(3, 64mm) !important;
+    column-gap: 2.5mm !important;
+    row-gap: 0 !important;
+    justify-content: center !important;
+    padding: 8mm 4mm !important;
+  }
+  #printable-barcode-labels .barcode-print-container.sheet-a4-24 .barcode-label-slip {
+    height: 33.8mm !important;
+    max-height: 33.8mm !important;
+    padding: 1.5mm 2mm !important;
+    box-sizing: border-box !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    border: none !important;
+  }
+
+  /* Sheet A4 (40 labels: 4 columns x 10 rows) */
+  #printable-barcode-labels .barcode-print-container.sheet-a4-40 {
+    display: grid !important;
+    grid-template-columns: repeat(4, 48.5mm) !important;
+    column-gap: 2mm !important;
+    row-gap: 0 !important;
+    justify-content: center !important;
+    padding: 8mm 3mm !important;
+  }
+  #printable-barcode-labels .barcode-print-container.sheet-a4-40 .barcode-label-slip {
+    height: 25.4mm !important;
+    max-height: 25.4mm !important;
+    padding: 1mm 1.5mm !important;
+    box-sizing: border-box !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    border: none !important;
+  }
+
+  /* Barcode label sub-elements styling */
+  #printable-barcode-labels .barcode-label-store {
+    font-size: 7pt !important;
+    font-weight: 900 !important;
+    text-transform: uppercase !important;
+    text-align: center !important;
+    line-height: 1 !important;
+    color: #000000 !important;
+    border-bottom: 0.5pt solid #000000 !important;
+    padding-bottom: 0.5mm !important;
+    margin-bottom: 0.5mm !important;
+  }
+  #printable-barcode-labels .barcode-label-name {
+    font-size: 8pt !important;
+    font-weight: 800 !important;
+    text-align: center !important;
+    line-height: 1.1 !important;
+    max-height: 2.3em !important;
+    overflow: hidden !important;
+    color: #000000 !important;
+  }
+  #printable-barcode-labels .barcode-label-svg-wrap {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    margin: 0.5mm 0 !important;
+  }
+  #printable-barcode-labels .barcode-label-svg-wrap svg {
+    max-width: 100% !important;
+  }
+  #printable-barcode-labels .barcode-label-footer {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: flex-end !important;
+    font-size: 7pt !important;
+    line-height: 1 !important;
+    color: #000000 !important;
+    border-top: 0.5pt solid #000000 !important;
+    padding-top: 0.5mm !important;
+  }
+  #printable-barcode-labels .barcode-label-sku {
+    font-family: monospace !important;
+    font-weight: 600 !important;
+  }
+  #printable-barcode-labels .barcode-label-price {
+    font-weight: 900 !important;
+    font-size: 8.5pt !important;
+  }
+
   @page {
-    margin: 6mm;
+    /* Minimal roll margin: avoids wasting thermal paper roll */
+    margin: 2mm 0;
+    size: auto;
   }
 
   html,

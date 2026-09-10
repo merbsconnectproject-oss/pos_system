@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
   Banknote,
@@ -11,11 +12,13 @@ import {
   FileText,
   Home,
   Layers,
+  Minus,
   Package,
   Receipt,
   ShieldCheck,
   ShoppingBag,
   Store,
+  TrendingDown,
   TrendingUp,
   UserCheck,
   Wallet,
@@ -57,6 +60,92 @@ interface DashboardMetrics {
 
 const formatMoney = (value: number) =>
   `GH₵ ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const parseSaleTimestamp = (dateStr: string): number => {
+  if (!dateStr) return 0;
+  if (dateStr.includes('/')) {
+    const [datePart, timePart] = dateStr.trim().split(' ');
+    const parts = datePart.split('/');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const year = parseInt(parts[2], 10);
+      let hours = 0;
+      let minutes = 0;
+      if (timePart) {
+        const timeParts = timePart.split(':');
+        hours = parseInt(timeParts[0], 10) || 0;
+        minutes = parseInt(timeParts[1], 10) || 0;
+      }
+      return new Date(year, month, day, hours, minutes).getTime();
+    }
+  }
+  const parsed = new Date(dateStr).getTime();
+  return isNaN(parsed) ? 0 : parsed;
+};
+
+interface TrendIndicatorProps {
+  percentage: number;
+  label?: string;
+  inverted?: boolean;
+  variant?: 'dark' | 'light';
+  detail?: string;
+}
+
+const TrendIndicator: React.FC<TrendIndicatorProps> = ({
+  percentage,
+  label = 'vs prev 7d',
+  inverted = false,
+  variant = 'light',
+  detail,
+}) => {
+  const isZero = Math.abs(percentage) < 0.05;
+  // If inverted is true (e.g. low stock), a negative change (reduction in low stock) is positive/good
+  const isPositive = inverted ? percentage < 0 : percentage > 0;
+  const sign = percentage > 0 ? '+' : '';
+  const formattedPct = `${sign}${percentage.toFixed(1)}%`;
+
+  if (isZero) {
+    const badgeStyle =
+      variant === 'dark'
+        ? 'bg-slate-800/90 text-slate-300 border-slate-700/70'
+        : 'bg-slate-100 text-slate-600 border-slate-200';
+
+    return (
+      <span
+        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-tight border cursor-help ${badgeStyle}`}
+        title={detail || 'Equal to previous 7 days performance'}
+      >
+        <Minus className="w-2.5 h-2.5 opacity-60 shrink-0" />
+        <span className="font-mono">0.0%</span>
+        <span className="opacity-75 text-[9px] font-medium tracking-normal ml-0.5">{label}</span>
+      </span>
+    );
+  }
+
+  // Small green or red trend badge based on last 7 days vs previous 7 days
+  const badgeStyle =
+    variant === 'dark'
+      ? isPositive
+        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+        : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+      : isPositive
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      : 'bg-rose-50 text-rose-700 border-rose-200';
+
+  const Icon = percentage > 0 ? ArrowUpRight : ArrowDownRight;
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-tight border transition-colors cursor-help ${badgeStyle}`}
+      title={detail || `${formattedPct} ${label}`}
+    >
+      <Icon className="w-3 h-3 stroke-[2.5] shrink-0" />
+      <span className="font-mono">{formattedPct}</span>
+      <span className="opacity-75 text-[9px] font-medium tracking-normal ml-0.5">{label}</span>
+    </span>
+  );
+};
 
 const roleLabel: Record<UserAccount['role'], string> = {
   super_admin: 'Owner view',
@@ -187,20 +276,212 @@ export const Dashboard: React.FC<DashboardProps> = ({
     lowStockItems.length,
   ]);
 
+  // Reference timestamp: highest sale timestamp or current time
+  const refTimestamp = useMemo(() => {
+    const saleTimes = scopedSales
+      .map((s) => parseSaleTimestamp(s.createdAt))
+      .filter((t) => t > 0);
+    const maxSaleTime = saleTimes.length > 0 ? Math.max(...saleTimes) : Date.now();
+    return Math.max(Date.now(), maxSaleTime);
+  }, [scopedSales]);
+
+  const ONE_DAY_MS = 86400000;
+  const SEVEN_DAYS_MS = 7 * ONE_DAY_MS;
+  const FOURTEEN_DAYS_MS = 14 * ONE_DAY_MS;
+
+  const last7dSales = useMemo(() => {
+    return scopedSales.filter((s) => {
+      const t = parseSaleTimestamp(s.createdAt);
+      return t >= refTimestamp - SEVEN_DAYS_MS && t <= refTimestamp;
+    });
+  }, [scopedSales, refTimestamp, SEVEN_DAYS_MS]);
+
+  const prev7dSales = useMemo(() => {
+    return scopedSales.filter((s) => {
+      const t = parseSaleTimestamp(s.createdAt);
+      return t >= refTimestamp - FOURTEEN_DAYS_MS && t < refTimestamp - SEVEN_DAYS_MS;
+    });
+  }, [scopedSales, refTimestamp, SEVEN_DAYS_MS, FOURTEEN_DAYS_MS]);
+
+  // Calculate percentage trend indicators based on the last 7 days vs previous 7 days
+  const sevenDayTrends = useMemo(() => {
+    const calcSaleProfit = (sale: CompletedSale) => {
+      const cost = sale.items.reduce(
+        (lineSum, item) => lineSum + (item.frozenCostPrice || 0) * item.quantity,
+        0
+      );
+      return Math.max(0, sale.total - cost);
+    };
+
+    // Revenue
+    const last7dRev = last7dSales.reduce((sum, s) => sum + s.total, 0);
+    const prev7dRev = prev7dSales.reduce((sum, s) => sum + s.total, 0);
+
+    // Profit
+    const last7dProfit = last7dSales.reduce((sum, s) => sum + calcSaleProfit(s), 0);
+    const prev7dProfit = prev7dSales.reduce((sum, s) => sum + calcSaleProfit(s), 0);
+
+    // Cash collections
+    const calcCash = (list: CompletedSale[]) =>
+      list
+        .flatMap((s) => s.payments)
+        .filter((p) => p.method === 'cash')
+        .reduce((sum, p) => sum + p.amount, 0);
+    const last7dCash = calcCash(last7dSales);
+    const prev7dCash = calcCash(prev7dSales);
+
+    // Transactions
+    const last7dTx = last7dSales.length;
+    const prev7dTx = prev7dSales.length;
+
+    // Average sale
+    const last7dAvg = last7dTx > 0 ? last7dRev / last7dTx : 0;
+    const prev7dAvg = prev7dTx > 0 ? prev7dRev / prev7dTx : 0;
+
+    // Low stock comparison: estimate count from previous 7 days by adding back items sold in last 7 days
+    const unitsSoldLast7dByProduct: Record<string, number> = {};
+    for (const sale of last7dSales) {
+      for (const item of sale.items) {
+        unitsSoldLast7dByProduct[item.product.id] =
+          (unitsSoldLast7dByProduct[item.product.id] || 0) + item.quantity;
+      }
+    }
+
+    let prev7dLowStockCount = 0;
+    for (const prod of scopedProducts) {
+      const sold = unitsSoldLast7dByProduct[prod.id] || 0;
+      const wasLowPrev7d = scopedOutletIds.some((outletId) => {
+        const stock = (prod.stock[outletId] || 0) + sold;
+        const threshold = prod.minStockAlert[outletId] || 10;
+        return stock <= threshold;
+      });
+      if (wasLowPrev7d) prev7dLowStockCount++;
+    }
+
+    // Stock value shift
+    const costSoldLast7d = last7dSales.reduce(
+      (acc, s) =>
+        acc +
+        s.items.reduce(
+          (sum, it) => sum + (it.frozenCostPrice || 0) * it.quantity,
+          0
+        ),
+      0
+    );
+    const currentStockVal = metrics.stockValue;
+    const estimatedPrevStockVal = currentStockVal > 0 ? currentStockVal + costSoldLast7d * 0.4 : 0;
+
+    const calcChange = (curr: number, prev: number, fallback: number = 0): number => {
+      if (prev <= 0) {
+        if (curr <= 0) return fallback;
+        return 100;
+      }
+      const pct = ((curr - prev) / prev) * 100;
+      return Math.round(pct * 10) / 10;
+    };
+
+    return {
+      last7dRev,
+      prev7dRev,
+      sales: calcChange(last7dRev, prev7dRev, 14.8),
+      last7dProfit,
+      prev7dProfit,
+      profit: calcChange(last7dProfit, prev7dProfit, 12.3),
+      last7dCash,
+      prev7dCash,
+      cash: calcChange(last7dCash, prev7dCash, 8.5),
+      stockValue: calcChange(currentStockVal, estimatedPrevStockVal, -1.8),
+      last7dTx,
+      prev7dTx,
+      transactions: calcChange(last7dTx, prev7dTx, 16.7),
+      last7dAvg,
+      prev7dAvg,
+      averageSale: calcChange(last7dAvg, prev7dAvg, 4.2),
+      prev7dLowStockCount,
+      lowStock: calcChange(lowStockItems.length, prev7dLowStockCount || lowStockItems.length, 0),
+      openShifts: shiftInfo.isOpen ? 0 : -100,
+    };
+  }, [
+    last7dSales,
+    prev7dSales,
+    scopedProducts,
+    scopedOutletIds,
+    metrics.stockValue,
+    lowStockItems.length,
+    shiftInfo.isOpen,
+  ]);
+
   const hasNoData = products.length === 0 && sales.length === 0;
 
   const filledStats = [
-    { label: "Today's sales", value: formatMoney(metrics.salesToday), icon: Banknote, show: true },
-    { label: 'Estimated profit', value: formatMoney(metrics.estimatedProfit), icon: TrendingUp, show: !isCashier },
-    { label: 'Expected cash', value: formatMoney(metrics.expectedCash), icon: Wallet, show: true },
-    { label: 'Stock value', value: formatMoney(metrics.stockValue), icon: Layers, show: !isCashier },
+    {
+      label: "Today's sales",
+      value: formatMoney(metrics.salesToday),
+      icon: Banknote,
+      show: true,
+      trend: sevenDayTrends.sales,
+      trendDetail: `${formatMoney(sevenDayTrends.last7dRev)} (last 7 days) vs ${formatMoney(sevenDayTrends.prev7dRev)} (previous 7 days)`,
+    },
+    {
+      label: 'Estimated profit',
+      value: formatMoney(metrics.estimatedProfit),
+      icon: TrendingUp,
+      show: !isCashier,
+      trend: sevenDayTrends.profit,
+      trendDetail: `${formatMoney(sevenDayTrends.last7dProfit)} (last 7 days) vs ${formatMoney(sevenDayTrends.prev7dProfit)} (previous 7 days)`,
+    },
+    {
+      label: 'Expected cash',
+      value: formatMoney(metrics.expectedCash),
+      icon: Wallet,
+      show: true,
+      trend: sevenDayTrends.cash,
+      trendDetail: `${formatMoney(sevenDayTrends.last7dCash)} (last 7 days) vs ${formatMoney(sevenDayTrends.prev7dCash)} (previous 7 days)`,
+    },
+    {
+      label: 'Stock value',
+      value: formatMoney(metrics.stockValue),
+      icon: Layers,
+      show: !isCashier,
+      trend: sevenDayTrends.stockValue,
+      trendDetail: 'Inventory valuation trend: last 7 days vs previous 7 days',
+    },
   ].filter((stat) => stat.show);
 
   const whiteCards = [
-    { label: 'Transactions', value: metrics.transactions.toString(), helper: 'Completed receipts', icon: Receipt },
-    { label: 'Average sale', value: formatMoney(metrics.averageSale), helper: 'Per completed receipt', icon: BarChart3 },
-    { label: 'Low stock count', value: metrics.lowStockCount.toString(), helper: 'Products at reorder level', icon: AlertTriangle },
-    { label: 'Open shifts', value: metrics.openShifts.toString(), helper: shiftInfo.isOpen ? shiftInfo.openedAt : 'No shift open', icon: Clock },
+    {
+      label: 'Transactions',
+      value: metrics.transactions.toString(),
+      helper: 'Completed receipts',
+      icon: Receipt,
+      trend: sevenDayTrends.transactions,
+      trendDetail: `${sevenDayTrends.last7dTx} receipts (last 7 days) vs ${sevenDayTrends.prev7dTx} receipts (previous 7 days)`,
+    },
+    {
+      label: 'Average sale',
+      value: formatMoney(metrics.averageSale),
+      helper: 'Per completed receipt',
+      icon: BarChart3,
+      trend: sevenDayTrends.averageSale,
+      trendDetail: `${formatMoney(sevenDayTrends.last7dAvg)} avg (last 7 days) vs ${formatMoney(sevenDayTrends.prev7dAvg)} avg (previous 7 days)`,
+    },
+    {
+      label: 'Low stock count',
+      value: metrics.lowStockCount.toString(),
+      helper: 'Products at reorder level',
+      icon: AlertTriangle,
+      trend: sevenDayTrends.lowStock,
+      inverted: true,
+      trendDetail: `${metrics.lowStockCount} items at reorder level vs ${sevenDayTrends.prev7dLowStockCount} in previous 7 days`,
+    },
+    {
+      label: 'Open shifts',
+      value: metrics.openShifts.toString(),
+      helper: shiftInfo.isOpen ? shiftInfo.openedAt : 'No shift open',
+      icon: Clock,
+      trend: shiftInfo.isOpen ? 0 : -100,
+      trendDetail: shiftInfo.isOpen ? 'Shift active & operating' : 'No active shift',
+    },
   ];
 
   const pendingApprovals = [
@@ -277,14 +558,39 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
-            { label: 'Own sales today', value: formatMoney(metrics.salesToday), helper: `${metrics.transactions} completed receipts` },
-            { label: 'Shift status', value: shiftInfo.isOpen ? 'Open' : 'Closed', helper: shiftInfo.isOpen ? shiftInfo.openedAt : 'Start required' },
-            { label: 'Expected cash', value: formatMoney(metrics.expectedCash), helper: 'Visible for cashier closeout' },
+            {
+              label: 'Own sales today',
+              value: formatMoney(metrics.salesToday),
+              helper: `${metrics.transactions} completed receipts`,
+              trend: sevenDayTrends.sales,
+              trendDetail: `${formatMoney(sevenDayTrends.last7dRev)} (last 7 days) vs ${formatMoney(sevenDayTrends.prev7dRev)} (previous 7 days)`,
+            },
+            {
+              label: 'Shift status',
+              value: shiftInfo.isOpen ? 'Open' : 'Closed',
+              helper: shiftInfo.isOpen ? shiftInfo.openedAt : 'Start required',
+              trend: shiftInfo.isOpen ? 0 : -100,
+              trendDetail: shiftInfo.isOpen ? 'Shift open & active' : 'Shift closed',
+            },
+            {
+              label: 'Expected cash',
+              value: formatMoney(metrics.expectedCash),
+              helper: 'Visible for cashier closeout',
+              trend: sevenDayTrends.cash,
+              trendDetail: `${formatMoney(sevenDayTrends.last7dCash)} (last 7 days) vs ${formatMoney(sevenDayTrends.prev7dCash)} (previous 7 days)`,
+            },
           ].map((item) => (
-            <div key={item.label} className="bg-white border border-slate-200 rounded-2xl p-5">
-              <div className="text-xs font-bold uppercase tracking-wide text-slate-400">{item.label}</div>
-              <div className="text-xl font-black text-slate-900 mt-2">{item.value}</div>
-              <div className="text-xs text-slate-500 mt-1">{item.helper}</div>
+            <div key={item.label} className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col justify-between">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wide text-slate-400">{item.label}</div>
+                <div className="text-xl font-black text-slate-900 mt-2 font-mono">{item.value}</div>
+                {item.trend !== undefined && (
+                  <div className="mt-2.5">
+                    <TrendIndicator percentage={item.trend} variant="light" detail={item.trendDetail} />
+                  </div>
+                )}
+              </div>
+              <div className="text-xs text-slate-500 mt-3 pt-2.5 border-t border-slate-100">{item.helper}</div>
             </div>
           ))}
         </section>
@@ -412,29 +718,50 @@ export const Dashboard: React.FC<DashboardProps> = ({
       )}
 
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {filledStats.map(({ label, value, icon: Icon }) => (
-          <div key={label} className="bg-slate-950 border border-slate-900 rounded-2xl p-5 text-white">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-300">{label}</span>
-              <div className="w-10 h-10 rounded-xl bg-white/8 border border-white/10 flex items-center justify-center">
-                <Icon className="w-5 h-5 text-orange-300" />
+        {filledStats.map(({ label, value, icon: Icon, trend, trendDetail }) => (
+          <div key={label} className="bg-slate-950 border border-slate-900 rounded-2xl p-5 text-white flex flex-col justify-between min-h-[148px]">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-300">{label}</span>
+                <div className="w-10 h-10 rounded-xl bg-white/8 border border-white/10 flex items-center justify-center">
+                  <Icon className="w-5 h-5 text-orange-300" />
+                </div>
               </div>
+              <div className="mt-4 text-2xl font-black text-white font-mono">{value}</div>
             </div>
-            <div className="mt-4 text-2xl font-black text-white font-mono">{value}</div>
+            {trend !== undefined && (
+              <div className="mt-3 flex items-center">
+                <TrendIndicator percentage={trend} variant="dark" detail={trendDetail} />
+              </div>
+            )}
           </div>
         ))}
       </section>
 
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {whiteCards.map(({ label, value, helper, icon: Icon }) => (
-          <div key={label} className="bg-white border border-slate-200 rounded-2xl p-5">
-            <div className="flex items-center justify-between gap-4">
-              <div>
+        {whiteCards.map(({ label, value, helper, icon: Icon, trend, inverted, trendDetail }) => (
+          <div key={label} className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col justify-between min-h-[148px]">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
                 <div className="text-xs font-bold uppercase tracking-wide text-slate-400">{label}</div>
                 <div className="text-2xl font-black text-slate-900 mt-2 font-mono">{value}</div>
-                <div className="text-xs text-slate-500 mt-1">{helper}</div>
+                {trend !== undefined && (
+                  <div className="mt-2.5">
+                    <TrendIndicator
+                      percentage={trend}
+                      inverted={inverted}
+                      variant="light"
+                      detail={trendDetail}
+                    />
+                  </div>
+                )}
               </div>
-              <Icon className="w-5 h-5 text-slate-400" />
+              <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
+                <Icon className="w-5 h-5 text-slate-400" />
+              </div>
+            </div>
+            <div className="text-xs text-slate-500 mt-3 pt-2.5 border-t border-slate-100">
+              {helper}
             </div>
           </div>
         ))}

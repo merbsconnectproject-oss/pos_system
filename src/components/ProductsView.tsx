@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Archive,
   BarChart3,
+  Barcode,
   CheckCircle2,
   ChevronRight,
   Download,
@@ -13,6 +14,7 @@ import {
   Package,
   Plus,
   Power,
+  Printer,
   Search,
   Sliders,
   Tag,
@@ -22,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Outlet, Product } from '../types';
 import { exportToCsv } from '../utils/csvExport';
+import { ProductBarcodeModal, ProductBarcodeSvg } from './ProductBarcodeModal';
 
 type ProductMode = 'list' | 'import' | 'setup' | 'bulk-price';
 type ImportStep = 'upload' | 'mapping' | 'validation' | 'preview' | 'result';
@@ -91,6 +94,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [priceHistoryProduct, setPriceHistoryProduct] = useState<Product | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [barcodeModalOpen, setBarcodeModalOpen] = useState(false);
+  const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [importStep, setImportStep] = useState<ImportStep>('upload');
   const [bulkPercent, setBulkPercent] = useState(5);
   const [setupValues, setSetupValues] = useState({
@@ -147,6 +153,27 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       return terms.every((term) => haystack.includes(term));
     });
   }, [brandFilter, categoryFilter, currentOutlet, products, searchTerm, stockFilter, storeFilter]);
+
+  const toggleSelectProduct = (id: string) => {
+    setSelectedProductIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedProductIds.length === filteredProducts.length && filteredProducts.length > 0) {
+      setSelectedProductIds([]);
+    } else {
+      setSelectedProductIds(filteredProducts.map((p) => p.id));
+    }
+  };
+
+  const selectedProductsForPrint = useMemo(() => {
+    if (selectedProductIds.length > 0) {
+      return products.filter((p) => selectedProductIds.includes(p.id));
+    }
+    return products;
+  }, [products, selectedProductIds]);
 
   const startCreate = () => {
     setForm((prev) => ({
@@ -458,12 +485,51 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         </div>
       </div>
 
+      {/* Batch Selection Action Banner */}
+      {selectedProductIds.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 px-4 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+            <span className="text-xs font-bold text-orange-950">
+              {selectedProductIds.length} of {filteredProducts.length} products selected
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const firstSelected = products.find((p) => selectedProductIds.includes(p.id));
+                setBarcodeProduct(firstSelected || null);
+                setBarcodeModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-lg shadow-2xs transition-colors cursor-pointer"
+            >
+              <Barcode className="w-4 h-4" />
+              <span>Print Barcodes for Selected ({selectedProductIds.length})</span>
+            </button>
+            <button
+              onClick={() => setSelectedProductIds([])}
+              className="text-xs font-medium text-slate-600 hover:text-slate-900 px-2 py-1 cursor-pointer"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 font-black border-b border-slate-200 uppercase text-[10px] tracking-wide">
               <tr>
-                <th className="py-3 px-4"><input type="checkbox" className="accent-orange-500" /></th>
+                <th className="py-3 px-4">
+                  <input
+                    type="checkbox"
+                    checked={selectedProductIds.length === filteredProducts.length && filteredProducts.length > 0}
+                    onChange={toggleSelectAll}
+                    className="accent-orange-500 cursor-pointer"
+                    title="Select all products"
+                  />
+                </th>
                 <th className="py-3 px-4">Thumbnail + Name</th>
                 <th className="py-3 px-4">SKU / Barcode</th>
                 <th className="py-3 px-4">Category / Brand</th>
@@ -480,14 +546,27 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 const stock = product.stock[key] || 0;
                 const reorder = product.minStockAlert[key] || 0;
                 const low = stock <= reorder;
+                const isSelected = selectedProductIds.includes(product.id);
                 return (
-                  <tr key={product.id} className={`hover:bg-slate-50 ${!product.active ? 'opacity-60 bg-slate-50' : ''}`}>
-                    <td className="py-3 px-4"><input type="checkbox" className="accent-orange-500" /></td>
+                  <tr
+                    key={product.id}
+                    className={`hover:bg-slate-50 transition-colors ${
+                      isSelected ? 'bg-orange-50/40' : ''
+                    } ${!product.active ? 'opacity-60 bg-slate-50' : ''}`}
+                  >
+                    <td className="py-3 px-4">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelectProduct(product.id)}
+                        className="accent-orange-500 cursor-pointer"
+                      />
+                    </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3 min-w-[260px]">
                         <img src={product.imageUrl} alt={product.name} className="w-11 h-11 rounded-md object-cover border border-slate-200 bg-slate-100" />
                         <div>
-                          <button onClick={() => setSelectedProduct(product)} className="font-bold text-slate-800 text-left hover:text-orange-600 line-clamp-2">{product.name}</button>
+                          <button onClick={() => setSelectedProduct(product)} className="font-bold text-slate-800 text-left hover:text-orange-600 line-clamp-2 cursor-pointer">{product.name}</button>
                           <div className="text-[10px] text-slate-400">{product.outletId || 'Shared catalogue'}</div>
                         </div>
                       </div>
@@ -502,10 +581,20 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${product.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{product.active ? 'Active' : 'Inactive'}</span></td>
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => setSelectedProduct(product)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200" title="View detail"><Eye className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => startEdit(product)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200" title="Edit product"><Edit2 className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => onToggleActive(product.id)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200" title="Deactivate product"><Power className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => onOpenAdjustment(product)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200" title="Adjust stock"><Sliders className="w-3.5 h-3.5" /></button>
+                        <button
+                          onClick={() => {
+                            setBarcodeProduct(product);
+                            setBarcodeModalOpen(true);
+                          }}
+                          className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-orange-50 hover:text-orange-600 transition-colors cursor-pointer"
+                          title="Print barcode label for this product"
+                        >
+                          <Barcode className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => setSelectedProduct(product)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer" title="View detail"><Eye className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => startEdit(product)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer" title="Edit product"><Edit2 className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => onToggleActive(product.id)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer" title="Deactivate product"><Power className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => onOpenAdjustment(product)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer" title="Adjust stock"><Sliders className="w-3.5 h-3.5" /></button>
                       </div>
                     </td>
                   </tr>
@@ -542,13 +631,23 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           <p className="text-sm text-slate-500 mt-1">Shared catalogue with outlet-specific stock, weighted cost, pricing, units and barcodes.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={exportProducts} className="flex items-center gap-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold px-3.5 py-2 rounded-lg">
+          <button
+            onClick={() => {
+              setBarcodeProduct(selectedProduct || filteredProducts[0] || products[0] || null);
+              setBarcodeModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer shadow-2xs"
+            title="Generate and print product barcode labels (Thermal roll or A4 sheet)"
+          >
+            <Barcode className="w-4 h-4 text-orange-500" /> Print Barcodes
+          </button>
+          <button onClick={exportProducts} className="flex items-center gap-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer">
             <Download className="w-4 h-4" /> Export
           </button>
-          <button onClick={() => onOpenGoodsReceipt()} className="flex items-center gap-1.5 bg-slate-900 hover:bg-black text-white text-xs font-bold px-3.5 py-2 rounded-lg">
+          <button onClick={() => onOpenGoodsReceipt()} className="flex items-center gap-1.5 bg-slate-900 hover:bg-black text-white text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer">
             <Truck className="w-4 h-4 text-orange-400" /> Goods Receipt
           </button>
-          <button onClick={startCreate} className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3.5 py-2 rounded-lg">
+          <button onClick={startCreate} className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer shadow-xs">
             <Plus className="w-4 h-4" /> Add Product
           </button>
         </div>
@@ -619,7 +718,47 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 </div>
               </section>
               <section className="rounded-xl border border-slate-200 overflow-hidden bg-white">
-                <div className="px-4 py-3 bg-slate-50 border-b border-slate-200"><h3 className="text-sm font-black text-slate-900">Units and barcodes</h3></div>
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                  <h3 className="text-sm font-black text-slate-900">Units and barcodes</h3>
+                  <button
+                    onClick={() => {
+                      setBarcodeProduct(selectedProduct);
+                      setBarcodeModalOpen(true);
+                    }}
+                    className="text-xs font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Barcode className="w-3.5 h-3.5" /> Print Barcode Label
+                  </button>
+                </div>
+                {selectedProduct.barcode && (
+                  <div className="p-4 bg-slate-50/50 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-white p-2 border border-slate-200 rounded-lg shadow-2xs">
+                        <ProductBarcodeSvg
+                          value={selectedProduct.barcode}
+                          width={1.2}
+                          height={28}
+                          fontSize={9}
+                        />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-900">Primary Barcode</div>
+                        <div className="text-[11px] font-mono text-slate-600">{selectedProduct.barcode}</div>
+                        <div className="text-[10px] text-slate-400">Scan at POS terminal or print stickers</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setBarcodeProduct(selectedProduct);
+                        setBarcodeModalOpen(true);
+                      }}
+                      className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors whitespace-nowrap"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>Print Label</span>
+                    </button>
+                  </div>
+                )}
                 <div className="divide-y divide-slate-100">
                   {(selectedProduct.sellingUnits || [{ name: selectedProduct.baseUnit, conversionFactor: 1, price: selectedProduct.retailPrice }]).map((unit) => (
                     <div key={unit.name} className="px-4 py-3 flex justify-between text-sm">
@@ -731,6 +870,18 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Barcode Generation and Printing Modal */}
+      <ProductBarcodeModal
+        isOpen={barcodeModalOpen}
+        onClose={() => {
+          setBarcodeModalOpen(false);
+          setBarcodeProduct(null);
+        }}
+        product={barcodeProduct}
+        products={selectedProductIds.length > 0 ? selectedProductsForPrint : products}
+        currentOutlet={currentOutlet}
+      />
     </div>
   );
 };
