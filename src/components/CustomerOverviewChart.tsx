@@ -26,7 +26,7 @@ export const CustomerOverviewChart: React.FC<CustomerOverviewChartProps> = ({ ac
       <div className="flex items-center justify-between pb-3 border-b border-slate-200">
         <div>
           <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
-            <Users className="w-4 h-4 text-orange-500" />
+            <Users className="w-4 h-4 text-accent-500" />
             <span>Customer Demographics</span>
           </h3>
           <p className="text-[11px] text-slate-400 font-medium">Trade vs Retail revenue mix</p>
@@ -49,7 +49,7 @@ export const CustomerOverviewChart: React.FC<CustomerOverviewChartProps> = ({ ac
                     setFilter(t);
                     setDropdownOpen(false);
                   }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-orange-50 hover:text-orange-600 font-bold"
+                  className="w-full text-left px-3 py-1.5 hover:bg-accent-50 hover:text-accent-600 font-bold"
                 >
                   {t}
                 </button>

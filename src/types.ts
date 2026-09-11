@@ -1,3 +1,7 @@
+import type { PermissionCode, PermissionOverrides, UserRole } from './permissions';
+
+export type { PermissionCode, PermissionOverrides, UserRole };
+
 /**
  * Outlet identifiers are plain slugs so that administrators can register new
  * branches at runtime (Settings → Stores & Branches). The seeded stores use
@@ -25,6 +29,17 @@ export interface SellingUnit {
   tradePrice?: number;
 }
 
+/**
+ * FR-PROD-03/04: a product may carry several barcodes, and each is bound to one
+ * selling unit — so scanning the carton code adds a full carton, not one piece.
+ * `code` is unique system-wide; `unitName` matches a SellingUnit.name, or the
+ * product's baseUnit when the code identifies a single base unit.
+ */
+export interface ProductBarcode {
+  code: string;
+  unitName: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -46,7 +61,7 @@ export interface Product {
     | 'Hardware & Tools'
     | 'Plumbing & Pipes';
   brand: string;
-  barcode: string;
+  barcodes: ProductBarcode[]; // FR-PROD-03: many per product, each bound to a unit
   baseUnit: 'm' | 'pcs' | 'length' | 'roll' | 'box' | 'kg' | 'bucket' | 'tin' | 'set' | 'pair';
   sellingUnits?: SellingUnit[];
   retailPrice: number;
@@ -145,7 +160,7 @@ export interface Supplier {
   paymentTerms: 'Cash on Delivery' | 'Net 14' | 'Net 30' | 'Advance';
   address: string;
   totalSupplied: number;
-  outletId?: 'inco-hardware' | 'apex-electricals' | 'all-outlets';
+  outletId?: OutletId; // 'all-outlets' for a supplier serving every branch
   categorySupplied?: string;
 }
 
@@ -164,6 +179,57 @@ export interface ShiftInfo {
   closedAt?: string;
 }
 
+/**
+ * PRD §7.4 `cash_movement`. Money into or out of the drawer during a shift.
+ * Deliberately NOT a StockMovement: BR-2 requires stock level to equal the sum
+ * of its stock movements, which a cash payout must never contribute to.
+ */
+export type CashMovementDirection = 'in' | 'out';
+
+export type CashMovementReason =
+  | 'Banking'
+  | 'Owner drawing'
+  | 'Supplier payment'
+  | 'Float transfer'
+  | 'Petty cash'
+  | 'Correction';
+
+export interface CashMovement {
+  id: string;
+  shiftId: string;
+  outletId: OutletId;
+  direction: CashMovementDirection;
+  amount: number; // GHS major units at the UI boundary; pesewas on the wire (BR-11)
+  reasonCode: CashMovementReason;
+  note?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+/**
+ * PRD §7.4 `shift`. A shift is one cashier's session on one terminal, from float
+ * declaration to blind count. Closed shifts are never reopened (FR-CASH-09);
+ * corrections are made with a separate cash movement.
+ */
+export interface ShiftRecord {
+  id: string;
+  outletId: OutletId;
+  outletName: string;
+  terminalId: string;
+  cashier: string;
+  openingFloat: number;
+  openedAt: string;
+  closedAt?: string;
+  salesTotal: number;
+  /** Takings by method, for reconciliation against statements (FR-CASH-07). */
+  takingsByMethod: Partial<Record<PaymentMethod, number>>;
+  expectedCash: number;
+  countedCash?: number;
+  variance?: number;
+  varianceNote?: string;
+  status: 'open' | 'closed';
+}
+
 export interface AuditLogEntry {
   id: string;
   timestamp: string;
@@ -173,8 +239,6 @@ export interface AuditLogEntry {
   outletName: string;
   details: string;
 }
-
-export type UserRole = 'super_admin' | 'branch_manager' | 'cashier' | 'storekeeper';
 
 export interface UserAccount {
   id: string;
@@ -192,46 +256,36 @@ export interface UserAccount {
   passwordResetAt?: string; // Timestamp when password was reset
   tempPassword?: string; // Latest temporary assigned password
   password?: string; // Standing sign-in credential
+  /** FR-USER-03 / screen J-07: grants and revocations against the role baseline. */
+  permissionOverrides?: PermissionOverrides;
 }
 
-export interface PermissionDefinition {
-  key: string;
-  label: string;
-  description: string;
-  category: 'pos' | 'inventory' | 'customers' | 'system';
-}
-
+/**
+ * The role baseline. `permissions` holds PRD §6 permission codes; a user's
+ * effective set is this list with their own overrides applied on top — see
+ * resolvePermissions() in ./permissions.
+ */
 export interface RolePermissions {
   role: UserRole;
   roleTitle: string;
   description: string;
   badgeColor: string;
-  permissions: {
-    // POS & Checkout
-    canOpenTerminal: boolean;
-    canApplyDiscount: boolean;
-    canOverrideFloorPrice: boolean;
-    canVoidSale: boolean;
-    canProcessRefund: boolean;
-    canBlindCloseShift: boolean;
+  permissions: PermissionCode[];
+}
 
-    // Inventory & Catalog
-    canViewCostPrices: boolean;
-    canAddProducts: boolean;
-    canEditPrices: boolean;
-    canAdjustStock: boolean;
-    canReceiveGoods: boolean;
-
-    // Customers & Credit
-    canCreateCustomer: boolean;
-    canAssignCreditLimit: boolean;
-
-    // Reports & System
-    canViewExecutiveReports: boolean;
-    canExportCsv: boolean;
-    canViewAuditLogs: boolean;
-    canModifySystemSettings: boolean;
-  };
+/**
+ * K-08 / FR-SET-06: operational thresholds. These are the values BR-10, FR-INV-06
+ * and FR-CASH-06 read, so they are configuration rather than hard-coded constants.
+ */
+export interface OperationalThresholds {
+  /** FR-AUTH-05: minutes of inactivity before the session locks. */
+  idleLockMinutes: number;
+  /** FR-INV-06: adjustments above this value need stock.approve_adjustment. */
+  adjustmentApprovalValue: number;
+  /** FR-CASH-06: variance beyond this needs a written explanation. */
+  cashVarianceExplain: number;
+  /** FR-POS-10: the discount ceiling each role may apply without approval. */
+  discountCeilingByRole: Record<UserRole, number>;
 }
 
 export interface GeneralSettings {
@@ -252,6 +306,7 @@ export interface GeneralSettings {
   autoPrintReceipt: boolean;
   showCashierOnReceipt: boolean;
   accentColor: string;
+  thresholds: OperationalThresholds;
 }
 
 // ==========================================

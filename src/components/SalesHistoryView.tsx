@@ -3,6 +3,7 @@ import { Search, Printer, X, Download, Filter, Eye, FileText } from 'lucide-reac
 import { CompletedSale, Outlet, StockMovement } from '../types';
 import { ManagerPinModal } from './ManagerPinModal';
 import { exportToCsv } from '../utils/csvExport';
+import { InfoHint } from './InfoHint';
 import { ThermalReceiptSlip } from './ThermalReceiptSlip';
 import { ReceiptPrintModal } from './ReceiptPrintModal';
 
@@ -118,7 +119,6 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
       'Items Breakdown',
       'Subtotal (GHS)',
       'Discount (GHS)',
-      'Tax (GHS)',
       'Total Amount (GHS)',
       'Transaction Status',
       'Void Reason',
@@ -136,18 +136,17 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
 
       return [
         s.receiptNumber,
-        s.timestamp,
+        s.createdAt,
         s.outletName,
         s.cashierName,
         s.customerName,
         s.customerPhone || '',
-        s.customerTier || 'Retail',
-        s.paymentMethod,
+        s.customerType || 'retail',
+        s.payments.map((payment) => payment.method).join(' + '),
         itemsCount,
         itemsBreakdown,
         s.subtotal.toFixed(2),
-        s.discount.toFixed(2),
-        s.tax.toFixed(2),
+        s.discountTotal.toFixed(2),
         s.total.toFixed(2),
         s.status,
         s.voidReason || '',
@@ -195,14 +194,11 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-300">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-slate-800 tracking-tight">Sales & Receipts History</h1>
+            <div className="flex items-center gap-2"><h1 className="text-2xl font-black text-slate-800 tracking-tight">Sales &amp; Receipts History</h1><InfoHint text="Browse completed and voided transactions, filter sales, preview receipts, export data, and reprint records." /></div>
             <span className="bg-slate-100 text-slate-700 text-[11px] font-bold px-2 py-0.5 rounded-full border border-slate-300">
               Audit Trail
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Completed sales are immutable. Corrections are made via Void with manager PIN approval.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
@@ -314,7 +310,7 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by receipt #, customer, phone..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-orange-500"
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-accent-500"
           />
         </div>
 
@@ -325,7 +321,7 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
           <select
             value={dateFilter}
             onChange={(e) => setDateFilter(e.target.value as 'ALL' | 'TODAY' | 'CUSTOM')}
-            className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-orange-500"
+            className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-accent-500"
             aria-label="Filter sales by date"
           >
             <option value="ALL">All dates</option>
@@ -333,23 +329,23 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
             <option value="CUSTOM">Custom range</option>
           </select>
           {dateFilter === 'CUSTOM' && <>
-            <input type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-orange-500" aria-label="Sales start date" />
+            <input type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-accent-500" aria-label="Sales start date" />
             <span className="text-xs text-slate-400 font-bold">to</span>
-            <input type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-orange-500" aria-label="Sales end date" />
+            <input type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-accent-500" aria-label="Sales end date" />
           </>}
-          <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value)} className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-orange-500" aria-label="Filter sales by payment method">
+          <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value)} className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-accent-500" aria-label="Filter sales by payment method">
             <option value="ALL">All payment methods</option>
             <option value="cash">Cash</option>
             <option value="momo">Mobile Money</option>
             <option value="card">Card</option>
             <option value="transfer">Bank Transfer</option>
           </select>
-          <select value={cashierFilter} onChange={(e) => setCashierFilter(e.target.value)} className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-orange-500" aria-label="Filter sales by cashier">
+          <select value={cashierFilter} onChange={(e) => setCashierFilter(e.target.value)} className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-accent-500" aria-label="Filter sales by cashier">
             <option value="ALL">All cashiers</option>
             {cashiers.map((cashier) => <option key={cashier} value={cashier}>{cashier}</option>)}
           </select>
-          <input type="number" min="0" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} placeholder="Min GH₵" className="w-24 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-orange-500" aria-label="Minimum sale amount" />
-          <input type="number" min="0" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} placeholder="Max GH₵" className="w-24 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-orange-500" aria-label="Maximum sale amount" />
+          <input type="number" min="0" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} placeholder="Min GH₵" className="w-24 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-accent-500" aria-label="Minimum sale amount" />
+          <input type="number" min="0" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} placeholder="Max GH₵" className="w-24 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-accent-500" aria-label="Maximum sale amount" />
           <button type="button" onClick={clearFilters} className="px-2.5 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">Clear</button>
         </div>
 
@@ -430,7 +426,7 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
                   onClick={() => setSelectedSaleId(sale.id)}
                   className={`transition-colors cursor-pointer ${
                     selectedSaleId === sale.id
-                      ? 'bg-orange-50/80 ring-1 ring-inset ring-orange-300'
+                      ? 'bg-accent-50/80 ring-1 ring-inset ring-accent-300'
                       : 'hover:bg-slate-50'
                   }`}
                 >
@@ -479,7 +475,7 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
                         className="px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-md transition-colors cursor-pointer flex items-center gap-1.5"
                         title="Open dedicated print-friendly thermal receipt slip"
                       >
-                        <FileText className="w-3.5 h-3.5 text-orange-600" />
+                        <FileText className="w-3.5 h-3.5 text-accent-600" />
                         <span>Receipt Slip</span>
                       </button>
                       <button

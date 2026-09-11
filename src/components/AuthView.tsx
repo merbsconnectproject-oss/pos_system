@@ -45,6 +45,20 @@ interface AuthViewProps {
   }) => void;
 }
 
+/**
+ * Sign-in hero image.
+ *
+ * Swap this for a photograph of the client's own shop floor — it will read as far
+ * more relatable than stock, and a local file also removes the network dependency
+ * on a screen that has to work when the connection does not. Drop the file in
+ * `public/` and set this to e.g. `/inco-hardware-counter.jpg`.
+ *
+ * The panel is designed so that if this image fails to load, the layered gradient
+ * beneath it stands on its own and nothing shifts.
+ */
+const HERO_IMAGE =
+  'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=1400&auto=format&fit=crop&q=80';
+
 export const AuthView: React.FC<AuthViewProps> = ({
   users,
   outlets,
@@ -55,6 +69,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
   onAddAuditLog,
 }) => {
   const [screen, setScreen] = useState<AuthScreen>('sign-in');
+  const [heroFailed, setHeroFailed] = useState(false);
 
   // Sign-in form
   const [identifier, setIdentifier] = useState('');
@@ -268,6 +283,41 @@ export const AuthView: React.FC<AuthViewProps> = ({
     <div className="min-h-screen bg-[#f8f9fa] text-slate-800 font-sans lg:grid lg:grid-cols-2">
       {/* LEFT: BRAND PANEL */}
       <div className="relative hidden lg:flex flex-col justify-between bg-slate-900 text-white p-10 xl:p-14 overflow-hidden">
+        {/*
+          Blended hero. Layer order, bottom to top: slate base → photograph →
+          dark scrim for text contrast (NFR-14) → accent tint so the panel follows
+          the chosen theme → the existing radial glows → content.
+        */}
+        {!heroFailed && (
+          <img
+            src={HERO_IMAGE}
+            alt=""
+            aria-hidden="true"
+            loading="eager"
+            onError={() => setHeroFailed(true)}
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center opacity-[0.72] saturate-[0.9] contrast-[1.05]"
+          />
+        )}
+
+        {/*
+          Scrim. Kept deliberately light overall so the photograph reads, with the
+          darkening concentrated left-to-right where the copy actually sits — the
+          text column stays past 11:1 while the right of the panel opens up (NFR-14).
+        */}
+        <div className="pointer-events-none absolute inset-0 bg-slate-900/30" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/85 to-slate-900/10" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-slate-900 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-slate-900/80 to-transparent" />
+
+        {/* Accent tint — ties the photograph to the active theme colour. */}
+        <div
+          className="pointer-events-none absolute inset-0 mix-blend-soft-light opacity-35"
+          style={{ backgroundImage: `linear-gradient(135deg, ${accentColor} 0%, transparent 55%)` }}
+        />
+
+        {/* Hairline seam against the form panel. */}
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-px bg-white/10" />
+
         <div
           className="absolute -top-24 -right-24 w-96 h-96 rounded-full opacity-25 blur-3xl"
           style={{ backgroundColor: accentColor }}
@@ -295,7 +345,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
         </div>
 
         <div className="relative space-y-6 max-w-md">
-          <h1 className="text-3xl xl:text-4xl font-black tracking-tight leading-tight">
+          <h1 className="text-3xl xl:text-4xl font-black tracking-tight leading-tight text-white">
             One terminal for every branch you run.
           </h1>
           <p className="text-sm text-slate-300 leading-relaxed">
@@ -499,12 +549,12 @@ export const AuthView: React.FC<AuthViewProps> = ({
                     key={outlet.id}
                     type="button"
                     onClick={() => continueWithUser(outletSelectUser, outlet.id)}
-                    className="text-left rounded-2xl border border-slate-300 bg-white p-4 hover:border-orange-300 hover:bg-orange-50/30 transition-colors cursor-pointer"
+                    className="text-left rounded-2xl border border-slate-300 bg-white p-4 hover:border-accent-300 hover:bg-accent-50/30 transition-colors cursor-pointer"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3">
                         <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center">
-                          <Store className="w-5 h-5 text-orange-600" />
+                          <Store className="w-5 h-5 text-accent-600" />
                         </div>
                         <div>
                           <div className="font-black text-sm text-slate-900">{outlet.name}</div>

@@ -17,9 +17,9 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
   currentOutlet,
   onConfirmAdjustment,
 }) => {
-  const [reasonCode, setReasonCode] = useState<'PHYSICAL_COUNT' | 'DAMAGED' | 'SHOP_USE' | 'SUPPLIER_RETURN'>('PHYSICAL_COUNT');
+  const [reasonCode, setReasonCode] = useState<'PHYSICAL_COUNT' | 'DAMAGED' | 'SHOP_USE' | 'SUPPLIER_RETURN' | ''>('');
   const [notes, setNotes] = useState('');
-  const [actualCount, setActualCount] = useState<number>(0);
+  const [actualCount, setActualCount] = useState('');
 
   if (!isOpen || !product) return null;
 
@@ -27,12 +27,14 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
     ? product.outletId
     : (currentOutlet.id === 'all-outlets' ? 'inco-hardware' : currentOutlet.id);
   const currentStock = product.stock[outletId] || 0;
-  const variance = actualCount - currentStock;
+  const actualCountNum = parseFloat(actualCount) || 0;
+  const variance = actualCount === '' ? 0 : actualCountNum - currentStock;
 
   const storeName = outletId === 'inco-hardware' ? 'Inco Hardware' : 'Apex Electricals';
 
   const handleAdjust = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!reasonCode || actualCount === '') return;
     if (variance === 0) {
       alert('Count matches current stock, no adjustment needed.');
       return;
@@ -58,13 +60,13 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
       type,
       quantity: variance,
       previousStock: currentStock,
-      newStock: actualCount,
+      newStock: actualCountNum,
       referenceNumber: `ADJ-${Date.now().toString().slice(-6)}`,
       reason: `[${reasonCode}] ${notes}`,
       user: 'Manager (Yaw Boakye)',
     };
 
-    onConfirmAdjustment(product.id, actualCount, movement);
+    onConfirmAdjustment(product.id, actualCountNum, movement);
     onClose();
   };
 
@@ -79,7 +81,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
       >
         <div className="bg-slate-900 text-white px-6 py-5 sm:px-8 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-accent-500/20 border border-accent-500/40 text-accent-400 flex items-center justify-center">
               <Sliders className="w-5 h-5" />
             </div>
             <div>
@@ -111,10 +113,12 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
             <div>
               <label className="text-sm font-bold text-slate-800 block mb-1.5">Audit Reason Code (Mandatory) *</label>
               <select
+                required
                 value={reasonCode}
-                onChange={(e) => setReasonCode(e.target.value as any)}
-                className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white font-medium text-slate-800 focus:outline-orange-500"
+                onChange={(e) => setReasonCode(e.target.value as typeof reasonCode)}
+                className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white font-medium text-slate-800 focus:outline-accent-500"
               >
+                <option value="" disabled>Select reason code</option>
                 <option value="PHYSICAL_COUNT">Physical Count Audit Discrepancy</option>
                 <option value="DAMAGED">Damaged / Defective Stock</option>
                 <option value="SHOP_USE">Store Maintenance / Internal Use</option>
@@ -132,8 +136,8 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
                 min="0"
                 required
                 value={actualCount}
-                onChange={(e) => setActualCount(parseFloat(e.target.value) || 0)}
-                className="w-full text-lg font-black border border-slate-300 rounded-lg px-3.5 py-2 text-slate-900 focus:outline-orange-500"
+                onChange={(e) => setActualCount(e.target.value)}
+                className="w-full text-lg font-black border border-slate-300 rounded-lg px-3.5 py-2 text-slate-900 focus:outline-accent-500"
               />
             </div>
           </div>
@@ -162,7 +166,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="e.g. Recounted coil on spool stand during weekly Monday audit; 3 meters removed for damaged end cut..."
-              className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-orange-500 focus:ring-2 focus:ring-orange-500/20"
+              className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500 focus:ring-2 focus:ring-accent-500/20"
             />
           </div>
 
@@ -176,7 +180,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
             </button>
             <button
               type="submit"
-              className="sm:w-2/3 py-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm shadow-xs cursor-pointer transition-colors"
+              className="sm:w-2/3 py-3 rounded-lg bg-accent-500 hover:bg-accent-600 text-white font-bold text-sm shadow-xs cursor-pointer transition-colors"
             >
               Commit Stock Adjustment
             </button>

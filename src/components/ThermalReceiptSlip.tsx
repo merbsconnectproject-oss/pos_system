@@ -142,7 +142,7 @@ export const ReceiptQrCode: React.FC<{
           </div>
 
           {onScanClick && (
-            <div className="text-[8px] text-orange-600 font-sans font-bold group-hover:underline print:hidden pt-0.5 flex items-center gap-1">
+            <div className="text-[8px] text-accent-600 font-sans font-bold group-hover:underline print:hidden pt-0.5 flex items-center gap-1">
               <span>Click to test customer scan</span>
               <span aria-hidden="true">&rarr;</span>
             </div>

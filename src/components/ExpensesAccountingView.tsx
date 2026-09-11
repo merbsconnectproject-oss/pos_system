@@ -68,20 +68,18 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
   const [statementPrintModalOpen, setStatementPrintModalOpen] = useState(false);
 
   // Form State
-  const [formCategory, setFormCategory] = useState<ExpenseCategory>('Utilities & Power');
+  const [formCategory, setFormCategory] = useState<ExpenseCategory | ''>('');
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formAmount, setFormAmount] = useState('');
-  const [formDate, setFormDate] = useState(new Date().toISOString().slice(0, 10));
-  const [formOutletId, setFormOutletId] = useState<OutletId>(
-    currentOutlet.id === 'all-outlets' ? 'radiance-lighting' : currentOutlet.id
-  );
+  const [formDate, setFormDate] = useState('');
+  const [formOutletId, setFormOutletId] = useState<OutletId | ''>('');
   const [formPayee, setFormPayee] = useState('');
   const [formPaymentMethod, setFormPaymentMethod] = useState<
-    'Cash (Drawer)' | 'Mobile Money' | 'Bank Transfer' | 'Cheque' | 'Corporate Card'
-  >('Cash (Drawer)');
+    'Cash (Drawer)' | 'Mobile Money' | 'Bank Transfer' | 'Cheque' | 'Corporate Card' | ''
+  >('');
   const [formRef, setFormRef] = useState('');
-  const [formTaxDeductible, setFormTaxDeductible] = useState(true);
+  const [formTaxDeductible, setFormTaxDeductible] = useState(false);
 
   // Filtered Expenses
   const filteredExpenses = useMemo(() => {
@@ -156,7 +154,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
   // Handle Create Expense
   const handleSubmitExpense = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formTitle.trim() || !formAmount || parseFloat(formAmount) <= 0) return;
+    if (!formCategory || !formOutletId || !formPaymentMethod || !formDate || !formTitle.trim() || !formAmount || parseFloat(formAmount) <= 0) return;
 
     const matchedOutlet = outlets.find((o) => o.id === formOutletId);
     const outletName = matchedOutlet ? matchedOutlet.name : 'Radiance Lighting';
@@ -185,8 +183,13 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
     setFormTitle('');
     setFormDescription('');
     setFormAmount('');
+    setFormDate('');
+    setFormCategory('');
+    setFormOutletId('');
     setFormPayee('');
+    setFormPaymentMethod('');
     setFormRef('');
+    setFormTaxDeductible(false);
   };
 
   // Export CSV
@@ -349,7 +352,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search description, payee, or reference #..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
           />
         </div>
 
@@ -388,7 +391,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
         <div className="lg:col-span-1 bg-white p-5 rounded-2xl border border-slate-300 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-300">
             <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
-              <PieChart className="w-4 h-4 text-orange-500" />
+              <PieChart className="w-4 h-4 text-accent-500" />
               <span>Expense Allocation</span>
             </h2>
             <span className="text-xs text-slate-500 font-mono font-bold">
@@ -506,7 +509,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
           <div className="bg-white w-full max-w-3xl rounded-xl shadow-2xl border border-slate-300 overflow-hidden animate-modal-card flex flex-col max-h-[92vh]">
             <div className="px-6 py-5 sm:px-8 bg-slate-900 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-accent-500/20 border border-accent-500/40 text-accent-400 flex items-center justify-center">
                   <Plus className="w-5 h-5 stroke-[3]" />
                 </div>
                 <div>
@@ -530,10 +533,11 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                   </label>
                   <select
                     value={formCategory}
-                    onChange={(e) => setFormCategory(e.target.value as ExpenseCategory)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-800"
+                    onChange={(e) => setFormCategory(e.target.value as ExpenseCategory | '')}
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-medium text-slate-800"
                     required
                   >
+                    <option value="" disabled>Select expense category</option>
                     {EXPENSE_CATEGORIES.map((cat) => (
                       <option key={cat} value={cat}>
                         {cat}
@@ -547,10 +551,12 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                     Store Outlet *
                   </label>
                   <select
+                    required
                     value={formOutletId}
-                    onChange={(e) => setFormOutletId(e.target.value as OutletId)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-800"
+                    onChange={(e) => setFormOutletId(e.target.value as OutletId | '')}
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-medium text-slate-800"
                   >
+                    <option value="" disabled>Select outlet</option>
                     {outlets.map((o) => (
                       <option key={o.id} value={o.id}>
                         {o.name} ({o.town})
@@ -569,7 +575,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
                   placeholder="e.g. ECG Power Utility Bill for Main Hardware Showroom"
-                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-900"
+                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-medium text-slate-900"
                   required
                 />
               </div>
@@ -586,7 +592,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                     value={formAmount}
                     onChange={(e) => setFormAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-full px-3.5 py-2.5 text-base bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-mono font-bold text-slate-900"
+                    className="w-full px-3.5 py-2.5 text-base bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-mono font-bold text-slate-900"
                     required
                   />
                 </div>
@@ -599,7 +605,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                     type="date"
                     value={formDate}
                     onChange={(e) => setFormDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-800"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-medium text-slate-800"
                     required
                   />
                 </div>
@@ -615,7 +621,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                     value={formPayee}
                     onChange={(e) => setFormPayee(e.target.value)}
                     placeholder="e.g. Electricity Company of Ghana / Allied Haulage"
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-900"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-medium text-slate-900"
                     required
                   />
                 </div>
@@ -625,10 +631,12 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                     Payment Method *
                   </label>
                   <select
+                    required
                     value={formPaymentMethod}
                     onChange={(e) => setFormPaymentMethod(e.target.value as any)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-800"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-medium text-slate-800"
                   >
+                    <option value="" disabled>Select payment method</option>
                     <option value="Cash (Drawer)">Cash (Drawer Float)</option>
                     <option value="Mobile Money">Mobile Money (MoMo)</option>
                     <option value="Bank Transfer">Bank Transfer (ACH/Wire)</option>
@@ -648,7 +656,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                     value={formRef}
                     onChange={(e) => setFormRef(e.target.value)}
                     placeholder="e.g. INV-9942 or REC-002"
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-mono text-slate-900"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-mono text-slate-900"
                   />
                 </div>
 
@@ -658,7 +666,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                       type="checkbox"
                       checked={formTaxDeductible}
                       onChange={(e) => setFormTaxDeductible(e.target.checked)}
-                      className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-slate-300 cursor-pointer"
+                      className="w-4 h-4 rounded text-accent-600 focus:ring-accent-500 border-slate-300 cursor-pointer"
                     />
                     <span>Tax Deductible Business Expense</span>
                   </label>
@@ -674,7 +682,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
                   placeholder="Additional context, department cost center or management sign-off notes..."
-                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-900"
+                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-medium text-slate-900"
                 />
               </div>
 

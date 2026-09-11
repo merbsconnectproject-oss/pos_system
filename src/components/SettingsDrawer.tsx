@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import type { PermissionSet } from '../permissions';
+import { ACCENT_PRESETS, DEFAULT_ACCENT, isBlue } from '../accent';
 import { Settings, X, RotateCcw, Check, Palette, Store, Printer, Shield } from 'lucide-react';
 import { Outlet } from '../types';
 
@@ -10,6 +12,7 @@ interface SettingsDrawerProps {
   onChangeAccent: (color: string) => void;
   outlets: Outlet[];
   onOpenFullSettings?: () => void;
+  permissions: PermissionSet;
 }
 
 export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
@@ -20,42 +23,38 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   onChangeAccent,
   outlets,
   onOpenFullSettings,
+  permissions,
 }) => {
+  const canSetAccent = permissions.has('settings.appearance');
+  const canSetTerminal = permissions.has('settings.terminal');
+  const canSeeOutlets = permissions.has('settings.general');
+  const consoleSubtitle = permissions.has('user.manage')
+    ? 'Users, roles, RBAC & hardware'
+    : [canSeeOutlets && 'Store & branches', canSetTerminal && 'Hardware', canSetAccent && 'Theme']
+        .filter(Boolean)
+        .join(' · ') || 'Your available settings';
   const [customHex, setCustomHex] = useState(accentColor);
+  const [hexError, setHexError] = useState<string | null>(null);
   const [receiptWidth, setReceiptWidth] = useState<'80mm' | '58mm'>('80mm');
 
-  const swatches = [
-    { label: 'Orange (Default)', hex: '#c55200' },
-    { label: 'Amber', hex: '#a56800' },
-    { label: 'Crimson', hex: '#c1354b' },
-    { label: 'Plum', hex: '#8b4a99' },
-    { label: 'Forest', hex: '#2d7a4f' },
-    { label: 'Teal', hex: '#10786f' },
-    { label: 'Graphite', hex: '#57534e' },
-  ];
-
-  // Refuse blue per Counter Datasheet AC-11 & NFR-15
-  const isBlueHex = (hex: string) => {
-    const clean = hex.replace('#', '');
-    if (clean.length !== 6) return false;
-    const r = parseInt(clean.substring(0, 2), 16);
-    const g = parseInt(clean.substring(2, 4), 16);
-    const b = parseInt(clean.substring(4, 6), 16);
-    // Rough check if blue dominant over red and green, or known blue ranges
-    return b > r + 30 && b > g + 15;
-  };
+  const swatches = ACCENT_PRESETS.map((preset) => ({
+    label: preset.hex === DEFAULT_ACCENT ? `${preset.name} (Default)` : preset.name,
+    hex: preset.hex,
+  }));
 
   const handleHexSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (/^#[0-9A-F]{6}$/i.test(customHex)) {
-      if (isBlueHex(customHex)) {
-        alert('Blue is refused as an accent color per design system rules (AC-11). Please choose Orange, Amber, Crimson, Plum, Forest, Teal, or Graphite.');
-        return;
-      }
-      onChangeAccent(customHex);
-    } else {
-      alert('Please enter a valid 6-digit hex code, e.g. #c55200');
+    if (!/^#[0-9A-F]{6}$/i.test(customHex)) {
+      setHexError('Enter a valid 6-digit hex code, e.g. #c55200.');
+      return;
     }
+    // Acceptance criterion 11: no blue appears anywhere in the palette.
+    if (isBlue(customHex)) {
+      setHexError('Blue is not part of the palette. Choose Orange, Amber, Crimson, Plum, Forest, Teal or Graphite.');
+      return;
+    }
+    setHexError(null);
+    onChangeAccent(customHex);
   };
 
   return (
@@ -63,7 +62,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
       {/* Floating Orange Gear Tab on Right Screen Edge (Matches screenshots exactly!) */}
       <button
         onClick={onOpen}
-        className="fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-orange-500 hover:bg-orange-600 text-white p-2.5 rounded-l-xl shadow-xl transition-transform hover:-translate-x-1 flex items-center justify-center cursor-pointer"
+        className="fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-accent-500 hover:bg-accent-600 text-white p-2.5 rounded-l-xl shadow-xl transition-transform hover:-translate-x-1 flex items-center justify-center cursor-pointer"
         title="Settings & Appearance"
       >
         <Settings className="w-5 h-5 animate-spin-slow" />
@@ -82,7 +81,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
             {/* Drawer Header */}
             <div className="p-4 border-b border-slate-300 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
-                <Settings className="w-5 h-5 text-orange-500" />
+                <Settings className="w-5 h-5 text-accent-500" />
                 <h3 className="font-extrabold text-slate-800 text-base">Settings & Appearance</h3>
               </div>
               <button
@@ -102,13 +101,13 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                     onClose();
                     onOpenFullSettings();
                   }}
-                  className="w-full flex items-center justify-between p-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl shadow-xs hover:from-orange-600 hover:to-amber-600 transition-all cursor-pointer group"
+                  className="w-full flex items-center justify-between p-3 bg-gradient-to-r from-accent-500 to-amber-500 text-white rounded-xl shadow-xs hover:from-accent-600 hover:to-amber-600 transition-all cursor-pointer group"
                 >
                   <div className="flex items-center gap-2.5 text-left">
                     <Shield className="w-5 h-5 text-white shrink-0" />
                     <div>
                       <div className="text-xs font-black">Open Full Settings Console</div>
-                      <div className="text-[10px] text-orange-100">Users, Roles, RBAC &amp; Hardware</div>
+                      <div className="text-[10px] text-accent-100">{consoleSubtitle}</div>
                     </div>
                   </div>
                   <span className="text-xs font-black text-white group-hover:translate-x-0.5 transition-transform">
@@ -117,16 +116,16 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                 </button>
               )}
 
-              {/* Section 1: Appearance & Accent Picker (Screen K-06) */}
-              <div className="space-y-3">
+              {/* Section 1: Appearance & Accent Picker (Screen K-06, FR-SET-03) */}
+              {canSetAccent && <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <Palette className="w-4 h-4 text-orange-500" />
+                    <Palette className="w-4 h-4 text-accent-500" />
                     System Accent Color
                   </span>
                   <button
-                    onClick={() => onChangeAccent('#ff9f43')}
-                    className="text-[11px] text-orange-600 font-semibold hover:underline flex items-center gap-1"
+                    onClick={() => onChangeAccent(DEFAULT_ACCENT)}
+                    className="text-[11px] text-accent-600 font-semibold hover:underline flex items-center gap-1"
                   >
                     <RotateCcw className="w-3 h-3" />
                     Reset
@@ -153,8 +152,8 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                   <input
                     type="text"
                     value={customHex}
-                    onChange={(e) => setCustomHex(e.target.value)}
-                    placeholder="#ff9f43"
+                    onChange={(e) => { setCustomHex(e.target.value); setHexError(null); }}
+                    placeholder={DEFAULT_ACCENT}
                     className="flex-1 px-3 py-1.5 text-xs font-mono border border-slate-300 rounded-lg"
                   />
                   <button
@@ -164,6 +163,12 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                     Apply
                   </button>
                 </form>
+
+                {hexError && (
+                  <p className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] font-bold text-rose-700">
+                    {hexError}
+                  </p>
+                )}
 
                 {/* Live Preview Panel (Per Screen K-06 requirement) */}
                 <div className="p-3 bg-slate-50 border border-slate-300 rounded-xl space-y-2 text-xs">
@@ -183,12 +188,11 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                     </span>
                   </div>
                 </div>
-              </div>
+              </div>}
 
-              {/* Section 2: Receipt & Printer Configuration */}
-              <div className="space-y-3 pt-4 border-t border-slate-200">
+              {canSetTerminal && <div className="space-y-3 pt-4 border-t border-slate-200">
                 <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <Printer className="w-4 h-4 text-orange-500" />
+                  <Printer className="w-4 h-4 text-accent-500" />
                   Thermal Printer Layout
                 </span>
 
@@ -199,7 +203,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                       onClick={() => setReceiptWidth(w)}
                       className={`py-2 text-xs font-bold rounded-lg border transition-all ${
                         receiptWidth === w
-                          ? 'border-orange-500 bg-orange-50 text-orange-600'
+                          ? 'border-accent-500 bg-accent-50 text-accent-600'
                           : 'border-slate-300 text-slate-600 hover:bg-slate-50'
                       }`}
                     >
@@ -210,12 +214,11 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                 <p className="text-[11px] text-slate-400">
                   Default format used during POS checkout printing.
                 </p>
-              </div>
+              </div>}
 
-              {/* Section 3: Two Outlets Configuration */}
-              <div className="space-y-3 pt-4 border-t border-slate-200">
+              {canSeeOutlets && <div className="space-y-3 pt-4 border-t border-slate-200">
                 <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <Store className="w-4 h-4 text-orange-500" />
+                  <Store className="w-4 h-4 text-accent-500" />
                   Configured Outlets ({outlets.length})
                 </span>
 
@@ -227,7 +230,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                     >
                       <div className="font-bold text-slate-800 flex items-center justify-between">
                         <span>{outlet.name}</span>
-                        <span className="text-[10px] font-mono text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] font-mono text-accent-600 bg-accent-50 px-1.5 py-0.5 rounded">
                           {outlet.receiptPrefix}
                         </span>
                       </div>
@@ -235,7 +238,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                     </div>
                   ))}
                 </div>
-              </div>
+              </div>}
             </div>
 
             {/* Drawer Footer */}

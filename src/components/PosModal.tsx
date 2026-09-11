@@ -43,7 +43,20 @@ import {
   Customer,
   ShiftInfo,
 } from '../types';
+import { findByBarcodeOrSku } from '../catalogue';
+import type { PermissionSet } from '../permissions';
+import { useScanner } from '../useScanner';
+import { createBlock, issueReceiptNumber, remainingInBlock } from '../receiptSequence';
+import { printReceipt } from '../printService';
+import { formatQuantity, lineTotal, moneyEquals, roundMoney, roundQuantity, sumMoney } from '../money';
 import { ManagerPinModal } from './ManagerPinModal';
+
+const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  cash: 'Cash',
+  momo: 'Mobile Money',
+  card: 'Card',
+  transfer: 'Bank Transfer',
+};
 
 interface PosModalProps {
   isOpen: boolean;
@@ -55,6 +68,8 @@ interface PosModalProps {
   onOpenShift: () => void;
   onAddCustomer: (customer: Customer) => void;
   onSaleCompleted: (sale: CompletedSale) => void;
+  permissions: PermissionSet;
+  onLockSession?: () => void;
 }
 
 export const PosModal: React.FC<PosModalProps> = ({
@@ -67,7 +82,11 @@ export const PosModal: React.FC<PosModalProps> = ({
   onOpenShift,
   onAddCustomer,
   onSaleCompleted,
+  permissions,
+  onLockSession,
 }) => {
+  const canOversell = permissions.has('stock.oversell');
+  const canDiscount = permissions.has('sale.discount');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -85,7 +104,7 @@ export const PosModal: React.FC<PosModalProps> = ({
   const [unitPickerProduct, setUnitPickerProduct] = useState<Product | null>(null);
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerPhone, setNewCustomerPhone] = useState('');
-  const [newCustomerType, setNewCustomerType] = useState<Customer['customerType']>('retail');
+  const [newCustomerType, setNewCustomerType] = useState<Customer['customerType'] | ''>('');
   const [inlineNotice, setInlineNotice] = useState<{ type: 'warning' | 'error' | 'success'; title: string; message: string } | null>(null);
 
   // Payment modal states
@@ -99,10 +118,11 @@ export const PosModal: React.FC<PosModalProps> = ({
   const [momoReference, setMomoReference] = useState('');
   const [momoVerified, setMomoVerified] = useState(false);
 
-  // Split payment details
-  const [splitCashAmount, setSplitCashAmount] = useState<number>(0);
-  const [splitMomoAmount, setSplitMomoAmount] = useState<number>(0);
-  const [splitMomoRef, setSplitMomoRef] = useState('');
+  // FR-PAY-04 / C-15: split across two or more methods, with a live remaining balance.
+  const [splitParts, setSplitParts] = useState<{ id: string; method: PaymentMethod; amount: number; reference: string }[]>([
+    { id: 'split-1', method: 'cash', amount: 0, reference: '' },
+    { id: 'split-2', method: 'momo', amount: 0, reference: '' },
+  ]);
   const [cardReference, setCardReference] = useState('');
   const [transferReference, setTransferReference] = useState('');
   const [externalPaymentVerified, setExternalPaymentVerified] = useState(false);
@@ -119,6 +139,22 @@ export const PosModal: React.FC<PosModalProps> = ({
   // Barcode simulation
   const [barcodeInput, setBarcodeInput] = useState('');
   const [scanNotice, setScanNotice] = useState<string | null>(null);
+  // FR-POS-05: a rescanned product flashes its existing line rather than adding a second.
+  const [flashLineKey, setFlashLineKey] = useState<string | null>(null);
+  // C-18 / FR-RCPT-05: a print failure never blocks or reverses a committed sale.
+  const [printFailed, setPrintFailed] = useState(false);
+  // C-21: an insufficient-stock strip, not a modal — it must not block the counter.
+  const [unknownBarcode, setUnknownBarcode] = useState<string | null>(null);
+  const [receiptBlock, setReceiptBlock] = useState(() =>
+    createBlock(currentOutlet.receiptPrefix, shiftInfo.terminalId || '01', 4312),
+  );
+  const [oversellPrompt, setOversellPrompt] = useState<{
+    product: Product;
+    unitIndex: number;
+    available: number;
+    requested: number;
+    unitName: string;
+  } | null>(null);
 
   const outletId = currentOutlet.id === 'all-outlets' ? 'inco-hardware' : currentOutlet.id;
 
@@ -179,11 +215,32 @@ export const PosModal: React.FC<PosModalProps> = ({
         ];
 
   // Calculate totals
-  const subtotal = cart.reduce((acc, item) => acc + item.lineTotal, 0);
-  const discountTotal = (subtotal * cartDiscountPercent) / 100;
-  const total = Math.max(0, subtotal - discountTotal);
+  const subtotal = sumMoney(cart.map((item) => item.lineTotal));
+  const discountTotal = roundMoney((subtotal * cartDiscountPercent) / 100);
+  const total = Math.max(0, roundMoney(subtotal - discountTotal));
   const cashTenderedNum = parseFloat(cashTendered) || 0;
-  const changeDue = Math.max(0, cashTenderedNum - total);
+  const changeDue = Math.max(0, roundMoney(cashTenderedNum - total));
+  const splitTotal = sumMoney(splitParts.map((part) => part.amount));
+  const splitRemaining = roundMoney(total - splitTotal);
+
+  // FR-POS-03..06: scanner keystrokes reach the cart wherever focus sits.
+  useScanner({
+    enabled: isOpen && !paymentModalOpen && !completedSale,
+    onScan: (code) => {
+      const stocked = products.filter(
+        (p) => !p.outletId || p.outletId === 'all-outlets' || p.outletId === outletId,
+      );
+      const match = findByBarcodeOrSku(stocked, code);
+      if (!match) {
+        // C-19 / FR-POS-07: an unknown code is an inline strip, never a modal.
+        setUnknownBarcode(code);
+        return;
+      }
+      setUnknownBarcode(null);
+      const unitIndex = match.product.sellingUnits?.findIndex((unit) => unit.name === match.unitName);
+      handleAddToCart(match.product, unitIndex !== undefined && unitIndex >= 0 ? unitIndex : undefined);
+    },
+  });
 
   // Keyboard shortcut listener
   useEffect(() => {
@@ -200,6 +257,9 @@ export const PosModal: React.FC<PosModalProps> = ({
       } else if (e.key === 'F4' && !paymentModalOpen) {
         e.preventDefault();
         searchInputRef.current?.focus();
+      } else if (e.key === 'F9' && !paymentModalOpen) {
+        e.preventDefault();
+        onLockSession?.();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -209,17 +269,7 @@ export const PosModal: React.FC<PosModalProps> = ({
   if (!isOpen) return null;
 
   // Add product to cart with selling unit support & trade pricing
-  const handleAddToCart = (product: Product, unitIndex?: number) => {
-    const stockOnHand = product.stock[outletId] || 0;
-    if (stockOnHand <= 0) {
-      setInlineNotice({
-        type: 'error',
-        title: 'Out of stock',
-        message: `${product.name} has no available stock at ${currentOutlet.name}.`,
-      });
-      return;
-    }
-
+  const handleAddToCart = (product: Product, unitIndex?: number, options?: { force?: boolean }) => {
     if (unitIndex === undefined && product.sellingUnits && product.sellingUnits.length > 1) {
       setUnitPickerProduct(product);
       return;
@@ -235,13 +285,40 @@ export const PosModal: React.FC<PosModalProps> = ({
     const unitPrice = isTradeCustomer ? (unit.tradePrice || product.tradePrice) : (unit.price || product.retailPrice);
     const frozenCost = (product.costPrice[outletId] || product.retailPrice * 0.7) * unit.conversionFactor;
 
+    // BR-9 / FR-POS-13: negative stock is blocked unless the user holds stock.oversell.
+    const stockOnHand = product.stock[outletId] || 0;
+    const alreadyInCart = cart
+      .filter((item) => item.product.id === product.id)
+      .reduce((sum, item) => sum + item.quantity * item.conversionFactor, 0);
+    const requestedBase = roundQuantity(alreadyInCart + unit.conversionFactor);
+    if (requestedBase > stockOnHand && !options?.force) {
+      setOversellPrompt({
+        product,
+        unitIndex: selectedUnitIndex,
+        available: stockOnHand,
+        requested: requestedBase,
+        unitName: unit.name,
+      });
+      return;
+    }
+
+    // FR-POS-05: a rescan increments the existing line and flashes it.
+    const lineKey = `${product.id}-${unit.name}`;
+    const lineExists = cart.some(
+      (item) => item.product.id === product.id && item.selectedUnit === unit.name,
+    );
+    if (lineExists) {
+      setFlashLineKey(lineKey);
+      window.setTimeout(() => setFlashLineKey(null), 700);
+    }
+
     setCart((prev) => {
       const existing = prev.find((item) => item.product.id === product.id && item.selectedUnit === unit.name);
       if (existing) {
         const newQty = existing.quantity + 1;
         return prev.map((item) =>
           item.product.id === product.id && item.selectedUnit === unit.name
-            ? { ...item, quantity: newQty, lineTotal: newQty * item.unitPrice }
+            ? { ...item, quantity: roundQuantity(newQty), lineTotal: lineTotal(newQty, item.unitPrice) }
             : item
         );
       } else {
@@ -266,6 +343,47 @@ export const PosModal: React.FC<PosModalProps> = ({
     setTimeout(() => setScanNotice(null), 1500);
   };
 
+  /** C-05: switch a line to a different selling unit, reconverting quantity and price. */
+  const handleChangeLineUnit = (productId: string, currentUnitName: string, nextUnitName: string) => {
+    setCart((prev) => {
+      const line = prev.find((item) => item.product.id === productId && item.selectedUnit === currentUnitName);
+      if (!line || currentUnitName === nextUnitName) return prev;
+      const product = line.product;
+      const nextUnit = product.sellingUnits?.find((unit) => unit.name === nextUnitName);
+      const factor = nextUnit?.conversionFactor ?? 1;
+      const isTrade = selectedCustomer &&
+        (selectedCustomer.customerType === 'electrician' || selectedCustomer.customerType === 'contractor');
+      const price = isTrade
+        ? nextUnit?.tradePrice ?? product.tradePrice * factor
+        : nextUnit?.price ?? product.retailPrice * factor;
+      const frozenCost = (product.costPrice[outletId] || product.retailPrice * 0.7) * factor;
+      return prev.map((item) =>
+        item.product.id === productId && item.selectedUnit === currentUnitName
+          ? {
+              ...item,
+              selectedUnit: nextUnitName,
+              conversionFactor: factor,
+              unitPrice: price,
+              frozenCostPrice: frozenCost,
+              lineTotal: lineTotal(item.quantity, price, item.discount),
+            }
+          : item,
+      );
+    });
+  };
+
+  /** FR-POS-10: a per-line discount, capped by the role's discount ceiling. */
+  const handleLineDiscount = (productId: string, unitName: string, amount: number) => {
+    setCart((prev) =>
+      prev.map((item) => {
+        if (item.product.id !== productId || item.selectedUnit !== unitName) return item;
+        const gross = roundMoney(item.quantity * item.unitPrice);
+        const capped = Math.min(Math.max(0, roundMoney(amount)), gross);
+        return { ...item, discount: capped, lineTotal: lineTotal(item.quantity, item.unitPrice, capped) };
+      }),
+    );
+  };
+
   const handleUpdateQuantity = (productId: string, unitName: string, newQty: number) => {
     if (newQty <= 0) {
       handleRemoveItem(productId, unitName);
@@ -277,7 +395,7 @@ export const PosModal: React.FC<PosModalProps> = ({
           return {
             ...item,
             quantity: newQty,
-            lineTotal: Number((newQty * item.unitPrice).toFixed(2)),
+            lineTotal: lineTotal(newQty, item.unitPrice),
           };
         }
         return item;
@@ -303,7 +421,7 @@ export const PosModal: React.FC<PosModalProps> = ({
           return {
             ...i,
             unitPrice: newPrice,
-            lineTotal: Number((i.quantity * newPrice).toFixed(2)),
+            lineTotal: lineTotal(i.quantity, newPrice),
           };
         }
         return i;
@@ -321,7 +439,7 @@ export const PosModal: React.FC<PosModalProps> = ({
           return {
             ...item,
             unitPrice: requestedPrice,
-            lineTotal: Number((item.quantity * requestedPrice).toFixed(2)),
+            lineTotal: lineTotal(item.quantity, requestedPrice),
             floorPriceApproved: true,
             floorPriceApprover: approverName,
           };
@@ -350,7 +468,7 @@ export const PosModal: React.FC<PosModalProps> = ({
             return {
               ...item,
               unitPrice: tradePrice,
-              lineTotal: Number((item.quantity * tradePrice).toFixed(2)),
+              lineTotal: lineTotal(item.quantity, tradePrice),
             };
           })
         );
@@ -394,18 +512,17 @@ export const PosModal: React.FC<PosModalProps> = ({
     e.preventDefault();
     if (!barcodeInput) return;
     const clean = barcodeInput.trim();
-    const found = products.find(
-      (p) =>
-        (!p.outletId || p.outletId === 'all-outlets' || p.outletId === outletId) &&
-        (p.barcode === clean || p.sku.toLowerCase() === clean.toLowerCase())
+    const stocked = products.filter(
+      (p) => !p.outletId || p.outletId === 'all-outlets' || p.outletId === outletId
     );
-    if (found) {
-      handleAddToCart(found);
+    const match = findByBarcodeOrSku(stocked, clean);
+    if (match) {
+      // FR-PROD-04: the scanned code names a unit, so a carton code adds a full carton.
+      const unitIndex = match.product.sellingUnits?.findIndex((unit) => unit.name === match.unitName);
+      handleAddToCart(match.product, unitIndex !== undefined && unitIndex >= 0 ? unitIndex : undefined);
       setBarcodeInput('');
     } else {
-      const otherStoreProd = products.find(
-        (p) => p.barcode === clean || p.sku.toLowerCase() === clean.toLowerCase()
-      );
+      const otherStoreProd = findByBarcodeOrSku(products, clean)?.product;
       if (otherStoreProd) {
         const otherStoreName =
           otherStoreProd.outletId === 'inco-hardware'
@@ -441,7 +558,7 @@ export const PosModal: React.FC<PosModalProps> = ({
       id: `cust-${Date.now()}`,
       name: newCustomerName.trim(),
       phone: newCustomerPhone.trim(),
-      customerType: newCustomerType,
+      customerType: newCustomerType || 'retail',
       totalPurchased: 0,
       salesCount: 0,
     };
@@ -465,11 +582,11 @@ export const PosModal: React.FC<PosModalProps> = ({
       });
     } else if (activePaymentTab === 'momo') {
       if (!momoReference.trim()) {
-        alert('Mandatory MoMo Transaction Reference ID required (FR-SALE-12)');
+        setInlineNotice({ type: 'error', title: 'Reference required', message: 'Enter the MoMo transaction reference before completing the sale.' });
         return;
       }
       if (!momoVerified) {
-        alert('Please confirm SMS verification on the shop phone before completing (FR-SALE-13)');
+        setInlineNotice({ type: 'error', title: 'Confirm receipt', message: 'Confirm the payment SMS on the shop phone before completing the sale.' });
         return;
       }
       payments.push({
@@ -481,7 +598,7 @@ export const PosModal: React.FC<PosModalProps> = ({
       });
     } else if (activePaymentTab === 'card') {
       if (!cardReference.trim() || !externalPaymentVerified) {
-        alert('Card payment reference and received confirmation are required.');
+        setInlineNotice({ type: 'error', title: 'Card details required', message: 'Enter the card reference and confirm the funds were received.' });
         return;
       }
       payments.push({
@@ -493,7 +610,7 @@ export const PosModal: React.FC<PosModalProps> = ({
       });
     } else if (activePaymentTab === 'transfer') {
       if (!transferReference.trim() || !externalPaymentVerified) {
-        alert('Bank transfer reference and received confirmation are required.');
+        setInlineNotice({ type: 'error', title: 'Transfer details required', message: 'Enter the transfer reference and confirm the funds were received.' });
         return;
       }
       payments.push({
@@ -504,27 +621,44 @@ export const PosModal: React.FC<PosModalProps> = ({
         verified: true,
       });
     } else if (activePaymentTab === 'split') {
-      const splitTotal = splitCashAmount + splitMomoAmount;
-      if (Math.abs(splitTotal - total) > 0.05) {
-        alert(`Split amounts (GH₵ ${splitTotal.toFixed(2)}) must equal total (GH₵ ${total.toFixed(2)})`);
+      const funded = splitParts.filter((part) => part.amount > 0);
+      if (!moneyEquals(splitTotal, total)) {
+        setInlineNotice({
+          type: 'error',
+          title: 'Split does not balance',
+          message: `Parts total ${formatMoney(splitTotal)} against ${formatMoney(total)} due. ${
+            splitRemaining > 0
+              ? `${formatMoney(splitRemaining)} still to allocate.`
+              : `${formatMoney(-splitRemaining)} over.`
+          }`,
+        });
         return;
       }
-      if (splitCashAmount > 0) {
-        payments.push({ method: 'cash', amount: splitCashAmount });
-      }
-      if (splitMomoAmount > 0) {
-        payments.push({
-          method: 'momo',
-          amount: splitMomoAmount,
-          provider: momoProvider,
-          reference: splitMomoRef || 'SPLIT-MOMO',
-          verified: true,
+      // FR-PAY-03: non-cash parts need a reference and an explicit confirmation.
+      const missingRef = funded.find((part) => part.method !== 'cash' && !part.reference.trim());
+      if (missingRef) {
+        setInlineNotice({
+          type: 'error',
+          title: 'Reference required',
+          message: `Enter the reference for the ${PAYMENT_METHOD_LABELS[missingRef.method]} part before completing.`,
         });
+        return;
       }
+      funded.forEach((part) => {
+        payments.push({
+          method: part.method,
+          amount: part.amount,
+          provider: part.method === 'momo' ? momoProvider : undefined,
+          reference: part.method === 'cash' ? undefined : part.reference.trim(),
+          verified: part.method !== 'cash' ? true : undefined,
+        });
+      });
     }
 
-    const receiptSeq = Math.floor(1000 + Math.random() * 9000);
-    const receiptNumber = `${currentOutlet.receiptPrefix}-${receiptSeq}`;
+    // BR-6: gapless, per terminal, drawn from this terminal's pre-allocated block.
+    const issued = issueReceiptNumber(receiptBlock);
+    const receiptNumber = issued.receiptNumber;
+    setReceiptBlock(issued.block);
 
     const sale: CompletedSale = {
       id: `sale-${Date.now()}`,
@@ -547,10 +681,21 @@ export const PosModal: React.FC<PosModalProps> = ({
       status: 'COMPLETED',
     };
 
+    // FR-RCPT-01: the sale is committed before any print is attempted.
     onSaleCompleted(sale);
     setCompletedSale(sale);
     setReceiptPrintStatus('ready');
     setReceiptReprint(false);
+    setPrintFailed(false);
+
+    // FR-RCPT-05: a print failure surfaces a retry; it never reverses the sale.
+    void printReceipt({
+      receiptNumber: sale.receiptNumber,
+      paperWidth: '80mm',
+      payload: sale.receiptNumber,
+    }).then((result) => {
+      if (!result.ok) setPrintFailed(true);
+    });
     setPaymentModalOpen(false);
     setCart([]);
     setSelectedCustomer(null);
@@ -568,7 +713,7 @@ export const PosModal: React.FC<PosModalProps> = ({
     const matchesSearch =
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.barcode.includes(searchQuery);
+      p.barcodes.some((entry) => entry.code.includes(searchQuery));
     return matchesOutlet && matchesCat && matchesSearch && p.active;
   });
   const searchResults = searchQuery.trim() ? filteredProducts.slice(0, 6) : [];
@@ -608,7 +753,7 @@ export const PosModal: React.FC<PosModalProps> = ({
             <button
               type="button"
               onClick={onOpenShift}
-              className="py-3 rounded-xl bg-orange-500 text-white text-sm font-black hover:bg-orange-600"
+              className="py-3 rounded-xl bg-accent-500 text-white text-sm font-black hover:bg-accent-600"
             >
               Open shift
             </button>
@@ -624,13 +769,13 @@ export const PosModal: React.FC<PosModalProps> = ({
         {/* POS Top Bar */}
         <div className="bg-[#1e293b] text-white px-4 py-2.5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="bg-orange-500 text-white p-1.5 rounded-lg font-black text-xs tracking-wider">
+            <div className="bg-accent-500 text-white p-1.5 rounded-lg font-black text-xs tracking-wider">
               POS
             </div>
             <div>
               <div className="font-black text-sm flex items-center gap-2">
                 <span>{currentOutlet.name}</span>
-                <span className="text-[11px] font-semibold text-orange-400 bg-white/10 px-2 py-0.5 rounded-md">
+                <span className="text-[11px] font-semibold text-accent-400 bg-white/10 px-2 py-0.5 rounded-md">
                   Terminal #01
                 </span>
                 <span className="hidden sm:inline-block text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
@@ -645,7 +790,7 @@ export const PosModal: React.FC<PosModalProps> = ({
 
           {/* Barcode Quick Scanner input */}
           <form onSubmit={handleBarcodeSubmit} className="hidden md:flex items-center gap-2 bg-slate-800/80 border border-slate-700 px-3 py-1.5 rounded-lg">
-            <Barcode className="w-4 h-4 text-orange-400" />
+            <Barcode className="w-4 h-4 text-accent-400" />
             <input
               type="text"
               value={barcodeInput}
@@ -653,7 +798,7 @@ export const PosModal: React.FC<PosModalProps> = ({
               placeholder="Scan barcode or type SKU..."
               className="text-xs bg-transparent text-white placeholder-slate-400 focus:outline-none w-48 font-mono"
             />
-            <button type="submit" className="text-[10px] bg-orange-500 hover:bg-orange-600 text-white font-bold px-2 py-0.5 rounded">
+            <button type="submit" className="text-[10px] bg-accent-500 hover:bg-accent-600 text-white font-bold px-2 py-0.5 rounded">
               Enter
             </button>
           </form>
@@ -679,6 +824,71 @@ export const PosModal: React.FC<PosModalProps> = ({
             </button>
           </div>
         </div>
+
+        {/* C-21: insufficient stock — reduce, or sell anyway with stock.oversell */}
+        {oversellPrompt && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900">
+            <div className="font-bold">
+              Only {formatQuantity(oversellPrompt.available)} {oversellPrompt.product.baseUnit} of{' '}
+              {oversellPrompt.product.name} at {currentOutlet.name}.
+              <span className="ml-1 font-semibold">
+                This adds {formatQuantity(oversellPrompt.requested)}.
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setOversellPrompt(null)}
+                className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-bold text-amber-800"
+              >
+                Reduce quantity
+              </button>
+              {canOversell && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const prompt = oversellPrompt;
+                    setOversellPrompt(null);
+                    handleAddToCart(prompt.product, prompt.unitIndex, { force: true });
+                  }}
+                  className="rounded-lg bg-amber-600 px-3 py-1.5 font-bold text-white"
+                  title="Recorded as a flagged movement on the exceptions report (BR-9)"
+                >
+                  Sell anyway
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* C-19: scanned code not in the catalogue */}
+        {unknownBarcode && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900">
+            <div className="font-bold">
+              No product matches barcode <span className="font-mono">{unknownBarcode}</span>.
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery(unknownBarcode);
+                  setUnknownBarcode(null);
+                  searchInputRef.current?.focus();
+                }}
+                className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-bold text-amber-800"
+              >
+                Search manually
+              </button>
+              <button
+                type="button"
+                onClick={() => setUnknownBarcode(null)}
+                className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-bold text-amber-800"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Scan Toast Notice */}
         {scanNotice && (
@@ -721,7 +931,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search electrical items or SKU..."
-                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-orange-500 shadow-2xs"
+                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-accent-500 shadow-2xs"
                 />
                 {searchQuery.trim() && (
                   <div className="absolute left-0 right-0 top-9 z-40 bg-white border border-slate-200 rounded-xl shadow-xl p-2">
@@ -758,7 +968,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                           onClick={() => {
                             onClose();
                           }}
-                          className="mt-2 text-xs font-bold text-orange-600 hover:underline"
+                          className="mt-2 text-xs font-bold text-accent-600 hover:underline"
                         >
                           Create product from catalogue
                         </button>
@@ -776,7 +986,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                     onClick={() => setSelectedCategory(cat)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
                       selectedCategory === cat
-                        ? 'bg-orange-500 text-white shadow-xs'
+                        ? 'bg-accent-500 text-white shadow-xs'
                         : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-300'
                     }`}
                   >
@@ -863,7 +1073,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                             <button
                               key={u.name}
                               onClick={() => handleAddToCart(p, uIdx)}
-                              className="text-[9px] font-bold bg-slate-100 hover:bg-orange-50 hover:text-orange-700 px-1.5 py-1 rounded border border-slate-200"
+                              className="text-[9px] font-bold bg-slate-100 hover:bg-accent-50 hover:text-accent-700 px-1.5 py-1 rounded border border-slate-200"
                               title={`Add as ${u.name}`}
                             >
                               {u.conversionFactor > 1 ? `${u.conversionFactor}x` : '1x'}
@@ -900,7 +1110,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                       setMobileCartDrawerOpen(true);
                       setPaymentModalOpen(true);
                     }}
-                    className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-black rounded-xl shadow-xs cursor-pointer"
+                    className="px-4 py-2 bg-accent-500 hover:bg-accent-600 text-white text-xs font-black rounded-xl shadow-xs cursor-pointer"
                   >
                     Pay (F2) →
                   </button>
@@ -920,7 +1130,7 @@ export const PosModal: React.FC<PosModalProps> = ({
             {/* Mobile-only header to close drawer */}
             <div className="lg:hidden flex items-center justify-between p-3.5 border-b border-slate-300 bg-slate-900 text-white">
               <div className="font-black text-sm flex items-center gap-2">
-                <ShoppingCart className="w-4 h-4 text-orange-400" />
+                <ShoppingCart className="w-4 h-4 text-accent-400" />
                 <span>Order Cart ({cart.length} items)</span>
               </div>
               <button
@@ -935,7 +1145,7 @@ export const PosModal: React.FC<PosModalProps> = ({
             <div className="p-4 border-b border-slate-200 bg-slate-50/70 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-orange-500" />
+                  <User className="w-3.5 h-3.5 text-accent-500" />
                   <span>Customer (Trade Discount Auto-Applied)</span>
                 </span>
                 {selectedCustomer && (
@@ -950,7 +1160,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setCustomerModalOpen(true)}
-                    className="text-[11px] text-orange-600 font-bold hover:underline"
+                    className="text-[11px] text-accent-600 font-bold hover:underline"
                   >
                     Attach / create
                   </button>
@@ -976,7 +1186,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                     value={customerSearchPhone}
                     onChange={(e) => handleCustomerPhoneLookup(e.target.value)}
                     placeholder="Type phone: e.g. 0244567890 (Yaw Mensah)"
-                    className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white focus:outline-orange-500 font-mono"
+                    className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white focus:outline-accent-500 font-mono"
                   />
                   <button
                     type="button"
@@ -1003,7 +1213,14 @@ export const PosModal: React.FC<PosModalProps> = ({
                 </div>
               ) : (
                 cart.map((item, idx) => (
-                  <div key={`${item.product.id}-${item.selectedUnit}`} className="pt-3 first:pt-0 space-y-2.5">
+                  <div
+                    key={`${item.product.id}-${item.selectedUnit}`}
+                    className={`pt-3 first:pt-0 space-y-2.5 rounded-lg transition-colors duration-300 ${
+                      flashLineKey === `${item.product.id}-${item.selectedUnit}`
+                        ? 'bg-emerald-100/70'
+                        : ''
+                    }`}
+                  >
                     <div className="flex justify-between items-start">
                       <div className="flex-1 pr-2">
                         <div className="font-bold text-xs text-slate-900 leading-tight">
@@ -1075,6 +1292,48 @@ export const PosModal: React.FC<PosModalProps> = ({
                         GH₵ {item.lineTotal.toFixed(2)}
                       </div>
                     </div>
+
+                    {/* C-05: unit switch and line discount */}
+                    <div className="flex flex-wrap items-center gap-2 pl-0.5">
+                      {item.product.sellingUnits && item.product.sellingUnits.length > 1 && (
+                        <label className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
+                          Unit
+                          <select
+                            value={item.selectedUnit}
+                            onChange={(event) =>
+                              handleChangeLineUnit(item.product.id, item.selectedUnit, event.target.value)
+                            }
+                            className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-bold text-slate-700"
+                          >
+                            {item.product.sellingUnits.map((unit) => (
+                              <option key={unit.name} value={unit.name}>
+                                {unit.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      {canDiscount && (
+                        <label className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
+                          Less GH₵
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={item.discount || ''}
+                            placeholder="0.00"
+                            onChange={(event) =>
+                              handleLineDiscount(
+                                item.product.id,
+                                item.selectedUnit,
+                                parseFloat(event.target.value) || 0,
+                              )
+                            }
+                            className="w-14 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-right text-[11px] font-bold text-slate-700"
+                          />
+                        </label>
+                      )}
+                    </div>
                   </div>
                 ))
               )}
@@ -1094,21 +1353,21 @@ export const PosModal: React.FC<PosModalProps> = ({
                       setDiscountDraft(String(cartDiscountPercent));
                       setDiscountModalOpen(true);
                     }}
-                    className="text-orange-600 font-bold hover:underline"
+                    className="text-accent-600 font-bold hover:underline"
                   >
                     Discount
                   </button>
                   <span className="font-mono font-bold">{cartDiscountPercent}%</span>
                 </div>
                 {cartDiscountPercent > 0 && (
-                  <div className="flex justify-between text-orange-600 font-bold">
+                  <div className="flex justify-between text-accent-600 font-bold">
                     <span>Discount ({cartDiscountPercent}%):</span>
                     <span className="font-mono">- GH₵ {discountTotal.toFixed(2)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-base font-black text-slate-900 pt-1 border-t border-slate-300">
                   <span>TOTAL DUE:</span>
-                  <span className="text-orange-600 font-mono text-xl">GH₵ {total.toFixed(2)}</span>
+                  <span className="text-accent-600 font-mono text-xl">GH₵ {total.toFixed(2)}</span>
                 </div>
               </div>
 
@@ -1128,7 +1387,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                   type="button"
                   onClick={() => setPaymentModalOpen(true)}
                   disabled={cart.length === 0}
-                  className="py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                  className="py-3 rounded-xl bg-accent-500 hover:bg-accent-600 text-white font-black text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   <DollarSign className="w-4 h-4 stroke-[3]" />
                   <span>Pay (F2)</span>
@@ -1165,7 +1424,7 @@ export const PosModal: React.FC<PosModalProps> = ({
               <div>
                 <h3 className="font-black text-xl leading-tight">Collect Payment</h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Total Payable: <strong className="text-orange-400 text-sm font-black">GH₵ {total.toFixed(2)}</strong>
+                  Total Payable: <strong className="text-accent-400 text-sm font-black">GH₵ {total.toFixed(2)}</strong>
                 </p>
               </div>
               <button 
@@ -1181,7 +1440,7 @@ export const PosModal: React.FC<PosModalProps> = ({
               <button
                 onClick={() => setActivePaymentTab('cash')}
                 className={`py-3.5 flex items-center justify-center gap-2 transition-colors cursor-pointer ${
-                  activePaymentTab === 'cash' ? 'bg-white text-orange-600 border-b-2 border-orange-500 font-black' : 'text-slate-600 hover:bg-slate-100'
+                  activePaymentTab === 'cash' ? 'bg-white text-accent-600 border-b-2 border-accent-500 font-black' : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <DollarSign className="w-4 h-4" /> Cash (Cedis)
@@ -1189,7 +1448,7 @@ export const PosModal: React.FC<PosModalProps> = ({
               <button
                 onClick={() => setActivePaymentTab('momo')}
                 className={`py-3.5 flex items-center justify-center gap-2 transition-colors cursor-pointer ${
-                  activePaymentTab === 'momo' ? 'bg-white text-orange-600 border-b-2 border-orange-500 font-black' : 'text-slate-600 hover:bg-slate-100'
+                  activePaymentTab === 'momo' ? 'bg-white text-accent-600 border-b-2 border-accent-500 font-black' : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <Smartphone className="w-4 h-4" /> Mobile Money
@@ -1200,7 +1459,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                   setExternalPaymentVerified(false);
                 }}
                 className={`py-3.5 flex items-center justify-center gap-2 transition-colors cursor-pointer ${
-                  activePaymentTab === 'card' ? 'bg-white text-orange-600 border-b-2 border-orange-500 font-black' : 'text-slate-600 hover:bg-slate-100'
+                  activePaymentTab === 'card' ? 'bg-white text-accent-600 border-b-2 border-accent-500 font-black' : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <CreditCard className="w-4 h-4" /> Card
@@ -1211,7 +1470,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                   setExternalPaymentVerified(false);
                 }}
                 className={`py-3.5 flex items-center justify-center gap-2 transition-colors cursor-pointer ${
-                  activePaymentTab === 'transfer' ? 'bg-white text-orange-600 border-b-2 border-orange-500 font-black' : 'text-slate-600 hover:bg-slate-100'
+                  activePaymentTab === 'transfer' ? 'bg-white text-accent-600 border-b-2 border-accent-500 font-black' : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <Building2 className="w-4 h-4" /> Transfer
@@ -1219,11 +1478,14 @@ export const PosModal: React.FC<PosModalProps> = ({
               <button
                 onClick={() => {
                   setActivePaymentTab('split');
-                  setSplitCashAmount(Math.round(total / 2));
-                  setSplitMomoAmount(Number((total - Math.round(total / 2)).toFixed(2)));
+                  // Seed with the whole amount on cash; the cashier reallocates from there.
+                  setSplitParts([
+                    { id: 'split-1', method: 'cash', amount: total, reference: '' },
+                    { id: 'split-2', method: 'momo', amount: 0, reference: '' },
+                  ]);
                 }}
                 className={`py-3.5 flex items-center justify-center gap-2 transition-colors cursor-pointer ${
-                  activePaymentTab === 'split' ? 'bg-white text-orange-600 border-b-2 border-orange-500 font-black' : 'text-slate-600 hover:bg-slate-100'
+                  activePaymentTab === 'split' ? 'bg-white text-accent-600 border-b-2 border-accent-500 font-black' : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <Calculator className="w-4 h-4" /> Split Payment
@@ -1243,7 +1505,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                       value={cashTendered}
                       onChange={(e) => setCashTendered(e.target.value)}
                       placeholder={`e.g. ${Math.ceil(total / 10) * 10}`}
-                      className="w-full text-3xl font-black font-mono border border-slate-300 rounded-lg p-3.5 text-center text-slate-900 focus:outline-orange-500"
+                      className="w-full text-3xl font-black font-mono border border-slate-300 rounded-lg p-3.5 text-center text-slate-900 focus:outline-accent-500"
                     />
                   </div>
 
@@ -1256,7 +1518,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                           key={denom}
                           type="button"
                           onClick={() => setCashTendered(denom.toString())}
-                          className="py-3 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 font-black rounded-lg border border-slate-300 text-sm cursor-pointer transition-colors"
+                          className="py-3 bg-slate-100 hover:bg-accent-50 hover:text-accent-600 hover:border-accent-300 font-black rounded-lg border border-slate-300 text-sm cursor-pointer transition-colors"
                         >
                           GH₵ {denom}
                         </button>
@@ -1304,7 +1566,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                       value={momoPhone}
                       onChange={(e) => setMomoPhone(e.target.value)}
                       placeholder="0244123456"
-                      className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-orange-500"
+                      className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-accent-500"
                     />
                   </div>
 
@@ -1318,7 +1580,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                       value={momoReference}
                       onChange={(e) => setMomoReference(e.target.value)}
                       placeholder="e.g. MM-2026-984210"
-                      className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono uppercase focus:outline-orange-500"
+                      className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono uppercase focus:outline-accent-500"
                     />
                     <span className="text-xs text-slate-400 mt-1.5 block">
                       Verify transaction ID from the shop phone / merchant SMS before proceeding.
@@ -1353,7 +1615,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                       value={cardReference}
                       onChange={(e) => setCardReference(e.target.value)}
                       placeholder="e.g. CARD-984210"
-                      className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono uppercase focus:outline-orange-500"
+                      className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono uppercase focus:outline-accent-500"
                     />
                   </div>
                   <label className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 p-4 rounded-xl cursor-pointer">
@@ -1384,7 +1646,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                       value={transferReference}
                       onChange={(e) => setTransferReference(e.target.value)}
                       placeholder="e.g. TRF-2026-984210"
-                      className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono uppercase focus:outline-orange-500"
+                      className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono uppercase focus:outline-accent-500"
                     />
                   </div>
                   <label className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 p-4 rounded-xl cursor-pointer">
@@ -1403,44 +1665,143 @@ export const PosModal: React.FC<PosModalProps> = ({
 
               {/* Tab 5: SPLIT PAYMENT */}
               {activePaymentTab === 'split' && (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <div>
-                      <label className="text-sm font-bold text-slate-800 block mb-1.5">Part 1: Cash Amount (GH₵)</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={splitCashAmount}
-                        onChange={(e) => setSplitCashAmount(parseFloat(e.target.value) || 0)}
-                        className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-base font-bold text-slate-900 focus:outline-orange-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-bold text-slate-800 block mb-1.5">Part 2: MoMo Amount (GH₵)</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={splitMomoAmount}
-                        onChange={(e) => setSplitMomoAmount(parseFloat(e.target.value) || 0)}
-                        className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-base font-bold text-amber-700 focus:outline-orange-500"
-                      />
-                    </div>
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    {splitParts.map((part, index) => (
+                      <div key={part.id} className="rounded-xl border border-slate-300 bg-white p-3.5 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black uppercase tracking-wider text-slate-400">
+                            Part {index + 1}
+                          </span>
+                          {splitParts.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() => setSplitParts((prev) => prev.filter((item) => item.id !== part.id))}
+                              className="text-xs font-bold text-rose-600 hover:text-rose-700"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <label className="text-xs font-bold text-slate-700">
+                            Method
+                            <select
+                              value={part.method}
+                              onChange={(event) =>
+                                setSplitParts((prev) =>
+                                  prev.map((item) =>
+                                    item.id === part.id
+                                      ? { ...item, method: event.target.value as PaymentMethod }
+                                      : item,
+                                  ),
+                                )
+                              }
+                              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-bold text-slate-900"
+                            >
+                              {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((method) => (
+                                <option key={method} value={method}>
+                                  {PAYMENT_METHOD_LABELS[method]}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="text-xs font-bold text-slate-700">
+                            Amount (GH₵)
+                            <div className="mt-1 flex gap-2">
+                              <input
+                                type="number"
+                                step="any"
+                                min="0"
+                                value={part.amount || ''}
+                                onChange={(event) =>
+                                  setSplitParts((prev) =>
+                                    prev.map((item) =>
+                                      item.id === part.id
+                                        ? { ...item, amount: roundMoney(parseFloat(event.target.value) || 0) }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-bold text-slate-900"
+                              />
+                              <button
+                                type="button"
+                                title="Allocate the remaining balance to this part"
+                                onClick={() =>
+                                  setSplitParts((prev) =>
+                                    prev.map((item) =>
+                                      item.id === part.id
+                                        ? { ...item, amount: roundMoney(Math.max(0, item.amount + splitRemaining)) }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                                className="shrink-0 rounded-lg border border-slate-300 px-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                              >
+                                Rest
+                              </button>
+                            </div>
+                          </label>
+                        </div>
+                        {part.method !== 'cash' && (
+                          <label className="block text-xs font-bold text-slate-700">
+                            {PAYMENT_METHOD_LABELS[part.method]} reference
+                            <input
+                              type="text"
+                              value={part.reference}
+                              onChange={(event) =>
+                                setSplitParts((prev) =>
+                                  prev.map((item) =>
+                                    item.id === part.id ? { ...item, reference: event.target.value } : item,
+                                  ),
+                                )
+                              }
+                              placeholder="Transaction reference"
+                              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-sm"
+                            />
+                          </label>
+                        )}
+                      </div>
+                    ))}
                   </div>
 
-                  <div>
-                    <label className="text-sm font-bold text-slate-800 block mb-1.5">MoMo Transaction Ref ID</label>
-                    <input
-                      type="text"
-                      value={splitMomoRef}
-                      onChange={(e) => setSplitMomoRef(e.target.value)}
-                      placeholder="Ref ID for the MoMo portion"
-                      className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-orange-500"
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSplitParts((prev) => [
+                        ...prev,
+                        {
+                          id: `split-${Date.now()}`,
+                          method: 'card',
+                          amount: roundMoney(Math.max(0, splitRemaining)),
+                          reference: '',
+                        },
+                      ])
+                    }
+                    className="w-full rounded-lg border border-dashed border-slate-400 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                  >
+                    + Add another method
+                  </button>
 
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-300 flex justify-between items-center text-sm font-bold">
-                    <span>Split Total: <strong className="text-slate-900">GH₵ {(splitCashAmount + splitMomoAmount).toFixed(2)}</strong></span>
-                    <span>Total Required: <strong className="text-orange-600">GH₵ {total.toFixed(2)}</strong></span>
+                  {/* Live remaining balance — the sale cannot complete until this is zero (FR-PAY-05) */}
+                  <div
+                    className={`flex items-center justify-between rounded-xl border p-4 text-sm font-bold ${
+                      moneyEquals(splitTotal, total)
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                        : 'border-amber-300 bg-amber-50 text-amber-900'
+                    }`}
+                  >
+                    <span>
+                      Allocated <strong>{formatMoney(splitTotal)}</strong> of {formatMoney(total)}
+                    </span>
+                    <span>
+                      {moneyEquals(splitTotal, total)
+                        ? 'Balanced'
+                        : splitRemaining > 0
+                        ? `${formatMoney(splitRemaining)} remaining`
+                        : `${formatMoney(-splitRemaining)} over`}
+                    </span>
                   </div>
                 </div>
               )}
@@ -1458,7 +1819,7 @@ export const PosModal: React.FC<PosModalProps> = ({
               <button
                 type="button"
                 onClick={handleFinalizeSale}
-                className="sm:w-2/3 py-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-black text-sm shadow-md cursor-pointer transition-colors"
+                className="sm:w-2/3 py-3 rounded-lg bg-accent-500 hover:bg-accent-600 text-white font-black text-sm shadow-md cursor-pointer transition-colors"
               >
                 Complete Sale &amp; Issue Receipt
               </button>
@@ -1486,7 +1847,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                   key={unit.name}
                   type="button"
                   onClick={() => handleAddToCart(unitPickerProduct, idx)}
-                  className="p-4 rounded-xl border border-slate-300 hover:border-orange-300 hover:bg-orange-50/30 text-left flex items-center justify-between gap-4"
+                  className="p-4 rounded-xl border border-slate-300 hover:border-accent-300 hover:bg-accent-50/30 text-left flex items-center justify-between gap-4"
                 >
                   <div>
                     <div className="text-sm font-black text-slate-900">{unit.name}</div>
@@ -1521,7 +1882,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                   type="number"
                   value={discountDraft}
                   onChange={(e) => setDiscountDraft(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl text-lg font-black text-slate-900 focus:outline-orange-500"
+                  className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl text-lg font-black text-slate-900 focus:outline-accent-500"
                   min="0"
                   max="25"
                 />
@@ -1543,7 +1904,7 @@ export const PosModal: React.FC<PosModalProps> = ({
               <button type="button" onClick={() => setDiscountModalOpen(false)} className="py-3 rounded-xl border border-slate-300 text-slate-700 font-bold text-sm hover:bg-slate-50">
                 Cancel
               </button>
-              <button type="button" onClick={handleApplyDiscount} className="py-3 rounded-xl bg-orange-500 text-white font-black text-sm hover:bg-orange-600">
+              <button type="button" onClick={handleApplyDiscount} className="py-3 rounded-xl bg-accent-500 text-white font-black text-sm hover:bg-accent-600">
                 Apply discount
               </button>
             </div>
@@ -1571,7 +1932,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                   type="text"
                   value={customerSearchPhone}
                   onChange={(e) => handleCustomerPhoneLookup(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-mono focus:outline-orange-500"
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-mono focus:outline-accent-500"
                   placeholder="0244567890"
                 />
                 <div className="space-y-2">
@@ -1616,7 +1977,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                   type="text"
                   value={newCustomerName}
                   onChange={(e) => setNewCustomerName(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-orange-500"
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-accent-500"
                   placeholder="Customer name"
                   required
                 />
@@ -1624,21 +1985,21 @@ export const PosModal: React.FC<PosModalProps> = ({
                   type="text"
                   value={newCustomerPhone}
                   onChange={(e) => setNewCustomerPhone(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-mono focus:outline-orange-500"
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-mono focus:outline-accent-500"
                   placeholder="Phone number"
                   required
                 />
                 <select
                   value={newCustomerType}
                   onChange={(e) => setNewCustomerType(e.target.value as Customer['customerType'])}
-                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:outline-orange-500"
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:outline-accent-500"
                 >
                   <option value="retail">Retail</option>
                   <option value="electrician">Electrician</option>
                   <option value="contractor">Contractor</option>
                   <option value="company">Company</option>
                 </select>
-                <button type="submit" className="w-full py-3 rounded-xl bg-orange-500 text-white font-black text-sm hover:bg-orange-600">
+                <button type="submit" className="w-full py-3 rounded-xl bg-accent-500 text-white font-black text-sm hover:bg-accent-600">
                   Create and attach
                 </button>
               </form>
@@ -1659,7 +2020,7 @@ export const PosModal: React.FC<PosModalProps> = ({
               type="text"
               value={holdLabel}
               onChange={(e) => setHoldLabel(e.target.value)}
-              className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-orange-500"
+              className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-accent-500"
               placeholder={`Held #${heldCarts.length + 1} (${selectedCustomer?.name || 'Walk-in'})`}
             />
             <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 text-xs flex justify-between">
@@ -1670,7 +2031,7 @@ export const PosModal: React.FC<PosModalProps> = ({
               <button type="button" onClick={() => setHoldModalOpen(false)} className="py-3 rounded-xl border border-slate-300 text-slate-700 font-bold text-sm hover:bg-slate-50">
                 Cancel
               </button>
-              <button type="button" onClick={handleHoldCart} className="py-3 rounded-xl bg-orange-500 text-white font-black text-sm hover:bg-orange-600">
+              <button type="button" onClick={handleHoldCart} className="py-3 rounded-xl bg-accent-500 text-white font-black text-sm hover:bg-accent-600">
                 Hold sale
               </button>
             </div>
@@ -1706,7 +2067,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => handleResumeCart(idx)} className="py-2.5 rounded-xl bg-orange-500 text-white text-xs font-black hover:bg-orange-600">
+                    <button type="button" onClick={() => handleResumeCart(idx)} className="py-2.5 rounded-xl bg-accent-500 text-white text-xs font-black hover:bg-accent-600">
                       Resume
                     </button>
                     <button
@@ -1744,6 +2105,32 @@ export const PosModal: React.FC<PosModalProps> = ({
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {printFailed && (
+              <div className="shrink-0 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+                <p className="text-xs font-black text-amber-900">Sale saved. Receipt did not print.</p>
+                <p className="mt-1 text-[11px] text-amber-800">
+                  Receipt {completedSale.receiptNumber} is committed and stock is decremented. Printing can be
+                  retried at any time.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPrintFailed(false)}
+                    className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white"
+                  >
+                    Retry print
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrintFailed(false)}
+                    className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-800"
+                  >
+                    Continue without printing
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-center">
               <div className="text-xs font-black uppercase tracking-wide text-slate-500">Change due</div>
@@ -1855,7 +2242,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                   <span className="font-bold text-slate-900">{formatMoney(0)}</span>
                 </div>
                 {completedSale.discountTotal > 0 && (
-                  <div className="flex justify-between text-xs font-bold text-orange-700">
+                  <div className="flex justify-between text-xs font-bold text-accent-700">
                     <span>Discount</span>
                     <span>- {formatMoney(completedSale.discountTotal)}</span>
                   </div>

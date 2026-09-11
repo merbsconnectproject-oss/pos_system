@@ -11,6 +11,25 @@
   --radius-2xl: 0.625rem;
   --radius-3xl: 0.75rem;
   --radius-4xl: 1rem;
+
+  /*
+   * The accent scale, exposed to Tailwind as `accent-*` utilities
+   * (bg-accent-500, text-accent-600, border-accent-200, …).
+   * Each maps to a runtime custom property that Settings rewrites, so the
+   * accent is a single token and no component hard-codes a hex (NFR-15).
+   */
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-50: var(--accent-50);
+  --color-accent-100: var(--accent-100);
+  --color-accent-200: var(--accent-200);
+  --color-accent-300: var(--accent-300);
+  --color-accent-400: var(--accent-400);
+  --color-accent-500: var(--accent-500);
+  --color-accent-600: var(--accent-600);
+  --color-accent-700: var(--accent-700);
+  --color-accent-800: var(--accent-800);
+  --color-accent-900: var(--accent-900);
 }
 
 @layer base {

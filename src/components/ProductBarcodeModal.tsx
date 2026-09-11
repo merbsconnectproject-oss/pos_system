@@ -16,6 +16,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { Product, Outlet } from '../types';
+import { primaryBarcode } from '../catalogue';
 
 export type BarcodeLabelSize = 'roll-40x25' | 'roll-50x30' | 'roll-60x40' | 'sheet-a4-24' | 'sheet-a4-40';
 
@@ -164,7 +165,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
 
   const handleCopyBarcode = async () => {
     try {
-      await navigator.clipboard.writeText(selectedProduct.barcode);
+      await navigator.clipboard.writeText(primaryBarcode(selectedProduct));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -183,7 +184,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `barcode_${selectedProduct.sku}_${selectedProduct.barcode}.svg`;
+    link.download = `barcode_${selectedProduct.sku}_${primaryBarcode(selectedProduct)}.svg`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -280,7 +281,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
           {/* Header */}
           <header className="p-4 sm:px-6 sm:py-4 border-b border-slate-800 bg-slate-900/90 flex flex-wrap items-center justify-between gap-3 shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-orange-600/20 border border-orange-500/30 flex items-center justify-center text-orange-400">
+              <div className="w-9 h-9 rounded-xl bg-accent-600/20 border border-accent-500/30 flex items-center justify-center text-accent-400">
                 <Barcode className="w-5 h-5" />
               </div>
               <div>
@@ -301,7 +302,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
             <div className="flex items-center gap-2">
               <button
                 onClick={handlePrint}
-                className="flex items-center gap-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition-colors cursor-pointer"
+                className="flex items-center gap-2 bg-accent-600 hover:bg-accent-500 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition-colors cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
                 <span>Print {expandedLabels.length} {expandedLabels.length === 1 ? 'Label' : 'Labels'}</span>
@@ -333,11 +334,11 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
                         const found = products.find((p) => p.id === e.target.value);
                         if (found) setSelectedProduct(found);
                       }}
-                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-xs appearance-none focus:outline-orange-500 focus:border-orange-500 cursor-pointer"
+                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-xs appearance-none focus:outline-accent-500 focus:border-accent-500 cursor-pointer"
                     >
                       {products.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.name} ({p.sku} - {p.barcode})
+                          {p.name} ({p.sku} - {primaryBarcode(p)})
                         </option>
                       ))}
                     </select>
@@ -365,7 +366,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
                       onClick={() => setLabelSize(size.id as BarcodeLabelSize)}
                       className={`p-2 rounded-lg border text-left transition-colors cursor-pointer ${
                         labelSize === size.id
-                          ? 'bg-orange-600/15 border-orange-500 text-white'
+                          ? 'bg-accent-600/15 border-accent-500 text-white'
                           : 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:bg-slate-800'
                       }`}
                     >
@@ -385,7 +386,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setCopies(Math.max(1, currentStock))}
-                    className="text-[11px] font-semibold text-orange-400 hover:text-orange-300 hover:underline cursor-pointer"
+                    className="text-[11px] font-semibold text-accent-400 hover:text-accent-300 hover:underline cursor-pointer"
                   >
                     Match Stock ({currentStock} in {currentOutlet?.name || 'store'})
                   </button>
@@ -424,7 +425,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
                         onClick={() => setCopies(num)}
                         className={`px-2 py-1 rounded text-[11px] font-bold transition-colors cursor-pointer ${
                           copies === num
-                            ? 'bg-orange-500 text-white'
+                            ? 'bg-accent-500 text-white'
                             : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
                         }`}
                       >
@@ -440,7 +441,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
                       type="checkbox"
                       checked={printAllSelected}
                       onChange={(e) => setPrintAllSelected(e.target.checked)}
-                      className="accent-orange-500 rounded"
+                      className="accent-accent-500 rounded"
                     />
                     <span>Print for all {products.length} products in list ({copies} each)</span>
                   </label>
@@ -458,7 +459,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
                       type="checkbox"
                       checked={showStoreName}
                       onChange={(e) => setShowStoreName(e.target.checked)}
-                      className="accent-orange-500"
+                      className="accent-accent-500"
                     />
                     <span>Store / Brand</span>
                   </label>
@@ -468,7 +469,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
                       type="checkbox"
                       checked={showProductName}
                       onChange={(e) => setShowProductName(e.target.checked)}
-                      className="accent-orange-500"
+                      className="accent-accent-500"
                     />
                     <span>Product Title</span>
                   </label>
@@ -478,7 +479,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
                       type="checkbox"
                       checked={showPrice}
                       onChange={(e) => setShowPrice(e.target.checked)}
-                      className="accent-orange-500"
+                      className="accent-accent-500"
                     />
                     <span>Price (GH₵)</span>
                   </label>
@@ -488,7 +489,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
                       type="checkbox"
                       checked={showUnit}
                       onChange={(e) => setShowUnit(e.target.checked)}
-                      className="accent-orange-500"
+                      className="accent-accent-500"
                     />
                     <span>Unit (e.g. {selectedProduct.baseUnit})</span>
                   </label>
@@ -498,7 +499,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
                       type="checkbox"
                       checked={showSku}
                       onChange={(e) => setShowSku(e.target.checked)}
-                      className="accent-orange-500"
+                      className="accent-accent-500"
                     />
                     <span>SKU Code</span>
                   </label>
@@ -508,7 +509,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
                       type="checkbox"
                       checked={showBarcodeText}
                       onChange={(e) => setShowBarcodeText(e.target.checked)}
-                      className="accent-orange-500"
+                      className="accent-accent-500"
                     />
                     <span>Barcode Text</span>
                   </label>
@@ -528,7 +529,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
                       onClick={() => setBarcodeFormat(fmt)}
                       className={`flex-1 py-1.5 rounded-lg border text-xs font-bold transition-colors cursor-pointer ${
                         barcodeFormat === fmt
-                          ? 'bg-orange-600/20 border-orange-500 text-orange-300'
+                          ? 'bg-accent-600/20 border-accent-500 text-accent-300'
                           : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
                       }`}
                     >
@@ -565,7 +566,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
               {/* Preview Bar */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-800 text-xs">
                 <div className="flex items-center gap-2 text-slate-400">
-                  <Eye className="w-4 h-4 text-orange-400" />
+                  <Eye className="w-4 h-4 text-accent-400" />
                   <span className="font-semibold text-slate-200">Live Label Preview</span>
                   <span className="text-[11px] text-slate-500 font-mono">
                     ({dim.widthMm}mm × {dim.heightMm}mm)
@@ -581,7 +582,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
                         key={z}
                         onClick={() => setPreviewZoom(z)}
                         className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors cursor-pointer ${
-                          previewZoom === z ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-white'
+                          previewZoom === z ? 'bg-accent-600 text-white' : 'text-slate-400 hover:text-white'
                         }`}
                       >
                         {z}%
@@ -629,7 +630,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
                     {/* Barcode SVG */}
                     <div className="my-1 flex justify-center items-center">
                       <ProductBarcodeSvg
-                        value={selectedProduct.barcode}
+                        value={primaryBarcode(selectedProduct)}
                         format={barcodeFormat}
                         width={dim.barcodeWidth}
                         height={dim.barcodeHeight}
@@ -671,7 +672,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
                 <button
                   type="button"
                   onClick={handlePrint}
-                  className="flex items-center gap-1.5 bg-orange-600 hover:bg-orange-500 text-white font-bold px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                  className="flex items-center gap-1.5 bg-accent-600 hover:bg-accent-500 text-white font-bold px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5" />
                   <span>Send to Printer</span>
@@ -708,7 +709,7 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
               )}
               <div className="barcode-label-svg-wrap">
                 <ProductBarcodeSvg
-                  value={prod.barcode}
+                  value={primaryBarcode(prod)}
                   format={barcodeFormat}
                   width={dim.barcodeWidth}
                   height={dim.barcodeHeight}

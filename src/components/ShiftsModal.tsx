@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatMoney, roundMoney } from '../money';
 import { X, Wallet, DollarSign, CheckCircle2, AlertTriangle, Clock, Printer } from 'lucide-react';
 import { ShiftInfo, Outlet } from '../types';
 
@@ -9,17 +10,20 @@ interface ShiftsModalProps {
   onStartShift: (openingFloat: number) => void;
   onCloseShift: (countedCash: number, note?: string) => void;
   currentOutlet: Outlet;
+  /** FR-CASH-06: variance beyond this needs a written explanation (K-08). */
+  varianceExplainThreshold: number;
 }
 
 export const ShiftsModal: React.FC<ShiftsModalProps> = ({
   isOpen,
   onClose,
   shiftInfo,
+  varianceExplainThreshold,
   onStartShift,
   onCloseShift,
   currentOutlet,
 }) => {
-  const [openingFloat, setOpeningFloat] = useState<number>(200);
+  const [openingFloat, setOpeningFloat] = useState('');
   const [countedCash, setCountedCash] = useState<string>('');
   const [varianceNote, setVarianceNote] = useState<string>('');
   const [showVarianceResult, setShowVarianceResult] = useState<boolean>(false);
@@ -27,7 +31,10 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
   if (!isOpen) return null;
 
   const countedNum = parseFloat(countedCash) || 0;
-  const variance = countedNum - shiftInfo.expectedCash;
+  const variance = roundMoney(countedNum - shiftInfo.expectedCash);
+  // FR-CASH-06: an explanation is required only past the configured threshold.
+  const explanationRequired = Math.abs(variance) > varianceExplainThreshold;
+  const canFinalize = !explanationRequired || varianceNote.trim().length > 0;
 
   const handlePerformBlindCount = (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,6 +42,7 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
   };
 
   const handleFinalizeClose = () => {
+    if (!canFinalize) return;
     onCloseShift(countedNum, varianceNote);
     setShowVarianceResult(false);
     onClose();
@@ -52,7 +60,7 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
         {/* Header */}
         <div className="px-6 py-5 sm:px-8 bg-slate-900 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-accent-500/20 border border-accent-500/40 text-accent-400 flex items-center justify-center">
               <Wallet className="w-5 h-5" />
             </div>
             <div>
@@ -99,9 +107,11 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
                   <input
                     type="number"
                     step="any"
+                    required
                     value={openingFloat}
-                    onChange={(e) => setOpeningFloat(Number(e.target.value))}
-                    className="w-full pl-14 pr-4 py-3 text-xl font-black border border-slate-300 rounded-lg bg-white text-slate-900 focus:outline-orange-500"
+                    onChange={(e) => setOpeningFloat(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full pl-14 pr-4 py-3 text-xl font-black border border-slate-300 rounded-lg bg-white text-slate-900 focus:outline-accent-500"
                   />
                 </div>
                 <p className="text-xs text-slate-500">
@@ -111,10 +121,12 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
 
               <button
                 onClick={() => {
-                  onStartShift(openingFloat);
+                  const openingFloatValue = parseFloat(openingFloat);
+                  if (Number.isNaN(openingFloatValue)) return;
+                  onStartShift(openingFloatValue);
                   onClose();
                 }}
-                className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 rounded-lg shadow-xs transition-colors text-sm cursor-pointer"
+                className="w-full bg-accent-500 hover:bg-accent-600 text-white font-bold py-3.5 rounded-lg shadow-xs transition-colors text-sm cursor-pointer"
               >
                 Start Shift &amp; Unlock POS Terminal
               </button>
@@ -141,7 +153,7 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
                   value={countedCash}
                   onChange={(e) => setCountedCash(e.target.value)}
                   placeholder="0.00"
-                  className="w-full text-3xl font-black text-center py-3.5 border border-slate-300 rounded-lg focus:outline-orange-500 text-slate-900"
+                  className="w-full text-3xl font-black text-center py-3.5 border border-slate-300 rounded-lg focus:outline-accent-500 text-slate-900"
                 />
               </div>
 
@@ -185,14 +197,23 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
               {variance !== 0 && (
                 <div>
                   <label className="text-sm font-bold text-slate-800 block mb-1.5">
-                    Variance Explanation Note (Audit Required) *
+                    Variance explanation{' '}
+                    {explanationRequired ? (
+                      <span className="text-rose-600">
+                        (required — variance exceeds {formatMoney(varianceExplainThreshold)})
+                      </span>
+                    ) : (
+                      <span className="font-normal text-slate-500">
+                        (optional — within the {formatMoney(varianceExplainThreshold)} threshold)
+                      </span>
+                    )}
                   </label>
                   <textarea
                     rows={3}
                     value={varianceNote}
                     onChange={(e) => setVarianceNote(e.target.value)}
                     placeholder="Provide detailed explanation for cash drawer discrepancy..."
-                    className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:outline-orange-500"
+                    className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:outline-accent-500"
                   />
                 </div>
               )}
@@ -208,7 +229,9 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
                 <button
                   type="button"
                   onClick={handleFinalizeClose}
-                  className="sm:w-1/2 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-sm transition-colors cursor-pointer shadow-xs"
+                  disabled={!canFinalize}
+                  title={canFinalize ? undefined : 'A written explanation is required for this variance.'}
+                  className="sm:w-1/2 py-3 bg-red-600 hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-300 text-white rounded-lg font-bold text-sm transition-colors cursor-pointer shadow-xs"
                 >
                   Finalize &amp; Close Shift
                 </button>

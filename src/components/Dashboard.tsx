@@ -27,6 +27,7 @@ import {
 import { SalesPurchaseChart } from './SalesPurchaseChart';
 import { CustomerOverviewChart } from './CustomerOverviewChart';
 import { CompletedSale, Outlet, OutletId, Product, ShiftInfo, UserAccount } from '../types';
+import type { PermissionSet } from '../permissions';
 
 interface DashboardProps {
   products: Product[];
@@ -43,6 +44,7 @@ interface DashboardProps {
   onSelectTab: (tab: string) => void;
   accentColor?: string;
   isLoading?: boolean;
+  permissions: PermissionSet;
 }
 
 type DashboardScope = OutletId | 'all';
@@ -148,10 +150,10 @@ const TrendIndicator: React.FC<TrendIndicatorProps> = ({
 };
 
 const roleLabel: Record<UserAccount['role'], string> = {
-  super_admin: 'Owner view',
-  branch_manager: 'Manager view',
+  owner: 'Owner view',
+  manager: 'Manager view',
   cashier: 'Cashier view',
-  storekeeper: 'Manager view',
+  storekeeper: 'Storekeeper view',
 };
 
 const DashboardSkeleton = () => (
@@ -184,6 +186,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onSelectTab,
   accentColor = '#c55200',
   isLoading = false,
+  permissions,
 }) => {
   const [alertDismissed, setAlertDismissed] = useState(false);
   const [dateRangeOpen, setDateRangeOpen] = useState(false);
@@ -192,8 +195,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
     currentUser.outletId === 'all-outlets' ? 'all' : currentOutlet.id
   );
 
-  const isOwner = currentUser.role === 'super_admin';
-  const isCashier = currentUser.role === 'cashier';
+  const isOwner = permissions.has('outlet.view_all');
+  const isCashier = !permissions.has('report.view');
+  const canViewProfit = permissions.has('report.view_profit');
+  const canViewStockValue = permissions.has('price.view_cost');
   const greeting = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening';
   const activeOutlets = outlets.filter((outlet) => outlet.active !== false);
   const resolvedScope = isOwner ? dashboardScope : currentOutlet.id;
@@ -426,7 +431,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       label: 'Estimated profit',
       value: formatMoney(metrics.estimatedProfit),
       icon: TrendingUp,
-      show: !isCashier,
+      show: canViewProfit,
       trend: sevenDayTrends.profit,
       trendDetail: `${formatMoney(sevenDayTrends.last7dProfit)} (last 7 days) vs ${formatMoney(sevenDayTrends.prev7dProfit)} (previous 7 days)`,
     },
@@ -442,7 +447,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       label: 'Stock value',
       value: formatMoney(metrics.stockValue),
       icon: Layers,
-      show: !isCashier,
+      show: canViewStockValue,
       trend: sevenDayTrends.stockValue,
       trendDetail: 'Inventory valuation trend: last 7 days vs previous 7 days',
     },
@@ -514,7 +519,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <button
               type="button"
               onClick={onOpenShift}
-              className="px-5 py-3 rounded-xl bg-orange-500 text-white text-sm font-bold hover:bg-orange-600 flex items-center justify-center gap-2"
+              className="px-5 py-3 rounded-xl bg-accent-500 text-white text-sm font-bold hover:bg-accent-600 flex items-center justify-center gap-2"
             >
               <Clock className="w-4 h-4" />
               <span>Open shift</span>
@@ -531,7 +536,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <section className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 border border-orange-200 text-orange-700 px-3 py-1 text-xs font-bold">
+              <span className="inline-flex items-center gap-2 rounded-full bg-accent-50 border border-accent-200 text-accent-700 px-3 py-1 text-xs font-bold">
                 <UserCheck className="w-3.5 h-3.5" />
                 {roleLabel[currentUser.role]}
               </span>
@@ -547,7 +552,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <button
               type="button"
               onClick={shiftInfo.isOpen ? onOpenPos : onOpenShift}
-              className="px-6 py-4 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm flex items-center justify-center gap-2 shadow-xs"
+              className="px-6 py-4 rounded-2xl bg-accent-500 hover:bg-accent-600 text-white font-black text-sm flex items-center justify-center gap-2 shadow-xs"
             >
               <ShoppingBag className="w-5 h-5" />
               <span>{shiftInfo.isOpen ? 'Continue selling' : 'Open shift'}</span>
@@ -665,7 +670,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         setDateRange(range);
                         setDateRangeOpen(false);
                       }}
-                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 font-bold text-slate-600"
+                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-accent-50 hover:text-accent-700 font-bold text-slate-600"
                     >
                       {range}
                     </button>
@@ -701,7 +706,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <button
               type="button"
               onClick={onOpenGoodsReceipt}
-              className="px-3 py-2 rounded-xl bg-orange-500 text-white text-xs font-bold hover:bg-orange-600"
+              className="px-3 py-2 rounded-xl bg-accent-500 text-white text-xs font-bold hover:bg-accent-600"
             >
               Receive stock
             </button>
@@ -724,7 +729,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wide text-slate-300">{label}</span>
                 <div className="w-10 h-10 rounded-xl bg-white/8 border border-white/10 flex items-center justify-center">
-                  <Icon className="w-5 h-5 text-orange-300" />
+                  <Icon className="w-5 h-5 text-accent-300" />
                 </div>
               </div>
               <div className="mt-4 text-2xl font-black text-white font-mono">{value}</div>
@@ -810,7 +815,7 @@ const LowStockCard = ({ items, onViewAll }: { items: Product[]; onViewAll: () =>
         <AlertTriangle className="w-4 h-4 text-amber-600" />
         <span>Low stock list</span>
       </h3>
-      <button type="button" onClick={onViewAll} className="text-xs font-bold text-orange-600 hover:underline">
+      <button type="button" onClick={onViewAll} className="text-xs font-bold text-accent-600 hover:underline">
         View all
       </button>
     </div>
@@ -841,10 +846,10 @@ const RecentSalesCard = ({
   <div className="bg-white rounded-2xl border border-slate-200 p-5">
     <div className="flex items-center justify-between pb-4 border-b border-slate-100">
       <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
-        <FileText className="w-4 h-4 text-orange-600" />
+        <FileText className="w-4 h-4 text-accent-600" />
         <span>Recent sales</span>
       </h3>
-      <button type="button" onClick={() => onSelectTab('sales-history')} className="text-xs font-bold text-orange-600 hover:underline">
+      <button type="button" onClick={() => onSelectTab('sales-history')} className="text-xs font-bold text-accent-600 hover:underline">
         View all
       </button>
     </div>
@@ -876,10 +881,10 @@ const TopSellersCard = ({
   <div className="bg-white rounded-2xl border border-slate-200 p-5">
     <div className="flex items-center justify-between pb-4 border-b border-slate-100">
       <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
-        <ShoppingBag className="w-4 h-4 text-orange-600" />
+        <ShoppingBag className="w-4 h-4 text-accent-600" />
         <span>Top sellers</span>
       </h3>
-      <button type="button" onClick={() => onSelectTab('products')} className="text-xs font-bold text-orange-600 hover:underline">
+      <button type="button" onClick={() => onSelectTab('products')} className="text-xs font-bold text-accent-600 hover:underline">
         Products
       </button>
     </div>

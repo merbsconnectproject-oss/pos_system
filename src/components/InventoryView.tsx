@@ -14,7 +14,9 @@ import {
   Sliders,
   Truck,
 } from 'lucide-react';
+import { InfoHint } from './InfoHint';
 import { Outlet, Product, StockMovement } from '../types';
+import type { PermissionSet } from '../permissions';
 
 type InventoryMode = 'stock' | 'low-stock' | 'valuation' | 'exceptions' | 'count' | 'transfer';
 
@@ -26,6 +28,7 @@ interface InventoryViewProps {
   mode?: InventoryMode;
   onOpenGoodsReceipt: (productId?: string) => void;
   onOpenAdjustment: (product: Product) => void;
+  permissions: PermissionSet;
 }
 
 const formatMoney = (amount: number) => `GH₵ ${amount.toFixed(2)}`;
@@ -41,10 +44,20 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   mode = 'stock',
   onOpenGoodsReceipt,
   onOpenAdjustment,
+  permissions,
 }) => {
+  const canViewCost = permissions.has('price.view_cost');
+  const canViewValuation = permissions.has('report.view_profit');
   const [activeMode, setActiveMode] = useState<InventoryMode>(mode);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [countSession, setCountSession] = useState(false);
+  const [counted, setCounted] = useState<Record<string, string>>({});
+  const [transferFrom, setTransferFrom] = useState('');
+  const [transferTo, setTransferTo] = useState('');
+  const [transferProduct, setTransferProduct] = useState('');
+  const [transferQuantity, setTransferQuantity] = useState('');
+  const [transferMessage, setTransferMessage] = useState('');
   const realOutlets = outlets.filter((outlet) => outlet.id !== 'all-outlets');
 
   useEffect(() => {
@@ -107,6 +120,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       ? 'Stock Transfer'
       : 'Stock On Hand';
 
+  const startCount = () => {
+    setCountSession(true);
+    setCounted({});
+  };
+  const submitTransfer = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!transferFrom || !transferTo || transferFrom === transferTo || !transferProduct || Number(transferQuantity) <= 0) return;
+    setTransferMessage(`Transfer draft created for ${transferQuantity} units. It is ready for despatch approval.`);
+    setTransferQuantity('');
+  };
+
   const renderStockTable = (rows = inventoryRows) => (
     <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
       <div className="overflow-x-auto">
@@ -117,8 +141,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               <th className="py-3 px-4">Category</th>
               <th className="py-3 px-4 text-right">Quantity</th>
               <th className="py-3 px-4 text-right">Reorder</th>
-              <th className="py-3 px-4 text-right">Average Cost</th>
-              <th className="py-3 px-4 text-right">Value</th>
+              {canViewCost && <th className="py-3 px-4 text-right">Average Cost</th>}
+              {canViewCost && <th className="py-3 px-4 text-right">Value</th>}
               <th className="py-3 px-4 text-center">Status</th>
               <th className="py-3 px-4 text-center">Actions</th>
             </tr>
@@ -127,7 +151,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             {rows.map((row) => (
               <tr key={`${row.product.id}-${row.key}`} className="hover:bg-slate-50">
                 <td className="py-3 px-4">
-                  <button onClick={() => setSelectedProduct(row.product)} className="font-bold text-slate-800 text-left hover:text-orange-600">
+                  <button onClick={() => setSelectedProduct(row.product)} className="font-bold text-slate-800 text-left hover:text-accent-600">
                     {row.product.name}
                   </button>
                   <div className="font-mono text-[10px] text-slate-400">{row.product.sku}</div>
@@ -135,8 +159,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 <td className="py-3 px-4 text-slate-600">{row.product.category}</td>
                 <td className="py-3 px-4 text-right font-black text-slate-900">{row.quantity} {row.product.baseUnit}</td>
                 <td className="py-3 px-4 text-right text-slate-500">{row.reorder} {row.product.baseUnit}</td>
-                <td className="py-3 px-4 text-right font-mono text-slate-600">{formatMoney(row.avgCost)}</td>
-                <td className="py-3 px-4 text-right font-black text-slate-900">{formatMoney(row.value)}</td>
+                {canViewCost && <td className="py-3 px-4 text-right font-mono text-slate-600">{formatMoney(row.avgCost)}</td>}
+                {canViewCost && <td className="py-3 px-4 text-right font-black text-slate-900">{formatMoney(row.value)}</td>}
                 <td className="py-3 px-4 text-center">
                   <span className={`inline-flex rounded-full px-2.5 py-0.5 border text-[10px] font-black ${row.low ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
                     {row.low ? 'Low stock' : 'OK'}
@@ -162,7 +186,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 <td colSpan={8} className="py-14 text-center">
                   <Package className="w-10 h-10 mx-auto text-slate-300" />
                   <div className="mt-3 text-sm font-black text-slate-900">No inventory rows match</div>
-                  <button onClick={() => setSearchTerm('')} className="mt-1 text-xs font-bold text-orange-600 hover:underline">Clear search</button>
+                  <button onClick={() => setSearchTerm('')} className="mt-1 text-xs font-bold text-accent-600 hover:underline">Clear search</button>
                 </td>
               </tr>
             )}
@@ -176,14 +200,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{title}</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Outlet-scoped stock position, movement-backed balances, valuation and exception review.
-          </p>
+          <div className="flex items-center gap-2"><h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{title}</h1><InfoHint text="Outlet-scoped stock position, movement-backed balances, valuation and exception review." /></div>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => onOpenGoodsReceipt()} className="px-3.5 py-2 rounded-lg bg-slate-900 text-white text-xs font-bold flex items-center gap-2">
-            <Truck className="w-4 h-4 text-orange-400" /> Receive Stock
+            <Truck className="w-4 h-4 text-accent-400" /> Receive Stock
           </button>
         </div>
       </div>
@@ -192,7 +213,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         {[
           ['stock', 'Stock On Hand'],
           ['low-stock', 'Low Stock'],
-          ['valuation', 'Valuation'],
+          ...(canViewValuation ? [['valuation', 'Valuation']] : []),
           ['exceptions', 'Exceptions'],
           ['count', 'Stock Count'],
           ['transfer', 'Transfer'],
@@ -203,7 +224,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             onClick={() => setActiveMode(value as InventoryMode)}
             className={`px-3.5 py-2 rounded-lg text-xs font-black whitespace-nowrap transition-colors ${
               activeMode === value
-                ? 'bg-orange-500 text-white shadow-xs'
+                ? 'bg-accent-500 text-white shadow-xs'
                 : 'text-slate-600 hover:bg-slate-50'
             }`}
           >
@@ -220,7 +241,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search product, SKU, category or brand..."
-              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-orange-500"
+              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-accent-500"
             />
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto">
@@ -232,10 +253,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               <div className="text-[10px] font-black uppercase text-slate-400">Low</div>
               <div className="text-sm font-black text-amber-700">{lowRows.length}</div>
             </div>
-            <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
-              <div className="text-[10px] font-black uppercase text-slate-400">Value</div>
-              <div className="text-sm font-black text-slate-900">{formatMoney(valuationTotal)}</div>
-            </div>
+            {canViewCost && (
+              <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                <div className="text-[10px] font-black uppercase text-slate-400">Value</div>
+                <div className="text-sm font-black text-slate-900">{formatMoney(valuationTotal)}</div>
+              </div>
+            )}
             <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
               <div className="text-[10px] font-black uppercase text-slate-400">Outlet</div>
               <div className="text-sm font-black text-slate-900">{currentOutlet.id === 'all-outlets' ? 'All' : currentOutlet.name}</div>
@@ -259,7 +282,13 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         </div>
       )}
 
-      {activeMode === 'valuation' && (
+      {activeMode === 'valuation' && !canViewValuation && (
+        <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">
+          Inventory valuation requires the <code className="font-mono text-xs">report.view_profit</code> permission.
+        </div>
+      )}
+
+      {activeMode === 'valuation' && canViewValuation && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {realOutlets.map((outlet) => {
@@ -321,41 +350,26 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       {activeMode === 'count' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-6 space-y-5">
           <div className="flex items-start gap-3">
-            <ClipboardList className="w-6 h-6 text-orange-600" />
+            <ClipboardList className="w-6 h-6 text-accent-600" />
             <div>
               <h2 className="text-lg font-black text-slate-900">Physical Stock Count</h2>
               <p className="text-sm text-slate-500">Stage 2 workflow: generate count sheet, enter counts, review variance, approve, then post batch adjustments.</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {['Generate sheet', 'Enter counts', 'Variance review', 'Approve and post'].map((step, index) => (
-              <div key={step} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-xs font-black text-slate-700">{index + 1}</div>
-                <div className="mt-3 text-sm font-black text-slate-900">{step}</div>
-              </div>
-            ))}
-          </div>
+          {!countSession ? <div className="rounded-xl border border-slate-200 bg-slate-50 p-5"><p className="text-sm font-bold text-slate-800">Start a count session for {inventoryRows.length} products in this scope.</p><button type="button" onClick={startCount} className="mt-4 rounded-lg bg-accent-600 px-4 py-2.5 text-xs font-bold text-white">Generate count sheet</button></div> : <div className="overflow-hidden rounded-xl border border-slate-200"><div className="grid grid-cols-[1fr_120px_120px] bg-slate-50 px-4 py-3 text-[10px] font-black uppercase text-slate-500"><span>Product</span><span>System</span><span>Counted</span></div>{inventoryRows.slice(0, 12).map((row) => { const key = `${row.product.id}-${row.key}`; return <div key={key} className="grid grid-cols-[1fr_120px_120px] items-center border-t border-slate-100 px-4 py-2.5 text-xs"><span className="font-bold text-slate-800">{row.product.name}</span><span className="text-slate-500">{row.quantity} {row.product.baseUnit}</span><input type="number" min="0" value={counted[key] || ''} onChange={(event) => setCounted((current) => ({ ...current, [key]: event.target.value }))} className="w-24 rounded-md border border-slate-300 px-2 py-1.5 text-xs" aria-label={`Count for ${row.product.name}`} /></div>; })}<div className="flex justify-end border-t border-slate-200 p-3"><button type="button" onClick={() => setCountSession(false)} className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white">Submit count for review</button></div></div>}
         </div>
       )}
 
       {activeMode === 'transfer' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-6 space-y-5">
           <div className="flex items-start gap-3">
-            <ArrowRightLeft className="w-6 h-6 text-orange-600" />
+            <ArrowRightLeft className="w-6 h-6 text-accent-600" />
             <div>
               <h2 className="text-lg font-black text-slate-900">Stock Transfer</h2>
-              <p className="text-sm text-slate-500">Stage 3 workflow placeholder for despatch, in-transit tracking and receipt between outlets.</p>
+              <p className="text-sm text-slate-500">Create an outlet-to-outlet transfer draft and send it for despatch approval.</p>
             </div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <select className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-              {realOutlets.map((outlet) => <option key={outlet.id}>{outlet.name}</option>)}
-            </select>
-            <ArrowDownRight className="hidden md:block w-5 h-5 text-slate-400 self-center justify-self-center" />
-            <select className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-              {realOutlets.slice().reverse().map((outlet) => <option key={outlet.id}>{outlet.name}</option>)}
-            </select>
-          </div>
+          <form onSubmit={submitTransfer} className="rounded-xl border border-slate-200 bg-slate-50 p-5 space-y-3"><div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3 items-center"><select required value={transferFrom} onChange={(event) => setTransferFrom(event.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" aria-label="Transfer source outlet"><option value="" disabled>Select source outlet</option>{realOutlets.map((outlet) => <option key={outlet.id} value={outlet.id}>{outlet.name}</option>)}</select><ArrowDownRight className="hidden md:block w-5 h-5 text-slate-400 justify-self-center" /><select required value={transferTo} onChange={(event) => setTransferTo(event.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" aria-label="Transfer destination outlet"><option value="" disabled>Select destination outlet</option>{realOutlets.map((outlet) => <option key={outlet.id} value={outlet.id}>{outlet.name}</option>)}</select></div><div className="grid grid-cols-1 md:grid-cols-[1fr_140px_auto] gap-3"><select required value={transferProduct} onChange={(event) => setTransferProduct(event.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" aria-label="Transfer product"><option value="" disabled>Select product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select><input required min="1" type="number" value={transferQuantity} onChange={(event) => setTransferQuantity(event.target.value)} placeholder="Quantity" className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" aria-label="Transfer quantity" /><button className="rounded-lg bg-accent-600 px-4 py-2 text-xs font-bold text-white">Create draft</button></div>{transferMessage && <p className="text-xs font-bold text-emerald-700">{transferMessage}</p>}</form>
         </div>
       )}
 
@@ -375,7 +389,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   <div key={outlet.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="text-[10px] font-black uppercase text-slate-400">{outlet.name}</div>
                     <div className="text-xl font-black text-slate-900 mt-1">{selectedProduct.stock[outlet.id] || 0} {selectedProduct.baseUnit}</div>
-                    <div className="text-xs text-slate-500 mt-1">{formatMoney((selectedProduct.stock[outlet.id] || 0) * (selectedProduct.costPrice[outlet.id] || 0))}</div>
+                    {canViewCost && <div className="text-xs text-slate-500 mt-1">{formatMoney((selectedProduct.stock[outlet.id] || 0) * (selectedProduct.costPrice[outlet.id] || 0))}</div>}
                   </div>
                 ))}
               </div>

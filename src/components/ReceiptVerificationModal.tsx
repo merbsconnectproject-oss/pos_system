@@ -172,18 +172,13 @@ export const ReceiptVerificationModal: React.FC<ReceiptVerificationModalProps> =
                 <span>Subtotal</span>
                 <span>GH₵ {sale.subtotal.toFixed(2)}</span>
               </div>
-              {sale.discount > 0 && (
+              {sale.discountTotal > 0 && (
                 <div className="flex justify-between text-emerald-600">
                   <span>Discount</span>
-                  <span>-GH₵ {sale.discount.toFixed(2)}</span>
+                  <span>-GH₵ {sale.discountTotal.toFixed(2)}</span>
                 </div>
               )}
-              {sale.tax > 0 && (
-                <div className="flex justify-between text-slate-600">
-                  <span>VAT / Tax</span>
-                  <span>GH₵ {sale.tax.toFixed(2)}</span>
-                </div>
-              )}
+              {/* AS-1: VAT is out of Stage 1 scope — receipts show prices as charged, no tax line. */}
               <div className="flex justify-between text-sm font-black text-slate-900 pt-1 border-t border-slate-200">
                 <span>TOTAL PAID</span>
                 <span className="text-emerald-700 font-mono">

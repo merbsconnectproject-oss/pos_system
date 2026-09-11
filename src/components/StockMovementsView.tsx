@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Layers, Search, Filter, ArrowDownRight, ArrowUpRight, AlertCircle, FileText } from 'lucide-react';
 import { StockMovement, Outlet } from '../types';
+import { InfoHint } from './InfoHint';
 
 interface StockMovementsViewProps {
   movements: StockMovement[];
@@ -80,14 +81,11 @@ export const StockMovementsView: React.FC<StockMovementsViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-slate-800 tracking-tight">Stock Movements Log</h1>
+            <h1 className="text-2xl font-black text-slate-800 tracking-tight">Stock Movements Log</h1><InfoHint text="Immutable inventory ledger of receipts, sales, returns, transfers, adjustments, and losses." />
             <span className="bg-slate-100 text-slate-700 text-[11px] font-bold px-2 py-0.5 rounded-full">
               Immutable Audit Trail
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Every inventory change is recorded as an immutable ledger movement.
-          </p>
         </div>
       </div>
 
@@ -100,7 +98,7 @@ export const StockMovementsView: React.FC<StockMovementsViewProps> = ({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search product, ref #, or reason..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-orange-500"
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-accent-500"
           />
         </div>
 

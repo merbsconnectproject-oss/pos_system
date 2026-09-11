@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Briefcase, CalendarClock, CreditCard, Edit2, Phone, Plus, Search, Users, X } from 'lucide-react';
 import { CompletedSale, Customer, Outlet } from '../types';
+import { InfoHint } from './InfoHint';
 
 type CustomerMode = 'list' | 'purchases' | 'types' | 'credit';
 
@@ -31,7 +32,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
     phone: '',
     email: '',
     address: '',
-    customerType: 'retail' as Customer['customerType'],
+    customerType: '' as Customer['customerType'] | '',
     notes: '',
   });
 
@@ -46,7 +47,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
 
   const startCreate = () => {
     setEditingCustomer(null);
-    setForm({ name: '', phone: '', email: '', address: '', customerType: 'retail', notes: '' });
+    setForm({ name: '', phone: '', email: '', address: '', customerType: '', notes: '' });
     setModalOpen(true);
   };
 
@@ -65,6 +66,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
 
   const submitCustomer = (event: React.FormEvent) => {
     event.preventDefault();
+    if (!form.customerType) return;
     const customer: Customer = {
       id: editingCustomer?.id || `cust-${Date.now()}`,
       name: form.name.trim(),
@@ -101,8 +103,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
     <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Customers</h1>
-          <p className="text-sm text-slate-500 mt-1">Shared customer directory, trade pricing, purchase history and credit-account readiness.</p>
+          <div className="flex items-center gap-2"><h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Customers</h1><InfoHint text="Shared customer directory, trade pricing, purchase history and credit-account readiness." /></div>
         </div>
         <button onClick={startCreate} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-xs self-start lg:self-auto">
           <Plus className="w-4 h-4" /> Add Customer
@@ -116,7 +117,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
           ['types', 'Customer Types'],
           ['credit', 'Credit Accounts'],
         ].map(([value, label]) => (
-          <button key={value} onClick={() => setActiveMode(value as CustomerMode)} className={`px-3.5 py-2 rounded-lg text-xs font-black whitespace-nowrap ${activeMode === value ? 'bg-orange-500 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-50'}`}>
+          <button key={value} onClick={() => setActiveMode(value as CustomerMode)} className={`px-3.5 py-2 rounded-lg text-xs font-black whitespace-nowrap ${activeMode === value ? 'bg-accent-500 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-50'}`}>
             {label}
           </button>
         ))}
@@ -127,7 +128,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
           <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex items-center justify-between gap-3">
             <div className="relative w-full sm:w-96">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search by name, phone, or customer type..." className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-orange-500" />
+              <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search by name, phone, or customer type..." className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-accent-500" />
             </div>
             <div className="hidden sm:block text-xs text-slate-500 font-bold">{filtered.length} customers</div>
           </div>
@@ -150,7 +151,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                   {filtered.map((customer) => (
                     <tr key={customer.id} className="hover:bg-slate-50">
                       <td className="py-3 px-4">
-                        <button onClick={() => setSelectedCustomer(customer)} className="font-bold text-slate-900 hover:text-orange-600">{customer.name}</button>
+                        <button onClick={() => setSelectedCustomer(customer)} className="font-bold text-slate-900 hover:text-accent-600">{customer.name}</button>
                         <div className="text-[10px] text-slate-400 truncate max-w-xs">{customer.notes || 'No notes recorded'}</div>
                       </td>
                       <td className="py-3 px-4 font-mono text-slate-600">{customer.phone}</td>
@@ -172,7 +173,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                         <Users className="w-12 h-12 mx-auto text-slate-300" />
                         <h3 className="mt-3 font-black text-slate-900">No registered customers</h3>
                         <p className="text-sm text-slate-500 mt-1">Walk-in sales can still complete without a customer attached.</p>
-                        <button onClick={startCreate} className="mt-2 text-sm font-bold text-orange-600 hover:underline">Add customer</button>
+                        <button onClick={startCreate} className="mt-2 text-sm font-bold text-accent-600 hover:underline">Add customer</button>
                       </td>
                     </tr>
                   )}
@@ -186,7 +187,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
       {activeMode === 'purchases' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="p-5 border-b border-slate-200 flex items-center gap-3">
-            <CalendarClock className="w-5 h-5 text-orange-600" />
+            <CalendarClock className="w-5 h-5 text-accent-600" />
             <div>
               <h2 className="text-sm font-black text-slate-900">Purchase History</h2>
               <p className="text-xs text-slate-500">Sales linked to registered customers across outlets.</p>
@@ -213,7 +214,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {typeRows.map(([type, label, priceLevel, discount]) => (
             <div key={type} className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
-              <Briefcase className="w-5 h-5 text-orange-600" />
+              <Briefcase className="w-5 h-5 text-accent-600" />
               <h3 className="mt-3 text-sm font-black text-slate-900">{label}</h3>
               <p className="text-xs text-slate-500 mt-1">{priceLevel}</p>
               <div className="mt-4 text-2xl font-black text-slate-900">{discount}%</div>
@@ -226,7 +227,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
       {activeMode === 'credit' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-6">
           <div className="flex items-start gap-3">
-            <CreditCard className="w-6 h-6 text-orange-600" />
+            <CreditCard className="w-6 h-6 text-accent-600" />
             <div>
               <h2 className="text-lg font-black text-slate-900">Credit Accounts</h2>
               <p className="text-sm text-slate-500">Stage 2 workspace for limits, balances, ageing, statements and part payments.</p>
@@ -284,7 +285,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
           <div onClick={(event) => event.stopPropagation()} className="bg-white rounded-xl w-full max-w-2xl shadow-2xl border border-slate-300 overflow-hidden animate-modal-card flex flex-col max-h-[92vh]">
             <div className="bg-slate-900 text-white px-6 py-5 sm:px-8 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center"><Users className="w-5 h-5" /></div>
+                <div className="w-10 h-10 rounded-lg bg-accent-500/20 border border-accent-500/40 text-accent-400 flex items-center justify-center"><Users className="w-5 h-5" /></div>
                 <div>
                   <h3 className="font-black text-xl text-white">{editingCustomer ? 'Edit Customer' : 'Add Customer'}</h3>
                   <p className="text-xs text-slate-400 mt-0.5">Customer profile, phone lookup key and price-level mapping.</p>
@@ -294,16 +295,16 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
             </div>
             <form onSubmit={submitCustomer} className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <label className="text-sm font-bold text-slate-800">Name or Company *<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-orange-500" /></label>
-                <label className="text-sm font-bold text-slate-800">Phone *<input required value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-orange-500" /></label>
-                <label className="text-sm font-bold text-slate-800">Email<input value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-orange-500" /></label>
-                <label className="text-sm font-bold text-slate-800">Type<select value={form.customerType} onChange={(event) => setForm({ ...form, customerType: event.target.value as Customer['customerType'] })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white focus:outline-orange-500"><option value="retail">Retail</option><option value="electrician">Electrician</option><option value="contractor">Contractor</option><option value="company">Company</option></select></label>
+                <label className="text-sm font-bold text-slate-800">Name or Company *<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-accent-500" /></label>
+                <label className="text-sm font-bold text-slate-800">Phone *<input required value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-accent-500" /></label>
+                <label className="text-sm font-bold text-slate-800">Email<input value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-accent-500" /></label>
+                <label className="text-sm font-bold text-slate-800">Type<select required value={form.customerType} onChange={(event) => setForm({ ...form, customerType: event.target.value as Customer['customerType'] | '' })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white focus:outline-accent-500"><option value="" disabled>Select customer type</option><option value="retail">Retail</option><option value="electrician">Electrician</option><option value="contractor">Contractor</option><option value="company">Company</option></select></label>
               </div>
-              <label className="text-sm font-bold text-slate-800 block">Address<input value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-orange-500" /></label>
-              <label className="text-sm font-bold text-slate-800 block">Notes<textarea rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-orange-500" /></label>
+              <label className="text-sm font-bold text-slate-800 block">Address<input value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-accent-500" /></label>
+              <label className="text-sm font-bold text-slate-800 block">Notes<textarea rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-accent-500" /></label>
               <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-slate-200">
                 <button type="button" onClick={() => setModalOpen(false)} className="sm:w-1/3 py-3 rounded-lg border border-slate-300 font-bold text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-                <button type="submit" className="sm:w-2/3 py-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm shadow-xs">{editingCustomer ? 'Save Changes' : 'Save Customer'}</button>
+                <button type="submit" className="sm:w-2/3 py-3 rounded-lg bg-accent-500 hover:bg-accent-600 text-white font-bold text-sm shadow-xs">{editingCustomer ? 'Save Changes' : 'Save Customer'}</button>
               </div>
             </form>
           </div>

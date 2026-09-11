@@ -34,52 +34,47 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
     (s) => !s.outletId || s.outletId === 'all-outlets' || s.outletId === outletId
   );
 
-  const [selectedProductId, setSelectedProductId] = useState<string>(storeProducts[0]?.id || products[0]?.id || '');
-  const [selectedSupplierId, setSelectedSupplierId] = useState<string>(storeSuppliers[0]?.id || suppliers[0]?.id || '');
-  const [invoiceRef, setInvoiceRef] = useState(
-    outletId === 'inco-hardware'
-      ? 'GRN-INC-' + Date.now().toString().slice(-4)
-      : 'GRN-APX-' + Date.now().toString().slice(-4)
-  );
-  const [qtyReceived, setQtyReceived] = useState<number>(50);
-  const [unitCost, setUnitCost] = useState<number>(0);
+  const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+  const [invoiceRef, setInvoiceRef] = useState('');
+  const [qtyReceived, setQtyReceived] = useState('');
+  const [unitCost, setUnitCost] = useState('');
 
   if (!isOpen) return null;
 
-  const product = storeProducts.find((p) => p.id === selectedProductId) || storeProducts[0] || products[0];
+  const product = storeProducts.find((p) => p.id === selectedProductId);
   const currentStock = product ? product.stock[outletId] || 0 : 0;
   const currentAvgCost = product ? product.costPrice[outletId] || product.retailPrice * 0.7 : 0;
-
-  // Initialize unit cost if 0
-  const activeUnitCost = unitCost > 0 ? unitCost : currentAvgCost;
+  const qtyReceivedNum = parseFloat(qtyReceived) || 0;
+  const activeUnitCost = parseFloat(unitCost) || 0;
 
   // PRD BR-4: Weighted Average Costing Formula
   // new_avg = ((qty_on_hand * current_avg) + (qty_received * unit_cost)) / (qty_on_hand + qty_received)
-  const totalQtyAfter = Math.max(1, currentStock + qtyReceived);
+  const totalQtyAfter = Math.max(1, currentStock + qtyReceivedNum);
   const weightedAvgCost =
-    ((Math.max(0, currentStock) * currentAvgCost) + (qtyReceived * activeUnitCost)) / totalQtyAfter;
+    ((Math.max(0, currentStock) * currentAvgCost) + (qtyReceivedNum * activeUnitCost)) / totalQtyAfter;
 
   const handleReceive = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!product || qtyReceived <= 0) return;
+    if (!product || !selectedSupplierId || !invoiceRef.trim() || qtyReceivedNum <= 0 || activeUnitCost <= 0) return;
 
     const movement: StockMovement = {
       id: `mvt-${Date.now()}`,
       timestamp: new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      outletId: outletId as 'inco-hardware' | 'apex-electricals',
+      outletId,
       productId: product.id,
       productName: product.name,
       type: 'RECEIPT',
-      quantity: qtyReceived,
+      quantity: qtyReceivedNum,
       previousStock: currentStock,
-      newStock: currentStock + qtyReceived,
+      newStock: currentStock + qtyReceivedNum,
       unitCost: activeUnitCost,
       referenceNumber: invoiceRef,
       reason: `Goods receipt from ${suppliers.find((s) => s.id === selectedSupplierId)?.name || 'Supplier'}`,
       user: 'Storekeeper (Yaw)',
     };
 
-    onConfirmReceipt(product.id, qtyReceived, activeUnitCost, Number(weightedAvgCost.toFixed(2)), movement);
+    onConfirmReceipt(product.id, qtyReceivedNum, activeUnitCost, Number(weightedAvgCost.toFixed(2)), movement);
     onClose();
   };
 
@@ -94,7 +89,7 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
       >
         <div className="bg-slate-900 text-white px-6 py-5 sm:px-8 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-accent-500/20 border border-accent-500/40 text-accent-400 flex items-center justify-center">
               <Truck className="w-5 h-5" />
             </div>
             <div>
@@ -115,10 +110,12 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
             <div>
               <label className="text-sm font-bold text-slate-800 block mb-1.5">Originating Supplier *</label>
               <select
+                required
                 value={selectedSupplierId}
                 onChange={(e) => setSelectedSupplierId(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white font-medium text-slate-800 focus:outline-orange-500"
+                className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white font-medium text-slate-800 focus:outline-accent-500"
               >
+                <option value="" disabled>Select supplier</option>
                 {storeSuppliers.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name} ({s.paymentTerms})
@@ -135,7 +132,7 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
                 value={invoiceRef}
                 onChange={(e) => setInvoiceRef(e.target.value)}
                 placeholder="e.g. INV-2025-0891"
-                className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono text-slate-800 focus:outline-orange-500 focus:ring-2 focus:ring-orange-500/20"
+                className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono text-slate-800 focus:outline-accent-500 focus:ring-2 focus:ring-accent-500/20"
               />
             </div>
           </div>
@@ -143,13 +140,15 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
           <div>
             <label className="text-sm font-bold text-slate-800 block mb-1.5">Catalogue Item Received *</label>
             <select
+              required
               value={selectedProductId}
               onChange={(e) => {
                 setSelectedProductId(e.target.value);
-                setUnitCost(0);
+                setUnitCost('');
               }}
-              className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white font-medium text-slate-800 focus:outline-orange-500"
+              className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white font-medium text-slate-800 focus:outline-accent-500"
             >
+              <option value="" disabled>Select product</option>
               {storeProducts.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} [{p.sku}] — Current Stock: {p.stock[outletId] || 0} {p.baseUnit}
@@ -169,8 +168,8 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
                 min="0.001"
                 required
                 value={qtyReceived}
-                onChange={(e) => setQtyReceived(parseFloat(e.target.value) || 0)}
-                className="w-full text-base font-black border border-slate-300 rounded-lg px-3.5 py-2.5 text-slate-900 focus:outline-orange-500"
+                onChange={(e) => setQtyReceived(e.target.value)}
+                className="w-full text-base font-black border border-slate-300 rounded-lg px-3.5 py-2.5 text-slate-900 focus:outline-accent-500"
               />
             </div>
 
@@ -183,9 +182,9 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
                 step="any"
                 min="0.01"
                 required
-                value={activeUnitCost}
-                onChange={(e) => setUnitCost(parseFloat(e.target.value) || 0)}
-                className="w-full text-base font-black border border-slate-300 rounded-lg px-3.5 py-2.5 text-slate-900 focus:outline-orange-500"
+                value={unitCost}
+                onChange={(e) => setUnitCost(e.target.value)}
+                className="w-full text-base font-black border border-slate-300 rounded-lg px-3.5 py-2.5 text-slate-900 focus:outline-accent-500"
               />
             </div>
           </div>
@@ -193,7 +192,7 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
           {/* PRD BR-4 Weighted Average Cost Calculation Box */}
           <div className="bg-slate-50 border border-slate-300 rounded-xl p-5 space-y-3">
             <div className="flex items-center gap-2 text-slate-800 font-black text-sm">
-              <Calculator className="w-5 h-5 text-orange-500" />
+              <Calculator className="w-5 h-5 text-accent-500" />
               <span>Weighted Average Costing Valuation (AVCO)</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs pt-1">
@@ -205,14 +204,14 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
                 <span className="text-slate-500 block text-[11px]">New Unit Delivery Cost:</span>
                 <strong className="text-slate-900 text-sm">GH₵ {activeUnitCost.toFixed(2)}</strong>
               </div>
-              <div className="bg-orange-50/80 p-3 rounded-lg border border-orange-200">
-                <span className="text-orange-700 block text-[11px] font-medium">Recomputed Moving Avg:</span>
-                <strong className="text-orange-700 font-black text-base">GH₵ {weightedAvgCost.toFixed(2)}</strong>
+              <div className="bg-accent-50/80 p-3 rounded-lg border border-accent-200">
+                <span className="text-accent-700 block text-[11px] font-medium">Recomputed Moving Avg:</span>
+                <strong className="text-accent-700 font-black text-base">GH₵ {weightedAvgCost.toFixed(2)}</strong>
               </div>
             </div>
             <div className="text-xs text-slate-500 border-t border-slate-200 pt-2.5 flex items-center justify-between">
               <span>On-hand stock at {currentOutlet.name}</span>
-              <span className="font-bold text-slate-700">{currentStock} → {currentStock + qtyReceived} {product?.baseUnit}</span>
+              <span className="font-bold text-slate-700">{currentStock} → {currentStock + qtyReceivedNum} {product?.baseUnit || ''}</span>
             </div>
           </div>
 
@@ -226,7 +225,7 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
             </button>
             <button
               type="submit"
-              className="sm:w-2/3 py-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-colors"
+              className="sm:w-2/3 py-3 rounded-lg bg-accent-500 hover:bg-accent-600 text-white font-bold text-sm shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-colors"
             >
               <CheckCircle2 className="w-5 h-5" />
               <span>Post Goods Receipt to Inventory</span>

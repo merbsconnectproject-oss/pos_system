@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
+import { InfoHint } from './InfoHint';
 import {
   Users,
   ShieldCheck,
   Key,
   Printer,
+  SlidersHorizontal,
   Palette,
   Database,
   Store,
@@ -43,7 +45,16 @@ import {
   Product,
   CompletedSale,
 } from '../types';
+import {
+  PERMISSION_CATALOGUE,
+  PERMISSION_GROUPS,
+  ROLE_LABELS,
+  ROLE_ORDER,
+  type PermissionCode,
+  type PermissionSet,
+} from '../permissions';
 import { exportToCsv } from '../utils/csvExport';
+import { ACCENT_PRESETS, DEFAULT_ACCENT, isBlue } from '../accent';
 
 interface SettingsViewProps {
   currentOutlet: Outlet;
@@ -62,6 +73,7 @@ interface SettingsViewProps {
   sales: CompletedSale[];
   accentColor: string;
   onChangeAccent: (color: string) => void;
+  permissions: PermissionSet;
 }
 
 type SettingsTab =
@@ -70,6 +82,7 @@ type SettingsTab =
   | 'users'
   | 'permissions'
   | 'security'
+  | 'thresholds'
   | 'printers'
   | 'appearance'
   | 'backup';
@@ -79,15 +92,18 @@ const SETTINGS_TABS: {
   label: string;
   hint: string;
   icon: React.ComponentType<{ className?: string }>;
+  /** The permission that opens this section. L-09: without it the tab is absent. */
+  requires: PermissionCode;
 }[] = [
-  { key: 'general', label: 'Store Profile', hint: 'Legal identity, TIN, currency & rounding', icon: Building },
-  { key: 'outlets', label: 'Stores & Branches', hint: 'Register branches & assign staff', icon: Store },
-  { key: 'users', label: 'User Accounts', hint: 'Staff credentials & branches', icon: Users },
-  { key: 'permissions', label: 'Roles & Permissions', hint: 'RBAC matrix & capabilities', icon: ShieldCheck },
-  { key: 'security', label: 'Manager PIN', hint: 'Floor price & void override policies', icon: Key },
-  { key: 'printers', label: 'Hardware & Receipts', hint: '80mm / 58mm thermal templates', icon: Printer },
-  { key: 'appearance', label: 'Theme', hint: 'Accent colour & visual palette', icon: Palette },
-  { key: 'backup', label: 'Backup', hint: 'JSON archive & accounting CSV exports', icon: Database },
+  { key: 'general', label: 'Store Profile', hint: 'Legal identity, TIN, currency & rounding', icon: Building, requires: 'settings.general' },
+  { key: 'outlets', label: 'Stores & Branches', hint: 'Register branches & assign staff', icon: Store, requires: 'settings.general' },
+  { key: 'users', label: 'User Accounts', hint: 'Staff credentials & branches', icon: Users, requires: 'user.manage' },
+  { key: 'permissions', label: 'Roles & Permissions', hint: 'RBAC matrix & capabilities', icon: ShieldCheck, requires: 'user.manage' },
+  { key: 'security', label: 'Manager PIN', hint: 'Floor price & void override policies', icon: Key, requires: 'settings.general' },
+  { key: 'thresholds', label: 'Thresholds', hint: 'Idle lock, approval & variance limits', icon: SlidersHorizontal, requires: 'settings.general' },
+  { key: 'printers', label: 'Hardware & Receipts', hint: '80mm / 58mm thermal templates', icon: Printer, requires: 'settings.terminal' },
+  { key: 'appearance', label: 'Theme', hint: 'Accent colour & visual palette', icon: Palette, requires: 'settings.appearance' },
+  { key: 'backup', label: 'Backup', hint: 'JSON archive & accounting CSV exports', icon: Database, requires: 'settings.general' },
 ];
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -107,8 +123,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   sales,
   accentColor,
   onChangeAccent,
+  permissions,
 }) => {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  // Only the sections this user may open exist at all (L-09).
+  const visibleTabs = SETTINGS_TABS.filter((item) => permissions.has(item.requires));
+  const canManageUsers = permissions.has('user.manage');
+  const [thresholdDraft, setThresholdDraft] = useState(generalSettings.thresholds);
+  const [activeTab, setActiveTab] = useState<SettingsTab>(
+    () => SETTINGS_TABS.find((item) => permissions.has(item.requires))?.key || 'appearance',
+  );
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // General Store Settings State
@@ -155,9 +178,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [userUsername, setUserUsername] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [userPhone, setUserPhone] = useState('');
-  const [userRole, setUserRole] = useState<UserRole>('cashier');
-  const [userOutlet, setUserOutlet] = useState<OutletId>('inco-hardware');
-  const [userPin, setUserPin] = useState('1234');
+  const [userRole, setUserRole] = useState<UserRole | ''>('');
+  const [userOutlet, setUserOutlet] = useState<OutletId | ''>('');
+  const [userPin, setUserPin] = useState('');
   const [userMustChangePassword, setUserMustChangePassword] = useState(false);
 
   // Password Reset Workflow State
@@ -463,10 +486,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setUserUsername('');
     setUserEmail('');
     setUserPhone('');
-    setUserRole('cashier');
-    setUserOutlet(currentOutlet.id === 'all-outlets' ? outlets[0]?.id || 'all-outlets' : currentOutlet.id);
-    setUserPin('1234');
-    setUserMustChangePassword(true); // default new users to requiring password change on first login
+    setUserRole('');
+    setUserOutlet('');
+    setUserPin('');
+    setUserMustChangePassword(false);
     setIsUserModalOpen(true);
   };
 
@@ -655,8 +678,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const handleSaveUser = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userFullName.trim() || !userUsername.trim()) {
-      alert('Please fill in required fields (Name and Username).');
+    if (!userFullName.trim() || !userUsername.trim() || !userRole || !userOutlet) {
+      alert('Please fill in required fields (Name, Username, Role, and Store Branch).');
       return;
     }
     if (!/^\d{4}$/.test(userPin)) {
@@ -739,22 +762,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   // Role permissions handlers
-  const handleTogglePermission = (
-    roleKey: UserRole,
-    permKey: keyof RolePermissions['permissions']
-  ) => {
+  const handleTogglePermission = (roleKey: UserRole, code: PermissionCode) => {
+    // BR-16: permission changes cannot be self-applied.
+    if (roleKey === currentUser.role) return;
     setEditableRoles((prev) =>
       prev.map((r) => {
-        if (r.role === roleKey) {
-          return {
-            ...r,
-            permissions: {
-              ...r.permissions,
-              [permKey]: !r.permissions[permKey],
-            },
-          };
-        }
-        return r;
+        if (r.role !== roleKey) return r;
+        const granted = r.permissions.includes(code);
+        return {
+          ...r,
+          permissions: granted
+            ? r.permissions.filter((item) => item !== code)
+            : [...r.permissions, code],
+        };
       })
     );
   };
@@ -769,6 +789,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       details: `Saved permission matrix changes for role "${selectedRoleForEdit}"`,
     });
     showToast('Role permissions matrix saved successfully.');
+  };
+
+  const handleSaveThresholds = () => {
+    onUpdateGeneralSettings({ ...generalSettings, thresholds: thresholdDraft });
+    onAddAuditLog({
+      actor: currentUser.fullName,
+      action: 'UPDATE_THRESHOLDS',
+      entity: 'Operational thresholds',
+      outletName: currentOutlet.name,
+      details: `Idle lock ${thresholdDraft.idleLockMinutes}m · adjustment approval GH₵ ${thresholdDraft.adjustmentApprovalValue} · variance GH₵ ${thresholdDraft.cashVarianceExplain}`,
+    });
+    showToast('Operational thresholds saved.');
   };
 
   const handleResetRolePermissions = () => {
@@ -824,18 +856,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     showToast('Full system backup archive exported.');
   };
 
-  const swatches = [
-    { label: 'Orange (Default)', hex: '#c55200' },
-    { label: 'Amber', hex: '#a56800' },
-    { label: 'Crimson', hex: '#c1354b' },
-    { label: 'Plum', hex: '#8b4a99' },
-    { label: 'Forest', hex: '#2d7a4f' },
-    { label: 'Teal', hex: '#10786f' },
-    { label: 'Graphite', hex: '#57534e' },
-  ];
+  const swatches = ACCENT_PRESETS.map((preset) => ({
+    label: preset.hex === DEFAULT_ACCENT ? `${preset.name} (Default)` : preset.name,
+    hex: preset.hex,
+  }));
 
   const currentRoleConfig =
     editableRoles.find((r) => r.role === selectedRoleForEdit) || editableRoles[0];
+  const isOwnRole = currentRoleConfig.role === currentUser.role;
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto animate-fade-in">
@@ -857,24 +885,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-300">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-slate-800 tracking-tight">
-              Enterprise System Settings
-            </h1>
+            <div className="flex items-center gap-2"><h1 className="text-2xl font-black text-slate-800 tracking-tight">Enterprise System Settings</h1><InfoHint text="Manage stores, staff access, role permissions, security policies, receipt hardware, and appearance." /></div>
             <span className="text-[10px] font-black uppercase bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full border border-slate-300">
               v2.6 Certified
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Manage store profiles, user credentials, role permissions, master security policies,
-            and thermal receipt hardware.
-          </p>
         </div>
       </div>
 
       {/* Module Tabs — aligned horizontally across the top of the page */}
       <div className="bg-white rounded-xl border border-slate-300 shadow-2xs p-1.5">
         <div className="flex flex-wrap items-stretch gap-1">
-          {SETTINGS_TABS.map(({ key, label, hint, icon: Icon }) => {
+          {visibleTabs.map(({ key, label, hint, icon: Icon }) => {
             const isActive = activeTab === key;
             return (
               <button
@@ -882,7 +904,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 onClick={() => setActiveTab(key)}
                 className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all text-left cursor-pointer whitespace-nowrap ${
                   isActive
-                    ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
+                    ? 'bg-accent-500 text-white shadow-xs shadow-accent-500/20'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 }`}
                 title={hint}
@@ -918,7 +940,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* Active Module Panel */}
       <div className="space-y-6">
           {/* TAB 1: GENERAL STORE PROFILE & TAX */}
-          {activeTab === 'general' && (
+          {activeTab === 'general' && permissions.has('settings.general') && (
             <div className="bg-white rounded-xl border border-slate-300 p-6 shadow-2xs space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200">
                 <div>
@@ -931,7 +953,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
                 <button
                   onClick={handleSaveGeneral}
-                  className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                  className="flex items-center gap-2 bg-accent-500 hover:bg-accent-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
                   <span>Save Changes</span>
@@ -945,7 +967,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     type="text"
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
-                    className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
+                    className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500 font-medium"
                   />
                 </div>
 
@@ -955,7 +977,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     type="text"
                     value={taxRegNo}
                     onChange={(e) => setTaxRegNo(e.target.value)}
-                    className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-mono"
+                    className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500 font-mono"
                   />
                 </div>
 
@@ -966,7 +988,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       type="text"
                       value={currencySymbol}
                       onChange={(e) => setCurrencySymbol(e.target.value)}
-                      className="w-24 px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-bold text-center"
+                      className="w-24 px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500 font-bold text-center"
                     />
                     <input
                       type="text"
@@ -982,7 +1004,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <select
                     value={cashRounding}
                     onChange={(e) => setCashRounding(e.target.value as any)}
-                    className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                    className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500"
                   >
                     <option value="exact">Exact (No Rounding - e.g. GH₵ 12.37)</option>
                     <option value="0.10">Round to nearest 10 Pesewas (e.g. GH₵ 12.40)</option>
@@ -1004,17 +1026,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     type="checkbox"
                     checked={taxEnabled}
                     onChange={(e) => setTaxEnabled(e.target.checked)}
-                    className="w-5 h-5 accent-orange-500 rounded cursor-pointer"
+                    className="w-5 h-5 accent-accent-500 rounded cursor-pointer"
                   />
                 </div>
 
                 {taxEnabled && (
-                  <div className="p-4 bg-orange-50/60 border border-orange-200 rounded-xl flex items-center gap-4">
+                  <div className="p-4 bg-accent-50/60 border border-accent-200 rounded-xl flex items-center gap-4">
                     <div className="space-y-1 flex-1">
-                      <label className="text-xs font-bold text-orange-950">Combined Tax Rate (%)</label>
-                      <p className="text-[11px] text-orange-800">Standard rate for Ghana commercial sales is 21.9%.</p>
+                      <label className="text-xs font-bold text-accent-950">Combined Tax Rate (%)</label>
+                      <p className="text-[11px] text-accent-800">Standard rate for Ghana commercial sales is 21.9%.</p>
                     </div>
-                    <div className="w-32 flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-orange-300">
+                    <div className="w-32 flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-accent-300">
                       <input
                         type="number"
                         min="0"
@@ -1036,7 +1058,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <div className="text-xs font-bold text-slate-800">Configured Branch Outlets</div>
                   <button
                     onClick={() => setActiveTab('outlets')}
-                    className="text-[11px] font-bold text-orange-600 hover:text-orange-700 underline cursor-pointer"
+                    className="text-[11px] font-bold text-accent-600 hover:text-accent-700 underline cursor-pointer"
                   >
                     Manage branches &amp; staff
                   </button>
@@ -1055,7 +1077,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                               Deactivated
                             </span>
                           )}
-                          <span className="text-[10px] font-mono font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded">
+                          <span className="text-[10px] font-mono font-bold bg-accent-100 text-accent-700 px-2 py-0.5 rounded">
                             {o.receiptPrefix}
                           </span>
                         </div>
@@ -1076,7 +1098,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           )}
 
           {/* TAB 2: STORES & BRANCHES */}
-          {activeTab === 'outlets' && (
+          {activeTab === 'outlets' && permissions.has('settings.general') && (
             <div className="bg-white rounded-xl border border-slate-300 p-5 shadow-2xs space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
                 <div>
@@ -1088,7 +1110,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
                 <button
                   onClick={handleOpenNewBranchModal}
-                  className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
+                  className="flex items-center gap-2 bg-accent-500 hover:bg-accent-600 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
                 >
                   <Plus className="w-4 h-4 stroke-[3]" />
                   <span>Set Up New Store / Branch</span>
@@ -1142,7 +1164,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         <tr key={o.id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="py-3.5 px-3 whitespace-nowrap">
                             <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-200 text-orange-600 flex items-center justify-center shrink-0">
+                              <div className="w-8 h-8 rounded-lg bg-accent-50 border border-accent-200 text-accent-600 flex items-center justify-center shrink-0">
                                 <Store className="w-4 h-4" />
                               </div>
                               <div>
@@ -1226,7 +1248,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           )}
 
           {/* TAB 3: USER ACCOUNTS & STAFF MANAGEMENT */}
-          {activeTab === 'users' && (
+          {activeTab === 'users' && permissions.has('user.manage') && (
             <div className="bg-white rounded-xl border border-slate-300 p-5 shadow-2xs space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
                 <div>
@@ -1237,7 +1259,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
                 <button
                   onClick={handleOpenNewUserModal}
-                  className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
+                  className="flex items-center gap-2 bg-accent-500 hover:bg-accent-600 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
                 >
                   <UserPlus className="w-4 h-4" />
                   <span>Add New Staff User</span>
@@ -1253,13 +1275,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     value={userSearch}
                     onChange={(e) => setUserSearch(e.target.value)}
                     placeholder="Search by staff name, username, or phone..."
-                    className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                    className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500"
                   />
                 </div>
                 <select
                   value={userOutletFilter}
                   onChange={(e) => setUserOutletFilter(e.target.value)}
-                  className="px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
+                  className="px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500 font-medium"
                 >
                   <option value="all">All Branches</option>
                   {outlets.map((o) => (
@@ -1374,7 +1396,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                               {/* Reset Password Trigger */}
                               <button
                                 onClick={() => handleOpenResetPasswordModal(u)}
-                                className="inline-flex items-center justify-center p-1.5 rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-300 transition-colors cursor-pointer"
+                                className="inline-flex items-center justify-center p-1.5 rounded-lg bg-accent-50 text-accent-700 hover:bg-accent-100 border border-accent-300 transition-colors cursor-pointer"
                                 title="Reset staff password & enforce next-login update"
                               >
                                 <KeyRound className="w-4 h-4 shrink-0" />
@@ -1420,7 +1442,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           )}
 
           {/* TAB 3: ROLES & PERMISSIONS MATRIX */}
-          {activeTab === 'permissions' && (
+          {activeTab === 'permissions' && permissions.has('user.manage') && (
             <div className="bg-white rounded-xl border border-slate-300 p-6 shadow-2xs space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
                 <div>
@@ -1428,7 +1450,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     Role-Based Access Control (RBAC) &amp; Permissions
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Configure granular capabilities for Super Admins, Branch Managers, Cashiers, and Storekeepers.
+                    Grant or revoke the PRD permission codes per role. The server authorises every
+                    endpoint against these same codes, so what is unchecked here is refused there too.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1441,7 +1464,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </button>
                   <button
                     onClick={handleSaveRolePermissions}
-                    className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                    className="flex items-center gap-2 bg-accent-500 hover:bg-accent-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
                   >
                     <Save className="w-4 h-4" />
                     <span>Save Permissions</span>
@@ -1479,234 +1502,68 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-slate-600">{currentRoleConfig.description}</p>
+                {isOwnRole && (
+                  <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-bold text-amber-800">
+                    <Lock className="h-3.5 w-3.5" />
+                    This is your own role. Permission changes cannot be self-applied (BR-16).
+                  </p>
+                )}
               </div>
 
-              {/* Permissions Matrix Checklist Groups */}
+              {/* Permission matrix — every PRD §6 code, grouped */}
               <div className="space-y-5">
-                {/* Group 1: Point of Sale & Cashiering */}
-                <div className="space-y-3">
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Point of Sale &amp; Register Operations
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-300 hover:border-orange-200 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={currentRoleConfig.permissions.canOpenTerminal}
-                        onChange={() =>
-                          handleTogglePermission(selectedRoleForEdit, 'canOpenTerminal')
-                        }
-                        className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">Launch POS Terminal</div>
-                        <div className="text-[11px] text-slate-500">Access register checkout screen &amp; scan barcodes</div>
+                {PERMISSION_GROUPS.map((group) => {
+                  const groupPermissions = PERMISSION_CATALOGUE.filter((item) => item.group === group);
+                  if (groupPermissions.length === 0) return null;
+                  return (
+                    <div key={group} className="space-y-3">
+                      <div className="flex items-baseline gap-2">
+                        <div className="text-xs font-bold uppercase tracking-wider text-slate-400">{group}</div>
+                        <div className="text-[10px] text-slate-400">
+                          {groupPermissions.filter((item) => currentRoleConfig.permissions.includes(item.code)).length}
+                          {' of '}
+                          {groupPermissions.length} granted
+                        </div>
                       </div>
-                    </label>
-
-                    <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-300 hover:border-orange-200 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={currentRoleConfig.permissions.canApplyDiscount}
-                        onChange={() =>
-                          handleTogglePermission(selectedRoleForEdit, 'canApplyDiscount')
-                        }
-                        className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">Apply Discounts</div>
-                        <div className="text-[11px] text-slate-500">Apply percentage or fixed price markdowns</div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {groupPermissions.map((item) => {
+                          const granted = currentRoleConfig.permissions.includes(item.code);
+                          return (
+                            <label
+                              key={item.code}
+                              className={`flex items-start gap-3 p-3 rounded-xl border transition-colors ${
+                                isOwnRole ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                              } ${
+                                granted
+                                  ? 'bg-accent-50/40 border-accent-200'
+                                  : 'bg-white border-slate-300 hover:border-accent-200'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={granted}
+                                disabled={isOwnRole}
+                                onChange={() => handleTogglePermission(selectedRoleForEdit, item.code)}
+                                className="w-4 h-4 mt-0.5 accent-accent-500 rounded disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                              />
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-slate-800">{item.label}</div>
+                                <div className="text-[11px] text-slate-500">{item.description}</div>
+                                <code className="mt-1 inline-block text-[10px] font-mono text-slate-400">{item.code}</code>
+                              </div>
+                            </label>
+                          );
+                        })}
                       </div>
-                    </label>
-
-                    <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-300 hover:border-orange-200 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={currentRoleConfig.permissions.canOverrideFloorPrice}
-                        onChange={() =>
-                          handleTogglePermission(selectedRoleForEdit, 'canOverrideFloorPrice')
-                        }
-                        className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">Override Floor Price</div>
-                        <div className="text-[11px] text-slate-500">Sell below floor price threshold without manager prompt</div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-300 hover:border-orange-200 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={currentRoleConfig.permissions.canVoidSale}
-                        onChange={() =>
-                          handleTogglePermission(selectedRoleForEdit, 'canVoidSale')
-                        }
-                        className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">Void Completed Sales</div>
-                        <div className="text-[11px] text-slate-500">Cancel immutable receipts and restore inventory</div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-300 hover:border-orange-200 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={currentRoleConfig.permissions.canBlindCloseShift}
-                        onChange={() =>
-                          handleTogglePermission(selectedRoleForEdit, 'canBlindCloseShift')
-                        }
-                        className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">Shift Drawer Close</div>
-                        <div className="text-[11px] text-slate-500">Submit blind physical cash drawer counts</div>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Group 2: Inventory & Catalog */}
-                <div className="space-y-3 pt-2">
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Inventory &amp; Cost Pricing
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-300 hover:border-orange-200 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={currentRoleConfig.permissions.canViewCostPrices}
-                        onChange={() =>
-                          handleTogglePermission(selectedRoleForEdit, 'canViewCostPrices')
-                        }
-                        className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">View Unit Cost Prices</div>
-                        <div className="text-[11px] text-slate-500">Inspect weighted average cost and margin analytics</div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-300 hover:border-orange-200 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={currentRoleConfig.permissions.canAddProducts}
-                        onChange={() =>
-                          handleTogglePermission(selectedRoleForEdit, 'canAddProducts')
-                        }
-                        className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">Create &amp; Edit Catalog Products</div>
-                        <div className="text-[11px] text-slate-500">Add SKUs, units of measure, and specifications</div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-300 hover:border-orange-200 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={currentRoleConfig.permissions.canAdjustStock}
-                        onChange={() =>
-                          handleTogglePermission(selectedRoleForEdit, 'canAdjustStock')
-                        }
-                        className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">Manual Stock Adjustment (FR-STK-07)</div>
-                        <div className="text-[11px] text-slate-500">Log damage, shrinkage, and audit discrepancies</div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-300 hover:border-orange-200 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={currentRoleConfig.permissions.canReceiveGoods}
-                        onChange={() =>
-                          handleTogglePermission(selectedRoleForEdit, 'canReceiveGoods')
-                        }
-                        className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">Receive Goods (GRN BR-4)</div>
-                        <div className="text-[11px] text-slate-500">Process purchase orders &amp; recalculate weighted cost</div>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Group 3: Reports & System Administration */}
-                <div className="space-y-3 pt-2">
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Reports &amp; System Administration
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-300 hover:border-orange-200 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={currentRoleConfig.permissions.canViewExecutiveReports}
-                        onChange={() =>
-                          handleTogglePermission(selectedRoleForEdit, 'canViewExecutiveReports')
-                        }
-                        className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">Executive Profit Dashboards</div>
-                        <div className="text-[11px] text-slate-500">Inspect gross profit margins and store comparisons</div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-300 hover:border-orange-200 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={currentRoleConfig.permissions.canExportCsv}
-                        onChange={() =>
-                          handleTogglePermission(selectedRoleForEdit, 'canExportCsv')
-                        }
-                        className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">Export Accounting CSVs</div>
-                        <div className="text-[11px] text-slate-500">Download data for QuickBooks, Sage, Xero, and Excel</div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-300 hover:border-orange-200 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={currentRoleConfig.permissions.canViewAuditLogs}
-                        onChange={() =>
-                          handleTogglePermission(selectedRoleForEdit, 'canViewAuditLogs')
-                        }
-                        className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">Inspect Security Audit Trail</div>
-                        <div className="text-[11px] text-slate-500">Review forensic user activity and authorization logs</div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-300 hover:border-orange-200 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={currentRoleConfig.permissions.canModifySystemSettings}
-                        onChange={() =>
-                          handleTogglePermission(selectedRoleForEdit, 'canModifySystemSettings')
-                        }
-                        className="w-4 h-4 mt-0.5 accent-orange-500 rounded cursor-pointer"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">Modify System Settings</div>
-                        <div className="text-[11px] text-slate-500">Change master PIN, store profile, and printer settings</div>
-                      </div>
-                    </label>
-                  </div>
-                </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
 
           {/* TAB 4: SECURITY & MANAGER PIN */}
-          {activeTab === 'security' && (
+          {activeTab === 'security' && permissions.has('settings.general') && (
             <div className="bg-white rounded-xl border border-slate-300 p-6 shadow-2xs space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200">
                 <div>
@@ -1717,7 +1574,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
                 <button
                   onClick={handleSaveSecurity}
-                  className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                  className="flex items-center gap-2 bg-accent-500 hover:bg-accent-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
                   <span>Update Security</span>
@@ -1729,7 +1586,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <Lock className="w-4 h-4 text-orange-500" />
+                      <Lock className="w-4 h-4 text-accent-500" />
                       Master Manager Authorization PIN
                     </div>
                     <div className="text-[11px] text-slate-500">
@@ -1745,7 +1602,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       maxLength={4}
                       value={managerPin}
                       onChange={(e) => setManagerPin(e.target.value.replace(/\D/g, ''))}
-                      className="w-full px-4 py-2.5 text-center tracking-[0.5em] font-mono text-lg font-black bg-white border border-slate-300 rounded-xl focus:outline-orange-500"
+                      className="w-full px-4 py-2.5 text-center tracking-[0.5em] font-mono text-lg font-black bg-white border border-slate-300 rounded-xl focus:outline-accent-500"
                     />
                     <button
                       type="button"
@@ -1779,7 +1636,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       type="checkbox"
                       checked={enforceFloorPin}
                       onChange={(e) => setEnforceFloorPin(e.target.checked)}
-                      className="w-5 h-5 accent-orange-500 rounded cursor-pointer"
+                      className="w-5 h-5 accent-accent-500 rounded cursor-pointer"
                     />
                   </div>
 
@@ -1796,7 +1653,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       type="checkbox"
                       checked={enforceVoidPin}
                       onChange={(e) => setEnforceVoidPin(e.target.checked)}
-                      className="w-5 h-5 accent-orange-500 rounded cursor-pointer"
+                      className="w-5 h-5 accent-accent-500 rounded cursor-pointer"
                     />
                   </div>
 
@@ -1813,7 +1670,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       type="checkbox"
                       checked={enforceBlindShift}
                       onChange={(e) => setEnforceBlindShift(e.target.checked)}
-                      className="w-5 h-5 accent-orange-500 rounded cursor-pointer"
+                      className="w-5 h-5 accent-accent-500 rounded cursor-pointer"
                     />
                   </div>
                 </div>
@@ -1822,7 +1679,116 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           )}
 
           {/* TAB 5: HARDWARE & RECEIPTS */}
-          {activeTab === 'printers' && (
+          {/* K-08 / FR-SET-06: the limits the business rules read from */}
+          {activeTab === 'thresholds' && permissions.has('settings.general') && (
+            <div className="bg-white rounded-xl border border-slate-300 p-6 shadow-2xs space-y-6">
+              <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Operational thresholds</h2>
+                  <p className="text-xs text-slate-500">
+                    The limits that decide when the system asks for approval or an explanation.
+                  </p>
+                </div>
+                <button
+                  onClick={handleSaveThresholds}
+                  className="flex cursor-pointer items-center gap-2 rounded-xl bg-accent-500 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-accent-600"
+                >
+                  <Save className="h-4 w-4" />
+                  <span>Save thresholds</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <label className="block text-xs font-bold text-slate-700">
+                  Idle lock (minutes)
+                  <input
+                    type="number"
+                    min="1"
+                    value={thresholdDraft.idleLockMinutes}
+                    onChange={(event) =>
+                      setThresholdDraft((prev) => ({ ...prev, idleLockMinutes: Number(event.target.value) || 0 }))
+                    }
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-bold text-slate-900"
+                  />
+                  <span className="mt-1 block text-[11px] font-normal text-slate-500">
+                    FR-AUTH-05 — the POS locks rather than signing out when a shift is open.
+                  </span>
+                </label>
+
+                <label className="block text-xs font-bold text-slate-700">
+                  Adjustment approval above (GH₵)
+                  <input
+                    type="number"
+                    min="0"
+                    value={thresholdDraft.adjustmentApprovalValue}
+                    onChange={(event) =>
+                      setThresholdDraft((prev) => ({
+                        ...prev,
+                        adjustmentApprovalValue: Number(event.target.value) || 0,
+                      }))
+                    }
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-bold text-slate-900"
+                  />
+                  <span className="mt-1 block text-[11px] font-normal text-slate-500">
+                    FR-INV-06 — needs <code className="font-mono">stock.approve_adjustment</code>.
+                  </span>
+                </label>
+
+                <label className="block text-xs font-bold text-slate-700">
+                  Cash variance explanation above (GH₵)
+                  <input
+                    type="number"
+                    min="0"
+                    value={thresholdDraft.cashVarianceExplain}
+                    onChange={(event) =>
+                      setThresholdDraft((prev) => ({
+                        ...prev,
+                        cashVarianceExplain: Number(event.target.value) || 0,
+                      }))
+                    }
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-bold text-slate-900"
+                  />
+                  <span className="mt-1 block text-[11px] font-normal text-slate-500">
+                    FR-CASH-06 — a written note is required past this.
+                  </span>
+                </label>
+              </div>
+
+              <div className="space-y-3 border-t border-slate-200 pt-5">
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Discount ceiling per role (FR-POS-10)
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {ROLE_ORDER.map((role) => (
+                    <label key={role} className="block text-xs font-bold text-slate-700">
+                      {ROLE_LABELS[role]} (%)
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={thresholdDraft.discountCeilingByRole[role]}
+                        onChange={(event) =>
+                          setThresholdDraft((prev) => ({
+                            ...prev,
+                            discountCeilingByRole: {
+                              ...prev.discountCeilingByRole,
+                              [role]: Math.min(100, Math.max(0, Number(event.target.value) || 0)),
+                            },
+                          }))
+                        }
+                        className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-bold text-slate-900"
+                      />
+                    </label>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  A cashier attempting more than their ceiling needs manager approval by PIN.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'printers' && permissions.has('settings.terminal') && (
             <div className="bg-white rounded-xl border border-slate-300 p-6 shadow-2xs space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200">
                 <div>
@@ -1833,7 +1799,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
                 <button
                   onClick={handleSavePrinters}
-                  className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                  className="flex items-center gap-2 bg-accent-500 hover:bg-accent-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
                   <span>Save Receipt Format</span>
@@ -1851,7 +1817,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         onClick={() => setPrinterWidth('80mm')}
                         className={`p-3 rounded-xl border text-xs font-bold transition-all text-left cursor-pointer ${
                           printerWidth === '80mm'
-                            ? 'border-orange-500 bg-orange-50/50 text-orange-700'
+                            ? 'border-accent-500 bg-accent-50/50 text-accent-700'
                             : 'border-slate-300 text-slate-600 hover:bg-slate-50'
                         }`}
                       >
@@ -1866,7 +1832,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         onClick={() => setPrinterWidth('58mm')}
                         className={`p-3 rounded-xl border text-xs font-bold transition-all text-left cursor-pointer ${
                           printerWidth === '58mm'
-                            ? 'border-orange-500 bg-orange-50/50 text-orange-700'
+                            ? 'border-accent-500 bg-accent-50/50 text-accent-700'
                             : 'border-slate-300 text-slate-600 hover:bg-slate-50'
                         }`}
                       >
@@ -1884,7 +1850,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       rows={2}
                       value={receiptHeader}
                       onChange={(e) => setReceiptHeader(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500"
                     />
                   </div>
 
@@ -1894,7 +1860,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       rows={2}
                       value={receiptFooter}
                       onChange={(e) => setReceiptFooter(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500"
                     />
                   </div>
 
@@ -1905,7 +1871,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         type="checkbox"
                         checked={autoPrint}
                         onChange={(e) => setAutoPrint(e.target.checked)}
-                        className="w-4 h-4 accent-orange-500 rounded cursor-pointer"
+                        className="w-4 h-4 accent-accent-500 rounded cursor-pointer"
                       />
                     </div>
 
@@ -1915,7 +1881,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         type="checkbox"
                         checked={showCashier}
                         onChange={(e) => setShowCashier(e.target.checked)}
-                        className="w-4 h-4 accent-orange-500 rounded cursor-pointer"
+                        className="w-4 h-4 accent-accent-500 rounded cursor-pointer"
                       />
                     </div>
                   </div>
@@ -1990,7 +1956,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           )}
 
           {/* TAB 6: APPEARANCE & THEME */}
-          {activeTab === 'appearance' && (
+          {activeTab === 'appearance' && permissions.has('settings.appearance') && (
             <div className="bg-white rounded-xl border border-slate-300 p-6 shadow-2xs space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200">
                 <div>
@@ -2000,7 +1966,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </p>
                 </div>
                 <button
-                  onClick={() => onChangeAccent('#ff9f43')}
+                  onClick={() => onChangeAccent(DEFAULT_ACCENT)}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 border border-slate-300 transition-colors cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
@@ -2045,24 +2011,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       type="text"
                       value={customHex}
                       onChange={(e) => setCustomHex(e.target.value)}
-                      placeholder="#ff9f43"
-                      className="flex-1 px-3 py-2 text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                      placeholder={DEFAULT_ACCENT}
+                      className="flex-1 px-3 py-2 text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500"
                     />
                     <button
                       onClick={() => {
                         if (/^#[0-9A-F]{6}$/i.test(customHex)) {
-                          const clean = customHex.replace('#', '');
-                          const r = parseInt(clean.substring(0, 2), 16);
-                          const g = parseInt(clean.substring(2, 4), 16);
-                          const b = parseInt(clean.substring(4, 6), 16);
-                          if (b > r + 30 && b > g + 15) {
-                            alert('Blue is refused as an accent color per design system rules (AC-11). Please choose Orange, Amber, Crimson, Plum, Forest, Teal, or Graphite.');
+                          // Acceptance criterion 11: no blue anywhere in the palette.
+                          if (isBlue(customHex)) {
+                            showToast('Blue is not part of the palette. Choose Orange, Amber, Crimson, Plum, Forest, Teal or Graphite.');
                             return;
                           }
                           onChangeAccent(customHex);
-                          showToast('Custom accent color applied.');
+                          showToast('Custom accent colour applied.');
                         } else {
-                          alert('Please enter a valid 6-digit hex code, e.g. #c55200');
+                          showToast('Enter a valid 6-digit hex code, e.g. #c55200.');
                         }
                       }}
                       className="px-4 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
@@ -2105,7 +2068,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           )}
 
           {/* TAB 7: BACKUP & ACCOUNTING EXPORT */}
-          {activeTab === 'backup' && (
+          {activeTab === 'backup' && permissions.has('settings.general') && (
             <div className="bg-white rounded-xl border border-slate-300 p-6 shadow-2xs space-y-6">
               <div className="pb-4 border-b border-slate-200">
                 <h2 className="text-base font-bold text-slate-900">
@@ -2121,7 +2084,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-300 space-y-3 flex flex-col justify-between">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                      <Database className="w-4 h-4 text-orange-500" />
+                      <Database className="w-4 h-4 text-accent-500" />
                       Full System Snapshot (JSON)
                     </div>
                     <p className="text-[11px] text-slate-500">
@@ -2164,11 +2127,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         ];
                         const rows = sales.map((s) => [
                           s.receiptNumber,
-                          s.timestamp,
+                          s.createdAt,
                           s.outletName,
                           s.cashierName,
                           s.customerName,
-                          s.paymentMethod,
+                          s.payments.map((payment) => payment.method).join(' + '),
                           s.total.toFixed(2),
                           s.status,
                         ]);
@@ -2234,8 +2197,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-300 animate-modal-card">
             <div className="p-5 sm:p-6 border-b border-slate-300 flex items-center justify-between bg-slate-50 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
-                  <Store className="w-5 h-5 text-orange-600" />
+                <div className="w-10 h-10 rounded-xl bg-accent-100 text-accent-600 flex items-center justify-center shrink-0">
+                  <Store className="w-5 h-5 text-accent-600" />
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-900 text-base">
@@ -2269,7 +2232,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       value={branchName}
                       onChange={(e) => setBranchName(e.target.value)}
                       placeholder="e.g. Radiance Lighting Takoradi"
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
+                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500 font-medium"
                       required
                     />
                   </div>
@@ -2281,7 +2244,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       value={branchTown}
                       onChange={(e) => setBranchTown(e.target.value)}
                       placeholder="e.g. Takoradi"
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
+                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500 font-medium"
                       required
                     />
                   </div>
@@ -2294,7 +2257,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     value={branchAddress}
                     onChange={(e) => setBranchAddress(e.target.value)}
                     placeholder="e.g. 24 Beach Road, Market Circle"
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500 font-medium"
                   />
                 </div>
 
@@ -2306,7 +2269,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       value={branchPhone}
                       onChange={(e) => setBranchPhone(e.target.value)}
                       placeholder="+233 24 000 0000"
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-mono"
+                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500 font-mono"
                     />
                   </div>
 
@@ -2317,7 +2280,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       value={branchPrefix}
                       onChange={(e) => setBranchPrefix(e.target.value.toUpperCase())}
                       placeholder={branchName ? suggestReceiptPrefix(branchName) : 'e.g. TKD-01'}
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-mono"
+                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500 font-mono"
                     />
                     <p className="text-xs text-slate-400">
                       Leave blank to auto-generate. Must be unique across branches.
@@ -2331,7 +2294,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       value={branchManager}
                       onChange={(e) => setBranchManager(e.target.value)}
                       placeholder="e.g. Ama Serwaa (Manager)"
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
+                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500 font-medium"
                     />
                   </div>
                 </div>
@@ -2364,7 +2327,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           type="checkbox"
                           checked={checked}
                           onChange={() => handleToggleBranchStaff(u.id)}
-                          className="w-4 h-4 accent-orange-500 rounded cursor-pointer shrink-0"
+                          className="w-4 h-4 accent-accent-500 rounded cursor-pointer shrink-0"
                         />
                         <img
                           src={u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80'}
@@ -2401,7 +2364,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-orange-500 hover:bg-orange-600 text-white shadow-xs transition-colors cursor-pointer"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-accent-500 hover:bg-accent-600 text-white shadow-xs transition-colors cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
                   <span>{editingBranch ? 'Save Branch Changes' : 'Create Branch'}</span>
@@ -2418,8 +2381,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-300 animate-modal-card">
             <div className="p-5 sm:p-6 border-b border-slate-300 flex items-center justify-between bg-slate-50 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
-                  <Users className="w-5 h-5 text-orange-600" />
+                <div className="w-10 h-10 rounded-xl bg-accent-100 text-accent-600 flex items-center justify-center shrink-0">
+                  <Users className="w-5 h-5 text-accent-600" />
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-900 text-base">
@@ -2446,7 +2409,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   value={assignSearch}
                   onChange={(e) => setAssignSearch(e.target.value)}
                   placeholder="Search staff by name or username..."
-                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500"
                 />
               </div>
             </div>
@@ -2511,8 +2474,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-300 animate-modal-card flex flex-col max-h-[92vh]">
             <div className="p-5 sm:p-6 border-b border-slate-300 flex items-center justify-between bg-slate-50 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
-                  <Users className="w-5 h-5 text-orange-600" />
+                <div className="w-10 h-10 rounded-xl bg-accent-100 text-accent-600 flex items-center justify-center shrink-0">
+                  <Users className="w-5 h-5 text-accent-600" />
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-900 text-base">
@@ -2540,7 +2503,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   placeholder="e.g. Kwame Asante"
                   value={userFullName}
                   onChange={(e) => setUserFullName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                  className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500"
                 />
               </div>
 
@@ -2553,7 +2516,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     placeholder="e.g. kasante"
                     value={userUsername}
                     onChange={(e) => setUserUsername(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-mono"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500 font-mono"
                   />
                 </div>
 
@@ -2565,7 +2528,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     required
                     value={userPin}
                     onChange={(e) => setUserPin(e.target.value.replace(/\D/g, ''))}
-                    className="w-full px-3.5 py-2.5 text-sm text-center tracking-widest bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-mono font-bold"
+                    className="w-full px-3.5 py-2.5 text-sm text-center tracking-widest bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500 font-mono font-bold"
                   />
                 </div>
               </div>
@@ -2574,10 +2537,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="space-y-1.5">
                   <label className="text-sm font-bold text-slate-700">System Role</label>
                   <select
+                    required
                     value={userRole}
-                    onChange={(e) => setUserRole(e.target.value as UserRole)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
+                    onChange={(e) => setUserRole(e.target.value as UserRole | '')}
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500 font-medium"
                   >
+                    <option value="" disabled>Select role</option>
                     <option value="cashier">POS Cashier</option>
                     <option value="branch_manager">Branch Manager</option>
                     <option value="storekeeper">Storekeeper / Inventory</option>
@@ -2588,10 +2553,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="space-y-1.5">
                   <label className="text-sm font-bold text-slate-700">Store Branch</label>
                   <select
+                    required
                     value={userOutlet}
                     onChange={(e) => setUserOutlet(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500 font-medium"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500 font-medium"
                   >
+                    <option value="" disabled>Select branch</option>
                     {outlets.map((o) => (
                       <option key={o.id} value={o.id} disabled={o.active === false}>
                         {o.name} ({o.town})
@@ -2611,7 +2578,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     placeholder="kwame@incohardware.com"
                     value={userEmail}
                     onChange={(e) => setUserEmail(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500"
                   />
                 </div>
 
@@ -2622,7 +2589,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     placeholder="+233 24 000 0000"
                     value={userPhone}
                     onChange={(e) => setUserPhone(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500"
                   />
                 </div>
               </div>
@@ -2632,15 +2599,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="p-4 sm:p-5 bg-slate-50 border border-slate-300 rounded-xl space-y-3.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                      <KeyRound className="w-4 h-4 text-orange-500" />
+                      <KeyRound className="w-4 h-4 text-accent-500" />
                       <span>Password &amp; Login Security Policy</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleOpenResetPasswordModal(editingUser)}
-                      className="px-3 py-1.5 text-xs font-bold bg-white text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-50 cursor-pointer flex items-center gap-1.5 transition-colors"
+                      className="px-3 py-1.5 text-xs font-bold bg-white text-accent-700 border border-accent-200 rounded-lg hover:bg-accent-50 cursor-pointer flex items-center gap-1.5 transition-colors"
                     >
-                      <RotateCcw className="w-3.5 h-3.5 text-orange-600" />
+                      <RotateCcw className="w-3.5 h-3.5 text-accent-600" />
                       <span>Reset Password...</span>
                     </button>
                   </div>
@@ -2650,7 +2617,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       type="checkbox"
                       checked={userMustChangePassword}
                       onChange={(e) => setUserMustChangePassword(e.target.checked)}
-                      className="mt-0.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500 w-4 h-4"
+                      className="mt-0.5 rounded border-slate-300 text-accent-600 focus:ring-accent-500 w-4 h-4"
                     />
                     <div>
                       <div className="text-sm font-bold text-slate-800">
@@ -2678,7 +2645,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       type="checkbox"
                       checked={userMustChangePassword}
                       onChange={(e) => setUserMustChangePassword(e.target.checked)}
-                      className="mt-0.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500 w-4 h-4"
+                      className="mt-0.5 rounded border-slate-300 text-accent-600 focus:ring-accent-500 w-4 h-4"
                     />
                     <div>
                       <div className="text-sm font-bold text-slate-800">
@@ -2702,7 +2669,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 text-sm font-bold bg-orange-500 hover:bg-orange-600 text-white rounded-xl shadow-xs transition-colors cursor-pointer"
+                  className="px-5 py-2.5 text-sm font-bold bg-accent-500 hover:bg-accent-600 text-white rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
                   {editingUser ? 'Save User Changes' : 'Create Staff User'}
                 </button>
@@ -2717,9 +2684,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-center justify-center p-4 sm:p-6 animate-modal-backdrop">
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-300 animate-modal-card flex flex-col max-h-[92vh]">
             {/* Modal Header */}
-            <div className="p-5 sm:p-6 border-b border-slate-300 flex items-center justify-between bg-gradient-to-r from-orange-50 to-amber-50 shrink-0">
+            <div className="p-5 sm:p-6 border-b border-slate-300 flex items-center justify-between bg-gradient-to-r from-accent-50 to-amber-50 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-accent-500 text-white flex items-center justify-center shadow-xs shrink-0">
                   <KeyRound className="w-5 h-5" />
                 </div>
                 <div>
@@ -2774,7 +2741,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setTempPasswordInput(generateSecureTempPassword())}
-                    className="text-xs text-orange-600 hover:text-orange-700 font-bold flex items-center gap-1.5 cursor-pointer"
+                    className="text-xs text-accent-600 hover:text-accent-700 font-bold flex items-center gap-1.5 cursor-pointer"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>Regenerate Secure Password</span>
@@ -2788,7 +2755,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       value={tempPasswordInput}
                       onChange={(e) => setTempPasswordInput(e.target.value)}
                       placeholder="Enter temporary password"
-                      className="w-full pl-4 pr-12 py-3 text-sm font-mono font-bold tracking-wider bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                      className="w-full pl-4 pr-12 py-3 text-sm font-mono font-bold tracking-wider bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500"
                     />
                     <button
                       type="button"
@@ -2829,18 +2796,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
 
               {/* State-Based Flag: Require Password Update on Next Login */}
-              <div className="p-4 sm:p-5 bg-orange-50/70 border border-orange-200 rounded-xl space-y-2">
+              <div className="p-4 sm:p-5 bg-accent-50/70 border border-accent-200 rounded-xl space-y-2">
                 <label className="flex items-start gap-3.5 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={mustChangeOnNextLogin}
                     onChange={(e) => setMustChangeOnNextLogin(e.target.checked)}
-                    className="mt-0.5 rounded border-orange-300 text-orange-600 focus:ring-orange-500 w-4 h-4"
+                    className="mt-0.5 rounded border-accent-300 text-accent-600 focus:ring-accent-500 w-4 h-4"
                   />
                   <div>
                     <div className="text-sm font-bold text-slate-900 flex items-center gap-2.5">
                       <span>Require password update on next login</span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-orange-200 text-orange-800">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-accent-200 text-accent-800">
                         Enforced Policy
                       </span>
                     </div>
@@ -2858,7 +2825,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     type="checkbox"
                     checked={dispatchNotification}
                     onChange={(e) => setDispatchNotification(e.target.checked)}
-                    className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 w-4 h-4"
+                    className="rounded border-slate-300 text-accent-600 focus:ring-accent-500 w-4 h-4"
                   />
                   <div className="text-xs sm:text-sm text-slate-700">
                     <span className="font-bold">Dispatch notification alert</span> to{' '}
@@ -2888,7 +2855,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <button
                 type="button"
                 onClick={() => handleConfirmPasswordReset()}
-                className="px-5 py-2.5 text-sm font-bold bg-orange-500 hover:bg-orange-600 text-white rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-2"
+                className="px-5 py-2.5 text-sm font-bold bg-accent-500 hover:bg-accent-600 text-white rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-2"
               >
                 <KeyRound className="w-4 h-4" />
                 <span>Confirm Password Reset</span>
@@ -2904,14 +2871,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="bg-white rounded-xl shadow-2xl max-w-xl w-full overflow-hidden border border-slate-300 animate-modal-card flex flex-col max-h-[92vh]">
             <div className="p-5 sm:p-6 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-accent-500 text-white flex items-center justify-center shadow-xs shrink-0">
                   <Lock className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-bold text-base leading-tight">
                     Password Update Required
                   </h3>
-                  <span className="text-xs text-orange-200 font-mono">
+                  <span className="text-xs text-accent-200 font-mono">
                     Mandatory Next-Login Policy
                   </span>
                 </div>
@@ -2952,7 +2919,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   value={simCurrentPass}
                   onChange={(e) => setSimCurrentPass(e.target.value)}
                   placeholder="Enter temporary password"
-                  className="w-full px-4 py-2.5 text-sm font-mono bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                  className="w-full px-4 py-2.5 text-sm font-mono bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500"
                 />
               </div>
 
@@ -2968,7 +2935,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     value={simNewPass}
                     onChange={(e) => setSimNewPass(e.target.value)}
                     placeholder="Minimum 8 characters"
-                    className="w-full pl-4 pr-12 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                    className="w-full pl-4 pr-12 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500"
                   />
                   <button
                     type="button"
@@ -2991,7 +2958,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   value={simConfirmPass}
                   onChange={(e) => setSimConfirmPass(e.target.value)}
                   placeholder="Retype new password"
-                  className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-orange-500"
+                  className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500"
                 />
               </div>
 

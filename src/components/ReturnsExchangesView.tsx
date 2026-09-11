@@ -23,6 +23,7 @@ import {
   Sparkles,
   DollarSign,
 } from 'lucide-react';
+import { InfoHint } from './InfoHint';
 import {
   ReturnExchangeRecord,
   ReturnedItemDetail,
@@ -75,13 +76,11 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
 
   // New Return/Swap Modal State
   const [modalOpen, setModalOpen] = useState(false);
-  const [selectedSaleId, setSelectedSaleId] = useState<string>(sales[0]?.id || '');
+  const [selectedSaleId, setSelectedSaleId] = useState<string>('');
   const [customReceiptNumber, setCustomReceiptNumber] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [outletId, setOutletId] = useState<OutletId>(
-    currentOutlet.id === 'all-outlets' ? 'radiance-lighting' : currentOutlet.id
-  );
+  const [outletId, setOutletId] = useState<OutletId | ''>('');
 
   // Returned Items Form State
   const [returnItems, setReturnItems] = useState<
@@ -91,14 +90,14 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
       sku: string;
       quantity: number;
       unitPrice: number;
-      reason: ReturnReason;
-      disposition: ReturnDisposition;
+      reason: ReturnReason | '';
+      disposition: ReturnDisposition | '';
       conditionNotes: string;
     }>
   >([]);
 
   // Swapped (Replacement) Items Form State
-  const [isSwapping, setIsSwapping] = useState(true);
+  const [isSwapping, setIsSwapping] = useState(false);
   const [swapItems, setSwapItems] = useState<
     Array<{
       productId: string;
@@ -107,7 +106,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
     }>
   >([]);
 
-  const [settlementMethod, setSettlementMethod] = useState<'Cash' | 'Mobile Money' | 'Card' | 'Store Credit' | 'Even Swap'>('Mobile Money');
+  const [settlementMethod, setSettlementMethod] = useState<ReturnExchangeRecord['settlementMethod'] | ''>('');
   const [transactionNotes, setTransactionNotes] = useState('');
 
   // Printable Voucher Modal
@@ -122,23 +121,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
       setCustomerName(sale.customerName || 'Walk-in Customer');
       setCustomerPhone(sale.customerPhone || '');
       setOutletId(sale.outletId);
-
-      // Populate default returnable item from the sale
-      if (sale.items.length > 0) {
-        const first = sale.items[0];
-        setReturnItems([
-          {
-            productId: first.productId,
-            productName: first.product.name,
-            sku: first.product.sku,
-            quantity: 1,
-            unitPrice: first.unitPrice,
-            reason: 'Wrong Specification / Color',
-            disposition: 'RESTOCK',
-            conditionNotes: 'Box opened, fixture uninstalled and in brand new working order.',
-          },
-        ]);
-      }
+      setReturnItems([]);
     }
   };
 
@@ -174,43 +157,26 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
 
   const netDifference = currentSwapSubtotal - currentReturnSubtotal;
 
-  // Open modal with initial values
+  // Open modal with empty entry values
   const handleOpenModal = () => {
-    if (sales.length > 0) {
-      handleSelectSale(sales[0].id);
-    } else {
-      const defaultProd = products[0];
-      setReturnItems([
-        {
-          productId: defaultProd?.id || '',
-          productName: defaultProd?.name || 'Fixture',
-          sku: defaultProd?.sku || 'SKU-01',
-          quantity: 1,
-          unitPrice: defaultProd?.retailPrice || 100,
-          reason: 'Wrong Specification / Color',
-          disposition: 'RESTOCK',
-          conditionNotes: 'Box intact, architect altered room requirements.',
-        },
-      ]);
-    }
-
-    // Default replacement product
-    const replacementProd = products[1] || products[0];
-    setSwapItems([
-      {
-        productId: replacementProd?.id || '',
-        quantity: 1,
-        unitPrice: replacementProd?.retailPrice || 110,
-      },
-    ]);
-    setIsSwapping(true);
+    setSelectedSaleId('');
+    setCustomReceiptNumber('');
+    setCustomerName('');
+    setCustomerPhone('');
+    setOutletId('');
+    setReturnItems([]);
+    setSwapItems([]);
+    setIsSwapping(false);
+    setSettlementMethod('');
+    setTransactionNotes('');
     setModalOpen(true);
   };
 
   // Submit Return or Swap
   const handleSubmitReturnOrSwap = (e: React.FormEvent) => {
     e.preventDefault();
-    if (returnItems.length === 0) return;
+    if (!outletId || returnItems.length === 0 || returnItems.some((item) => !item.productId || !item.reason || !item.disposition || item.quantity <= 0 || item.unitPrice <= 0)) return;
+    if (netDifference !== 0 && !settlementMethod) return;
 
     const matchedOutlet = outlets.find((o) => o.id === outletId) || outlets[0];
     const isExchange = isSwapping && swapItems.length > 0;
@@ -225,8 +191,8 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       lineTotal: item.quantity * item.unitPrice,
-      reason: item.reason,
-      disposition: item.disposition,
+      reason: item.reason as ReturnReason,
+      disposition: item.disposition as ReturnDisposition,
       conditionNotes: item.conditionNotes,
     }));
 
@@ -261,7 +227,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
       returnedSubtotal: currentReturnSubtotal,
       swappedSubtotal: currentSwapSubtotal,
       netDifference: netDifference,
-      settlementMethod: netDifference === 0 ? 'Even Swap' : settlementMethod,
+      settlementMethod: netDifference === 0 ? 'Even Swap' : settlementMethod as ReturnExchangeRecord['settlementMethod'],
       settlementStatus: 'SETTLED',
       notes: transactionNotes.trim(),
     };
@@ -338,16 +304,11 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-300">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-slate-800 tracking-tight">
-              Goods Returns &amp; Swaps (Exchanges)
-            </h1>
+            <div className="flex items-center gap-2"><h1 className="text-2xl font-black text-slate-800 tracking-tight">Goods Returns &amp; Swaps (Exchanges)</h1><InfoHint text="Process customer returns, product exchanges, price differences, and stock restocking." /></div>
             <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300">
               Inventory Reconciled
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Process customer goods returns, product swaps with price difference balancing, and automated stock restocks.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -376,7 +337,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
         <div className="returns-metric-card bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Swaps &amp; Exchanges</span>
-            <div className="w-8 h-8 rounded-lg bg-white/10 text-orange-300 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-white/10 text-accent-300 flex items-center justify-center">
               <RefreshCw className="w-4 h-4" />
             </div>
           </div>
@@ -392,7 +353,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
         <div className="returns-metric-card bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Refunds Processed</span>
-            <div className="w-8 h-8 rounded-lg bg-white/10 text-orange-300 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-white/10 text-accent-300 flex items-center justify-center">
               <RotateCcw className="w-4 h-4" />
             </div>
           </div>
@@ -452,7 +413,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by reference # (SWAP/RET), receipt #, customer, or phone..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
           />
         </div>
 
@@ -521,7 +482,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                         className={`inline-block mt-1 text-[9px] font-black uppercase px-2 py-0.2 rounded-md ${
                           record.type === 'EXCHANGE_SWAP'
                             ? 'bg-purple-100 text-purple-800'
-                            : 'bg-orange-100 text-orange-800'
+                            : 'bg-accent-100 text-accent-800'
                         }`}
                       >
                         {record.type === 'EXCHANGE_SWAP' ? 'Exchange / Swap' : 'Return & Refund'}
@@ -632,7 +593,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
           <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl border border-slate-300 overflow-hidden animate-modal-card max-h-[92vh] flex flex-col">
             <div className="px-6 py-5 sm:px-8 bg-slate-900 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-accent-500/20 border border-accent-500/40 text-accent-400 flex items-center justify-center">
                   <ArrowRightLeft className="w-5 h-5 stroke-[2.5]" />
                 </div>
                 <div>
@@ -654,7 +615,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
               {/* Section 1: Original Receipt & Customer */}
               <div className="bg-slate-50 p-5 rounded-xl border border-slate-300 space-y-4">
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <Receipt className="w-4 h-4 text-orange-500" />
+                  <Receipt className="w-4 h-4 text-accent-500" />
                   <span>1. Original Purchase Reference</span>
                 </h4>
 
@@ -664,10 +625,12 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                       Choose from Recent Sale:
                     </label>
                     <select
+                      required
                       value={selectedSaleId}
                       onChange={(e) => handleSelectSale(e.target.value)}
-                      className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-900"
+                      className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-medium text-slate-900"
                     >
+                      <option value="" disabled>Select sale</option>
                       {sales.map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.receiptNumber} - {s.customerName || 'Walk-in'} (GH₵ {s.total.toFixed(2)})
@@ -684,7 +647,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                       type="text"
                       value={customReceiptNumber}
                       onChange={(e) => setCustomReceiptNumber(e.target.value)}
-                      className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-mono text-slate-900"
+                      className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-mono text-slate-900"
                       required
                     />
                   </div>
@@ -698,7 +661,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
                       placeholder="Customer Name"
-                      className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 text-slate-900"
+                      className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 text-slate-900"
                       required
                     />
                   </div>
@@ -725,6 +688,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                           Product Returned:
                         </label>
                         <select
+                          required
                           value={item.productId}
                           onChange={(e) => {
                             const p = products.find((prod) => prod.id === e.target.value);
@@ -737,8 +701,9 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                             };
                             setReturnItems(updated);
                           }}
-                          className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 text-slate-900"
+                          className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 text-slate-900"
                         >
+                          <option value="" disabled>Select product</option>
                           {products.map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.name} (GH₵ {p.retailPrice.toFixed(2)})
@@ -790,14 +755,16 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                           Return Reason:
                         </label>
                         <select
+                          required
                           value={item.reason}
                           onChange={(e) => {
                             const updated = [...returnItems];
                             updated[idx].reason = e.target.value as ReturnReason;
                             setReturnItems(updated);
                           }}
-                          className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 text-slate-900"
+                          className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 text-slate-900"
                         >
+                          <option value="" disabled>Select return reason</option>
                           {RETURN_REASONS.map((r) => (
                             <option key={r} value={r}>
                               {r}
@@ -811,14 +778,16 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                           Stock Disposition:
                         </label>
                         <select
+                          required
                           value={item.disposition}
                           onChange={(e) => {
                             const updated = [...returnItems];
                             updated[idx].disposition = e.target.value as ReturnDisposition;
                             setReturnItems(updated);
                           }}
-                          className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-bold text-slate-900"
+                          className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-bold text-slate-900"
                         >
+                          <option value="" disabled>Select disposition</option>
                           <option value="RESTOCK">✓ Restock Into Inventory (Increases Stock)</option>
                           <option value="DAMAGED_WRITE_OFF">⚠ Damaged / Write-Off (Do Not Restock)</option>
                         </select>
@@ -835,11 +804,33 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                           setReturnItems(updated);
                         }}
                         placeholder="Condition notes / inspection findings..."
-                        className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 text-slate-900"
+                        className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 text-slate-900"
                       />
                     </div>
                   </div>
                 ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setReturnItems([
+                      ...returnItems,
+                      {
+                        productId: '',
+                        productName: '',
+                        sku: '',
+                        quantity: 0,
+                        unitPrice: 0,
+                        reason: '',
+                        disposition: '',
+                        conditionNotes: '',
+                      },
+                    ])
+                  }
+                  className="text-sm font-bold text-accent-600 hover:text-accent-700 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Returned Item</span>
+                </button>
               </div>
 
               {/* Section 3: Swapping Goods (Replacement) */}
@@ -851,7 +842,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                       id="toggleSwap"
                       checked={isSwapping}
                       onChange={(e) => setIsSwapping(e.target.checked)}
-                      className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-slate-300 cursor-pointer"
+                      className="w-4 h-4 rounded text-accent-600 focus:ring-accent-500 border-slate-300 cursor-pointer"
                     />
                     <label
                       htmlFor="toggleSwap"
@@ -872,11 +863,12 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                   <div className="bg-purple-50/50 p-5 rounded-xl border border-purple-200 space-y-3">
                     {swapItems.map((item, idx) => (
                       <div key={idx} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                        <select
-                          value={item.productId}
+                      <select
+                        required
+                        value={item.productId}
                           onChange={(e) => {
                             const p = products.find((prod) => prod.id === e.target.value);
-                            const updated = [...swapItems];
+                          const updated = [...swapItems];
                             updated[idx] = {
                               ...updated[idx],
                               productId: e.target.value,
@@ -884,8 +876,9 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                             };
                             setSwapItems(updated);
                           }}
-                          className="flex-1 px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 text-slate-900"
+                          className="flex-1 px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 text-slate-900"
                         >
+                          <option value="" disabled>Select replacement product</option>
                           {products.map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.name} (GH₵ {p.retailPrice.toFixed(2)})
@@ -930,9 +923,9 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                         setSwapItems([
                           ...swapItems,
                           {
-                            productId: products[0]?.id || '',
-                            quantity: 1,
-                            unitPrice: products[0]?.retailPrice || 100,
+                            productId: '',
+                            quantity: 0,
+                            unitPrice: 0,
                           },
                         ])
                       }
@@ -981,14 +974,16 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                         {netDifference > 0 ? 'Customer Pays Via:' : 'Refund Method:'}
                       </label>
                       <select
+                        required
                         value={settlementMethod}
                         onChange={(e) => setSettlementMethod(e.target.value as any)}
-                        className="px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg font-bold text-slate-800 focus:outline-orange-500"
+                        className="px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg font-bold text-slate-800 focus:outline-accent-500"
                       >
+                        <option value="" disabled>Select method</option>
                         <option value="Mobile Money">Mobile Money (MoMo)</option>
                         <option value="Cash">Cash (Drawer Float)</option>
-                        <option value="Card">Card POS</option>
-                        <option value="Store Credit">Store Credit Voucher</option>
+                        <option value="Bank Transfer">Bank Transfer</option>
+                        <option value="Store Credit Voucher">Store Credit Voucher</option>
                       </select>
                     </div>
                   )}
@@ -1000,7 +995,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                     value={transactionNotes}
                     onChange={(e) => setTransactionNotes(e.target.value)}
                     placeholder="Transaction authorization notes or comments..."
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 text-slate-900"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 text-slate-900"
                   />
                 </div>
               </div>

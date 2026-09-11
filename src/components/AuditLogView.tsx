@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ShieldCheck, Search, X } from 'lucide-react';
 import { AuditLogEntry } from '../types';
+import { InfoHint } from './InfoHint';
 
 interface AuditLogViewProps {
   logs: AuditLogEntry[];
@@ -30,14 +31,11 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ logs }) => {
       {/* Header */}
       <div>
         <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Security & Audit Trail</h1>
+          <div className="flex items-center gap-2"><h1 className="text-2xl font-black text-slate-800 tracking-tight">Security &amp; Audit Trail</h1><InfoHint text="Immutable event log for manager overrides, price adjustments, voids, and shift reconciliations." /></div>
           <span className="bg-slate-100 text-slate-700 text-[11px] font-bold px-2 py-0.5 rounded-full">
             Immutable Log
           </span>
         </div>
-        <p className="text-xs text-slate-500 mt-1">
-          Immutable event log tracking manager overrides, price adjustments, voids, and shift reconciliations.
-        </p>
       </div>
 
       {/* Search Bar */}
@@ -49,7 +47,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ logs }) => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search actor, action, or details..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-orange-500"
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-accent-500"
           />
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
@@ -92,7 +90,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ logs }) => {
           </table>
         </div>
       </div>
-      {selectedLog && <div className="fixed inset-0 z-50 bg-slate-950/40 p-4 flex items-center justify-center" onClick={() => setSelectedLog(null)}><div className="w-full max-w-xl rounded-xl border border-slate-300 bg-white shadow-xl" onClick={(event) => event.stopPropagation()}><div className="flex items-center justify-between border-b border-slate-200 bg-slate-900 px-5 py-4 text-white"><div><p className="text-[10px] font-bold uppercase tracking-wider text-orange-300">Read-only audit entry</p><h2 className="mt-1 text-sm font-black">{selectedLog.action}</h2></div><button onClick={() => setSelectedLog(null)} className="rounded-lg p-1.5 text-slate-300 hover:bg-white/10" aria-label="Close audit detail"><X className="w-4 h-4" /></button></div><div className="grid grid-cols-2 gap-4 p-5 text-xs"><div><p className="text-slate-500">Actor</p><p className="mt-1 font-bold text-slate-900">{selectedLog.actor}</p></div><div><p className="text-slate-500">Timestamp</p><p className="mt-1 font-bold text-slate-900">{selectedLog.timestamp}</p></div><div><p className="text-slate-500">Entity</p><p className="mt-1 font-bold text-slate-900">{selectedLog.entity}</p></div><div><p className="text-slate-500">Outlet</p><p className="mt-1 font-bold text-slate-900">{selectedLog.outletName}</p></div><div className="col-span-2 rounded-lg bg-slate-50 p-4"><p className="text-slate-500">Recorded details</p><p className="mt-2 leading-5 text-slate-700">{selectedLog.details}</p></div></div></div></div>}
+      {selectedLog && <div className="fixed inset-0 z-50 bg-slate-950/40 p-4 flex items-center justify-center" onClick={() => setSelectedLog(null)}><div className="w-full max-w-xl rounded-xl border border-slate-300 bg-white shadow-xl" onClick={(event) => event.stopPropagation()}><div className="flex items-center justify-between border-b border-slate-200 bg-slate-900 px-5 py-4 text-white"><div><p className="text-[10px] font-bold uppercase tracking-wider text-accent-300">Read-only audit entry</p><h2 className="mt-1 text-sm font-black">{selectedLog.action}</h2></div><button onClick={() => setSelectedLog(null)} className="rounded-lg p-1.5 text-slate-300 hover:bg-white/10" aria-label="Close audit detail"><X className="w-4 h-4" /></button></div><div className="grid grid-cols-2 gap-4 p-5 text-xs"><div><p className="text-slate-500">Actor</p><p className="mt-1 font-bold text-slate-900">{selectedLog.actor}</p></div><div><p className="text-slate-500">Timestamp</p><p className="mt-1 font-bold text-slate-900">{selectedLog.timestamp}</p></div><div><p className="text-slate-500">Entity</p><p className="mt-1 font-bold text-slate-900">{selectedLog.entity}</p></div><div><p className="text-slate-500">Outlet</p><p className="mt-1 font-bold text-slate-900">{selectedLog.outletName}</p></div><div className="col-span-2 rounded-lg bg-slate-50 p-4"><p className="text-slate-500">Recorded details</p><p className="mt-2 leading-5 text-slate-700">{selectedLog.details}</p></div></div></div></div>}
     </div>
   );
 };

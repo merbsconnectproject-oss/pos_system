@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Building, CalendarClock, FileText, Mail, Package, Phone, Plus, Search, Truck, Wallet, X } from 'lucide-react';
 import { Outlet, Product, StockMovement, Supplier } from '../types';
+import { InfoHint } from './InfoHint';
 
 type SupplierMode = 'list' | 'receipts' | 'purchase-orders' | 'balances';
 
@@ -36,13 +37,13 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
   const realOutlets = outlets.filter((outlet) => outlet.id !== 'all-outlets');
   const defaultOutlet = currentOutlet.id === 'all-outlets' ? realOutlets[0]?.id || 'inco-hardware' : currentOutlet.id;
   const [form, setForm] = useState({
-    outletId: defaultOutlet,
+    outletId: '',
     name: '',
     contactPerson: '',
     categorySupplied: '',
     phone: '',
     email: '',
-    paymentTerms: 'Net 30' as Supplier['paymentTerms'],
+    paymentTerms: '' as Supplier['paymentTerms'] | '',
     address: '',
   });
 
@@ -59,13 +60,13 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
   const startCreate = () => {
     setEditingSupplier(null);
     setForm({
-      outletId: defaultOutlet,
+      outletId: '',
       name: '',
       contactPerson: '',
       categorySupplied: '',
       phone: '',
       email: '',
-      paymentTerms: 'Net 30',
+      paymentTerms: '',
       address: '',
     });
     setModalOpen(true);
@@ -88,6 +89,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
 
   const submitSupplier = (event: React.FormEvent) => {
     event.preventDefault();
+    if (!form.outletId || !form.paymentTerms) return;
     const supplier: Supplier = {
       id: editingSupplier?.id || `sup-${Date.now()}`,
       name: form.name.trim(),
@@ -117,8 +119,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
     <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Suppliers</h1>
-          <p className="text-sm text-slate-500 mt-1">Supplier records, receipt history, purchase planning and balances.</p>
+          <div className="flex items-center gap-2"><h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Suppliers</h1><InfoHint text="Supplier records, receipt history, purchase planning and balances." /></div>
         </div>
         <button onClick={startCreate} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-xs self-start lg:self-auto">
           <Plus className="w-4 h-4" /> Add Supplier
@@ -132,7 +133,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
           ['purchase-orders', 'Purchase Orders'],
           ['balances', 'Balances'],
         ].map(([value, label]) => (
-          <button key={value} onClick={() => setActiveMode(value as SupplierMode)} className={`px-3.5 py-2 rounded-lg text-xs font-black whitespace-nowrap ${activeMode === value ? 'bg-orange-500 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-50'}`}>
+          <button key={value} onClick={() => setActiveMode(value as SupplierMode)} className={`px-3.5 py-2 rounded-lg text-xs font-black whitespace-nowrap ${activeMode === value ? 'bg-accent-500 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-50'}`}>
             {label}
           </button>
         ))}
@@ -143,7 +144,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
           <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col sm:flex-row gap-3 items-center justify-between">
             <div className="relative w-full sm:w-96">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search supplier, contact, phone or product line..." className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-orange-500" />
+              <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search supplier, contact, phone or product line..." className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-accent-500" />
             </div>
             <select value={storeFilter} onChange={(event) => setStoreFilter(event.target.value)} className="w-full sm:w-auto text-xs font-semibold bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-700">
               <option value="all">All outlets</option>
@@ -168,7 +169,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
                   {filtered.map((supplier) => (
                     <tr key={supplier.id} className="hover:bg-slate-50">
                       <td className="py-3 px-4">
-                        <button onClick={() => setSelectedSupplier(supplier)} className="font-bold text-slate-900 hover:text-orange-600 text-left">{supplier.name}</button>
+                        <button onClick={() => setSelectedSupplier(supplier)} className="font-bold text-slate-900 hover:text-accent-600 text-left">{supplier.name}</button>
                         <div className="text-[10px] text-slate-400">{supplier.categorySupplied || 'General supplier'}</div>
                       </td>
                       <td className="py-3 px-4 text-slate-600">
@@ -182,7 +183,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
                         <div className="flex items-center justify-center gap-1.5">
                           <button onClick={() => setSelectedSupplier(supplier)} className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold hover:bg-slate-200">View</button>
                           <button onClick={() => startEdit(supplier)} className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold hover:bg-slate-200">Edit</button>
-                          <button onClick={() => onReceiveStock(supplier.id)} className="px-2 py-1 rounded-lg bg-orange-500 text-white font-bold hover:bg-orange-600">Receive</button>
+                          <button onClick={() => onReceiveStock(supplier.id)} className="px-2 py-1 rounded-lg bg-accent-500 text-white font-bold hover:bg-accent-600">Receive</button>
                         </div>
                       </td>
                     </tr>
@@ -192,7 +193,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
                       <td colSpan={6} className="py-16 text-center">
                         <Building className="w-12 h-12 mx-auto text-slate-300" />
                         <h3 className="mt-3 font-black text-slate-900">No suppliers yet</h3>
-                        <button onClick={startCreate} className="mt-2 text-sm font-bold text-orange-600 hover:underline">Add supplier</button>
+                        <button onClick={startCreate} className="mt-2 text-sm font-bold text-accent-600 hover:underline">Add supplier</button>
                       </td>
                     </tr>
                   )}
@@ -206,7 +207,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
       {activeMode === 'receipts' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="p-5 border-b border-slate-200 flex items-center gap-3">
-            <FileText className="w-5 h-5 text-orange-600" />
+            <FileText className="w-5 h-5 text-accent-600" />
             <div>
               <h2 className="text-sm font-black text-slate-900">Receipt History</h2>
               <p className="text-xs text-slate-500">Read-only goods receipt records and movement references.</p>
@@ -232,7 +233,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
       {activeMode === 'purchase-orders' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-6">
           <div className="flex items-start gap-3">
-            <CalendarClock className="w-6 h-6 text-orange-600" />
+            <CalendarClock className="w-6 h-6 text-accent-600" />
             <div>
               <h2 className="text-lg font-black text-slate-900">Purchase Orders</h2>
               <p className="text-sm text-slate-500">Stage 2 workspace for purchase orders, partial delivery, over-delivery and short-delivery handling.</p>
@@ -245,7 +246,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {filtered.slice(0, 6).map((supplier) => (
             <div key={supplier.id} className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
-              <Wallet className="w-5 h-5 text-orange-600" />
+              <Wallet className="w-5 h-5 text-accent-600" />
               <h3 className="mt-3 text-sm font-black text-slate-900">{supplier.name}</h3>
               <div className="mt-1 text-2xl font-black text-slate-900">{formatMoney(supplier.totalSupplied * 0.18)}</div>
               <p className="text-xs text-slate-500 mt-1">Estimated outstanding balance pending supplier invoice model.</p>
@@ -300,7 +301,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
           <div onClick={(event) => event.stopPropagation()} className="bg-white rounded-xl w-full max-w-3xl shadow-2xl border border-slate-300 overflow-hidden animate-modal-card flex flex-col max-h-[92vh]">
             <div className="bg-slate-900 text-white px-6 py-5 sm:px-8 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center"><Truck className="w-5 h-5" /></div>
+                <div className="w-10 h-10 rounded-lg bg-accent-500/20 border border-accent-500/40 text-accent-400 flex items-center justify-center"><Truck className="w-5 h-5" /></div>
                 <div>
                   <h3 className="font-black text-xl text-white">{editingSupplier ? 'Edit Supplier' : 'Add Supplier'}</h3>
                   <p className="text-xs text-slate-400 mt-0.5">Supplier identity, contact details, payment terms and outlet assignment.</p>
@@ -310,18 +311,18 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
             </div>
             <form onSubmit={submitSupplier} className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <label className="text-sm font-bold text-slate-800">Supplier Name *<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-orange-500" /></label>
-                <label className="text-sm font-bold text-slate-800">Contact Person *<input required value={form.contactPerson} onChange={(event) => setForm({ ...form, contactPerson: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-orange-500" /></label>
-                <label className="text-sm font-bold text-slate-800">Phone *<input required value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-orange-500" /></label>
-                <label className="text-sm font-bold text-slate-800">Email<input value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-orange-500" /></label>
-                <label className="text-sm font-bold text-slate-800">Payment Terms<select value={form.paymentTerms} onChange={(event) => setForm({ ...form, paymentTerms: event.target.value as Supplier['paymentTerms'] })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white focus:outline-orange-500"><option>Cash on Delivery</option><option>Net 14</option><option>Net 30</option><option>Advance</option></select></label>
-                <label className="text-sm font-bold text-slate-800">Outlet<select value={form.outletId} onChange={(event) => setForm({ ...form, outletId: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white focus:outline-orange-500">{realOutlets.map((outlet) => <option key={outlet.id} value={outlet.id}>{outlet.name}</option>)}</select></label>
+                <label className="text-sm font-bold text-slate-800">Supplier Name *<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-accent-500" /></label>
+                <label className="text-sm font-bold text-slate-800">Contact Person *<input required value={form.contactPerson} onChange={(event) => setForm({ ...form, contactPerson: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-accent-500" /></label>
+                <label className="text-sm font-bold text-slate-800">Phone *<input required value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-accent-500" /></label>
+                <label className="text-sm font-bold text-slate-800">Email<input value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-accent-500" /></label>
+                <label className="text-sm font-bold text-slate-800">Payment Terms<select required value={form.paymentTerms} onChange={(event) => setForm({ ...form, paymentTerms: event.target.value as Supplier['paymentTerms'] | '' })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white focus:outline-accent-500"><option value="" disabled>Select payment terms</option><option>Cash on Delivery</option><option>Net 14</option><option>Net 30</option><option>Advance</option></select></label>
+                <label className="text-sm font-bold text-slate-800">Outlet<select required value={form.outletId} onChange={(event) => setForm({ ...form, outletId: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white focus:outline-accent-500"><option value="" disabled>Select outlet</option>{realOutlets.map((outlet) => <option key={outlet.id} value={outlet.id}>{outlet.name}</option>)}</select></label>
               </div>
-              <label className="text-sm font-bold text-slate-800 block">Supplied Product Lines<input value={form.categorySupplied} onChange={(event) => setForm({ ...form, categorySupplied: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-orange-500" /></label>
-              <label className="text-sm font-bold text-slate-800 block">Address<input value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-orange-500" /></label>
+              <label className="text-sm font-bold text-slate-800 block">Supplied Product Lines<input value={form.categorySupplied} onChange={(event) => setForm({ ...form, categorySupplied: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-accent-500" /></label>
+              <label className="text-sm font-bold text-slate-800 block">Address<input value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-accent-500" /></label>
               <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-slate-200">
                 <button type="button" onClick={() => setModalOpen(false)} className="sm:w-1/3 py-3 rounded-lg border border-slate-300 font-bold text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-                <button type="submit" className="sm:w-2/3 py-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm shadow-xs">{editingSupplier ? 'Save Changes' : 'Save Supplier'}</button>
+                <button type="submit" className="sm:w-2/3 py-3 rounded-lg bg-accent-500 hover:bg-accent-600 text-white font-bold text-sm shadow-xs">{editingSupplier ? 'Save Changes' : 'Save Supplier'}</button>
               </div>
             </form>
           </div>

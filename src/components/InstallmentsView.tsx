@@ -22,6 +22,7 @@ import {
   Layers,
   ArrowRight,
 } from 'lucide-react';
+import { InfoHint } from './InfoHint';
 import {
   CustomerInstallmentPlan,
   InstallmentScheduleItem,
@@ -65,30 +66,22 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
 
   // New Plan Modal State
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(customers[0]?.id || '');
-  const [planOutletId, setPlanOutletId] = useState<string>(
-    currentOutlet.id === 'all-outlets' ? 'radiance-lighting' : currentOutlet.id
-  );
-  const [planFrequency, setPlanFrequency] = useState<'weekly' | 'biweekly' | 'monthly'>('monthly');
-  const [planInstallmentCount, setPlanInstallmentCount] = useState<number>(3);
-  const [planDownPayment, setPlanDownPayment] = useState<string>('1500');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const [planOutletId, setPlanOutletId] = useState<string>('');
+  const [planFrequency, setPlanFrequency] = useState<'weekly' | 'biweekly' | 'monthly' | ''>('');
+  const [planInstallmentCount, setPlanInstallmentCount] = useState<string>('');
+  const [planDownPayment, setPlanDownPayment] = useState<string>('');
   const [planNotes, setPlanNotes] = useState('');
   const [planSelectedItems, setPlanSelectedItems] = useState<
     Array<{ productId: string; quantity: number; unitPrice: number }>
-  >([
-    {
-      productId: products.find((p) => p.outletId === 'radiance-lighting')?.id || products[0]?.id || '',
-      quantity: 2,
-      unitPrice: products.find((p) => p.outletId === 'radiance-lighting')?.retailPrice || 350,
-    },
-  ]);
+  >([]);
 
   // Payment Recording Modal State
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [activePlanForPayment, setActivePlanForPayment] = useState<CustomerInstallmentPlan | null>(null);
-  const [selectedInstallmentNum, setSelectedInstallmentNum] = useState<number>(1);
+  const [selectedInstallmentNum, setSelectedInstallmentNum] = useState<string>('');
   const [paymentAmount, setPaymentAmount] = useState<string>('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('momo');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>('');
   const [paymentReference, setPaymentReference] = useState('');
 
   // Receipt Slip Modal
@@ -146,30 +139,25 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
   // Handle Opening Payment Modal
   const handleOpenPayment = (plan: CustomerInstallmentPlan, installmentNum?: number) => {
     setActivePlanForPayment(plan);
-    const targetItem =
-      installmentNum !== undefined
-        ? plan.schedule.find((s) => s.installmentNumber === installmentNum)
-        : plan.schedule.find((s) => s.status !== 'PAID') || plan.schedule[0];
-
-    setSelectedInstallmentNum(targetItem ? targetItem.installmentNumber : 1);
-    setPaymentAmount(
-      targetItem ? (targetItem.expectedAmount - targetItem.paidAmount).toString() : '500'
-    );
-    setPaymentReference(`MOM-${Math.floor(1000000 + Math.random() * 9000000)}`);
+    setSelectedInstallmentNum(installmentNum !== undefined ? String(installmentNum) : '');
+    setPaymentAmount('');
+    setPaymentMethod('');
+    setPaymentReference('');
     setPaymentModalOpen(true);
   };
 
   // Submit Installment Payment
   const handleSubmitPayment = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activePlanForPayment || !paymentAmount || parseFloat(paymentAmount) <= 0) return;
+    const installmentNum = parseInt(selectedInstallmentNum, 10);
+    if (!activePlanForPayment || !paymentMethod || Number.isNaN(installmentNum) || !paymentAmount || parseFloat(paymentAmount) <= 0) return;
 
     const amount = parseFloat(paymentAmount);
-    const receiptNum = `RAD-INST-${activePlanForPayment.planNumber.replace('INST-', '')}-${selectedInstallmentNum}`;
+    const receiptNum = `RAD-INST-${activePlanForPayment.planNumber.replace('INST-', '')}-${installmentNum}`;
     const today = new Date().toISOString().slice(0, 10);
 
     const updatedSchedule: InstallmentScheduleItem[] = activePlanForPayment.schedule.map((item) => {
-      if (item.installmentNumber === selectedInstallmentNum) {
+      if (item.installmentNumber === installmentNum) {
         const newPaid = item.paidAmount + amount;
         return {
           ...item,
@@ -200,7 +188,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
     // Open Printable Receipt Slip
     setPaymentReceiptSlip({
       plan: activePlanForPayment,
-      installmentNum: selectedInstallmentNum,
+      installmentNum,
       amountPaid: amount,
       method: paymentMethod.toUpperCase(),
       reference: paymentReference,
@@ -213,8 +201,10 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
   // Create New Plan Submit
   const handleCreatePlanSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const cust = customers.find((c) => c.id === selectedCustomerId) || customers[0];
-    const outlet = outlets.find((o) => o.id === planOutletId) || outlets[0];
+    const cust = customers.find((c) => c.id === selectedCustomerId);
+    const outlet = outlets.find((o) => o.id === planOutletId);
+    const installmentCount = parseInt(planInstallmentCount, 10);
+    if (!cust || !outlet || !planFrequency || Number.isNaN(installmentCount) || installmentCount <= 0 || planSelectedItems.length === 0) return;
 
     // Compute items
     const lineItems = planSelectedItems.map((item) => {
@@ -231,12 +221,12 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
     const totalOrder = lineItems.reduce((s, i) => s + i.lineTotal, 0);
     const downPay = Math.min(parseFloat(planDownPayment) || 0, totalOrder);
     const balanceToFinance = Math.max(0, totalOrder - downPay);
-    const perInstallment = balanceToFinance / planInstallmentCount;
+    const perInstallment = balanceToFinance / installmentCount;
 
     // Generate schedule
     const schedule: InstallmentScheduleItem[] = [];
     const now = new Date();
-    for (let i = 1; i <= planInstallmentCount; i++) {
+    for (let i = 1; i <= installmentCount; i++) {
       const dueDateObj = new Date(now);
       if (planFrequency === 'weekly') {
         dueDateObj.setDate(now.getDate() + i * 7);
@@ -269,7 +259,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
       downPayment: downPay,
       remainingBalance: balanceToFinance,
       frequency: planFrequency,
-      installmentCount: planInstallmentCount,
+      installmentCount,
       startDate: now.toISOString().slice(0, 10),
       status: 'ACTIVE',
       schedule: schedule,
@@ -322,16 +312,11 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-300">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-slate-800 tracking-tight">
-              Customer Installment Plans
-            </h1>
+            <div className="flex items-center gap-2"><h1 className="text-2xl font-black text-slate-800 tracking-tight">Customer Installment Plans</h1><InfoHint text="Scheduled payment plans, collection progress, outstanding balances, and overdue follow-up." /></div>
             <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300">
               Layaway &amp; Credit
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Enable customers to purchase high-value lighting fixtures &amp; systems on scheduled payment installments.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -360,7 +345,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
         <div className="installments-metric-card bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-bold tracking-wide uppercase">Total Credit Book</span>
-            <div className="w-8 h-8 rounded-lg bg-white/10 text-orange-300 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-white/10 text-accent-300 flex items-center justify-center">
               <Layers className="w-4 h-4" />
             </div>
           </div>
@@ -447,7 +432,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by customer name, phone, or plan number (e.g. INST-2026)..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
           />
         </div>
 
@@ -726,7 +711,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                                     {item.status !== 'PAID' && (
                                       <button
                                         onClick={() => handleOpenPayment(plan, item.installmentNumber)}
-                                        className="px-2.5 py-1 rounded-lg text-xs font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 transition-colors cursor-pointer"
+                                        className="px-2.5 py-1 rounded-lg text-xs font-bold text-accent-600 bg-accent-50 hover:bg-accent-100 transition-colors cursor-pointer"
                                       >
                                         Pay Now
                                       </button>
@@ -809,16 +794,18 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                 <label className="block text-sm font-bold text-slate-800 mb-1.5">
                   Select Installment Tranche *
                 </label>
-                <select
-                  value={selectedInstallmentNum}
-                  onChange={(e) => {
-                    const num = parseInt(e.target.value);
-                    setSelectedInstallmentNum(num);
+                  <select
+                    value={selectedInstallmentNum}
+                    onChange={(e) => {
+                    const num = parseInt(e.target.value, 10);
+                    setSelectedInstallmentNum(e.target.value);
                     const item = activePlanForPayment.schedule.find((s) => s.installmentNumber === num);
                     if (item) setPaymentAmount((item.expectedAmount - item.paidAmount).toString());
                   }}
-                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-900"
+                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-medium text-slate-900"
+                  required
                 >
+                  <option value="" disabled>Select installment</option>
                   {activePlanForPayment.schedule.map((s) => (
                     <option key={s.installmentNumber} value={s.installmentNumber}>
                       Installment #{s.installmentNumber} (Due: {s.dueDate}) - GH₵ {s.expectedAmount.toFixed(2)}{' '}
@@ -839,7 +826,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                   max={activePlanForPayment.remainingBalance}
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-base bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-mono font-black text-slate-900"
+                  className="w-full px-3.5 py-2.5 text-base bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-mono font-black text-slate-900"
                   required
                 />
               </div>
@@ -851,9 +838,11 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                   </label>
                   <select
                     value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-800"
+                    onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod | '')}
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-medium text-slate-800"
+                    required
                   >
+                    <option value="" disabled>Select payment channel</option>
                     <option value="momo">MTN / Telecel MoMo</option>
                     <option value="cash">Cash (Register Drawer)</option>
                     <option value="card">Visa / Mastercard POS</option>
@@ -870,7 +859,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                     value={paymentReference}
                     onChange={(e) => setPaymentReference(e.target.value)}
                     placeholder="e.g. MOM-44910"
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-mono text-slate-900"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-mono text-slate-900"
                   />
                 </div>
               </div>
@@ -902,7 +891,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
           <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl border border-slate-300 overflow-hidden animate-modal-card max-h-[92vh] flex flex-col">
             <div className="px-6 py-5 sm:px-8 bg-slate-900 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-accent-500/20 border border-accent-500/40 text-accent-400 flex items-center justify-center">
                   <Plus className="w-5 h-5 stroke-[3]" />
                 </div>
                 <div>
@@ -927,9 +916,10 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                   <select
                     value={selectedCustomerId}
                     onChange={(e) => setSelectedCustomerId(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-800"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-medium text-slate-800"
                     required
                   >
+                    <option value="" disabled>Select customer</option>
                     {customers.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name} ({c.phone}) - {c.customerType}
@@ -945,8 +935,10 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                   <select
                     value={planOutletId}
                     onChange={(e) => setPlanOutletId(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-800"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-medium text-slate-800"
+                    required
                   >
+                    <option value="" disabled>Select outlet</option>
                     {outlets.map((o) => (
                       <option key={o.id} value={o.id}>
                         {o.name}
@@ -965,6 +957,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                   {planSelectedItems.map((item, index) => (
                     <div key={index} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                       <select
+                        required
                         value={item.productId}
                         onChange={(e) => {
                           const prod = products.find((p) => p.id === e.target.value);
@@ -972,12 +965,13 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                           newItems[index] = {
                             ...newItems[index],
                             productId: e.target.value,
-                            unitPrice: prod ? prod.retailPrice : 100,
+                            unitPrice: prod ? prod.retailPrice : 0,
                           };
                           setPlanSelectedItems(newItems);
                         }}
-                        className="flex-1 px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-900"
+                        className="flex-1 px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-medium text-slate-900"
                       >
+                        <option value="" disabled>Select product</option>
                         {products.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.name} - GH₵ {p.retailPrice.toFixed(2)}
@@ -1027,13 +1021,13 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                       setPlanSelectedItems([
                         ...planSelectedItems,
                         {
-                          productId: products[0]?.id || '',
-                          quantity: 1,
-                          unitPrice: products[0]?.retailPrice || 100,
+                          productId: '',
+                          quantity: 0,
+                          unitPrice: 0,
                         },
                       ]);
                     }}
-                    className="text-sm font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1.5 cursor-pointer pt-2"
+                    className="text-sm font-bold text-accent-600 hover:text-accent-700 flex items-center gap-1.5 cursor-pointer pt-2"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Add Another Fixture</span>
@@ -1053,7 +1047,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                     min="0"
                     value={planDownPayment}
                     onChange={(e) => setPlanDownPayment(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-mono font-bold text-slate-900"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-mono font-bold text-slate-900"
                     required
                   />
                 </div>
@@ -1065,8 +1059,10 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                   <select
                     value={planFrequency}
                     onChange={(e) => setPlanFrequency(e.target.value as any)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-800"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-medium text-slate-800"
+                    required
                   >
+                    <option value="" disabled>Select frequency</option>
                     <option value="weekly">Weekly</option>
                     <option value="biweekly">Bi-weekly (Fortnightly)</option>
                     <option value="monthly">Monthly</option>
@@ -1079,9 +1075,11 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                   </label>
                   <select
                     value={planInstallmentCount}
-                    onChange={(e) => setPlanInstallmentCount(parseInt(e.target.value))}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-800"
+                    onChange={(e) => setPlanInstallmentCount(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-medium text-slate-800"
+                    required
                   >
+                    <option value="" disabled>Select count</option>
                     <option value={2}>2 Installments</option>
                     <option value={3}>3 Installments</option>
                     <option value={4}>4 Installments</option>
@@ -1099,7 +1097,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                   value={planNotes}
                   onChange={(e) => setPlanNotes(e.target.value)}
                   placeholder="e.g. Electrical installation contractor agreement for Airport Hills residence..."
-                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-orange-500 font-medium text-slate-900"
+                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 font-medium text-slate-900"
                 />
               </div>
 

@@ -19,6 +19,7 @@ import {
   Info,
 } from 'lucide-react';
 import { Outlet, Product, CompletedSale } from '../types';
+import { InfoHint } from './InfoHint';
 
 interface OutletComparisonViewProps {
   outlets: Outlet[];
@@ -177,12 +178,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
       {/* Header with Metric Mode Segmented Switcher */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-300 shadow-2xs">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-[-0.025em]">
-            Multi-Outlet Comparison
-          </h1>
-          <p className="text-sm font-normal text-slate-500 mt-1 tracking-normal">
-            Comparative performance and operational analysis across all enterprise retail branches.
-          </p>
+          <div className="flex items-center gap-2"><h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Multi-Outlet Comparison</h1><InfoHint text="Compare sales, margins, basket size, and operational performance across enterprise retail branches." /></div>
         </div>
 
         {/* Primary Toggle: 'Total Values' vs 'Average Per Sale' */}
@@ -201,7 +197,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              <BarChart3 className="w-3.5 h-3.5 text-orange-600" />
+              <BarChart3 className="w-3.5 h-3.5 text-accent-600" />
               <span>Total Values (Volume)</span>
             </button>
 
@@ -274,12 +270,12 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                       Outlet {idx + 1} • {outlet.town}
                     </span>
                     {metricMode === 'total' && isRevenueLeader && (
-                      <span className="text-[10px] font-black uppercase tracking-wider bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded">
+                      <span className="text-[10px] font-black uppercase tracking-wider bg-accent-50 text-accent-700 border border-accent-200 px-2 py-0.5 rounded">
                         Revenue Leader
                       </span>
                     )}
                     {metricMode === 'average' && isAovLeader && (
-                      <span className="text-[10px] font-black uppercase tracking-wider bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded">
+                      <span className="text-[10px] font-black uppercase tracking-wider bg-accent-50 text-accent-700 border border-accent-200 px-2 py-0.5 rounded">
                         Highest AOV
                       </span>
                     )}
@@ -293,7 +289,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                   </p>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-200 shrink-0">
-                  <Store className="w-5 h-5 text-orange-600" />
+                  <Store className="w-5 h-5 text-accent-600" />
                 </div>
               </div>
 
@@ -306,7 +302,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                     <div className="p-3.5 bg-slate-950 text-white rounded-xl border border-slate-900">
                       <div className="flex justify-between items-center text-[11px] text-slate-200 font-semibold">
                         <span>Total Gross Revenue</span>
-                        <span className="text-orange-300 font-mono font-bold">
+                        <span className="text-accent-300 font-mono font-bold">
                           {((metric.totalRevenue / maxTotalRevenue) * 100).toFixed(0)}% of Max
                         </span>
                       </div>
@@ -316,7 +312,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                       {/* Visual Relative Scale Bar */}
                       <div className="w-full bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
                         <div
-                          className="bg-orange-500 h-1.5 rounded-full transition-all duration-500"
+                          className="bg-accent-500 h-1.5 rounded-full transition-all duration-500"
                           style={{ width: `${(metric.totalRevenue / maxTotalRevenue) * 100}%` }}
                         />
                       </div>
@@ -372,7 +368,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                     <div className="p-3.5 bg-slate-950 text-white rounded-xl border border-slate-900">
                       <div className="flex justify-between items-center text-[11px] text-slate-200 font-semibold">
                         <span>Average Order Value (AOV)</span>
-                        <span className="text-orange-300 font-mono font-bold">
+                        <span className="text-accent-300 font-mono font-bold">
                           {((metric.avgOrderValue / maxAOV) * 100).toFixed(0)}% of Max
                         </span>
                       </div>
@@ -383,7 +379,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                       {/* Visual Relative Scale Bar */}
                       <div className="w-full bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
                         <div
-                          className="bg-orange-500 h-1.5 rounded-full transition-all duration-500"
+                          className="bg-accent-500 h-1.5 rounded-full transition-all duration-500"
                           style={{ width: `${(metric.avgOrderValue / maxAOV) * 100}%` }}
                         />
                       </div>
@@ -433,7 +429,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                 {/* Key Revenue Driver Box */}
                 <div className="p-3 bg-slate-50 border border-slate-300 rounded-xl text-xs space-y-1">
                   <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+                    <Sparkles className="w-3.5 h-3.5 text-accent-500" />
                     <span>Branch Catalyst & Category Focus</span>
                   </span>
                   <p className="text-slate-600 leading-relaxed text-[11px]">{metric.topDriver}</p>
@@ -462,7 +458,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
         <div className="p-5 border-b border-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
-              <Layers className="w-4 h-4 text-orange-600" />
+              <Layers className="w-4 h-4 text-accent-600" />
               <span>Direct Cross-Branch Benchmark Matrix</span>
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -529,7 +525,7 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
               {/* Row 2: Sales Count / Items per Sale */}
               <tr className="bg-slate-50/40">
                 <td className="py-3 px-4 font-bold text-slate-800 flex items-center gap-2">
-                  <ShoppingBag className="w-4 h-4 text-orange-600 shrink-0" />
+                  <ShoppingBag className="w-4 h-4 text-accent-600 shrink-0" />
                   <div>
                     <span>{metricMode === 'total' ? 'Completed Transactions' : 'Items Per Basket'}</span>
                     <span className="block text-[10px] text-slate-400 font-normal">

@@ -55,6 +55,7 @@ import {
 } from 'recharts';
 import { Product, Outlet, CompletedSale, Expense, CustomerInstallmentPlan, ReturnExchangeRecord } from '../types';
 import { exportToCsv } from '../utils/csvExport';
+import { InfoHint } from './InfoHint';
 
 interface AnalyticsReportsViewProps {
   products: Product[];
@@ -130,6 +131,61 @@ const PAYMENT_COLORS: Record<string, string> = {
   'Bank Transfer': '#334155',
 };
 
+const ChartInferenceCallout: React.FC<{
+  id: string;
+  title: string;
+  trend: string;
+  inference: string;
+  driver: string;
+  action: string;
+  expandedId: string | null;
+  onToggle: (id: string) => void;
+  tone?: 'default' | 'danger';
+}> = ({ id, title, trend, inference, driver, action, expandedId, onToggle, tone = 'default' }) => {
+  const expanded = expandedId === id;
+  const danger = tone === 'danger';
+
+  return (
+    <div className={`mt-4 rounded-xl border p-3.5 ${danger ? 'bg-rose-50/70 border-rose-200/80' : 'analytics-callout bg-slate-50 border-slate-200'}`}>
+      <button
+        type="button"
+        onClick={() => onToggle(id)}
+        className="w-full text-left"
+        aria-expanded={expanded}
+      >
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <span className={`font-bold flex items-center gap-1.5 ${danger ? 'text-rose-950' : 'text-slate-900'}`}>
+            <Sparkles className={`w-3.5 h-3.5 ${danger ? 'text-rose-600' : 'text-accent-600'}`} /> {title}
+          </span>
+          <span className="flex items-center gap-2 shrink-0">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${danger ? 'text-rose-800 bg-rose-100' : 'text-slate-700 bg-slate-200'}`}>
+              {trend}
+            </span>
+            <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''} ${danger ? 'text-rose-700' : 'text-slate-500'}`} />
+          </span>
+        </div>
+        {!expanded && (
+          <p className={`mt-2 text-[11px] font-semibold ${danger ? 'text-rose-800' : 'text-slate-600'}`}>
+            Click to reveal AI inference details.
+          </p>
+        )}
+      </button>
+
+      {expanded && (
+        <div className="mt-2 space-y-1.5">
+          <p className={`text-xs leading-relaxed ${danger ? 'text-rose-900/90' : 'text-slate-700'}`}>
+            {inference}
+          </p>
+          <div className={`text-[11px] font-medium pt-1 border-t flex items-center justify-between gap-3 ${danger ? 'text-rose-950/80 border-rose-200/60' : 'text-slate-600 border-slate-200'}`}>
+            <span>Driver: {driver}</span>
+            <span className={`font-bold shrink-0 ${danger ? 'text-rose-800' : 'text-accent-700'}`}>Action: {action}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
   products = [],
   sales = [],
@@ -157,6 +213,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
   const [expandedRecommendation, setExpandedRecommendation] = useState<number | null>(0);
   const [answerPanelOpen, setAnswerPanelOpen] = useState(false);
   const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [expandedChartInference, setExpandedChartInference] = useState<string | null>(null);
 
   // Sync outlet filter if currentOutlet changes
   useEffect(() => {
@@ -624,13 +681,11 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 flex items-center gap-2">
             <span>Analytics &amp; Executive Reports</span>
-            <span className="text-[10px] bg-orange-50 text-orange-700 font-bold px-2 py-1 rounded-md border border-orange-200 flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-orange-600" /> AI-Inferred
+            <InfoHint text="Review financial performance, outlet comparisons, margin health, and AI-generated commercial insights." />
+            <span className="text-[10px] bg-accent-50 text-accent-700 font-bold px-2 py-1 rounded-md border border-accent-200 flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-accent-600" /> AI-Inferred
             </span>
           </h1>
-          <p className="text-sm font-normal text-slate-500 max-w-2xl mt-1 tracking-normal">
-            Real-time financial performance, multi-outlet commercial benchmarking, margin health, and AI-synthesized managerial inferences.
-          </p>
         </div>
 
         {/* Global Controls */}
@@ -674,7 +729,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           <button
             onClick={() => fetchAiInference()}
             disabled={aiLoading}
-            className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-black rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+            className="px-3.5 py-2 bg-accent-600 hover:bg-accent-700 text-white text-xs font-black rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
             title="Re-run Gemini AI inference on active metrics"
           >
             <Sparkles className={`w-3.5 h-3.5 ${aiLoading ? 'animate-spin' : ''}`} />
@@ -705,8 +760,8 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
       <div className="analytics-snapshot bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-200">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-600">
-              <Zap className="w-4 h-4 fill-orange-500" />
+            <div className="w-8 h-8 rounded-xl bg-accent-500/10 border border-accent-500/20 flex items-center justify-center text-accent-600">
+              <Zap className="w-4 h-4 fill-accent-500" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -726,7 +781,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1: Daily Revenue */}
-          <div role="button" tabIndex={0} onClick={() => setActiveSnapshot('dailyRevenue')} onKeyDown={(e) => e.key === 'Enter' && setActiveSnapshot('dailyRevenue')} className={`bg-white p-5 rounded-xl border shadow-xs hover:shadow-sm transition-shadow flex flex-col justify-between cursor-pointer ${activeSnapshot === 'dailyRevenue' ? 'border-orange-300' : 'border-slate-200'}`}>
+          <div role="button" tabIndex={0} onClick={() => setActiveSnapshot('dailyRevenue')} onKeyDown={(e) => e.key === 'Enter' && setActiveSnapshot('dailyRevenue')} className={`bg-white p-5 rounded-xl border shadow-xs hover:shadow-sm transition-shadow flex flex-col justify-between cursor-pointer ${activeSnapshot === 'dailyRevenue' ? 'border-accent-300' : 'border-slate-200'}`}>
             <div>
               <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
@@ -747,11 +802,11 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           </div>
 
           {/* Card 2: Profit Margin */}
-          <div role="button" tabIndex={0} onClick={() => setActiveSnapshot('profitMargin')} onKeyDown={(e) => e.key === 'Enter' && setActiveSnapshot('profitMargin')} className={`bg-white p-5 rounded-xl border shadow-xs hover:shadow-sm transition-shadow flex flex-col justify-between cursor-pointer ${activeSnapshot === 'profitMargin' ? 'border-orange-300' : 'border-slate-200'}`}>
+          <div role="button" tabIndex={0} onClick={() => setActiveSnapshot('profitMargin')} onKeyDown={(e) => e.key === 'Enter' && setActiveSnapshot('profitMargin')} className={`bg-white p-5 rounded-xl border shadow-xs hover:shadow-sm transition-shadow flex flex-col justify-between cursor-pointer ${activeSnapshot === 'profitMargin' ? 'border-accent-300' : 'border-slate-200'}`}>
             <div>
               <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <Percent className="w-4 h-4 text-orange-600" /> Gross Profit Margin
+                  <Percent className="w-4 h-4 text-accent-600" /> Gross Profit Margin
                 </span>
               </div>
               <div className="text-2xl sm:text-3xl font-black font-mono text-white mt-3 tracking-tight">
@@ -765,7 +820,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           </div>
 
           {/* Card 3: Customer Retention */}
-          <div role="button" tabIndex={0} onClick={() => setActiveSnapshot('retentionRate')} onKeyDown={(e) => e.key === 'Enter' && setActiveSnapshot('retentionRate')} className={`bg-white p-5 rounded-xl border shadow-xs hover:shadow-sm transition-shadow flex flex-col justify-between cursor-pointer ${activeSnapshot === 'retentionRate' ? 'border-orange-300' : 'border-slate-200'}`}>
+          <div role="button" tabIndex={0} onClick={() => setActiveSnapshot('retentionRate')} onKeyDown={(e) => e.key === 'Enter' && setActiveSnapshot('retentionRate')} className={`bg-white p-5 rounded-xl border shadow-xs hover:shadow-sm transition-shadow flex flex-col justify-between cursor-pointer ${activeSnapshot === 'retentionRate' ? 'border-accent-300' : 'border-slate-200'}`}>
             <div>
               <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
@@ -783,7 +838,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           </div>
 
           {/* Card 4: Average Order Value */}
-          <div role="button" tabIndex={0} onClick={() => setActiveSnapshot('aov')} onKeyDown={(e) => e.key === 'Enter' && setActiveSnapshot('aov')} className={`bg-white p-5 rounded-xl border shadow-xs hover:shadow-sm transition-shadow flex flex-col justify-between cursor-pointer ${activeSnapshot === 'aov' ? 'border-orange-300' : 'border-slate-200'}`}>
+          <div role="button" tabIndex={0} onClick={() => setActiveSnapshot('aov')} onKeyDown={(e) => e.key === 'Enter' && setActiveSnapshot('aov')} className={`bg-white p-5 rounded-xl border shadow-xs hover:shadow-sm transition-shadow flex flex-col justify-between cursor-pointer ${activeSnapshot === 'aov' ? 'border-accent-300' : 'border-slate-200'}`}>
             <div>
               <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
@@ -809,7 +864,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           {/* AI Banner Top Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center text-orange-600 shadow-xs">
+              <div className="w-10 h-10 rounded-xl bg-accent-50 border border-accent-200 flex items-center justify-center text-accent-600 shadow-xs">
                 <Sparkles className="w-5 h-5" />
               </div>
               <div>
@@ -817,7 +872,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                   <h2 className="text-base sm:text-lg font-black tracking-tight text-slate-900 flex items-center gap-2">
                     Executive Commercial Inference
                   </h2>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 font-bold">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-accent-50 text-accent-700 border border-accent-200 font-bold">
                     {aiInferences?.modelUsed || 'Gemini 3.8 Flash'}
                   </span>
                 </div>
@@ -857,7 +912,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                   <p className="text-[11px] text-slate-500">Daily movement across the selected period</p>
                 </div>
                 <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" /> Sales</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-accent-500" /> Sales</span>
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-500" /> OpEx</span>
                 </div>
               </div>
@@ -887,7 +942,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                 {[
                   { label: 'Margin health', value: `${metrics.grossMarginPct}%`, detail: `Gross profit is GH₵ ${metrics.grossProfit.toLocaleString()} on current sales.`, tone: 'text-emerald-700' },
                   { label: 'Cash exposure', value: `GH₵ ${(metrics.activeCreditReceivables / 1000).toFixed(1)}k`, detail: 'Active installment receivables require regular collection follow-up.', tone: 'text-slate-900' },
-                  { label: 'Revenue pace', value: quickSnapshot.dailyTrend, detail: `Daily revenue is tracking at ${quickSnapshot.dailyTargetPace}% of the selected target.`, tone: 'text-orange-700' },
+                  { label: 'Revenue pace', value: quickSnapshot.dailyTrend, detail: `Daily revenue is tracking at ${quickSnapshot.dailyTargetPace}% of the selected target.`, tone: 'text-accent-700' },
                 ].map((signal, index) => (
                   <button key={signal.label} type="button" onClick={() => setExpandedObservation(expandedObservation === index ? null : index)} className="w-full text-left bg-white border border-slate-200 rounded-lg px-3 py-2.5 hover:border-slate-300 transition-colors">
                     <div className="flex items-center justify-between gap-3">
@@ -905,7 +960,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           <div className="space-y-2.5 pt-1">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-                <Lightbulb className="w-3.5 h-3.5 text-orange-600" /> Ask AI Commercial Analyst:
+                <Lightbulb className="w-3.5 h-3.5 text-accent-600" /> Ask AI Commercial Analyst:
               </span>
               <span className="text-[10px] text-slate-400 hidden sm:inline">
                 Click a preset or enter a targeted query
@@ -915,7 +970,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
             {answerPanelOpen && activePreset && (
               <div className="bg-slate-900 text-white rounded-xl p-3.5 border border-slate-800 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="flex items-center justify-between gap-3 mb-1.5">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-orange-300">Analyst response</span>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-accent-300">Analyst response</span>
                   <button type="button" onClick={() => setAnswerPanelOpen(false)} className="text-slate-400 hover:text-white cursor-pointer" aria-label="Close analyst response"><X className="w-4 h-4" /></button>
                 </div>
                 <p className="text-xs leading-relaxed text-slate-200">{aiInferences?.executiveSummary || 'The analyst is preparing a response from the selected commercial signals.'}</p>
@@ -947,7 +1002,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                   onClick={() => handlePresetClick(preset)}
                   className={`px-3 py-1.5 text-[11px] font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all border ${
                     activePreset === preset.label
-                      ? 'bg-orange-500 text-white border-orange-500 shadow-xs'
+                      ? 'bg-accent-500 text-white border-accent-500 shadow-xs'
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
                   }`}
                 >
@@ -973,13 +1028,13 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                   value={customQuestion}
                   onChange={(e) => setCustomQuestion(e.target.value)}
                   placeholder="Ask a specific question (e.g. 'How should we price magnetic track lights next month?')..."
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-orange-500 focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-300 focus:border-accent-500 focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 outline-none transition-all"
                 />
               </div>
               <button
                 type="submit"
                 disabled={aiLoading || !customQuestion.trim()}
-                className="px-4 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-xs shrink-0"
+                className="px-4 py-2.5 bg-accent-500 hover:bg-accent-600 disabled:opacity-40 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-xs shrink-0"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Analyze</span>
@@ -1001,7 +1056,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                   `Returns & swaps restock compliance remains steady at 92%.`,
                 ]).map((obs, idx) => (
                   <button key={idx} type="button" onClick={() => setExpandedObservation(expandedObservation === idx + 3 ? null : idx + 3)} className="w-full flex items-center justify-between gap-3 text-left text-xs text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-200 hover:bg-white transition-colors">
-                    <span className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0 mt-1.5" /><span className="font-semibold">{obs}</span></span>
+                    <span className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-accent-500 shrink-0 mt-1.5" /><span className="font-semibold">{obs}</span></span>
                     <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${expandedObservation === idx + 3 ? 'rotate-180' : ''}`} />
                   </button>
                 ))}
@@ -1039,7 +1094,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
             {/* Right: Prescriptive Action Checklist */}
             <div className="space-y-3">
               <div className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-orange-500" /> Prescriptive Action Plan
+                <CheckCircle2 className="w-4 h-4 text-accent-500" /> Prescriptive Action Plan
               </div>
               <div className="space-y-2.5">
                 {(aiInferences?.strategicRecommendations || [
@@ -1248,25 +1303,16 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
             </div>
           </div>
 
-          {/* AI INFERENCE CALLOUT CARD */}
-          <div className="analytics-callout mt-4 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-orange-600" /> AI Chart Inference:
-              </span>
-              <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded-full uppercase">
-                {getChartInference('revenue-velocity')?.trend || 'Bullish Pattern'}
-              </span>
-            </div>
-            <p className="text-xs text-slate-700 leading-relaxed">
-              {getChartInference('revenue-velocity')?.inference ||
-                `Gross margin has stabilized above 34% driven by premium architectural chandelier sales and bundled accessories at Radiance Lighting.`}
-            </p>
-            <div className="text-[11px] text-slate-600 font-medium pt-1 border-t border-slate-200 flex items-center justify-between">
-              <span>Driver: {getChartInference('revenue-velocity')?.keyDriver || 'Contractor commercial fit-outs and high-margin bespoke chandeliers'}</span>
-              <span className="font-bold text-orange-700">Action: Stock 24V drivers →</span>
-            </div>
-          </div>
+          <ChartInferenceCallout
+            id="revenue-velocity"
+            title="AI Chart Inference:"
+            trend={getChartInference('revenue-velocity')?.trend || 'Bullish Pattern'}
+            inference={getChartInference('revenue-velocity')?.inference || `Gross margin has stabilized above 34% driven by premium architectural chandelier sales and bundled accessories at Radiance Lighting.`}
+            driver={getChartInference('revenue-velocity')?.keyDriver || 'Contractor commercial fit-outs and high-margin bespoke chandeliers'}
+            action="Stock 24V drivers"
+            expandedId={expandedChartInference}
+            onToggle={(id) => setExpandedChartInference(expandedChartInference === id ? null : id)}
+          />
         </div>
 
         {/* CHART 2: MULTI-OUTLET COMPARISON MATRIX */}
@@ -1308,25 +1354,16 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
             </div>
           </div>
 
-          {/* AI INFERENCE CALLOUT CARD */}
-          <div className="analytics-callout mt-4 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-orange-600" /> AI Outlet Benchmarking:
-              </span>
-              <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded-full uppercase">
-                {getChartInference('outlet-comparison')?.trend || 'Margin Divergence'}
-              </span>
-            </div>
-            <p className="text-xs text-slate-700 leading-relaxed">
-              {getChartInference('outlet-comparison')?.inference ||
-                `Radiance Lighting achieves the highest average basket size (GH₵ 1,245) and gross margin (40%), while Inco Hardware leads overall transaction volume.`}
-            </p>
-            <div className="text-[11px] text-slate-600 font-medium pt-1 border-t border-slate-200 flex items-center justify-between">
-              <span>Driver: {getChartInference('outlet-comparison')?.keyDriver || 'East Legon residential affluent fit-outs vs Tema industrial volume'}</span>
-              <span className="font-bold text-orange-700">Action: Cross-sell downlights →</span>
-            </div>
-          </div>
+          <ChartInferenceCallout
+            id="outlet-comparison"
+            title="AI Outlet Benchmarking:"
+            trend={getChartInference('outlet-comparison')?.trend || 'Margin Divergence'}
+            inference={getChartInference('outlet-comparison')?.inference || `Radiance Lighting achieves the highest average basket size (GH₵ 1,245) and gross margin (40%), while Inco Hardware leads overall transaction volume.`}
+            driver={getChartInference('outlet-comparison')?.keyDriver || 'East Legon residential affluent fit-outs vs Tema industrial volume'}
+            action="Cross-sell downlights"
+            expandedId={expandedChartInference}
+            onToggle={(id) => setExpandedChartInference(expandedChartInference === id ? null : id)}
+          />
         </div>
 
         {/* CHART 3: PRODUCT CATEGORY CONTRIBUTION & MARGIN DENSITY */}
@@ -1394,25 +1431,16 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
             </div>
           </div>
 
-          {/* AI INFERENCE CALLOUT CARD */}
-          <div className="analytics-callout mt-4 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-orange-600" /> AI Category Analysis:
-              </span>
-              <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded-full uppercase">
-                {getChartInference('category-contribution')?.trend || 'Margin Driver'}
-              </span>
-            </div>
-            <p className="text-xs text-slate-700 leading-relaxed">
-              {getChartInference('category-contribution')?.inference ||
-                `Lighting & Lamps provides 35% of total gross turnover and generates the highest margin yield at 42.5%, outperforming raw electrical cables.`}
-            </p>
-            <div className="text-[11px] text-slate-600 font-medium pt-1 border-t border-slate-200 flex items-center justify-between">
-              <span>Driver: {getChartInference('category-contribution')?.keyDriver || 'Premium aesthetics and smart switchgear demand'}</span>
-              <span className="font-bold text-orange-700">Action: Bundle accessories →</span>
-            </div>
-          </div>
+          <ChartInferenceCallout
+            id="category-contribution"
+            title="AI Category Analysis:"
+            trend={getChartInference('category-contribution')?.trend || 'Margin Driver'}
+            inference={getChartInference('category-contribution')?.inference || `Lighting & Lamps provides 35% of total gross turnover and generates the highest margin yield at 42.5%, outperforming raw electrical cables.`}
+            driver={getChartInference('category-contribution')?.keyDriver || 'Premium aesthetics and smart switchgear demand'}
+            action="Bundle accessories"
+            expandedId={expandedChartInference}
+            onToggle={(id) => setExpandedChartInference(expandedChartInference === id ? null : id)}
+          />
         </div>
 
         {/* CHART 4: PAYMENT CHANNELS & SETTLEMENT VELOCITY */}
@@ -1461,25 +1489,16 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
             </div>
           </div>
 
-          {/* AI INFERENCE CALLOUT CARD */}
-          <div className="analytics-callout mt-4 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-orange-600" /> AI Cash Flow Inference:
-              </span>
-              <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded-full uppercase">
-                {getChartInference('payment-channels')?.trend || 'Low Cash Risk'}
-              </span>
-            </div>
-            <p className="text-xs text-slate-700 leading-relaxed">
-              {getChartInference('payment-channels')?.inference ||
-                `Mobile Money (48%) is the dominant settlement rail. This significantly mitigates cashier drawer theft risks and accelerates end-of-shift blind balancing.`}
-            </p>
-            <div className="text-[11px] text-slate-600 font-medium pt-1 border-t border-slate-200 flex items-center justify-between">
-              <span>Driver: {getChartInference('payment-channels')?.keyDriver || 'Contractor on-site QR and bank wire verification'}</span>
-              <span className="font-bold text-orange-700">Action: Pre-fund merchant floats →</span>
-            </div>
-          </div>
+          <ChartInferenceCallout
+            id="payment-channels"
+            title="AI Cash Flow Inference:"
+            trend={getChartInference('payment-channels')?.trend || 'Low Cash Risk'}
+            inference={getChartInference('payment-channels')?.inference || `Mobile Money (48%) is the dominant settlement rail. This significantly mitigates cashier drawer theft risks and accelerates end-of-shift blind balancing.`}
+            driver={getChartInference('payment-channels')?.keyDriver || 'Contractor on-site QR and bank wire verification'}
+            action="Pre-fund merchant floats"
+            expandedId={expandedChartInference}
+            onToggle={(id) => setExpandedChartInference(expandedChartInference === id ? null : id)}
+          />
         </div>
 
         {/* CHART 5: CUSTOMER INSTALLMENT CREDIT AGING */}
@@ -1522,25 +1541,16 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
             </div>
           </div>
 
-          {/* AI INFERENCE CALLOUT CARD */}
-          <div className="analytics-callout mt-4 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-orange-600" /> AI Debtor Inference:
-              </span>
-              <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded-full uppercase">
-                {getChartInference('installment-credit')?.trend || 'Moderate Caution'}
-              </span>
-            </div>
-            <p className="text-xs text-slate-700 leading-relaxed">
-              {getChartInference('installment-credit')?.inference ||
-                `84% of installment plans are current. Only GH₵ 2,900 is in grace or overdue status, reflecting solid down payments (30%+) and verified contractor phones.`}
-            </p>
-            <div className="text-[11px] text-slate-600 font-medium pt-1 border-t border-slate-200 flex items-center justify-between">
-              <span>Driver: {getChartInference('installment-credit')?.keyDriver || 'Customer home renovation multi-room lighting financing'}</span>
-              <span className="font-bold text-orange-700">Action: Trigger SMS 48h prior →</span>
-            </div>
-          </div>
+          <ChartInferenceCallout
+            id="installment-credit"
+            title="AI Debtor Inference:"
+            trend={getChartInference('installment-credit')?.trend || 'Moderate Caution'}
+            inference={getChartInference('installment-credit')?.inference || `84% of installment plans are current. Only GH₵ 2,900 is in grace or overdue status, reflecting solid down payments (30%+) and verified contractor phones.`}
+            driver={getChartInference('installment-credit')?.keyDriver || 'Customer home renovation multi-room lighting financing'}
+            action="Trigger SMS 48h prior"
+            expandedId={expandedChartInference}
+            onToggle={(id) => setExpandedChartInference(expandedChartInference === id ? null : id)}
+          />
         </div>
 
         {/* CHART 6: TOP SELLING PRODUCTS & INVENTORY TURNOVER */}
@@ -1588,25 +1598,17 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
             </div>
           </div>
 
-          {/* AI INFERENCE CALLOUT CARD */}
-          <div className="mt-4 bg-rose-50/70 border border-rose-200/80 rounded-xl p-3.5 space-y-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-rose-950 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-rose-600" /> AI Inventory Inference:
-              </span>
-              <span className="text-[10px] font-bold text-rose-800 bg-rose-100 px-2 py-0.5 rounded-full uppercase">
-                {getChartInference('inventory-turnover')?.trend || 'Stock Alert'}
-              </span>
-            </div>
-            <p className="text-xs text-rose-900/90 leading-relaxed">
-              {getChartInference('inventory-turnover')?.inference ||
-                `15W Downlights and 2.5mm cables turn over every 14 days. Linear battens are approaching minimum alert levels and require prioritized reordering.`}
-            </p>
-            <div className="text-[11px] text-rose-950/80 font-medium pt-1 border-t border-rose-200/60 flex items-center justify-between">
-              <span>Driver: {getChartInference('inventory-turnover')?.keyDriver || 'High residential installation frequency in East Legon'}</span>
-              <span className="font-bold text-rose-800">Action: Create GRN batch →</span>
-            </div>
-          </div>
+          <ChartInferenceCallout
+            id="inventory-turnover"
+            title="AI Inventory Inference:"
+            trend={getChartInference('inventory-turnover')?.trend || 'Stock Alert'}
+            inference={getChartInference('inventory-turnover')?.inference || `15W Downlights and 2.5mm cables turn over every 14 days. Linear battens are approaching minimum alert levels and require prioritized reordering.`}
+            driver={getChartInference('inventory-turnover')?.keyDriver || 'High residential installation frequency in East Legon'}
+            action="Create GRN batch"
+            expandedId={expandedChartInference}
+            onToggle={(id) => setExpandedChartInference(expandedChartInference === id ? null : id)}
+            tone="danger"
+          />
         </div>
       </div>
 
@@ -1619,7 +1621,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xl font-black text-slate-900">Radiance POS</span>
-                  <span className="text-[10px] font-black uppercase text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
+                  <span className="text-[10px] font-black uppercase text-accent-600 bg-accent-50 px-2 py-0.5 rounded border border-accent-200">
                     Official Executive Report
                   </span>
                 </div>
@@ -1678,7 +1680,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">
                   2. AI Executive Diagnostic Assessment
                 </h3>
-                <div className="p-4 bg-orange-50/70 rounded-xl border border-orange-200 text-xs text-slate-800 leading-relaxed">
+                <div className="p-4 bg-accent-50/70 rounded-xl border border-accent-200 text-xs text-slate-800 leading-relaxed">
                   {aiInferences?.executiveSummary}
                 </div>
               </div>
@@ -1712,7 +1714,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
               </button>
               <button
                 onClick={() => window.print()}
-                className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-xl shadow-xs flex items-center gap-2 cursor-pointer transition-colors"
+                className="px-5 py-2.5 bg-accent-500 hover:bg-accent-600 text-white text-sm font-bold rounded-xl shadow-xs flex items-center gap-2 cursor-pointer transition-colors"
               >
                 <Printer className="w-4 h-4" />
                 <span>Print Document</span>

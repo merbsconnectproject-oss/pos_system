@@ -55,7 +55,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
       >
         {/* Search Input Bar */}
         <div className="p-4 sm:p-5 border-b border-slate-300 flex items-center gap-3.5 bg-white">
-          <Search className="w-5 h-5 text-orange-500 shrink-0" />
+          <Search className="w-5 h-5 text-accent-500 shrink-0" />
           <input
             type="text"
             autoFocus
@@ -83,10 +83,10 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                 onOpenPos();
                 onClose();
               }}
-              className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-orange-50 text-sm font-bold text-slate-700 hover:text-orange-600 group transition-colors cursor-pointer border border-transparent hover:border-orange-200"
+              className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-accent-50 text-sm font-bold text-slate-700 hover:text-accent-600 group transition-colors cursor-pointer border border-transparent hover:border-accent-200"
             >
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-slate-900 text-orange-400 flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-slate-900 text-accent-400 flex items-center justify-center shrink-0">
                   <Monitor className="w-4 h-4" />
                 </div>
                 <div className="text-left">
@@ -94,7 +94,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                   <span className="text-xs text-slate-400 font-normal">Press F2 from any screen</span>
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 text-orange-500" />
+              <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 text-accent-500" />
             </button>
 
             <button
@@ -102,10 +102,10 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                 onOpenShift();
                 onClose();
               }}
-              className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-orange-50 text-sm font-bold text-slate-700 hover:text-orange-600 group transition-colors cursor-pointer border border-transparent hover:border-orange-200"
+              className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-accent-50 text-sm font-bold text-slate-700 hover:text-accent-600 group transition-colors cursor-pointer border border-transparent hover:border-accent-200"
             >
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-accent-100 text-accent-600 flex items-center justify-center shrink-0">
                   <Wallet className="w-4 h-4" />
                 </div>
                 <div className="text-left">
@@ -113,7 +113,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                   <span className="text-xs text-slate-400 font-normal">Blind Count (BR-14 compliance)</span>
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 text-orange-500" />
+              <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 text-accent-500" />
             </button>
           </div>
 
@@ -147,7 +147,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                         </div>
                       </div>
                     </div>
-                    <span className="font-black text-orange-600 text-base font-mono">GH₵ {p.retailPrice.toFixed(2)}</span>
+                    <span className="font-black text-accent-600 text-base font-mono">GH₵ {p.retailPrice.toFixed(2)}</span>
                   </div>
                 );
               })}

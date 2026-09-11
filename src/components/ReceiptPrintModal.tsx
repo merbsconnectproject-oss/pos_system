@@ -135,7 +135,7 @@ export const ReceiptPrintModal: React.FC<ReceiptPrintModalProps> = ({
                 <h2 id="receipt-modal-title" className="text-sm font-bold text-white">
                   Receipt Print View
                 </h2>
-                <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-orange-400 font-bold">
+                <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-accent-400 font-bold">
                   {sale.receiptNumber}
                 </span>
                 {isReprint && (
@@ -338,7 +338,7 @@ export const ReceiptPrintModal: React.FC<ReceiptPrintModalProps> = ({
             <button
               type="button"
               onClick={() => onPrint(sale, paperWidth)}
-              className="px-3.5 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+              className="px-3.5 py-1.5 rounded-lg bg-accent-600 hover:bg-accent-500 text-white font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
               title="Send to physical receipt or desktop printer (Ctrl+P)"
             >
               <Printer className="w-4 h-4" />
@@ -403,7 +403,7 @@ export const ReceiptPrintModal: React.FC<ReceiptPrintModalProps> = ({
             <div className="w-full lg:w-[380px] bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-4 shrink-0 text-xs">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-orange-400" />
+                  <FileText className="w-4 h-4 text-accent-400" />
                   <span>Transaction Audit Trail</span>
                 </h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">

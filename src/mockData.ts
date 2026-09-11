@@ -8,11 +8,20 @@ import {
   AuditLogEntry,
   UserAccount,
   RolePermissions,
+  ShiftRecord,
   GeneralSettings,
   Expense,
   CustomerInstallmentPlan,
   ReturnExchangeRecord,
 } from './types';
+import {
+  DEFAULT_ROLE_PERMISSIONS,
+  ROLE_BADGE_COLORS,
+  ROLE_DESCRIPTIONS,
+  ROLE_LABELS,
+  ROLE_ORDER,
+} from './permissions';
+import { DEFAULT_ACCENT } from './accent';
 
 export const OUTLETS: Outlet[] = [
   {
@@ -59,7 +68,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'radiance-lighting',
     category: 'Lighting & Lamps',
     brand: 'Radiance Architectural',
-    barcode: '603100030001',
+    barcodes: [
+      { code: '603100030001', unitName: 'Complete Fixture Set' },
+    ],
     baseUnit: 'set',
     sellingUnits: [
       { name: 'Complete Fixture Set', conversionFactor: 1, price: 3850.00, tradePrice: 3450.00 },
@@ -81,7 +92,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'radiance-lighting',
     category: 'Lighting & Lamps',
     brand: 'Radiance Pro',
-    barcode: '603100030002',
+    barcodes: [
+      { code: '603100030002', unitName: 'Piece' },
+      { code: '60310003000210', unitName: 'Contractor Pack (10 pcs)' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Piece', conversionFactor: 1, price: 95.00, tradePrice: 85.00 },
@@ -104,7 +118,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'radiance-lighting',
     category: 'Lighting & Lamps',
     brand: 'Radiance Pro',
-    barcode: '603100030003',
+    barcodes: [
+      { code: '603100030003', unitName: 'Piece' },
+      { code: '60310003000310', unitName: 'Contractor Pack (10 pcs)' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Piece', conversionFactor: 1, price: 110.00, tradePrice: 98.00 },
@@ -127,7 +144,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'radiance-lighting',
     category: 'Lighting & Lamps',
     brand: 'Radiance Pro',
-    barcode: '603100030004',
+    barcodes: [
+      { code: '603100030004', unitName: 'Spotlight Unit' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Spotlight Unit', conversionFactor: 1, price: 220.00, tradePrice: 195.00 },
@@ -149,7 +168,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'radiance-lighting',
     category: 'Lighting & Lamps',
     brand: 'Radiance SmartHome',
-    barcode: '603100030005',
+    barcodes: [
+      { code: '603100030005', unitName: 'Fixture' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Fixture', conversionFactor: 1, price: 350.00, tradePrice: 310.00 },
@@ -171,7 +192,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'radiance-lighting',
     category: 'Lighting & Lamps',
     brand: 'Radiance HeavyDuty',
-    barcode: '603100030006',
+    barcodes: [
+      { code: '603100030006', unitName: 'Unit' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Unit', conversionFactor: 1, price: 420.00, tradePrice: 375.00 },
@@ -193,7 +216,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'radiance-lighting',
     category: 'Solar & Inverters',
     brand: 'Radiance SolarTech',
-    barcode: '603100030007',
+    barcodes: [
+      { code: '603100030007', unitName: 'Set with Bracket & Remote' },
+    ],
     baseUnit: 'set',
     sellingUnits: [
       { name: 'Set with Bracket & Remote', conversionFactor: 1, price: 850.00, tradePrice: 780.00 },
@@ -219,7 +244,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'inco-hardware',
     category: 'Power Tools & Machinery',
     brand: 'Ingco Tools',
-    barcode: '603100010001',
+    barcodes: [
+      { code: '603100010001', unitName: 'Piece (Kit)' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Piece (Kit)', conversionFactor: 1, price: 650.00, tradePrice: 590.00 },
@@ -241,7 +268,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'inco-hardware',
     category: 'Power Tools & Machinery',
     brand: 'Total Tools',
-    barcode: '603100010002',
+    barcodes: [
+      { code: '603100010002', unitName: 'Piece' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Piece', conversionFactor: 1, price: 420.00, tradePrice: 380.00 },
@@ -263,7 +292,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'inco-hardware',
     category: 'Paints & Adhesives',
     brand: 'Crown Paints',
-    barcode: '603100010003',
+    barcodes: [
+      { code: '603100010003', unitName: 'Drum (20L)' },
+    ],
     baseUnit: 'bucket',
     sellingUnits: [
       { name: 'Drum (20L)', conversionFactor: 1, price: 880.00, tradePrice: 820.00 },
@@ -285,7 +316,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'inco-hardware',
     category: 'Paints & Adhesives',
     brand: 'Coral Paints',
-    barcode: '603100010004',
+    barcodes: [
+      { code: '603100010004', unitName: 'Tin (4L)' },
+    ],
     baseUnit: 'tin',
     sellingUnits: [
       { name: 'Tin (4L)', conversionFactor: 1, price: 240.00, tradePrice: 215.00 },
@@ -307,7 +340,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'inco-hardware',
     category: 'Plumbing & Sanitary',
     brand: 'Polytank Ghana',
-    barcode: '603100010005',
+    barcodes: [
+      { code: '603100010005', unitName: 'Single Length (6m)' },
+      { code: '6031000100005', unitName: 'Bundle of 5' },
+    ],
     baseUnit: 'length',
     sellingUnits: [
       { name: 'Single Length (6m)', conversionFactor: 1, price: 65.00, tradePrice: 58.00 },
@@ -330,7 +366,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'inco-hardware',
     category: 'Plumbing & Sanitary',
     brand: 'Pegler Valves',
-    barcode: '603100010006',
+    barcodes: [
+      { code: '603100010006', unitName: 'Piece' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Piece', conversionFactor: 1, price: 85.00, tradePrice: 76.00 },
@@ -352,7 +390,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'inco-hardware',
     category: 'Hand Tools & Hardware',
     brand: 'Stanley Tools',
-    barcode: '603100010007',
+    barcodes: [
+      { code: '603100010007', unitName: 'Piece' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Piece', conversionFactor: 1, price: 145.00, tradePrice: 130.00 },
@@ -374,7 +414,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'inco-hardware',
     category: 'Fasteners & Fixings',
     brand: 'Fischer Fixings',
-    barcode: '603100010008',
+    barcodes: [
+      { code: '603100010008', unitName: 'Per Kg' },
+      { code: '60310001000325', unitName: 'Full Bag (25kg)' },
+    ],
     baseUnit: 'kg',
     sellingUnits: [
       { name: 'Per Kg', conversionFactor: 1, price: 32.00, tradePrice: 29.00 },
@@ -397,7 +440,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'inco-hardware',
     category: 'Fasteners & Fixings',
     brand: 'Fischer Fixings',
-    barcode: '603100010009',
+    barcodes: [
+      { code: '603100010009', unitName: 'Box of 100' },
+    ],
     baseUnit: 'box',
     sellingUnits: [
       { name: 'Box of 100', conversionFactor: 1, price: 75.00, tradePrice: 68.00 },
@@ -419,7 +464,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'inco-hardware',
     category: 'Building & Site Safety',
     brand: 'Delta Plus',
-    barcode: '603100010010',
+    barcodes: [
+      { code: '603100010010', unitName: 'Set (Helmet + Vest)' },
+    ],
     baseUnit: 'set',
     sellingUnits: [
       { name: 'Set (Helmet + Vest)', conversionFactor: 1, price: 95.00, tradePrice: 85.00 },
@@ -441,7 +488,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'inco-hardware',
     category: 'Building & Site Safety',
     brand: 'Sika Construction',
-    barcode: '603100010011',
+    barcodes: [
+      { code: '603100010011', unitName: 'Roll (10m)' },
+    ],
     baseUnit: 'roll',
     sellingUnits: [
       { name: 'Roll (10m)', conversionFactor: 1, price: 180.00, tradePrice: 160.00 },
@@ -463,7 +512,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'inco-hardware',
     category: 'Hand Tools & Hardware',
     brand: 'Stanley Tools',
-    barcode: '603100010012',
+    barcodes: [
+      { code: '603100010012', unitName: 'Piece' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Piece', conversionFactor: 1, price: 110.00, tradePrice: 98.00 },
@@ -490,7 +541,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'apex-electricals',
     category: 'Cables & Wires',
     brand: 'Nexans Cables',
-    barcode: '603200020001',
+    barcodes: [
+      { code: '603200020001', unitName: 'Metre (Cut Length)' },
+      { code: '60320002000110', unitName: 'Drum (100m Roll)' },
+    ],
     baseUnit: 'm',
     sellingUnits: [
       { name: 'Metre (Cut Length)', conversionFactor: 1, price: 18.50, tradePrice: 17.00 },
@@ -513,7 +567,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'apex-electricals',
     category: 'Cables & Wires',
     brand: 'Tropical Cable (TCCL)',
-    barcode: '603200020002',
+    barcodes: [
+      { code: '603200020002', unitName: 'Metre (Cut Length)' },
+      { code: '60320002000210', unitName: 'Coil (100m)' },
+    ],
     baseUnit: 'm',
     sellingUnits: [
       { name: 'Metre (Cut Length)', conversionFactor: 1, price: 8.50, tradePrice: 7.80 },
@@ -536,7 +593,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'apex-electricals',
     category: 'Cables & Wires',
     brand: 'Nexans Cables',
-    barcode: '603200020003',
+    barcodes: [
+      { code: '603200020003', unitName: 'Metre (Cut Length)' },
+      { code: '60320002000350', unitName: 'Drum (50m)' },
+    ],
     baseUnit: 'm',
     sellingUnits: [
       { name: 'Metre (Cut Length)', conversionFactor: 1, price: 98.00, tradePrice: 92.00 },
@@ -559,7 +619,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'apex-electricals',
     category: 'Switches & Sockets',
     brand: 'Schneider Electric',
-    barcode: '603200020004',
+    barcodes: [
+      { code: '603200020004', unitName: 'Piece' },
+      { code: '60320002000410', unitName: 'Box of 10' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Piece', conversionFactor: 1, price: 26.00, tradePrice: 22.50 },
@@ -582,7 +645,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'apex-electricals',
     category: 'Switches & Sockets',
     brand: 'Schneider Electric',
-    barcode: '603200020005',
+    barcodes: [
+      { code: '603200020005', unitName: 'Piece' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Piece', conversionFactor: 1, price: 32.00, tradePrice: 28.00 },
@@ -604,7 +669,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'apex-electricals',
     category: 'Protection & Breakers',
     brand: 'Schneider Electric',
-    barcode: '603200020006',
+    barcodes: [
+      { code: '603200020006', unitName: 'Piece' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Piece', conversionFactor: 1, price: 340.00, tradePrice: 315.00 },
@@ -626,7 +693,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'apex-electricals',
     category: 'Protection & Breakers',
     brand: 'ABB Electrification',
-    barcode: '603200020007',
+    barcodes: [
+      { code: '603200020007', unitName: 'Piece' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Piece', conversionFactor: 1, price: 240.00, tradePrice: 220.00 },
@@ -648,7 +717,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'apex-electricals',
     category: 'Protection & Breakers',
     brand: 'Clou Electrical',
-    barcode: '603200020008',
+    barcodes: [
+      { code: '603200020008', unitName: 'Piece (Complete Meter)' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Piece (Complete Meter)', conversionFactor: 1, price: 480.00, tradePrice: 450.00 },
@@ -670,7 +741,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'apex-electricals',
     category: 'Conduits & Trunking',
     brand: 'Polytank Pipes',
-    barcode: '603200020009',
+    barcodes: [
+      { code: '603200020009', unitName: 'Single Length (3m)' },
+      { code: '60320002000910', unitName: 'Bundle of 10' },
+    ],
     baseUnit: 'length',
     sellingUnits: [
       { name: 'Single Length (3m)', conversionFactor: 1, price: 15.00, tradePrice: 14.00 },
@@ -693,7 +767,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'apex-electricals',
     category: 'Conduits & Trunking',
     brand: 'Marshall-Tufflex',
-    barcode: '603200020010',
+    barcodes: [
+      { code: '603200020010', unitName: 'Single Length (3m)' },
+    ],
     baseUnit: 'length',
     sellingUnits: [
       { name: 'Single Length (3m)', conversionFactor: 1, price: 68.00, tradePrice: 62.00 },
@@ -715,7 +791,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'apex-electricals',
     category: 'Lighting & Lamps',
     brand: 'Philips Optima',
-    barcode: '603200020011',
+    barcodes: [
+      { code: '603200020011', unitName: 'Piece' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Piece', conversionFactor: 1, price: 185.00, tradePrice: 165.00 },
@@ -737,7 +815,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'apex-electricals',
     category: 'Protection & Breakers',
     brand: 'Furse Grounding',
-    barcode: '603200020012',
+    barcodes: [
+      { code: '603200020012', unitName: 'Piece' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Piece', conversionFactor: 1, price: 68.00, tradePrice: 60.00 },
@@ -759,7 +839,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     outletId: 'apex-electricals',
     category: 'Solar & Inverters',
     brand: 'Felicity Solar',
-    barcode: '603200020013',
+    barcodes: [
+      { code: '603200020013', unitName: 'Unit (Inverter)' },
+    ],
     baseUnit: 'pcs',
     sellingUnits: [
       { name: 'Unit (Inverter)', conversionFactor: 1, price: 5400.00, tradePrice: 5100.00 },
@@ -1448,7 +1530,7 @@ export const INITIAL_USERS: UserAccount[] = [
     username: 'kasante',
     email: 'kwame@incohardware.com',
     phone: '+233 24 411 2233',
-    role: 'super_admin',
+    role: 'owner',
     outletId: 'all-outlets',
     active: true,
     pinCode: '1234',
@@ -1463,7 +1545,7 @@ export const INITIAL_USERS: UserAccount[] = [
     username: 'yboakye',
     email: 'yaw@incohardware.com',
     phone: '+233 20 899 0011',
-    role: 'branch_manager',
+    role: 'manager',
     outletId: 'inco-hardware',
     active: true,
     pinCode: '4321',
@@ -1478,7 +1560,7 @@ export const INITIAL_USERS: UserAccount[] = [
     username: 'kmensah',
     email: 'kofi@apexkumasi.com',
     phone: '+233 27 344 5566',
-    role: 'branch_manager',
+    role: 'manager',
     outletId: 'apex-electricals',
     active: true,
     pinCode: '7788',
@@ -1521,106 +1603,65 @@ export const INITIAL_USERS: UserAccount[] = [
   },
 ];
 
-export const INITIAL_ROLES_PERMISSIONS: RolePermissions[] = [
+export const INITIAL_ROLES_PERMISSIONS: RolePermissions[] = ROLE_ORDER.map((role) => ({
+  role,
+  roleTitle: ROLE_LABELS[role],
+  description: ROLE_DESCRIPTIONS[role],
+  badgeColor: ROLE_BADGE_COLORS[role],
+  permissions: [...DEFAULT_ROLE_PERMISSIONS[role]],
+}));
+
+/** A few closed shifts so the history and end-of-day screens have something to show. */
+export const INITIAL_SHIFT_RECORDS: ShiftRecord[] = [
   {
-    role: 'super_admin',
-    roleTitle: 'Super Administrator',
-    description: 'Unrestricted enterprise-wide access across all store branches, executive financial reports, PIN security, and system administration.',
-    badgeColor: 'bg-purple-100 text-purple-700 border-purple-200',
-    permissions: {
-      canOpenTerminal: true,
-      canApplyDiscount: true,
-      canOverrideFloorPrice: true,
-      canVoidSale: true,
-      canProcessRefund: true,
-      canBlindCloseShift: true,
-      canViewCostPrices: true,
-      canAddProducts: true,
-      canEditPrices: true,
-      canAdjustStock: true,
-      canReceiveGoods: true,
-      canCreateCustomer: true,
-      canAssignCreditLimit: true,
-      canViewExecutiveReports: true,
-      canExportCsv: true,
-      canViewAuditLogs: true,
-      canModifySystemSettings: true,
-    },
+    id: 'shift-2026-09-09-inco-01',
+    outletId: 'inco-hardware',
+    outletName: 'Inco Hardware',
+    terminalId: '01',
+    cashier: 'Yaw Boakye',
+    openingFloat: 500,
+    openedAt: '09/09/2026, 08:02:11',
+    closedAt: '09/09/2026, 18:14:52',
+    salesTotal: 4820.5,
+    takingsByMethod: { cash: 2250, momo: 1980.5, card: 590 },
+    expectedCash: 2750,
+    countedCash: 2738,
+    variance: -12,
+    varianceNote: 'Short by GH₵ 12 — suspected change error on the 14:20 sale.',
+    status: 'closed',
   },
   {
-    role: 'branch_manager',
-    roleTitle: 'Branch Manager',
-    description: 'Branch authority to approve floor price discounts, authorize sale voids, perform stock adjustments, receive goods, and supervise cashiers.',
-    badgeColor: 'bg-blue-100 text-blue-700 border-blue-200',
-    permissions: {
-      canOpenTerminal: true,
-      canApplyDiscount: true,
-      canOverrideFloorPrice: true,
-      canVoidSale: true,
-      canProcessRefund: true,
-      canBlindCloseShift: true,
-      canViewCostPrices: true,
-      canAddProducts: true,
-      canEditPrices: true,
-      canAdjustStock: true,
-      canReceiveGoods: true,
-      canCreateCustomer: true,
-      canAssignCreditLimit: true,
-      canViewExecutiveReports: true,
-      canExportCsv: true,
-      canViewAuditLogs: true,
-      canModifySystemSettings: false,
-    },
+    id: 'shift-2026-09-09-rad-01',
+    outletId: 'radiance-lighting',
+    outletName: 'Radiance Lighting',
+    terminalId: '01',
+    cashier: 'Abena Osei',
+    openingFloat: 800,
+    openedAt: '09/09/2026, 09:00:04',
+    closedAt: '09/09/2026, 19:31:20',
+    salesTotal: 10310,
+    takingsByMethod: { cash: 3100, momo: 5210, card: 1200, transfer: 800 },
+    expectedCash: 3900,
+    countedCash: 3900,
+    variance: 0,
+    status: 'closed',
   },
   {
-    role: 'cashier',
-    roleTitle: 'POS Cashier',
-    description: 'Frontline sales counter access to ring up items, apply standard customer tier discounts, accept payments, and close register shifts.',
-    badgeColor: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    permissions: {
-      canOpenTerminal: true,
-      canApplyDiscount: true,
-      canOverrideFloorPrice: false, // Requires manager PIN
-      canVoidSale: false, // Requires manager PIN
-      canProcessRefund: false,
-      canBlindCloseShift: true,
-      canViewCostPrices: false,
-      canAddProducts: false,
-      canEditPrices: false,
-      canAdjustStock: false,
-      canReceiveGoods: false,
-      canCreateCustomer: true,
-      canAssignCreditLimit: false,
-      canViewExecutiveReports: false,
-      canExportCsv: false,
-      canViewAuditLogs: false,
-      canModifySystemSettings: false,
-    },
-  },
-  {
-    role: 'storekeeper',
-    roleTitle: 'Storekeeper / Inventory Clerk',
-    description: 'Warehouse and receiving dock control for goods intake (GRN), cycle counts, physical inventory audits, and damage reporting.',
-    badgeColor: 'bg-amber-100 text-amber-700 border-amber-200',
-    permissions: {
-      canOpenTerminal: false,
-      canApplyDiscount: false,
-      canOverrideFloorPrice: false,
-      canVoidSale: false,
-      canProcessRefund: false,
-      canBlindCloseShift: false,
-      canViewCostPrices: true,
-      canAddProducts: true,
-      canEditPrices: false,
-      canAdjustStock: true,
-      canReceiveGoods: true,
-      canCreateCustomer: false,
-      canAssignCreditLimit: false,
-      canViewExecutiveReports: false,
-      canExportCsv: true,
-      canViewAuditLogs: false,
-      canModifySystemSettings: false,
-    },
+    id: 'shift-2026-09-08-apx-01',
+    outletId: 'apex-electricals',
+    outletName: 'Apex Electricals',
+    terminalId: '01',
+    cashier: 'Kofi Mensah',
+    openingFloat: 400,
+    openedAt: '08/09/2026, 08:30:00',
+    closedAt: '08/09/2026, 17:45:10',
+    salesTotal: 2640,
+    takingsByMethod: { cash: 1640, momo: 1000 },
+    expectedCash: 2040,
+    countedCash: 2065,
+    variance: 25,
+    varianceNote: 'Over by GH₵ 25 — float was topped up mid-shift without a movement record.',
+    status: 'closed',
   },
 ];
 
@@ -1641,7 +1682,19 @@ export const INITIAL_SETTINGS: GeneralSettings = {
   receiptFooterPolicy: 'Goods once sold in good condition are returnable or exchangeable within 7 days with valid receipt.',
   autoPrintReceipt: true,
   showCashierOnReceipt: true,
-  accentColor: '#ff9f43',
+  accentColor: DEFAULT_ACCENT,
+  // K-08 / FR-SET-06
+  thresholds: {
+    idleLockMinutes: 10,
+    adjustmentApprovalValue: 500,
+    cashVarianceExplain: 20,
+    discountCeilingByRole: {
+      owner: 100,
+      manager: 25,
+      cashier: 10,
+      storekeeper: 0,
+    },
+  },
 };
 
 export const INITIAL_EXPENSES: Expense[] = [

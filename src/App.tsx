@@ -23,6 +23,7 @@ import { InstallmentsView } from './components/InstallmentsView';
 import { ReturnsExchangesView } from './components/ReturnsExchangesView';
 import { AnalyticsReportsView } from './components/AnalyticsReportsView';
 import { CashControlView } from './components/CashControlView';
+import { GoodsReceiptView } from './components/GoodsReceiptView';
 import { ReportsView } from './components/ReportsView';
 import { AuthView } from './components/AuthView';
 import {
@@ -36,6 +37,7 @@ import {
   INITIAL_USERS,
   INITIAL_ROLES_PERMISSIONS,
   INITIAL_SETTINGS,
+  INITIAL_SHIFT_RECORDS,
   INITIAL_EXPENSES,
   INITIAL_INSTALLMENT_PLANS,
   INITIAL_RETURNS_EXCHANGES,
@@ -51,12 +53,18 @@ import {
   AuditLogEntry,
   ShiftInfo,
   UserAccount,
+  CashMovement,
+  PaymentMethod,
   RolePermissions,
+  ShiftRecord,
   GeneralSettings,
   Expense,
   CustomerInstallmentPlan,
   ReturnExchangeRecord,
 } from './types';
+import { canAccessTab, resolvePermissions } from './permissions';
+import { roundMoney } from './money';
+import { DEFAULT_ACCENT, applyAccent } from './accent';
 
 export default function App() {
   const [outlets, setOutlets] = useState<Outlet[]>(OUTLETS);
@@ -93,6 +101,8 @@ export default function App() {
   const [suppliers, setSuppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
   const [sales, setSales] = useState<CompletedSale[]>(INITIAL_SALES);
   const [movements, setMovements] = useState<StockMovement[]>(INITIAL_MOVEMENTS);
+  const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
+  const [shiftRecords, setShiftRecords] = useState<ShiftRecord[]>(INITIAL_SHIFT_RECORDS);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(INITIAL_AUDIT_LOGS);
 
   // Radiance Lighting & Accounting Modules state
@@ -125,12 +135,17 @@ export default function App() {
   const [adjustmentTargetProduct, setAdjustmentTargetProduct] = useState<Product | null>(null);
 
   // Appearance accent color state (Counter Datasheet default: #c55200)
-  const [accentColor, setAccentColor] = useState<string>('#c55200');
+  const [accentColor, setAccentColor] = useState<string>(DEFAULT_ACCENT);
 
   const currentOutlet = outlets.find((o) => o.id === currentOutletId) || outlets[0];
-  const currentPermissions = rolesPermissions.find((item) => item.role === currentUser?.role)?.permissions;
+  const roleBaseline = rolesPermissions.find((item) => item.role === currentUser?.role)?.permissions;
+  const permissions = resolvePermissions(roleBaseline || [], currentUser?.permissionOverrides);
+  const can = permissions.has;
   const handleSelectOutlet = (outletId: OutletId) => {
-    if (currentUser && currentUser.outletId !== 'all-outlets' && outletId !== currentUser.outletId) return;
+    // FR-OUT-05/06: only outlet.view_all may leave the assigned branch.
+    if (!currentUser) return;
+    if (!can('outlet.view_all') && outletId !== currentUser.outletId) return;
+    if (currentUser.outletId !== 'all-outlets' && outletId !== currentUser.outletId) return;
     setCurrentOutletId(outletId);
   };
   const validTabs = new Set([
@@ -163,36 +178,21 @@ export default function App() {
     'denied',
   ]);
 
-  const hasTabAccess = (tab: string) => {
-    if (!currentPermissions) return true;
-    if (['analytics', 'outlet-comparison', 'reports'].includes(tab)) return currentPermissions.canViewExecutiveReports;
-    if (['settings'].includes(tab)) return currentPermissions.canModifySystemSettings;
-    if (tab === 'audit-log') return currentPermissions.canViewAuditLogs;
-    if (['products', 'products-import', 'products-setup', 'products-bulk-price'].includes(tab)) return currentPermissions.canAddProducts || currentPermissions.canViewCostPrices;
-    if (['inventory', 'inventory-low-stock', 'inventory-valuation', 'inventory-exceptions', 'inventory-count', 'inventory-transfer'].includes(tab)) return currentPermissions.canAdjustStock || currentPermissions.canViewCostPrices;
-    if (tab === 'goods-receipt') return currentPermissions.canReceiveGoods;
-    if (tab === 'stock-movements') return currentPermissions.canAdjustStock || currentPermissions.canViewCostPrices;
-    if (tab === 'customers') return currentPermissions.canCreateCustomer;
-    if (tab === 'suppliers') return currentPermissions.canReceiveGoods;
-    if (tab === 'returns-exchanges') return currentPermissions.canProcessRefund;
-    if (tab === 'expenses') return currentUser?.role === 'super_admin' || currentUser?.role === 'branch_manager';
-    if (tab === 'installments') return currentPermissions.canAssignCreditLimit;
-    if (tab === 'cash-control' || tab === 'shifts') return currentPermissions.canBlindCloseShift || currentPermissions.canViewExecutiveReports;
-    return true;
-  };
+  // L-09: a tab the user cannot reach is not rendered at all.
+  const hasTabAccess = (tab: string) => (currentUser ? canAccessTab(permissions, tab) : true);
 
   useEffect(() => {
     if (currentUser && activeTab !== 'denied' && validTabs.has(activeTab) && !hasTabAccess(activeTab)) setActiveTab('denied');
-  }, [activeTab, currentUser, rolesPermissions]);
+  }, [activeTab, currentUser, rolesPermissions, permissions.codes.join(',')]);
 
   useEffect(() => {
-    if (currentUser && currentPermissions && !currentPermissions.canOpenTerminal) setPosOpen(false);
-  }, [currentUser, currentPermissions]);
+    if (currentUser && currentUser && !can('pos.sell')) setPosOpen(false);
+  }, [currentUser, permissions.codes.join(',')]);
 
+  // FR-SET-03/04: one call repaints every accent surface; semantics stay fixed.
   useEffect(() => {
     document.documentElement.style.setProperty('--primary-accent', accentColor);
-    document.documentElement.style.setProperty('--accent', accentColor);
-    document.documentElement.style.setProperty('--chart-1', accentColor);
+    applyAccent(accentColor);
   }, [accentColor]);
 
   useEffect(() => {
@@ -214,10 +214,10 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setSearchOpen((prev) => !prev);
-      } else if (e.key === 'F2' && currentUser && currentPermissions?.canOpenTerminal) {
+      } else if (e.key === 'F2' && currentUser && can('pos.sell')) {
         e.preventDefault();
         setPosOpen(true);
-      } else if (e.key === 'F4' && currentUser && (currentPermissions?.canBlindCloseShift || currentPermissions?.canViewExecutiveReports)) {
+      } else if (e.key === 'F4' && currentUser && (permissions.hasAny('shift.open', 'shift.close'))) {
         e.preventDefault();
         setShiftModalOpen(true);
       } else if (e.key === 'F9' && currentUser) {
@@ -231,11 +231,12 @@ export default function App() {
     };
     window.addEventListener('keydown', handleGlobalKey);
     return () => window.removeEventListener('keydown', handleGlobalKey);
-  }, [currentUser, currentPermissions]);
+  }, [currentUser, permissions.codes.join(',')]);
 
   useEffect(() => {
     if (!currentUser || sessionLockReason) return;
-    const idleTimeoutMs = 15 * 60 * 1000;
+    // FR-AUTH-05 / K-08: the idle lock period is configurable, not a constant.
+    const idleTimeoutMs = Math.max(1, generalSettings.thresholds.idleLockMinutes) * 60 * 1000;
     let timeoutId = window.setTimeout(() => {
       setSessionLockReason('expired');
       appendAuditLog({
@@ -272,7 +273,7 @@ export default function App() {
       window.removeEventListener('click', resetIdleTimer);
       window.removeEventListener('touchstart', resetIdleTimer);
     };
-  }, [currentUser, sessionLockReason, currentOutlet.name]);
+  }, [currentUser, sessionLockReason, currentOutlet.name, generalSettings.thresholds.idleLockMinutes]);
 
   // PRD BR-1 & BR-2: Sale Completed handler
   const handleSaleCompleted = (sale: CompletedSale) => {
@@ -521,6 +522,38 @@ export default function App() {
   };
 
   // PRD BR-4: Goods Receipt with Weighted Average Cost handler
+  /** Posts every line of a goods receipt as one document (FR-SUP-04). */
+  const handleCommitReceipt = (
+    lines: { productId: string; quantityBase: number; unitCost: number; newAvgCost: number; movement: StockMovement }[],
+    reference: string,
+  ) => {
+    setProducts((prev) =>
+      prev.map((product) => {
+        const line = lines.find((item) => item.productId === product.id);
+        if (!line) return product;
+        const outletKey = line.movement.outletId;
+        return {
+          ...product,
+          stock: { ...product.stock, [outletKey]: (product.stock[outletKey] || 0) + line.quantityBase },
+          costPrice: { ...product.costPrice, [outletKey]: line.newAvgCost },
+        };
+      }),
+    );
+    setMovements((prev) => [...lines.map((line) => line.movement), ...prev]);
+    setAuditLogs((prev) => [
+      {
+        id: `aud-${Date.now()}`,
+        timestamp: new Date().toLocaleString('en-GB'),
+        actor: currentUser?.fullName || 'Storekeeper',
+        action: 'GOODS_RECEIPT',
+        entity: reference,
+        outletName: currentOutlet.name,
+        details: `Posted ${lines.length} line${lines.length === 1 ? '' : 's'}; weighted average cost recalculated per line (BR-4).`,
+      },
+      ...prev,
+    ]);
+  };
+
   const handleConfirmReceipt = (
     productId: string,
     qtyReceived: number,
@@ -663,16 +696,36 @@ export default function App() {
   };
 
   const handleStartShift = (openingFloat: number) => {
+    const shiftId = `shift-${Date.now()}`;
+    const cashier = currentUser?.fullName || 'Cashier';
+    const openedAt = new Date().toLocaleString('en-GB');
     setShiftInfo({
-      id: `shift-${Date.now()}`,
+      id: shiftId,
       outletId: currentOutlet.id,
       terminalId: '01',
       isOpen: true,
       openedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      cashier: 'Kwame A. (Admin)',
+      cashier,
       openingFloat,
       expectedCash: openingFloat,
     });
+    // H-01: the shift joins the history the moment it opens.
+    setShiftRecords((prev) => [
+      {
+        id: shiftId,
+        outletId: currentOutlet.id,
+        outletName: currentOutlet.name,
+        terminalId: '01',
+        cashier,
+        openingFloat,
+        openedAt,
+        salesTotal: 0,
+        takingsByMethod: {},
+        expectedCash: openingFloat,
+        status: 'open',
+      },
+      ...prev,
+    ]);
 
     const auditEntry: AuditLogEntry = {
       id: `aud-${Date.now()}`,
@@ -687,7 +740,7 @@ export default function App() {
   };
 
   const handleCloseShift = (countedCash: number, note?: string) => {
-    const variance = countedCash - shiftInfo.expectedCash;
+    const variance = roundMoney(countedCash - shiftInfo.expectedCash);
     setShiftInfo((prev) => ({
       ...prev,
       isOpen: false,
@@ -695,6 +748,36 @@ export default function App() {
       variance,
       varianceNote: note,
     }));
+
+    // FR-CASH-07: non-cash takings are recorded by method for reconciliation.
+    const shiftSales = sales.filter(
+      (sale) => sale.status === 'COMPLETED' && sale.outletId === shiftInfo.outletId,
+    );
+    const takingsByMethod = shiftSales.reduce<Partial<Record<PaymentMethod, number>>>((acc, sale) => {
+      sale.payments.forEach((payment) => {
+        acc[payment.method] = roundMoney((acc[payment.method] || 0) + payment.amount);
+      });
+      return acc;
+    }, {});
+
+    // FR-CASH-09: a closed shift is never reopened; this record is final.
+    setShiftRecords((prev) =>
+      prev.map((record) =>
+        record.id === shiftInfo.id
+          ? {
+              ...record,
+              status: 'closed',
+              closedAt: new Date().toLocaleString('en-GB'),
+              salesTotal: roundMoney(shiftSales.reduce((sum, sale) => sum + sale.total, 0)),
+              takingsByMethod,
+              expectedCash: shiftInfo.expectedCash,
+              countedCash,
+              variance,
+              varianceNote: note,
+            }
+          : record,
+      ),
+    );
 
     const auditEntry: AuditLogEntry = {
       id: `aud-${Date.now()}`,
@@ -707,9 +790,6 @@ export default function App() {
     };
     setAuditLogs((prev) => [auditEntry, ...prev]);
 
-    alert(
-      `Shift closed for ${currentOutlet.name}.\nVariance: ${variance >= 0 ? '+' : ''}GH₵ ${variance.toFixed(2)}`
-    );
   };
 
   // ==========================================
@@ -895,15 +975,16 @@ export default function App() {
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
         onOpenMobileMenu={() => setMobileMenuOpen(true)}
-        onOpenPos={() => currentPermissions?.canOpenTerminal && setPosOpen(true)}
+        onOpenPos={() => can('pos.sell') && setPosOpen(true)}
         onOpenSearch={() => setSearchOpen(true)}
-        onOpenSettings={() => setSettingsOpen(currentPermissions?.canModifySystemSettings === true)}
+        onOpenSettings={() => setSettingsOpen(permissions.hasAny('settings.appearance', 'settings.terminal', 'settings.general'))}
         onOpenAddNew={handleOpenAddNew}
-        canOpenTerminal={currentPermissions?.canOpenTerminal === true}
-        canModifySystemSettings={currentPermissions?.canModifySystemSettings === true}
-        canAddProducts={currentPermissions?.canAddProducts === true}
-        canCreateCustomer={currentPermissions?.canCreateCustomer === true}
-        canReceiveGoods={currentPermissions?.canReceiveGoods === true}
+        canOpenTerminal={can('pos.sell') === true}
+        canViewAllOutlets={can('outlet.view_all') === true}
+        canModifySystemSettings={permissions.hasAny('settings.appearance', 'settings.terminal', 'settings.general')}
+        canAddProducts={can('product.create') === true}
+        canCreateCustomer={can('customer.manage') === true}
+        canReceiveGoods={can('stock.receive') === true}
         onOpenUserProfile={() => setActiveTab(hasTabAccess('settings') ? 'settings' : 'denied')}
         onLockSession={() => handleLockSession('manual')}
       />
@@ -914,11 +995,11 @@ export default function App() {
           collapsed={sidebarCollapsed}
           activeTab={activeTab}
           onSelectTab={setActiveTab}
-          onOpenPos={() => currentPermissions?.canOpenTerminal && setPosOpen(true)}
-          onOpenShift={() => (currentPermissions?.canBlindCloseShift || currentPermissions?.canViewExecutiveReports) && setShiftModalOpen(true)}
+          onOpenPos={() => can('pos.sell') && setPosOpen(true)}
+          onOpenShift={() => (permissions.hasAny('shift.open', 'shift.close')) && setShiftModalOpen(true)}
           mobileOpen={mobileMenuOpen}
           onCloseMobile={() => setMobileMenuOpen(false)}
-          permissions={currentPermissions || INITIAL_ROLES_PERMISSIONS[0].permissions}
+          permissions={permissions}
         />
 
         <main ref={mainScrollRef} className="flex-1 overflow-y-auto bg-[#f8f9fa] pb-12">
@@ -926,15 +1007,16 @@ export default function App() {
           {/* Main Dashboard */}
           {activeTab === 'dashboard' && (
             <Dashboard
+              permissions={permissions}
               products={products}
               currentOutlet={currentOutlet}
               outlets={outlets}
               sales={sales}
               currentUser={currentUser}
               shiftInfo={shiftInfo}
-              onOpenPos={() => currentPermissions?.canOpenTerminal && setPosOpen(true)}
+              onOpenPos={() => can('pos.sell') && setPosOpen(true)}
               onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
-              onOpenShift={() => (currentPermissions?.canBlindCloseShift || currentPermissions?.canViewExecutiveReports) && setShiftModalOpen(true)}
+              onOpenShift={() => (permissions.hasAny('shift.open', 'shift.close')) && setShiftModalOpen(true)}
               onViewAllLowStock={() => setActiveTab('products')}
               onSelectOutlet={handleSelectOutlet}
               onSelectTab={setActiveTab}
@@ -967,27 +1049,31 @@ export default function App() {
 
           {activeTab === 'cash-control' && (
             <CashControlView
+              shiftRecords={shiftRecords}
               shiftInfo={shiftInfo}
               sales={sales}
-              movements={movements}
+              cashMovements={cashMovements}
               currentOutlet={currentOutlet}
               outlets={outlets}
-              onOpenShift={() => (currentPermissions?.canBlindCloseShift || currentPermissions?.canViewExecutiveReports) && setShiftModalOpen(true)}
+              onOpenShift={() => (permissions.hasAny('shift.open', 'shift.close')) && setShiftModalOpen(true)}
               onCloseShift={handleCloseShift}
               onAddMovement={(movement) => {
-                setMovements((prev) => [movement, ...prev]);
+                setCashMovements((prev) => [movement, ...prev]);
+                // BR-14: expected cash = float + cash sales − cash refunds − cash payouts.
                 setShiftInfo((prev) => ({
                   ...prev,
-                  expectedCash: prev.expectedCash + movement.quantity,
+                  expectedCash: roundMoney(
+                    prev.expectedCash + (movement.direction === 'in' ? movement.amount : -movement.amount),
+                  ),
                 }));
                 setAuditLogs((prev) => [{
                   id: `aud-${Date.now()}`,
                   timestamp: new Date().toLocaleString('en-GB'),
-                  actor: movement.user,
+                  actor: movement.createdBy,
                   action: 'CASH_MOVEMENT_RECORDED',
                   entity: movement.id,
                   outletName: currentOutlet.name,
-                  details: movement.reason || movement.type,
+                  details: `${movement.direction === 'in' ? 'In' : 'Out'} ${movement.amount.toFixed(2)} — ${movement.reasonCode}${movement.note ? `: ${movement.note}` : ''}`,
                 }, ...prev]);
               }}
             />
@@ -995,6 +1081,7 @@ export default function App() {
 
           {activeTab === 'reports' && (
             <ReportsView
+              permissions={permissions}
               products={products}
               sales={sales}
               movements={movements}
@@ -1007,6 +1094,7 @@ export default function App() {
           {/* Product Catalogue & Per-Outlet Stock (BR-1, BR-10) */}
           {activeTab === 'products' && (
             <ProductsView
+              permissions={permissions}
               products={products}
               currentOutlet={currentOutlet}
               outlets={outlets}
@@ -1020,6 +1108,7 @@ export default function App() {
 
           {activeTab === 'products-import' && (
             <ProductsView
+              permissions={permissions}
               products={products}
               currentOutlet={currentOutlet}
               outlets={outlets}
@@ -1034,6 +1123,7 @@ export default function App() {
 
           {activeTab === 'products-setup' && (
             <ProductsView
+              permissions={permissions}
               products={products}
               currentOutlet={currentOutlet}
               outlets={outlets}
@@ -1048,6 +1138,7 @@ export default function App() {
 
           {activeTab === 'products-bulk-price' && (
             <ProductsView
+              permissions={permissions}
               products={products}
               currentOutlet={currentOutlet}
               outlets={outlets}
@@ -1062,6 +1153,7 @@ export default function App() {
 
           {activeTab === 'inventory' && (
             <InventoryView
+              permissions={permissions}
               products={products}
               movements={movements}
               currentOutlet={currentOutlet}
@@ -1073,6 +1165,7 @@ export default function App() {
 
           {activeTab === 'inventory-low-stock' && (
             <InventoryView
+              permissions={permissions}
               products={products}
               movements={movements}
               currentOutlet={currentOutlet}
@@ -1085,6 +1178,7 @@ export default function App() {
 
           {activeTab === 'inventory-valuation' && (
             <InventoryView
+              permissions={permissions}
               products={products}
               movements={movements}
               currentOutlet={currentOutlet}
@@ -1097,6 +1191,7 @@ export default function App() {
 
           {activeTab === 'inventory-exceptions' && (
             <InventoryView
+              permissions={permissions}
               products={products}
               movements={movements}
               currentOutlet={currentOutlet}
@@ -1109,6 +1204,7 @@ export default function App() {
 
           {activeTab === 'inventory-count' && (
             <InventoryView
+              permissions={permissions}
               products={products}
               movements={movements}
               currentOutlet={currentOutlet}
@@ -1121,6 +1217,7 @@ export default function App() {
 
           {activeTab === 'inventory-transfer' && (
             <InventoryView
+              permissions={permissions}
               products={products}
               movements={movements}
               currentOutlet={currentOutlet}
@@ -1131,22 +1228,15 @@ export default function App() {
             />
           )}
 
-          {/* Goods Receipt (GRN) */}
+          {/* E-04/E-05: Receive stock */}
           {activeTab === 'goods-receipt' && (
-            <div className="p-6 max-w-4xl mx-auto space-y-4">
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-3 text-center">
-                <h2 className="text-xl font-black text-slate-800">Goods Receipt Note (GRN)</h2>
-                <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  Receive inventory batches, log supplier invoices, and recalculate weighted average costs automatically per PRD BR-4.
-                </p>
-                <button
-                  onClick={() => setGoodsReceiptModalOpen(true)}
-                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-xs shadow-xs cursor-pointer"
-                >
-                  Open Goods Receipt Modal
-                </button>
-              </div>
-            </div>
+            <GoodsReceiptView
+              products={products}
+              suppliers={suppliers}
+              currentOutlet={currentOutlet}
+              cashierName={currentUser?.fullName || 'Storekeeper'}
+              onCommitReceipt={handleCommitReceipt}
+            />
           )}
 
           {/* Stock Movements Log (Screen E-06, BR-2) */}
@@ -1239,6 +1329,7 @@ export default function App() {
           {/* Comprehensive System Settings Hub */}
           {activeTab === 'settings' && (
             <SettingsView
+              permissions={permissions}
               currentOutlet={currentOutlet}
               outlets={outlets}
               onAddOutlet={handleAddOutlet}
@@ -1274,7 +1365,7 @@ export default function App() {
           )}
 
           {activeTab === 'denied' && (
-            <div className="min-h-[70vh] flex items-center justify-center p-6"><div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-8 text-center shadow-xs"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-700"><ShieldCheck className="h-6 w-6" /></div><h1 className="mt-5 text-xl font-black text-slate-900">Permission required</h1><p className="mt-2 text-sm text-slate-500">Your role does not include access to this screen. Ask an administrator to grant the required permission.</p><button type="button" onClick={() => setActiveTab('dashboard')} className="mt-6 inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-xs font-bold text-white"><Home className="h-4 w-4" /> Back to dashboard</button></div></div>
+            <div className="min-h-[70vh] flex items-center justify-center p-6"><div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-8 text-center shadow-xs"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-700"><ShieldCheck className="h-6 w-6" /></div><h1 className="mt-5 text-xl font-black text-slate-900">Permission required</h1><p className="mt-2 text-sm text-slate-500">Your role does not include access to this screen. Ask an administrator to grant the required permission.</p><button type="button" onClick={() => setActiveTab('dashboard')} className="mt-6 inline-flex items-center gap-2 rounded-lg bg-accent-600 px-4 py-2.5 text-xs font-bold text-white"><Home className="h-4 w-4" /> Back to dashboard</button></div></div>
           )}
 
           {activeTab === 'server-error' && (
@@ -1308,7 +1399,7 @@ export default function App() {
                       setAppErrorReference(null);
                       setActiveTab('dashboard');
                     }}
-                    className="py-2.5 rounded-xl bg-orange-500 text-white font-bold text-xs hover:bg-orange-600 flex items-center justify-center gap-2"
+                    className="py-2.5 rounded-xl bg-accent-500 text-white font-bold text-xs hover:bg-accent-600 flex items-center justify-center gap-2"
                   >
                     <Home className="w-4 h-4" />
                     <span>Dashboard</span>
@@ -1331,7 +1422,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('dashboard')}
-                  className="mt-6 px-5 py-2.5 rounded-xl bg-orange-500 text-white font-bold text-xs hover:bg-orange-600 inline-flex items-center justify-center gap-2"
+                  className="mt-6 px-5 py-2.5 rounded-xl bg-accent-500 text-white font-bold text-xs hover:bg-accent-600 inline-flex items-center justify-center gap-2"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   <span>Back to dashboard</span>
@@ -1349,7 +1440,7 @@ export default function App() {
             className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-7 shadow-2xl text-center"
           >
             <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center mx-auto">
-              <LockKeyhole className="w-8 h-8 text-orange-600" />
+              <LockKeyhole className="w-8 h-8 text-accent-600" />
             </div>
             <h2 className="text-xl font-black text-slate-900 mt-5">
               {sessionLockReason === 'expired' ? 'Session expired' : 'Screen locked'}
@@ -1386,7 +1477,7 @@ export default function App() {
                   setUnlockError(null);
                   setUnlockPin(e.target.value.replace(/\D/g, '').slice(0, 6));
                 }}
-                className="w-full text-center text-3xl tracking-widest font-black py-3.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:outline-orange-500 text-slate-900"
+                className="w-full text-center text-3xl tracking-widest font-black py-3.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:outline-accent-500 text-slate-900"
                 autoFocus
               />
               {unlockError && (
@@ -1395,7 +1486,7 @@ export default function App() {
             </div>
             <button
               type="submit"
-              className="mt-5 w-full py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm flex items-center justify-center gap-2"
+              className="mt-5 w-full py-3 rounded-xl bg-accent-500 hover:bg-accent-600 text-white font-black text-sm flex items-center justify-center gap-2"
             >
               <ShieldCheck className="w-4 h-4" />
               <span>Unlock terminal</span>
@@ -1414,19 +1505,22 @@ export default function App() {
       {/* 3. MODALS & POPUPS */}
       {/* Full POS Checkout Terminal (Screen C-01) */}
       <PosModal
+        permissions={permissions}
+        onLockSession={() => handleLockSession('manual')}
         isOpen={posOpen}
         onClose={() => setPosOpen(false)}
         products={products}
         currentOutlet={currentOutlet}
         customers={customers}
         shiftInfo={shiftInfo}
-        onOpenShift={() => (currentPermissions?.canBlindCloseShift || currentPermissions?.canViewExecutiveReports) && setShiftModalOpen(true)}
+        onOpenShift={() => (permissions.hasAny('shift.open', 'shift.close')) && setShiftModalOpen(true)}
         onAddCustomer={(customer) => setCustomers((prev) => [customer, ...prev])}
         onSaleCompleted={handleSaleCompleted}
       />
 
       {/* Cashier Shift & Drawer Modal (BR-14) */}
       <ShiftsModal
+        varianceExplainThreshold={generalSettings.thresholds.cashVarianceExplain}
         isOpen={shiftModalOpen}
         onClose={() => setShiftModalOpen(false)}
         shiftInfo={shiftInfo}
@@ -1456,6 +1550,7 @@ export default function App() {
 
       {/* Settings & Appearance Drawer */}
       <SettingsDrawer
+        permissions={permissions}
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         onOpen={() => setSettingsOpen(true)}
@@ -1476,11 +1571,11 @@ export default function App() {
         }}
         onOpenPos={() => {
           setSearchOpen(false);
-          if (currentPermissions?.canOpenTerminal) setPosOpen(true);
+          if (can('pos.sell')) setPosOpen(true);
         }}
         onOpenShift={() => {
           setSearchOpen(false);
-          if (currentPermissions?.canBlindCloseShift || currentPermissions?.canViewExecutiveReports) setShiftModalOpen(true);
+          if (permissions.hasAny('shift.open', 'shift.close')) setShiftModalOpen(true);
         }}
       />
     </div>

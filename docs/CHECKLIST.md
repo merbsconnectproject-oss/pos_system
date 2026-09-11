@@ -1,629 +1,495 @@
-# Build & Delivery Checklist
-## POS & Inventory System — Two Outlets
+# Build Checklist — Stage 1
 
-Companion to PRD v1.0 and Screen Inventory v1.0. Every item references its requirement (`FR-`) or screen (`A-01`) ID so progress ties back to the spec.
+**Companion to** PRD v1.0 · SCREEN-INVENTORY.md v1.0 · DELIVERY-PLAN.md
+**Updated** 2026-09-10 · reflects the codebase as it stands, verified rather than assumed.
 
-**Progress:** `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked · `[-]` deferred
-
-| Phase | Items | Done | Status |
-|---|---|---|---|
-| 0 · Pre-build | 24 | | |
-| 1 · Foundations | 39 | 12 | design system done, data model and auth open |
-| 2 · Catalogue & units | 31 | | |
-| 3 · Inventory | 27 | | |
-| 4 · POS, payments, receipts | 54 | | |
-| 5 · Shifts & cash | 21 | | |
-| 6 · Suppliers & customers | 20 | | |
-| 7 · Reports & dashboard | 29 | | |
-| 8 · Settings & appearance | 22 | | |
-| 9 · Resilience & sync | 16 | | |
-| 10 · Security & audit | 18 | | |
-| 11 · Testing | 41 | | |
-| 12 · Data migration | 17 | | |
-| 13 · Deployment & ops | 19 | | |
-| 14 · Outlet 1 go-live | 24 | | |
-| 15 · Outlet 2 go-live | 18 | | |
-| 16 · Warranty & handover | 15 | | |
-| **Total** | **415** | **12** | |
+Grouped by feature, not by delivery phase, so a feature can be judged complete in one place.
+Every item carries its requirement ID (`FR-`), business rule (`BR-`) or screen ID so it ties back to
+the spec. The phase-ordered original is kept at `CHECKLIST-phases-v1.md.bak`.
 
 ---
 
-## Phase 0 — Before writing code
+## How to read this
 
-### Commercial
-- [ ] Quotation accepted in writing
-- [ ] Scope of Work v2.0 signed by both parties
-- [ ] Initial payment received
-- [ ] Source code release decision made and written into the contract
-- [ ] Change procedure agreed and understood by the client
+Each line carries **two boxes**: the first is the frontend, the second is the backend/API.
 
-### Open questions closed (PRD §13)
-- [ ] Q1 — Internet quality and outage duration confirmed at **both** outlets
-- [ ] Q2 — Per-outlet pricing confirmed: shared, or overrides used routinely
-- [ ] Q3 — Discount ceilings per role and floor price policy agreed
-- [ ] Q4 — Mobile money: merchant account with statement, or personal number
-- [ ] Q5 — Staff list per outlet with roles
-- [ ] Q6 — Cash variance threshold requiring written explanation
-- [ ] Q7 — Confirmation that VAT stays out of Stage 1
+```
+- [x][ ] Multiple barcodes per product — FR-PROD-03 · D-06
+   ^  ^
+   |  backend: not started
+   frontend: done
+```
 
-### Client inputs
-- [ ] Business and outlet details: names, addresses, phones
-- [ ] Logo supplied in usable resolution
-- [ ] Receipt footer and returns policy wording
-- [ ] Product data template issued to client
-- [ ] Named client-side owner for product data confirmed
-- [ ] Hardware specification issued
-- [ ] Client confirmed hardware purchase plan and dates
+| Mark | Meaning |
+|---|---|
+| `[x]` | Done and verified |
+| `[~]` | Partial — works, but not to the requirement |
+| `[ ]` | Not started |
+| `[-]` | Deferred to Stage 2 or 3, not in this release |
+| `[!]` | Blocked |
 
-### Technical decisions
-- [ ] Stack chosen and written down
-- [ ] Hosting provider and region selected
-- [ ] Database engine confirmed, with money as integer minor units (BR-11)
-- [ ] Print service approach confirmed and prototyped against a real thermal printer
-- [ ] Barcode scanner tested for keystroke timing behaviour (FR-POS-04)
+An item is **complete only when both boxes are `[x]`**. A feature is complete when every
+non-deferred item in its section is complete, including its non-functional items.
 
 ---
 
-## Phase 1 — Foundations
+## Progress at a glance
 
-### Project setup
-- [ ] Repository created with branch strategy
-- [ ] Environments: local, staging, production
-- [ ] CI running lint, typecheck and tests on every push
-- [ ] Error tracking wired up
-- [ ] Environment secrets managed outside the repo
-- [ ] Database migration tooling in place
-- [ ] Seed script for demo data
+| Feature | Items | Frontend | Backend |
+|---|---:|---:|---:|
+| A · Authentication & session | 12 | 10 done, 2 partial | 0 |
+| B · Outlets | 7 | 6 done, 1 deferred | 0 |
+| C · Product catalogue | 14 | 8 done, 3 partial, 1 open, 2 deferred | 0 |
+| D · Units & conversions | 7 | 6 done, 1 open | 0 |
+| E · Pricing | 8 | 4 done, 2 partial, 2 open | 0 |
+| F · Inventory | 12 | 9 done, 2 partial, 1 deferred | 0 |
+| G · Point of sale | 20 | 15 done, 4 partial, 1 deferred | 0 |
+| H · Payments | 9 | 6 done, 2 partial, 1 deferred | 0 |
+| I · Receipts & printing | 10 | 5 done, 4 partial, 1 deferred | 0 |
+| J · Shifts & cash | 9 | 8 done, 1 partial | 0 |
+| K · Suppliers & goods receipt | 10 | 5 done, 2 partial, 3 deferred | 0 |
+| L · Customers | 7 | 5 done, 1 partial, 1 deferred | 0 |
+| M · Users, roles & permissions | 8 | 7 done, 1 partial | 0 |
+| N · Audit | 5 | 1 done, 2 partial, 2 backend-only | 0 |
+| O · Reports & dashboard | 7 | 4 done, 2 partial, 1 deferred | 0 |
+| P · Settings | 8 | 5 done, 3 partial | 0 |
+| Q · Connectivity & resilience | 8 | 0 done, 2 partial, 5 open, 1 deferred | 0 |
+| R · Cross-cutting non-functional | 18 | 6 done, 4 partial, 8 backend | 0 |
 
-### Data model (PRD §7)
-- [ ] `outlet`, `terminal`
-- [ ] `user`, `role`, `permission`, `role_permission`, `user_role`, `user_permission`, `user_outlet`
-- [ ] `category`, `brand`, `supplier`
-- [ ] `product`, `unit`, `product_unit`, `product_barcode`
-- [ ] `product_outlet_price`, `price_history`
-- [ ] `stock_level` keyed on (product, outlet) — **BR-1**
-- [ ] `inventory_movement` insert-only — **BR-2**
-- [ ] `sale`, `sale_item`, `payment`, `sale_void`, `held_sale`
-- [ ] `customer`, `customer_type`
-- [ ] `goods_receipt`, `goods_receipt_item`
-- [ ] `shift`, `cash_movement`
-- [ ] `audit_log`
-- [ ] All unique constraints applied (PRD §7.5)
-- [ ] Partial unique indexes: one open shift per user, one per terminal
-- [ ] Search index on product name, SKU, description (FR-PROD-06)
-
-### Auth and permissions
-- [ ] Sign in with password (FR-AUTH-01) — `A-01`
-- [ ] PIN set and verify (FR-AUTH-02)
-- [ ] Outlet selection after sign-in (FR-AUTH-03) — `A-03`
-- [ ] Screen lock and PIN unlock (FR-AUTH-04) — `A-07`
-- [ ] Session expiry, POS locks rather than signs out (FR-AUTH-05)
-- [ ] Rate limiting on sign-in (FR-AUTH-06, NFR-10)
-- [ ] Password reset flow — `A-04` `A-05` `A-06`
-- [ ] **Server-side permission check on every endpoint** (NFR-9)
-- [ ] Permission-absent rendering, not disabled (FR-USER-06, `L-09`)
-
-### Design system and shell
-
-Specified and rendered at working size in `reference.html` (the Counter Datasheet, sections 01–11).
-Tokens live in `src/styles/tokens.css` and `src/theme/`; the component CSS is still inside the
-datasheet and has not yet been extracted into `src/styles/components.css` for the app build.
-
-- [x] Accent as CSS custom property, zero hard-coded accent hex (NFR-15) — enforced by `scripts/blue-audit.mjs`
-- [x] Colour tokens including fixed semantic colours — datasheet §02
-- [x] Nunito loaded, tabular figures for money — datasheet §03
-- [x] Buttons: primary, secondary dark, ghost, danger, icon, bordered square — datasheet §04
-- [x] Inputs: text, number, currency, quantity with unit, select, searchable select, date range — datasheet §05
-- [x] Data table with checkbox, thumbnail, badge, row actions, pagination — datasheet §06
-- [x] Stat tile (filled) and stat card (white) with trend badge — datasheet §06
-- [x] Modal, drawer, toast, inline strip — datasheet §07
-- [x] Skeleton loaders and empty state pattern — datasheet §08
-- [x] App shell: sidebar with grouped sections, header with outlet switcher (`L-10`) — datasheet §10
-- [x] Page header with title and action cluster — datasheet §10
-- [x] **No blue anywhere** — audited against focus rings, links, checkboxes, tabs, charts — audit clean
-- [ ] Component CSS extracted from the datasheet into the app's own stylesheet
+**Frontend ≈ 95% of Stage 1 · Backend 0% · Contract frozen and machine-checked (`npm run check`)**
 
 ---
 
-## Phase 2 — Catalogue and units
+## A · Authentication & session — `FR-AUTH`
 
-### Products
-- [ ] Product CRUD (FR-PROD-01) — `D-03` `D-04`
-- [ ] SKU auto-generation with manual override (FR-PROD-02)
-- [ ] Multiple barcodes per product (FR-PROD-03) — `D-06`
-- [ ] Barcode attached to a non-base unit (FR-PROD-04)
-- [ ] Categories management (FR-PROD-05) — `D-09`
-- [ ] Brands management — `D-10`
-- [ ] Deactivate not delete (FR-PROD-08, BR-17) — `D-19`
-- [ ] Product list with filters (`D-01`)
-- [ ] Product detail drawer showing stock at **both** outlets (`D-02`)
-- [ ] Empty and no-results states (`D-17` `D-18`)
-
-### Search
-- [ ] Partial, out-of-order term matching (FR-PROD-06)
-- [ ] "2.5 twin earth" finds "Twin & Earth Cable 2.5mm"
-- [ ] Results show stock at the **active outlet** (FR-PROD-07)
-- [ ] Under 300ms at 3,000 products (NFR-1)
-
-### Units and conversions
-- [ ] Base unit per product (FR-UOM-01)
-- [ ] Selling units with conversion factors (FR-UOM-02) — `D-05`
-- [ ] Unit selection converts quantity and price (FR-UOM-03)
-- [ ] Per-unit price override, so a drum differs from cut metres (FR-UOM-04)
-- [ ] Purchase unit converts on receipt (FR-UOM-05)
-- [ ] Fractional quantities to 3dp (FR-UOM-06, BR-12)
-- [ ] Conversion factor locked once transactions exist (FR-UOM-07)
-
-### Pricing
-- [ ] Cost, retail, trade, floor price (FR-PRICE-01, 02) — `D-07`
-- [ ] Per-outlet price override (FR-PRICE-03)
-- [ ] Customer type drives price level (FR-PRICE-04)
-- [ ] Customer-specific discount or agreed price (FR-PRICE-05)
-- [ ] Price history recorded (FR-PRICE-06) — `D-08`
-- [ ] Cost hidden without `price.view_cost` (FR-PRICE-07)
-- [ ] Accounting margin and replacement margin both shown (FR-PRICE-08)
-
-### Import
-- [ ] Upload with template download (`D-12`)
-- [ ] Column mapping (`D-13`)
-- [ ] Validation with downloadable error file (`D-14`)
-- [ ] Preview before commit (`D-15`)
-- [ ] Result summary (`D-16`)
-
----
-
-## Phase 3 — Inventory
-
-- [ ] Stock held per product per outlet (FR-INV-01, BR-1)
-- [ ] All movement types implemented (FR-INV-02)
-- [ ] Movement records outlet, reason, user, source document (FR-INV-03)
-- [ ] Movement history filterable (FR-INV-04) — `E-03`
-- [ ] Stock on hand list per outlet (`E-01`)
-- [ ] Stock detail with running balance (`E-02`)
-- [ ] Adjustment with **mandatory reason** (FR-INV-05) — `E-07`
-- [ ] Adjustment approval above threshold (FR-INV-06) — `E-08`
-- [ ] Damage and write-off with cost impact (`E-09`)
-- [ ] Weighted average cost recalculated on receipt (FR-INV-07, BR-4)
-- [ ] Cost frozen on sale line (BR-5)
-- [ ] Low stock flag per outlet (FR-INV-08) — `E-10`
-- [ ] Inventory valuation per outlet and combined (FR-INV-09) — `E-11`
-- [ ] Exceptions view (FR-INV-10) — `E-12`
-- [ ] Negative stock blocked by default (BR-9)
-- [ ] Oversell permitted with `stock.oversell`, movement flagged
-- [ ] Stock decrement inside transaction with row lock (BR-8)
-- [ ] Empty movement state (`E-13`)
-- [ ] **Nightly reconciliation job**: stock level equals sum of movements (NFR-17)
-- [ ] Reconciliation drift alerts to the developer
-
----
-
-## Phase 4 — POS, payments, receipts
-
-### POS shell and cart
-- [ ] Full-screen POS outside the app shell (FR-POS-01) — `C-01`
-- [ ] Shift required before selling (FR-POS-02) — `C-30`
-- [ ] Product tile grid with price per unit and stock at this outlet
-- [ ] Category chips
-- [ ] Cart panel: lines, customer, discount, subtotal, large total
-- [ ] Empty cart state (`C-24`)
-- [ ] Line editor: quantity, unit, price, discount, remove (FR-POS-09) — `C-05`
-- [ ] Hold sale with label (FR-POS-14) — `C-23`
-- [ ] Held sales list and resume (`C-22`)
-- [ ] Held sales do **not** reserve stock (FR-POS-15)
-
-### Scanning
-- [ ] **Global keystroke capture** — no click into search required (FR-POS-03)
-- [ ] Scanner distinguished from typing by timing plus Enter (FR-POS-04)
-- [ ] Repeat scan increments the existing line and flashes it (FR-POS-05)
-- [ ] Rapid consecutive scans all applied, none dropped (FR-POS-06)
-- [ ] Unknown barcode as inline strip, not a modal (FR-POS-07) — `C-19`
-- [ ] Assign barcode to product from the POS (`C-20`)
-- [ ] Multi-unit product prompts for unit (FR-POS-08) — `C-04`
-- [ ] Line render under 100ms (NFR-1)
-
-### Discounts and approval
-- [ ] Line and cart discount, percent or amount (FR-POS-10) — `C-06`
-- [ ] Capped by `sale.discount_max`
-- [ ] Below-floor triggers inline PIN approval (FR-POS-11, BR-10) — `C-07`
-- [ ] Approver identity stored on the sale
-- [ ] Approval refused state (`C-08`)
-
-### Customers at the counter
-- [ ] Attach by phone search (FR-POS-12) — `C-09`
-- [ ] Quick create with name and phone only (`C-10`)
-- [ ] Walk-in requires nothing (FR-CUST-01)
-
-### Payments
-- [ ] Method selection (FR-PAY-01) — `C-11`
-- [ ] Cash with tendered, change, denomination shortcuts (FR-PAY-02) — `C-12`
-- [ ] Mobile money with reference and explicit confirmation (FR-PAY-03) — `C-13`
-- [ ] Card and transfer with reference (`C-14`)
-- [ ] Split payment with live remaining balance (FR-PAY-04) — `C-15`
-- [ ] Cannot complete until payments equal total (FR-PAY-05)
-- [ ] Overpayment only for cash (FR-PAY-06)
-- [ ] **Payment UUID idempotency** (FR-PAY-07, BR-7)
-- [ ] Payment modal is the only one that blocks scanning (FR-PAY-08)
-
-### Completion and receipts
-- [ ] **Sale committed before print attempted** (FR-RCPT-01)
-- [ ] Sale complete screen with large change due (`C-16`)
-- [ ] Receipt numbering per outlet from pre-allocated block (BR-6)
-- [ ] ESC/POS printing via local service, no browser dialogue (FR-RCPT-02)
-- [ ] 58mm and 80mm layouts (FR-RCPT-03)
-- [ ] All receipt content present (FR-RCPT-04, PRD §9)
-- [ ] **Print failure never blocks or reverses the sale** (FR-RCPT-05) — `C-18`
-- [ ] Reprint marked REPRINT and logged (FR-RCPT-06)
-- [ ] Skip printing option (FR-RCPT-07)
-- [ ] Receipt preview (`C-17`)
-- [ ] Print begins within 1s (NFR-3)
-
-### History and voids
-- [ ] Transaction lookup with filters (FR-POS-18) — `C-25`
-- [ ] Sale detail drawer (`C-26`)
-- [ ] Void with reason and approval (FR-POS-19, BR-3) — `C-27`
-- [ ] Void writes reversing movements, original preserved
-- [ ] Void appears on the void report
-
-### Keyboard and touch
-- [ ] Shortcuts F2, F3, F4, F9, Esc, arrows, Enter (FR-POS-16)
-- [ ] **Full sale completable with no mouse** (NFR-12)
-- [ ] Touch targets ≥44px (FR-POS-17, NFR-14)
-
----
-
-## Phase 5 — Shifts and cash
-
-- [ ] Open shift with declared float (FR-CASH-01) — `C-29`
-- [ ] One open shift per user and per terminal (FR-CASH-02, BR-13)
-- [ ] Cash movements with reason (FR-CASH-03) — `H-04`
-- [ ] **Blind count** — expected cash hidden until submit (FR-CASH-04) — `C-31`
-- [ ] Variance calculated per BR-14 and recorded against the user
-- [ ] Variance note required beyond threshold (FR-CASH-06) — `H-06`
-- [ ] Non-cash takings listed at close (FR-CASH-07)
-- [ ] Close result screen (`C-32`)
-- [ ] Shift cannot be reopened (FR-CASH-09)
-- [ ] Shift list with variance colour (`H-01`)
-- [ ] Shift detail (`H-02`)
-- [ ] End-of-day per outlet and combined (FR-CASH-08) — `H-03`
-- [ ] Cash movement list (`H-05`)
-- [ ] Open shifts panel on dashboard (`H-07`)
-- [ ] Empty state (`H-08`)
-
----
-
-## Phase 6 — Suppliers and customers
-
-### Suppliers
-- [ ] Supplier CRUD (FR-SUP-01) — `F-01` `F-03` `F-04`
-- [ ] Supplier detail drawer (`F-02`)
-- [ ] Receive stock into a chosen outlet (FR-SUP-02) — `E-04`
-- [ ] Receipt lines with purchase unit and unit cost (FR-SUP-03)
-- [ ] Confirm screen showing resulting stock and new average cost (FR-SUP-05) — `E-05`
-- [ ] Confirming writes movements and recalculates cost (FR-SUP-04)
-- [ ] Posted receipt is immutable (FR-SUP-06)
-- [ ] Receipt detail view (`F-06`)
-- [ ] Purchase history per supplier and product (FR-SUP-07) — `F-05`
-- [ ] Empty state (`F-07`)
-
-### Customers
-- [ ] Customer CRUD (FR-CUST-02) — `G-01` `G-03` `G-04`
-- [ ] Phone unique and primary lookup (FR-CUST-03)
-- [ ] Customer types mapped to price levels (FR-CUST-04) — `G-06`
-- [ ] Shared across both outlets (FR-CUST-05)
-- [ ] Purchase history across outlets (FR-CUST-06) — `G-05`
-- [ ] Detail drawer (`G-02`)
-- [ ] Empty state (`G-07`)
-
----
-
-## Phase 7 — Reports and dashboard
-
-### Dashboards
-- [ ] Owner dashboard, both outlets separate and combined (FR-RPT-01) — `B-01`
-- [ ] Manager dashboard, single outlet (`B-02`)
-- [ ] Cashier landing with no profit or stock value (`B-03`)
-- [ ] Loading skeleton (`B-04`)
-- [ ] First-run empty state (`B-05`)
-- [ ] Low stock alert strip (`B-06`)
-
-### Reports
-- [ ] Report index with profit reports hidden without permission (`I-01`)
-- [ ] Sales summary with outlet comparison (`I-02`)
-- [ ] Sales by product (`I-03`)
-- [ ] Sales by category (`I-04`)
-- [ ] Sales by cashier (`I-05`)
-- [ ] Sales by customer (`I-06`)
-- [ ] Gross profit and COGS from frozen costs (FR-RPT-06) — `I-07`
-- [ ] Best sellers (`I-08`)
-- [ ] Slow movers (`I-09`)
-- [ ] Stock on hand report (`I-10`)
-- [ ] Stock movement report (`I-11`)
-- [ ] Payment method breakdown (`I-12`)
-- [ ] Discount and override log (`I-13`)
-- [ ] Void and refund log (`I-14`)
-- [ ] Purchases report (`I-15`)
-- [ ] **Outlet comparison report — NEW** (FR-RPT-08) — `I-19`
-  - [ ] Side-by-side: sales, gross margin, transactions, average sale
-  - [ ] Discount rate and void rate per outlet
-  - [ ] Cash variance per outlet
-  - [ ] Stock value and low-stock count per outlet
-  - [ ] Period selector with previous-period comparison
-- [ ] Filter panel: outlet, date range, category, user, method (FR-RPT-03) — `I-16`
-- [ ] Profit visible only with `report.view_profit` (FR-RPT-05)
-- [ ] Empty and loading states (`I-17` `I-18`)
-
----
-
-## Phase 8 — Settings and appearance
-
-- [ ] Settings index (`K-01`)
-- [ ] Business profile with logo upload (FR-SET-01) — `K-02`
-- [ ] Outlet list (`K-03`)
-- [ ] Per-outlet settings including receipt prefix and footer (FR-SET-02) — `K-04`
-- [ ] Receipt designer with 58mm and 80mm live preview (FR-RCPT-09) — `K-05`
-- [ ] **Appearance: accent picker** (FR-SET-03) — `K-06`
-  - [ ] Seven preset swatches, none blue
-  - [ ] Hex input with validation
-  - [ ] Live preview: button, nav item, selected row, tab, stat tile
-  - [ ] Reset to orange
-  - [ ] Restricted to `settings.appearance`
-  - [ ] Semantic colours unaffected (FR-SET-04)
-  - [ ] Change applies across the whole app without reload
-- [ ] Terminal settings: printer, width, auto-print (FR-SET-05) — `K-07`
-- [ ] **Test print button working against a real printer** (FR-RCPT-08)
-- [ ] Receipt number block status visible
-- [ ] Operational thresholds (FR-SET-06) — `K-08`
-- [ ] Backup status and restore history (FR-SET-07) — `K-09`
-- [ ] Data export (FR-SET-08) — `K-10`
-- [ ] Save confirmation toast (`K-11`)
-
----
-
-## Phase 9 — Resilience and sync
-
-- [ ] Product catalogue cached locally (FR-SYNC-01)
-- [ ] Search and scan work at full speed offline
-- [ ] Sales recorded and queued during dropout (FR-SYNC-02)
-- [ ] Queued sales keep pre-allocated receipt numbers (FR-SYNC-03, BR-6)
-- [ ] Offline banner with queued count, non-blocking (FR-SYNC-04) — `C-33`
-- [ ] Queue submitted in order on reconnect, idempotently (FR-SYNC-05)
-- [ ] Sync recovered toast (`C-34`)
-- [ ] Offline stock conflicts surfaced on exceptions report (FR-SYNC-06)
-- [ ] **Abrupt power loss loses no committed sale** (FR-SYNC-07, NFR-5)
-- [ ] Tolerates 15-minute dropout without interrupting trade (NFR-4)
-- [ ] Network error state with retry (`L-04`)
-- [ ] Sale UUID idempotency verified end to end (BR-7)
-
----
-
-## Phase 10 — Security and audit
-
-- [ ] Passwords hashed with bcrypt or argon2 (NFR-8)
-- [ ] PINs hashed separately
-- [ ] TLS enforced on all traffic
-- [ ] Authorisation enforced server-side on every endpoint (NFR-9)
-- [ ] Rate limiting on auth and approval endpoints (NFR-10)
-- [ ] Audit entries capture actor, action, before/after, outlet, terminal, IP (FR-AUDIT-01)
-- [ ] All listed actions logged (FR-AUDIT-02)
-- [ ] **Audit log append-only, no edit or delete path even for Owner** (FR-AUDIT-03, BR-15)
-- [ ] Audit log filterable (FR-AUDIT-04) — `J-08`
-- [ ] Audit entry detail (`J-09`)
-- [ ] Users cannot change their own permissions (FR-USER-05, BR-16)
-- [ ] User CRUD with outlet assignment (`J-01` `J-03` `J-04`)
-- [ ] Permission matrix (`J-06`)
-- [ ] Per-user overrides (`J-07`)
-- [ ] Permission denied page (`J-10`)
-- [ ] Deactivate user, sessions ended (`J-11`)
-- [ ] Penetration sanity check: can a cashier reach a profit endpoint directly by URL or API call
-
----
-
-## Phase 11 — Testing
-
-### Unit
-- [ ] Weighted average cost calculation (BR-4) across edge cases including zero stock
-- [ ] Unit conversion both directions, including fractions
-- [ ] Money rounding, half-up, per line then summed (BR-11)
-- [ ] Expected cash calculation (BR-14)
-- [ ] Discount and floor price validation (BR-10)
-- [ ] Permission resolution: role plus user override
-- [ ] Receipt number generation from a block
-
-### Integration
-- [ ] Sale writes sale, items, payments, movements atomically
-- [ ] Failed payment writes nothing
-- [ ] Goods receipt updates stock and average cost correctly
-- [ ] Void writes reversing movements and restores stock
-- [ ] Shift close computes variance correctly
-- [ ] Adjustment above threshold requires approval
-- [ ] Movement sum equals stock level after a long random sequence
-
-### Concurrency
-- [ ] **Two terminals sell the last unit → one succeeds, one refused** (BR-8)
-- [ ] Same sale UUID submitted twice → one sale (BR-7)
-- [ ] Same payment submitted twice → one payment
-- [ ] Simultaneous receipt and sale on the same product → correct final quantity and cost
-- [ ] Two users opening a shift on the same terminal → one succeeds
-
-### End to end
-- [ ] Scan five items, split payment, print, verify stock at selling outlet only
-- [ ] Sale with printer off → completes, prints on retry
-- [ ] Below-floor sale blocked, then approved by manager PIN
-- [ ] Void a sale, verify both records and the void report
-- [ ] Receive stock, verify new average cost, sell, verify frozen cost in profit report
-- [ ] Cashier account: no cost, no profit, no reports anywhere
-- [ ] Disconnect mid-sale, reconnect, verify exactly one sale at the server
-- [ ] Change accent colour, verify every accent surface updates
-- [ ] Full day simulated at both outlets, reconcile end-of-day figures
+### Functional
+- [x][ ] Sign in with username or email and password — FR-AUTH-01 · `A-01`
+- [x][ ] Sign-in error state with attempts remaining — FR-AUTH-02 · `A-02`
+- [x][ ] 4–6 digit PIN for counter approvals and unlock — FR-AUTH-02
+- [x][ ] Outlet selection after sign-in; single-outlet users placed automatically — FR-AUTH-03 · `A-03`
+- [x][ ] Lock the POS without ending the shift; unlock with the shift owner's PIN — FR-AUTH-04 · `A-07`
+- [x][ ] Idle timeout locks rather than signs out when a shift is open — FR-AUTH-05 · `A-08`
+- [x][ ] Idle period configurable, not a constant — FR-AUTH-05 · `K-08`
+- [~][ ] Failed sign-in attempts rate limited and logged — FR-AUTH-06 *(UI counts attempts; enforcement is server-side)*
+- [x][ ] Password reset by administrator — FR-AUTH-07 · `A-04` `A-05` `A-06`
+- [~][ ] Self-service reset by email where an address exists — FR-AUTH-07 *(screens exist, no mail transport)*
+- [x][ ] Deactivated user sees a clear message and cannot sign in — FR-AUTH-08 · `A-09`
+- [x][ ] Not-found and server-error pages — `A-10` `A-11`
 
 ### Non-functional
-- [ ] Search under 300ms at 3,000 products (NFR-1)
-- [ ] Sale completion under 1s (NFR-2)
-- [ ] Print starts within 1s (NFR-3)
-- [ ] Backup restore performed successfully into a clean environment (NFR-6)
-- [ ] Contrast check 4.5:1 on all text (NFR-14)
-- [ ] Full keyboard reachability
-- [ ] **Blue audit: no blue pixel anywhere in the interface**
-
-### Release gate — PRD §11
-- [ ] All twelve acceptance criteria pass at both outlets
+- [ ][ ] Passwords hashed with bcrypt or argon2; PINs hashed separately — NFR-8
+- [ ][ ] Rate limiting on authentication and approval endpoints — NFR-10
+- [x][ ] Locking and unlocking does not close the shift or clear the cart — US-AUTH-1 acceptance
 
 ---
 
-## Phase 12 — Data migration
+## B · Outlets — `FR-OUT`
 
-- [ ] Template issued to client (week 1)
-- [ ] Client data received (target week 10)
-- [ ] Duplicate products identified and merged
-- [ ] Missing costs and prices flagged back to client
-- [ ] Categories and brands normalised
-- [ ] Units and conversion factors set per product
-- [ ] Barcodes validated for uniqueness
-- [ ] Products without barcodes identified for labelling
-- [ ] Reorder levels set
-- [ ] Opening stock quantities per outlet supplied
-- [ ] Opening stock loaded as `OPENING` movements, not direct writes
-- [ ] Opening valuation reviewed and signed off by client
-- [ ] Customers imported with unique phone numbers
-- [ ] Suppliers imported
-- [ ] Users created with roles and outlet assignments
-- [ ] Spot check: 20 random products verified against the shelf
-- [ ] Client sign-off that data is correct before go-live
+### Functional
+- [x][ ] Multiple outlets supported; configured at launch — FR-OUT-01
+- [x][ ] Per-outlet name, trading name, address, phone, receipt footer — FR-OUT-02 · `K-04`
+- [~][ ] Per-outlet logo override — FR-OUT-02 *(field present, no upload/persistence)*
+- [x][ ] Every sale, payment, movement, shift, cash movement and receipt tagged to one outlet — FR-OUT-03
+- [x][ ] Active outlet selected in the header and persists across screens — FR-OUT-04 · `L-10`
+- [x][ ] `outlet.view_all` may select "All outlets"; transactional screens require one — FR-OUT-05
+- [x][ ] Without the permission, the outlet is static text, not a control — FR-OUT-06
+- [-][-] Stock transfer between outlets with in-transit state — FR-OUT-07 *(Stage 3)*
+
+### Non-functional
+- [x][ ] Adding a third outlet is configuration only, no schema or code change — NFR-16
+- [ ][ ] With Outlet A selected, no Outlet B record appears on any list, report or search — FR-OUT acceptance
 
 ---
 
-## Phase 13 — Deployment and operations
+## C · Product catalogue — `FR-PROD`
 
-- [ ] Production environment provisioned
-- [ ] Domain and TLS certificate
-- [ ] Database with automated daily backup, 30-day retention (NFR-6)
-- [ ] **Restore tested into a clean environment** — not assumed
-- [ ] RPO 15 minutes and RTO 4 hours verified (NFR-7)
-- [ ] Monitoring and uptime alerting
-- [ ] Error tracking in production
-- [ ] Log retention configured
-- [ ] Print service packaged as an installer
-- [ ] Print service auto-starts on boot
-- [ ] Print service tested on the client's actual printer model
-- [ ] Browser kiosk or shortcut configured for the POS
-- [ ] Deployment runbook written
-- [ ] Rollback procedure written and tested
-- [ ] Support contact and escalation path documented
+### Functional
+- [x][ ] Product record: name, SKU, category, brand, supplier, base unit, prices, reorder level, image, active flag — FR-PROD-01 · `D-03` `D-04`
+- [ ][ ] SKU auto-generated with manual override — FR-PROD-02
+- [ ][ ] SKU unique across the system — FR-PROD-02
+- [x][ ] Multiple barcodes per product — FR-PROD-03 · `D-06`
+- [x][ ] Each barcode bound to one selling unit, so a carton scan adds a carton — FR-PROD-04
+- [ ][ ] Barcode unique system-wide — FR-PROD-03
+- [x][ ] Categories and brands managed as lists — FR-PROD-05 · `D-09` `D-10`
+- [x][ ] Search matches name, SKU, barcode, brand, category; partial and out-of-order terms — FR-PROD-06
+- [x][ ] Search results show stock at the active outlet — FR-PROD-07
+- [x][ ] Products deactivated, never deleted — FR-PROD-08 · BR-17 · `D-19`
+- [~][ ] Full cost and price history retained and viewable — FR-PROD-09 · `D-08` *(modal renders mock history)*
+- [x][ ] Bulk import: template, upload, column mapping, row validation, error file, preview, commit — FR-PROD-10 · `D-12`…`D-16`
+- [~][-] Bulk price update by category, brand or supplier with affected-count preview — FR-PROD-11 · `D-20` *(Stage 2; filters render, apply not wired)*
+- [-][-] Product variants under a parent — FR-PROD-12 · `D-21` *(Stage 2)*
+
+### Non-functional
+- [ ][ ] Four-term partial query returns the product in the top three in under 300 ms at 3,000 products — NFR-1 · FR-PROD acceptance
+- [ ][ ] Full-text or trigram index on name, SKU, description — PRD §7.5
+- [x][ ] Empty and no-results states — `D-17` `D-18` · `L-03` `L-11`
 
 ---
 
-## Phase 14 — Outlet 1 go-live (Inco Hardware)
+## D · Units & conversions — `FR-UOM`
 
-### Pre-visit
-- [ ] Hardware purchased and delivered to the shop
-- [ ] UPS present at the counter — **not optional**
-- [ ] Internet confirmed working
-- [ ] Product data loaded and verified
-- [ ] User accounts created for this outlet's staff
-- [ ] Receipt layout configured with this outlet's details
+### Functional
+- [x][ ] One base unit per product, the smallest sellable unit — FR-UOM-01
+- [x][ ] Additional selling units with a conversion factor to base — FR-UOM-02 · `D-05`
+- [x][ ] Cashier picks the unit at the counter; quantity and price convert — FR-UOM-03 · `C-04`
+- [x][ ] A selling unit may carry its own price, not a multiple — FR-UOM-04
+- [x][ ] Goods received in a purchase unit, converted to base on receipt — FR-UOM-05
+- [x][ ] Fractional quantities to 3 decimal places — FR-UOM-06 · BR-12
+- [ ][ ] Conversion factor locked once stock or transactions exist — FR-UOM-07
 
-### On site
-- [ ] PC set up and positioned at the counter
-- [ ] Printer connected and test print successful
-- [ ] Scanner connected and tested with real products
-- [ ] UPS tested by pulling mains power mid-transaction
+### Non-functional
+- [x][ ] Receiving 3 drums of 100 m gives 300 m; selling 12.5 m leaves 287.5 m; selling a drum leaves 187.5 m — FR-UOM acceptance *(asserted in `contract-check.ts`)*
+
+---
+
+## E · Pricing — `FR-PRICE`
+
+### Functional
+- [x][ ] Cost, retail and trade price per product — FR-PRICE-01 · `D-07`
+- [x][ ] Floor price below which approval is required — FR-PRICE-02 · BR-10
+- [ ][ ] Per-outlet price override — FR-PRICE-03
+- [x][ ] Customer type determines the price level automatically — FR-PRICE-04
+- [~][ ] Customer-specific fixed discount or agreed price — FR-PRICE-05 *(field on the record, not applied at the counter)*
+- [~][ ] Price changes versioned with effective date and user — FR-PRICE-06 *(history view is mock)*
+- [x][ ] Cost and margin visible only with `price.view_cost` — FR-PRICE-07
+- [ ][ ] Accounting margin and replacement margin shown side by side — FR-PRICE-08
+
+### Non-functional
+- [x][ ] Money held as integer minor units on the wire; half-up rounding per line — BR-11 *(`money.ts`, asserted)*
+- [x][ ] Historical documents keep the price used at the time — BR-5 · FR-PRICE-06
+
+---
+
+## F · Inventory — `FR-INV`
+
+### Functional
+- [x][ ] Stock held per product per outlet; no global quantity — FR-INV-01 · BR-1
+- [x][ ] Movement types: RECEIPT, SALE, SALE_VOID, ADJUSTMENT_IN/OUT, DAMAGE, LOSS, OPENING — FR-INV-02
+- [x][ ] Every movement records outlet, product, delta, unit cost, reason, note, user, timestamp, source — FR-INV-03 · BR-2
+- [x][ ] Movement history filterable by product, outlet, type, user and date — FR-INV-04 · `E-03`
+- [x][ ] Manual adjustments require a reason code and `stock.adjust` — FR-INV-05 · `E-07`
+- [~][ ] Adjustments above the value threshold require `stock.approve_adjustment` — FR-INV-06 · `E-08` *(threshold configurable; approval gate not wired)*
+- [x][ ] Weighted average cost recalculated per outlet on every receipt — FR-INV-07 · BR-4
+- [x][ ] Low stock flagged at or below reorder level, per outlet — FR-INV-08 · `E-10`
+- [x][ ] Valuation at weighted average cost, per outlet and combined — FR-INV-09 · `E-11`
+- [x][ ] Exceptions view: oversells, large adjustments, write-offs — FR-INV-10 · `E-12`
+- [~][-] Stock count: generate sheet, enter counts, review variance, approve, post as one batch — FR-INV-11 · `E-14` *(Stage 2; entry works, does not post)*
+- [-][-] Quarantine state for faulty goods — FR-INV-12 *(Stage 3)*
+
+### Non-functional
+- [ ][ ] For any product at any outlet, quantity equals the sum of its movement deltas — FR-INV acceptance · BR-2
+- [ ][ ] Nightly reconciliation job proves it and reports drift — NFR-17
+- [x][ ] Cash movements are not stock movements, so the stock ledger holds only stock — BR-2
+
+---
+
+## G · Point of sale — `FR-POS`
+
+### Functional
+- [x][ ] Runs full screen without the application sidebar — FR-POS-01 · `C-01`
+- [x][ ] A shift must be open before selling; otherwise prompt to open one — FR-POS-02 · `C-30`
+- [x][ ] Scanner input captured globally, whatever has focus — FR-POS-03
+- [x][ ] Scan distinguished from typing by inter-keystroke timing and a terminating Enter — FR-POS-04
+- [x][ ] Scanning a product already in the cart increments and flashes that line — FR-POS-05
+- [x][ ] Rapid consecutive scans queued; none dropped — FR-POS-06
+- [x][ ] Unrecognised barcode shows an inline strip, not a modal — FR-POS-07 · `C-19`
+- [x][ ] A product with more than one selling unit prompts for the unit — FR-POS-08 · `C-04`
+- [x][ ] Cart lines: quantity, unit change, price override, discount, remove — FR-POS-09 · `C-05`
+- [~][ ] Line and cart discounts capped by the user's `sale.discount_max` — FR-POS-10 · `C-06` *(ceilings configurable in K-08; not yet read by the POS)*
+- [x][ ] Price below floor triggers manager PIN; approver recorded on the sale — FR-POS-11 · BR-10 · `C-07` `C-08`
+- [x][ ] Customer attached by phone search or created inline — FR-POS-12 · `C-09` `C-10`
+- [x][ ] Selling beyond stock blocked unless `stock.oversell` — FR-POS-13 · BR-9 · `C-21`
+- [x][ ] Sales held with an optional label and resumed — FR-POS-14 · `C-22` `C-23`
+- [x][ ] Held sales do not reserve stock — FR-POS-15
+- [~][ ] Shortcuts: F2 payment, F3 hold, F4 search, F9 lock, Esc clear, arrows navigate, Enter add — FR-POS-16 *(function keys done; arrow navigation of results not wired)*
+- [~][ ] Touch targets at least 44 px — FR-POS-17 *(not audited)*
+- [x][ ] Past transactions searchable by receipt, date, customer, amount or item — FR-POS-18 · `C-25`
+- [x][ ] Void with a reason by `sale.void`; reversing movements written — FR-POS-19 · BR-3 · `C-27`
+- [-][-] Returns and refunds against an original receipt — FR-POS-20 · `C-35` `C-36` *(Stage 2; built ahead of scope)*
+
+### Non-functional
+- [ ][ ] A five-line sale completes with scanner and keyboard only, no mouse — FR-POS acceptance · NFR-12
+- [ ][ ] Adding a scanned line renders in under 100 ms — NFR-1
+- [ ][ ] Sale completion including stock decrement and persistence under 1 s — NFR-2
+- [ ][ ] Two terminals cannot sell the same last unit — BR-8 · release gate 4
+- [x][ ] No blocking browser dialog in the payment path — `L-08`
+
+---
+
+## H · Payments — `FR-PAY`
+
+### Functional
+- [x][ ] Cash, mobile money, card and bank transfer — FR-PAY-01 · `C-11`
+- [~][ ] Cash captures tendered and calculates change; denomination shortcuts offered — FR-PAY-02 · `C-12` *(tendered and change done; denomination buttons absent)*
+- [x][ ] MoMo, card and transfer capture a reference and require explicit confirmation — FR-PAY-03 · `C-13` `C-14`
+- [x][ ] Split payment across two or more methods with a live remaining balance — FR-PAY-04 · `C-15`
+- [x][ ] Sale cannot complete until payments equal the total exactly — FR-PAY-05
+- [~][ ] Overpayment permitted only for cash, where the excess is change — FR-PAY-06
+- [ ][ ] Every payment carries a UUID; resubmission rejected — FR-PAY-07 · BR-7
+- [x][ ] The payment modal is the only modal permitted to block scanner input — FR-PAY-08
+- [-][-] Refund to the original method, cash refunds permission-restricted — FR-PAY-09 *(Stage 2)*
+
+### Non-functional
+- [ ][ ] The same payment submitted twice records exactly one payment and returns the original result — FR-PAY acceptance · release gate 3
+- [x][ ] Money comparison is exact, never within a tolerance — BR-11
+
+---
+
+## I · Receipts & printing — `FR-RCPT`
+
+### Functional
+- [x][ ] The sale is committed and persisted before any print is attempted — FR-RCPT-01
+- [~][ ] Printing via ESC/POS through a local print service; no browser print dialogue — FR-RCPT-02 *(seam and client written; the Windows service is not)*
+- [x][ ] Supports 58 mm and 80 mm — FR-RCPT-03
+- [x][ ] Receipt content per PRD §9 — FR-RCPT-04
+- [x][ ] A print failure never blocks or reverses the sale; a retry is offered — FR-RCPT-05 · `C-18`
+- [x][ ] Reprints permitted, marked `REPRINT`, and logged — FR-RCPT-06 · `C-17`
+- [~][ ] Printing may be skipped per sale — FR-RCPT-07
+- [~][ ] Printer selection, paper width and test print per terminal — FR-RCPT-08 · `K-07` *(settings render; test print is not real)*
+- [x][ ] Receipt layout previewable at both widths — FR-RCPT-09 · `K-05`
+- [-][-] Cash drawer kick on cash sales — FR-RCPT-10 *(Stage 3)*
+
+### Non-functional
+- [ ][ ] With the printer switched off the sale completes, the number is issued, stock decrements, and it prints on retry — FR-RCPT acceptance · release gate 2
+- [ ][ ] Receipt begins printing within 1 s of completion — NFR-3
+- [x][ ] Receipt numbers per outlet, gapless, never reused, `{OUTLET}-{TERMINAL}-{SEQ}` — BR-6
+
+---
+
+## J · Shifts & cash — `FR-CASH`
+
+### Functional
+- [x][ ] Shift opened with a declared float, tied to user, terminal and outlet — FR-CASH-01 · `C-29`
+- [ ][ ] Only one open shift per user and per terminal — FR-CASH-02 · BR-13
+- [x][ ] Cash movements during a shift, each with a reason — FR-CASH-03 · `H-04` `H-05`
+- [x][ ] Shift close requires a blind count; expected cash hidden until submitted — FR-CASH-04 · `C-31`
+- [x][ ] Variance calculated and recorded against the user, never absorbed — FR-CASH-05 · BR-14 · `C-32`
+- [x][ ] Variance beyond the configured threshold requires a written explanation — FR-CASH-06 · `H-06`
+- [x][ ] Non-cash takings listed by method at close for reconciliation — FR-CASH-07
+- [~][ ] End-of-day report per cashier, per outlet and for the business — FR-CASH-08 · `H-03` *(per outlet done; per cashier thin)*
+- [x][ ] A closed shift cannot be reopened; corrections are separate cash movements — FR-CASH-09
+- [x][ ] Shift list and shift detail — `H-01` `H-02`
+
+### Non-functional
+- [ ][ ] A blind close records the variance against the cashier and demands a note past threshold — release gate 9
+- [x][ ] Expected cash = float + cash sales − cash refunds − cash payouts — BR-14
+
+---
+
+## K · Suppliers & goods receipt — `FR-SUP`
+
+### Functional
+- [x][ ] Supplier records: name, contact, phone, email, address, terms, notes, active — FR-SUP-01 · `F-01`…`F-04`
+- [x][ ] Goods received into a specific outlet, with or without a prior order — FR-SUP-02 · `E-04`
+- [x][ ] Receipt lines capture product, quantity, purchase unit, unit cost and reference — FR-SUP-03
+- [x][ ] Confirming writes stock movements and recalculates weighted average cost — FR-SUP-04 · BR-4
+- [x][ ] The confirmation screen shows resulting stock and the new average cost before commit — FR-SUP-05 · `E-05`
+- [~][ ] A confirmed receipt cannot be edited; it is reversed by a correcting document — FR-SUP-06 *(stated in the UI; no reversal document)*
+- [~][ ] Purchase history per supplier and per product — FR-SUP-07 · `F-05` `F-06`
+- [-][-] Purchase orders, partial and over/short delivery — FR-SUP-08 *(Stage 2)*
+- [-][-] Landed cost apportionment — FR-SUP-09 *(Stage 2)*
+- [-][-] Supplier invoices, payments and balances — FR-SUP-10 *(Stage 2)*
+
+### Non-functional
+- [x][ ] Receiving 75 @ 42.00 then 50 @ 50.00 yields 125 @ 45.20 — BR-4 *(verified through the UI and asserted)*
+
+---
+
+## L · Customers — `FR-CUST`
+
+### Functional
+- [x][ ] Sales may complete with no customer attached — FR-CUST-01
+- [x][ ] Customer records: name, phone, email, address, type, notes, active — FR-CUST-02 · `G-03` `G-04`
+- [~][ ] Phone number is the primary lookup key and is unique — FR-CUST-03 *(lookup done; uniqueness is a constraint)*
+- [x][ ] Customer types map to price levels — FR-CUST-04 · `G-06`
+- [x][ ] Customers shared across both outlets — FR-CUST-05
+- [x][ ] Purchase history per customer across both outlets — FR-CUST-06 · `G-05`
+- [-][-] Credit limit, balance, ageing, statements, part payments — FR-CUST-07 · `G-08` *(Stage 2; built ahead of scope)*
+
+### Non-functional
+- [x][ ] Empty state explains walk-in sales need no customer — `G-07`
+
+---
+
+## M · Users, roles & permissions — `FR-USER`
+
+### Functional
+- [x][ ] Every person has an individual account; no shared logins — FR-USER-01 · `J-01` `J-03`
+- [x][ ] Four seeded roles: Owner, Manager, Cashier, Storekeeper — FR-USER-02 · `J-05`
+- [~][ ] Permissions granted individually and varied per user, not only per role — FR-USER-03 · `J-07` *(overrides in the contract and resolver; no per-user UI yet)*
+- [x][ ] Permission matrix over all 31 PRD codes, grouped by area — `J-06`
+- [x][ ] Users assigned to one or more outlets — FR-USER-04
+- [x][ ] No user can modify their own permissions — FR-USER-05 · BR-16
+- [x][ ] Controls the user lacks permission for are absent, not disabled — FR-USER-06 · `L-09`
+- [x][ ] Users deactivated, never deleted — FR-USER-07 · `J-11`
+- [x][ ] Every permission change written to the audit log — FR-USER-08
+
+### Non-functional
+- [ ][ ] Server-side authorisation on every endpoint; the UI is never the only control — NFR-9
+- [x][ ] A cashier account shows no cost price, no profit and no reports anywhere — release gate 7 *(asserted)*
+- [x][ ] Navigation authorisation has one source of truth shared by shell and sidebar — `L-09`
+
+---
+
+## N · Audit — `FR-AUDIT`
+
+### Functional
+- [~][ ] Entries capture actor, action, entity type and ID, before and after, outlet, terminal, IP, timestamp — FR-AUDIT-01 *(actor, action, entity, outlet, timestamp done; before/after, terminal and IP missing)*
+- [~][ ] All listed actions logged: sign-in, sale, void, discount override, price change, adjustment, receipt, shift, cash movement, user and permission change, settings, reprint, export — FR-AUDIT-02
+- [ ][ ] Append-only; no application path edits or deletes an entry, including for the Owner — FR-AUDIT-03 · BR-15
+- [x][ ] Filterable by actor, action, entity, outlet and date — FR-AUDIT-04 · `J-08` `J-09`
+- [ ][ ] Entries retained for the life of the system — FR-AUDIT-05
+
+### Non-functional
+- [x][ ] The log is visually marked read-only — `J-08`
+
+---
+
+## O · Reports & dashboard — `FR-RPT`
+
+### Functional
+- [x][ ] Owner dashboard: both outlets separately and combined — FR-RPT-01 · `B-01`
+- [x][ ] Manager and cashier dashboards, scoped and operational — FR-RPT-02 · `B-02` `B-03`
+- [~][ ] Every report filterable by outlet, date range, category, user and payment method — FR-RPT-03 · `I-16` *(outlet and date done; the rest partial)*
+- [~][ ] All fifteen reports present with real data — FR-RPT-04 · `I-02`…`I-15` *(sales, product, category, cashier, customer, profit, best sellers, slow movers, stock, movements, payments, discounts, voids, purchases render; several need server-side aggregation)*
+- [x][ ] Profit and cost figures only for `report.view_profit` — FR-RPT-05
+- [x][ ] Monetary figures calculated from stored frozen costs, never current prices — FR-RPT-06 · BR-5
+- [-][-] Export to Excel and PDF — FR-RPT-07 *(Stage 2; CSV export exists)*
+
+### Non-functional
+- [x][ ] Dashboard loading skeleton and first-run empty state — `B-04` `B-05`
+- [x][ ] Report empty state offers to widen the range — `I-17`
+- [ ][ ] Report queries perform acceptably against a full year of sales — NFR-1
+
+---
+
+## P · Settings — `FR-SET`
+
+### Functional
+- [x][ ] Business profile: legal name, trading name, contact details — FR-SET-01 · `K-02`
+- [~][ ] Logo upload and persistence — FR-SET-01
+- [x][ ] Per-outlet settings: name, address, phone, receipt footer, reorder defaults, receipt prefix — FR-SET-02 · `K-03` `K-04`
+- [x][ ] Accent colour from a preset palette or hex, with live preview; orange default; no blue — FR-SET-03 · `K-06`
+- [x][ ] Accent applied as a CSS custom property; semantic colours fixed and unaffected — FR-SET-04
+- [~][ ] Terminal settings: printer, paper width, test print, auto-print — FR-SET-05 · `K-07`
+- [x][ ] Operational thresholds: idle lock, adjustment approval, cash variance, discount ceilings — FR-SET-06 · `K-08`
+- [~][ ] Backup status, last successful backup, restore history — FR-SET-07 · `K-09`
+- [~][ ] Data export of all business data on request — FR-SET-08 · `K-10`
+
+### Non-functional
+- [x][ ] Changing the accent updates every accent surface, with no blue anywhere — release gate 11 *(621 literals migrated; asserted)*
+- [x][ ] The accent is a single token; no hard-coded accent hex in any component — NFR-15
+- [x][ ] Settings sections are absent without their permission — `L-09`
+
+---
+
+## Q · Connectivity & resilience — `FR-SYNC`
+
+### Functional
+- [ ][ ] Catalogue and prices cached locally so search and scanning work regardless of connection — FR-SYNC-01
+- [ ][ ] Sales recorded locally and queued during a connection loss — FR-SYNC-02
+- [~][ ] Queued sales retain receipt numbers from the pre-allocated block — FR-SYNC-03 · BR-6 *(block module written; queue not)*
+- [~][ ] Persistent non-blocking banner shows offline status and queued count — FR-SYNC-04 · `C-33` *(banner present; no count)*
+- [ ][ ] On reconnection the queue is submitted in order, idempotently — FR-SYNC-05 · BR-7 · `C-34`
+- [ ][ ] Conflicts surfaced on an exceptions report, never silently resolved — FR-SYNC-06
+- [ ][ ] Abrupt power loss does not corrupt data or lose a committed sale — FR-SYNC-07 · NFR-5
+- [-][-] Full-day offline operation with reconciliation — FR-SYNC-08 *(Stage 3)*
+
+### Non-functional
+- [ ][ ] Counter functions tolerate dropouts of up to 15 minutes without interrupting trade — NFR-4
+- [ ][ ] Disconnect mid-sale, reconnect: exactly one correct sale at the server — FR-SYNC acceptance · release gate 10
+
+---
+
+## R · Cross-cutting non-functional — `NFR`
+
+### Performance
+- [ ][ ] NFR-1 · Product search under 300 ms at 3,000 products; scanned line renders under 100 ms
+- [ ][ ] NFR-2 · Sale completion under 1 s on a normal connection
+- [ ][ ] NFR-3 · Receipt begins printing within 1 s
+
+### Availability & durability
+- [ ][ ] NFR-4 · Counter tolerates 15-minute dropouts
+- [ ][ ] NFR-5 · No committed sale lost on abrupt power loss
+- [ ][ ] NFR-6 · Automated daily off-site backup, 30-day retention, documented and **tested** restore
+- [ ][ ] NFR-7 · Recovery point 15 minutes, recovery time 4 hours
+
+### Security
+- [ ][ ] NFR-8 · Passwords bcrypt/argon2, PINs hashed separately, TLS on all traffic
+- [ ][ ] NFR-9 · Server-side authorisation on every endpoint
+- [ ][ ] NFR-10 · Rate limiting on authentication and approval endpoints
+
+### Usability & accessibility
+- [ ][ ] NFR-11 · A cashier reaches competence on core selling in one training session
+- [ ][ ] NFR-12 · Core selling requires no mouse
+- [~][ ] NFR-13 · Latest Chrome and Edge on Windows 10/11; tablet browsers for stock functions
+- [~][ ] NFR-14 · 4.5:1 contrast, keyboard-reachable controls, 44 px touch targets *(contrast verified on the sign-in hero; not audited app-wide)*
+
+### Maintainability & data
+- [x][ ] NFR-15 · The accent is a single token, no hard-coded accent hex
+- [x][ ] NFR-16 · A third outlet is configuration only
+- [ ][ ] NFR-17 · Nightly job reconciles stock against movement sums and reports drift
+- [~][ ] NFR-18 · Currency GHS, dates DD/MM/YYYY, 24-hour time *(currency and most dates done; not audited app-wide)*
+
+### Engineering hygiene
+- [x][ ] Typecheck is real and passes — `@types/react` installed, `tsc --noEmit` clean
+- [x][ ] Contract assertions pass — `npm run check`, 71 assertions
+- [ ][ ] Frontend unit and end-to-end tests for money rounding, change due, floor approval, role visibility, date filtering, sale/void/receipt
+- [ ][ ] CI runs typecheck, contract check and tests on both repos
+
+---
+
+## Release gate — PRD §11
+
+The twelve criteria that define acceptance. Frontend column is what the UI can satisfy alone.
+
+| # | Criterion | FE | BE | Notes |
+|---|---|:--:|:--:|---|
+| 1 | Five-line sale, scanner and keyboard only, prints, decrements the selling outlet | `x` | ` ` | Global scanner capture done and asserted |
+| 2 | Sale with the printer off is not lost; prints on retry | `x` | ` ` | Needs a physical printer to sign off |
+| 3 | A sale submitted twice records once | ` ` | ` ` | Idempotency is server-side |
+| 4 | Two terminals racing the last unit: one sale, one refusal | ` ` | ` ` | Row lock, week 3 |
+| 5 | 3 drums of 100 m, sell 12.5 m → 287.5 m and correct average cost | `x` | ` ` | `stockCosting.ts`, asserted |
+| 6 | Void leaves original and reversal visible, restores stock, appears on the report | `x` | ` ` | |
+| 7 | A cashier sees no cost, no profit, no reports anywhere | `x` | ` ` | Asserted in `contract-check.ts` |
+| 8 | Below-floor sale needs a manager PIN; approver stored | `x` | ` ` | |
+| 9 | Blind close records variance and requires a note past threshold | `x` | ` ` | Threshold configurable in K-08 |
+| 10 | Disconnect mid-sale, reconnect: exactly one sale at the server | ` ` | ` ` | Week 6 |
+| 11 | Accent change updates every accent surface, no blue | `x` | — | 621 literals migrated, asserted |
+| 12 | For every product at every outlet, quantity equals the sum of movements | ` ` | ` ` | Nightly reconciliation, NFR-17 |
+
+**7 of 12 satisfied on the frontend side. 0 of 12 signed off end to end.**
+
+---
+
+## Deployment window — parked
+
+Not part of the six-week software scope. Tracked here so it is not forgotten.
+
+- [ ] Client product catalogue filled into the template
+- [ ] Catalogue loaded via the import wizard
 - [ ] Opening stock counted and entered
-- [ ] Barcode labels applied to unlabelled stock
-- [ ] Test sale completed and voided
-- [ ] Shift opened, test sales, shift closed and reconciled
-
-### Training (per quotation §3)
-- [ ] Cashier session delivered — half day
-- [ ] Storekeeper session delivered — 2 hours
-- [ ] Manager and Owner session delivered — half day
-- [ ] User guide handed over
-- [ ] Quick reference cards printed and placed at the counter
-- [ ] Screen recordings shared
-
-### Go-live day
-- [ ] Full day on site during real trading
-- [ ] First real sale completed successfully
-- [ ] End of day reconciled with staff present
-- [ ] Issues logged and triaged
-- [ ] Client sign-off for Outlet 1
+- [ ] Staff accounts and PINs created for real people
+- [ ] Counter PCs, thermal printers and scanners installed at both outlets
+- [ ] Print verified on real hardware — closes release gate 2
+- [ ] UPS at each counter
+- [ ] Connectivity confirmed at both towns
+- [ ] Inco Hardware: install, train, supervised trading
+- [ ] Radiance Lighting: install, train, supervised trading
+- [ ] Owner training on dashboard and control reports
+- [ ] Hypercare period and snag list closed
 
 ---
 
-## Phase 15 — Outlet 2 go-live ([Electrical shop])
+## Out of scope for Stage 1
 
-- [ ] Four-week settling period at Outlet 1 completed
-- [ ] Issues from Outlet 1 fixed before touching Outlet 2
-- [ ] Hardware purchased and delivered
-- [ ] UPS present
-- [ ] Internet confirmed working
-- [ ] Outlet configured with its own name, address and receipt prefix
-- [ ] Product data and opening stock for this outlet loaded
-- [ ] User accounts created for this outlet's staff
-- [ ] PC, printer and scanner set up and tested
-- [ ] Test sale completed and voided
-- [ ] Cashier session delivered
-- [ ] Storekeeper session delivered
-- [ ] Manager session delivered
-- [ ] Full day on site during real trading
-- [ ] End of day reconciled
-- [ ] **Owner dashboard verified showing both outlets separately and combined**
-- [ ] Outlet comparison report verified with real data from both shops
-- [ ] Client sign-off for Outlet 2
+Listed so none of it is assumed into the price. Several are already built in the frontend, which is
+exactly what makes them easy to assume.
 
----
+**Stage 2** — credit sales and installments · quotations · purchase orders · returns and refunds ·
+stock counting · barcode label printing · expenses · report export to Excel and PDF · product
+variants · bulk price updates
 
-## Phase 16 — Warranty and handover
-
-- [ ] 30-day warranty started at each outlet, dates recorded
-- [ ] Follow-up training session at Outlet 1 (~2 weeks after go-live)
-- [ ] Follow-up training session at Outlet 2
-- [ ] One staff member shown how to train new starters
-- [ ] Backup verified running in production
-- [ ] Restore tested once more with live data
-- [ ] Documentation handed over: user guide, setup notes, runbook
-- [ ] Source code handed over, if contracted
-- [ ] Data export demonstrated to the client
-- [ ] Monthly support arrangement agreed and started
-- [ ] Final invoice issued at end of warranty
-- [ ] Stage 2 scope discussed and quoted
-- [ ] Post-project review with the client
-- [ ] Lessons logged for the next build
-
----
-
-## Milestone and payment tracker
-
-| # | Milestone | Target | Actual | Client approved | Invoice | Paid |
-|---|---|---|---|---|---|---|
-| — | Contract signed | | | | 25% | |
-| M1 | Design approval | Wk 2 | | | 10% | |
-| M2 | Catalogue, stock, users | Wk 6 | | | — | |
-| M3 | POS working | Wk 10 | | | 20% | |
-| M4 | Cash, suppliers, reports | Wk 13 | | | — | |
-| M5 | Outlet 1 live | Wk 15 | | | 25% | |
-| M6 | Outlet 2 live | Wk 19 | | | 10% | |
-| — | Warranty ends | Wk 23 | | | 10% | |
-
----
-
-## Live risk register
-
-| Risk | Status | Owner | Mitigation | Review |
-|---|---|---|---|---|
-| Product data not ready by week 10 | | Client | Template issued wk 1, weekly check-in from wk 6 | |
-| Connectivity poor at Outlet 2 | | Client | Confirm before signing; full offline quotable separately | |
-| Hardware not purchased in time | | Client | Spec issued wk 1; deadline wk 12 | |
-| Effort exceeds calendar (113 days vs 19 weeks) | | Developer | Re-baseline timeline or cut from SOW §9 | |
-| Client subject to E-VAT mid-project | | Client | Tax layer kept separate; integration is a change | |
-| Scope creep from Stage 2 list | | Developer | Written change procedure, no verbal agreements | |
-| Staff resist individual logins | | Client | Owner briefed that accountability is the point | |
-
----
-
-## Weekly review — five questions
-
-1. Which checklist items moved this week, and which slipped?
-2. Is anything marked `[!]` blocked, and who is it blocked on?
-3. Is the client on track for product data and hardware?
-4. Has any accent-colour hard-coding or blue crept into the UI?
-5. Does the milestone tracker still match reality, or does the client need telling now rather than later?
+**Stage 3** — stock transfers between outlets · deliveries and deposits · VAT and tax invoicing ·
+GRA E-VAT integration · cash drawer and customer display · SMS receipts · a third outlet ·
+full-day offline operation
