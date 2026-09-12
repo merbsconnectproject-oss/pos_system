@@ -1,0 +1,89 @@
+# Shared configuration.
+#
+# TWO DEPLOYMENTS, ONE JAR.
+#
+#   counter   the POS on a shop's counter PC. The system of record.
+#   consolidator  the owner's view, on Railway. Receives pushed snapshots.
+#
+# Everything that differs between them is a profile, and everything that
+# differs between machines is an environment variable with a working local
+# default. Nothing here should ever need editing to deploy.
+#
+# Activate with SPRING_PROFILES_ACTIVE=counter (or consolidator).
+
+spring:
+  application:
+    name: pos-api
+
+  profiles:
+    # A counter PC is the common case and the one a developer runs locally.
+    default: counter
+
+  datasource:
+    # Railway injects DATABASE_URL. Locally this falls back to a dev database.
+    # DatabaseUrlConfig normalises Railway's postgres:// form into JDBC.
+    url: ${JDBC_DATABASE_URL:jdbc:postgresql://localhost:5432/pos}
+    username: ${DB_USERNAME:pos}
+    password: ${DB_PASSWORD:pos}
+    hikari:
+      # A counter serves one browser; the consolidator serves one owner.
+      # Ten is generous for both and keeps the JVM small enough for Railway's
+      # memory-priced billing.
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      pool-name: pos-pool
+
+  jpa:
+    open-in-view: false          # an HTTP thread must not hold a DB connection
+    hibernate:
+      ddl-auto: validate         # Flyway owns DDL. Hibernate never writes it.
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+    validate-on-migrate: true
+
+  jackson:
+    default-property-inclusion: non_null
+    deserialization:
+      fail-on-unknown-properties: false
+
+server:
+  # Railway assigns a port and expects the app to bind it. Locally, 8080.
+  port: ${PORT:8080}
+  shutdown: graceful
+  error:
+    include-message: never       # errors are shaped by ApiExceptionHandler
+    include-stacktrace: never
+  forward-headers-strategy: framework   # X-Forwarded-* from Railway/Cloudflare
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Railway health checks hit /actuator/health. Nothing else is exposed.
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+logging:
+  level:
+    gh.giftedlabs.pos: ${LOG_LEVEL:INFO}
+
+pos:
+  auth:
+    max-attempts: ${AUTH_MAX_ATTEMPTS:5}
+    lockout-duration: ${AUTH_LOCKOUT:PT15M}
+    attempt-window: ${AUTH_ATTEMPT_WINDOW:PT15M}
+    # FR-AUTH-05: configurable, not a constant. With an open shift the POS
+    # locks rather than signing out.
+    idle-timeout: ${AUTH_IDLE_TIMEOUT:PT15M}

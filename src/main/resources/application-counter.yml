@@ -1,0 +1,44 @@
+# The POS on a shop's counter PC — the system of record.
+#
+# Same origin throughout: Chrome sits at localhost:8080 and so does this JVM,
+# because the Vite build is served from this JAR. No CORS, no cross-origin
+# cookie problem, no token refresh endpoint.
+
+server:
+  servlet:
+    session:
+      # FR-AUTH-05: idle expiry. With an open shift the POS locks rather than
+      # signing out — ScreenLockService owns that distinction, not the container.
+      timeout: ${AUTH_IDLE_TIMEOUT:PT15M}
+      cookie:
+        name: POSSESSION
+        http-only: true          # unreadable from JavaScript, so XSS cannot steal it
+        same-site: strict        # same-origin only; nothing else can send it
+        # No TLS on a counter PC — traffic never leaves the machine. The
+        # consolidator profile sets this true.
+        secure: false
+
+spring:
+  # A shop must be able to trade after a power cut with nobody present, so
+  # startup must never block waiting for anything optional.
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+pos:
+  deployment:
+    mode: counter
+    # Set at install by the first-run wizard. The snapshot publisher refuses
+    # to start without them rather than pushing an unattributed payload.
+    outlet-code: ${OUTLET_CODE:}
+    terminal-code: ${TERMINAL_CODE:01}
+
+  consolidator:
+    # Outbound push. Disabled until the owner's view is provisioned, so a shop
+    # installed today needs no change when the consolidator goes live later.
+    enabled: ${CONSOLIDATOR_ENABLED:false}
+    base-url: ${CONSOLIDATOR_URL:}
+    api-key: ${CONSOLIDATOR_API_KEY:}
+    push-interval: ${CONSOLIDATOR_PUSH_INTERVAL:PT15M}
+    # A shop must keep trading when the link is down. Failures queue and retry;
+    # they never block a sale.
+    request-timeout: PT10S

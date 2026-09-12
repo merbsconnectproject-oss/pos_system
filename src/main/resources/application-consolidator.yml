@@ -1,0 +1,64 @@
+# The owner's view — the same JAR, on Railway.
+#
+# Receives pushed snapshots from each shop and serves the combined dashboard.
+# It is NOT the system of record: if this instance is down, the tills never
+# notice. That is the whole point of local-first.
+#
+# Deploy:  SPRING_PROFILES_ACTIVE=consolidator
+# Railway injects PORT and DATABASE_URL; both are already read in application.yml.
+
+server:
+  servlet:
+    session:
+      # The owner opens this once or twice a day, so a longer idle window is
+      # kinder than re-authenticating every visit.
+      timeout: ${OWNER_IDLE_TIMEOUT:PT8H}
+      cookie:
+        name: POSOWNER
+        http-only: true
+        secure: true             # always TLS here, unlike a counter PC
+        # The frontend is on Cloudflare Pages and the API on Railway. Put both
+        # under one registrable domain (app.example.com / api.example.com) and
+        # the cookie stays first-party, so `lax` holds and no token machinery
+        # is needed. If they ever end up on genuinely different sites, this
+        # becomes `none` and CORS below must allow credentials.
+        same-site: ${OWNER_COOKIE_SAME_SITE:lax}
+
+spring:
+  flyway:
+    # The consolidator stores snapshots, not trading data. It runs its own
+    # migration path so a counter's schema and the owner's view can evolve
+    # independently.
+    locations: classpath:db/migration,classpath:db/consolidator
+
+pos:
+  deployment:
+    mode: consolidator
+
+  consolidator:
+    # This instance receives; it never pushes.
+    enabled: false
+
+    ingest:
+      # Shops authenticate with a per-outlet key, not a user session. Machine
+      # to machine, outbound only - nothing ever connects INTO a counter PC,
+      # so a shop needs no static IP, no port forwarding and no inbound
+      # firewall rule.
+      #
+      # Format: OUTLET_CODE:key,OUTLET_CODE:key
+      api-keys: ${CONSOLIDATOR_API_KEYS:}
+      # A snapshot older than this is stale; the dashboard must say so rather
+      # than imply figures it does not have.
+      stale-after: ${SNAPSHOT_STALE_AFTER:PT45M}
+
+  web:
+    # Cloudflare Pages origin(s) allowed to call this API. Comma-separated.
+    # Empty means same-origin only, which is correct when this JAR also serves
+    # the built frontend.
+    cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+
+logging:
+  level:
+    # Railway bills by resource; INFO on a request-per-minute service is fine,
+    # and DEBUG here would cost real money for no benefit.
+    gh.giftedlabs.pos: ${LOG_LEVEL:INFO}
