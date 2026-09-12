@@ -10,48 +10,49 @@ import java.math.BigDecimal;
  *           / (qty_on_hand + qty_received)
  * </pre>
  *
- * <p>Calculated <strong>per outlet</strong>. The result is what a goods receipt
- * writes to {@code stock_level.avg_cost}, and what a sale later freezes onto
- * its line (BR-5) so that later price changes never alter historical profit.
+ * <p>Calculated <strong>per outlet</strong> — BR-1 is explicit that there is no
+ * global quantity anywhere in the system, and AS-8 puts costing at the same
+ * grain. The result is what a goods receipt writes to
+ * {@code stock_level.avg_cost}, and what a sale later freezes onto its line
+ * (BR-5) so that later price changes never alter historical profit.
  *
- * <p>Port of the frontend's {@code src/stockCosting.ts}.
+ * <p>Ported from the frontend's {@code src/stockCosting.ts}.
  */
 public final class Costing {
 
     private Costing() {
     }
 
-    public static BigDecimal weightedAverageCost(
-            BigDecimal quantityOnHand,
-            BigDecimal currentAverage,
-            BigDecimal quantityReceivedBase,
-            BigDecimal unitCostPerBase) {
+    public static Money weightedAverageCost(
+            Quantity quantityOnHand,
+            Money currentAverage,
+            Quantity quantityReceivedBase,
+            Money unitCostPerBase) {
 
-        BigDecimal onHand = Quantity.round(quantityOnHand);
-        BigDecimal received = Quantity.round(quantityReceivedBase);
-        BigDecimal total = onHand.add(received);
+        Quantity total = quantityOnHand.plus(quantityReceivedBase);
 
-        if (total.compareTo(BigDecimal.ZERO) <= 0) {
-            return Money.round(unitCostPerBase);
+        // Nothing on hand and nothing received: the receipt cost is the average.
+        if (!total.isPositive()) {
+            return unitCostPerBase;
         }
 
-        BigDecimal numerator = onHand.multiply(currentAverage)
-                .add(received.multiply(unitCostPerBase));
+        BigDecimal numerator = quantityOnHand.amount().multiply(currentAverage.toMajor())
+                .add(quantityReceivedBase.amount().multiply(unitCostPerBase.toMajor()));
 
-        return Money.round(numerator.divide(total, Money.MC));
+        return Money.ofMajor(numerator.divide(total.amount(), Money.MC));
     }
 
     /**
      * A purchase unit cost converted to a per-base-unit cost — FR-UOM-05.
-     * A drum of 100 m costing 450 is 4.50 per metre.
+     * A 100 m drum costing 450 is 4.50 per metre.
      *
-     * <p>A conversion factor of zero or less falls back to the unit cost rather
-     * than dividing, matching the frontend's guard.
+     * <p>A factor of zero or less falls back to the unit cost rather than
+     * dividing, matching the frontend's guard.
      */
-    public static BigDecimal costPerBaseUnit(BigDecimal purchaseUnitCost, BigDecimal conversionFactor) {
-        if (conversionFactor == null || conversionFactor.compareTo(BigDecimal.ZERO) <= 0) {
+    public static Money costPerBaseUnit(Money purchaseUnitCost, BigDecimal conversionFactor) {
+        if (conversionFactor == null || conversionFactor.signum() <= 0) {
             return purchaseUnitCost;
         }
-        return purchaseUnitCost.divide(conversionFactor, Money.MC);
+        return Money.ofMajor(purchaseUnitCost.toMajor().divide(conversionFactor, Money.MC));
     }
 }

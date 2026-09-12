@@ -3,76 +3,134 @@ package gh.giftedlabs.pos.rules;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
-import java.util.List;
+import java.util.Collection;
 
 /**
  * Money — BR-11.
  *
- * <p>On the wire and in the database, money is an <strong>integer number of
- * pesewas</strong>. {@code 1850} is GH&#8373; 18.50. There are no fractional
- * pesewas and no floats in storage.
+ * <p>A value type over an <strong>integer number of pesewas</strong>.
+ * {@code new Money(1850)} is GH&#8373;&nbsp;18.50.
+ *
+ * <p>BR-11 says money is stored in minor units as integers. Holding that in a
+ * {@code long} rather than a {@code BigDecimal} makes the rule
+ * <em>structural</em>: a fractional pesewa cannot be represented, so it cannot
+ * be persisted, summed or compared into existence. Rounding happens once, at
+ * the boundary, in {@link #ofMajor}.
+ *
+ * <p>It also removes the commonest money bug in this kind of system — mixing
+ * major and minor units in the same expression. {@code Money} and {@code long}
+ * are different types; the compiler catches the swap that a bare
+ * {@code BigDecimal} would let through.
  *
  * <p>Rounding is <strong>half-up</strong>, applied <strong>per line</strong>,
- * and totals are summed from already-rounded lines — never rounded once at the
- * end. Two lines of 0.125 therefore total 0.26, not 0.25.
+ * with totals summed from already-rounded lines. Two lines of 0.125 therefore
+ * total 0.26, not 0.25.
  *
- * <p>This is a port of the frontend's {@code src/money.ts}. Neither side owns
- * the expected values: both are tested against
- * {@code docs/contract/test-vectors.json}. If this class and that file
- * disagree, this class is wrong.
+ * <p>Ported from the frontend's {@code src/money.ts} and pinned by
+ * {@code test-vectors.json}. If this type and that file disagree, this type is
+ * wrong.
  */
-public final class Money {
+public record Money(long pesewas) implements Comparable<Money> {
 
-    public static final int SCALE = 2;
+    public static final Money ZERO = new Money(0L);
+
+    /** Decimal places in a major unit. */
+    private static final int MINOR_SCALE = 2;
     public static final RoundingMode ROUNDING = RoundingMode.HALF_UP;
 
-    /** Division precision. Results are always rounded back to {@link #SCALE}. */
+    /** Division precision for intermediate arithmetic; results round back to whole pesewas. */
     public static final MathContext MC = new MathContext(20, RoundingMode.HALF_UP);
 
-    private Money() {
+    public static Money ofPesewas(long pesewas) {
+        return new Money(pesewas);
     }
 
-    /** Half-up to 2dp, away from zero for negatives (refunds). */
-    public static BigDecimal round(BigDecimal value) {
-        if (value == null) {
-            return BigDecimal.ZERO.setScale(SCALE, ROUNDING);
-        }
-        return value.setScale(SCALE, ROUNDING);
-    }
-
-    /** Major units (GH&#8373; 18.50) to wire format (1850). */
-    public static long toPesewas(BigDecimal major) {
+    /** Major units (GH&#8373; 18.50) to pesewas, rounded half-up exactly once. */
+    public static Money ofMajor(BigDecimal major) {
         if (major == null) {
-            return 0L;
+            return ZERO;
         }
-        return major.movePointRight(SCALE).setScale(0, ROUNDING).longValueExact();
+        return new Money(major.movePointRight(MINOR_SCALE).setScale(0, ROUNDING).longValueExact());
     }
 
-    /** Wire format (1850) to major units (18.50). */
-    public static BigDecimal fromPesewas(long minor) {
-        return BigDecimal.valueOf(minor).movePointLeft(SCALE).setScale(SCALE, ROUNDING);
+    /**
+     * Parses an exact decimal. Prefer this over {@code ofMajor(BigDecimal.valueOf(double))},
+     * which re-introduces the binary float error BR-11 exists to avoid.
+     */
+    public static Money ofMajor(String major) {
+        return ofMajor(new BigDecimal(major));
+    }
+
+    /** Sum of already-rounded amounts — BR-11 forbids rounding once at the end. */
+    public static Money sum(Collection<Money> amounts) {
+        long total = 0L;
+        for (Money amount : amounts) {
+            total += amount.pesewas();
+        }
+        return new Money(total);
     }
 
     /**
      * A line total, rounded once at the line as BR-11 requires.
-     * Quantity is held to 3dp (BR-12) to support cut lengths.
+     *
+     * <p><strong>Unit price and discount are {@code BigDecimal}, deliberately.</strong>
+     * BR-11's integer-pesewa rule governs <em>stored amounts</em> — totals,
+     * payments, cash — not <em>per-unit rates</em>. A price may carry sub-pesewa
+     * precision: 3 &times; 18.335 is 55.005, which settles to 55.01. Rounding the
+     * price to whole pesewas first gives 55.02, and the error compounds with
+     * quantity. The same holds for the discount: 100 &minus; 0.005 settles to
+     * 100.00, not 99.99.
+     *
+     * <p>This is why {@code product.retail_price}, {@code trade_price},
+     * {@code floor_price} and {@code sale_item.unit_price} are
+     * {@code NUMERIC(12,4)} in the schema, while {@code line_total},
+     * {@code subtotal} and {@code payment.amount} are {@code BIGINT} pesewas.
+     *
+     * <p>Quantity carries 3dp (BR-12) to support cut lengths.
      */
-    public static BigDecimal lineTotal(BigDecimal quantity, BigDecimal unitPrice, BigDecimal discount) {
-        BigDecimal off = discount == null ? BigDecimal.ZERO : discount;
-        return round(Quantity.round(quantity).multiply(unitPrice).subtract(off));
+    public static Money lineTotal(Quantity quantity, BigDecimal unitPrice, BigDecimal discount) {
+        BigDecimal gross = quantity.amount().multiply(unitPrice);
+        return ofMajor(gross.subtract(discount == null ? BigDecimal.ZERO : discount));
     }
 
-    /** Sum of already-rounded line values. */
-    public static BigDecimal sum(List<BigDecimal> values) {
-        BigDecimal total = BigDecimal.ZERO;
-        for (BigDecimal value : values) {
-            total = total.add(round(value));
-        }
-        return round(total);
+    /** Major units for display, and for arithmetic that must leave the pesewa grid. */
+    public BigDecimal toMajor() {
+        return BigDecimal.valueOf(pesewas).movePointLeft(MINOR_SCALE).setScale(MINOR_SCALE, ROUNDING);
     }
 
-    /** Exact money equality, to the pesewa. */
-    public static boolean equal(BigDecimal a, BigDecimal b) {
-        return toPesewas(a) == toPesewas(b);
+    public Money plus(Money other) {
+        return new Money(pesewas + other.pesewas());
+    }
+
+    public Money minus(Money other) {
+        return new Money(pesewas - other.pesewas());
+    }
+
+    public Money negated() {
+        return new Money(-pesewas);
+    }
+
+    /** Multiply by a quantity and round back to whole pesewas, once. */
+    public Money times(Quantity quantity) {
+        return ofMajor(toMajor().multiply(quantity.amount()));
+    }
+
+    public boolean isNegative() {
+        return pesewas < 0L;
+    }
+
+    public boolean isZero() {
+        return pesewas == 0L;
+    }
+
+    @Override
+    public int compareTo(Money other) {
+        return Long.compare(pesewas, other.pesewas());
+    }
+
+    /** Plain 2dp, no currency symbol — display formatting belongs to the UI. */
+    @Override
+    public String toString() {
+        return toMajor().toPlainString();
     }
 }

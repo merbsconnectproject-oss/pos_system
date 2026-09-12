@@ -11,10 +11,10 @@ import org.junit.jupiter.api.TestFactory;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.StreamSupport;
 
@@ -53,7 +53,7 @@ class RulesVectorTest {
                     %s not found on the test classpath.
                     Regenerate and sync it:
                       cd ../pos-system && npm run gen:vectors
-                      cp docs/contract/test-vectors.json ../pos-api/src/test/resources/
+                      ./scripts/sync-vectors.sh
                     """.formatted(VECTORS));
             root = new ObjectMapper().readTree(in);
         }
@@ -67,6 +67,12 @@ class RulesVectorTest {
         return node::elements;
     }
 
+    private static TreeSet<String> codesOf(EnumSet<Permission> permissions) {
+        TreeSet<String> codes = new TreeSet<>();
+        permissions.forEach(permission -> codes.add(permission.code()));
+        return codes;
+    }
+
     // ---------------------------------------------------------------- BR-11
 
     @TestFactory
@@ -76,18 +82,18 @@ class RulesVectorTest {
         JsonNode money = root.get("money");
 
         for (JsonNode c : each(money.get("roundMoney"))) {
-            tests.add(DynamicTest.dynamicTest("roundMoney(%s) = %s".formatted(c.get("in").asText(), c.get("out").asText()),
-                    () -> assertEquals(c.get("out").asText(), Money.round(dec(c.get("in"))).toPlainString())));
+            tests.add(DynamicTest.dynamicTest("round(%s) = %s".formatted(c.get("in").asText(), c.get("out").asText()),
+                    () -> assertEquals(c.get("out").asText(), Money.ofMajor(dec(c.get("in"))).toString())));
         }
 
         for (JsonNode c : each(money.get("toPesewas"))) {
             tests.add(DynamicTest.dynamicTest("toPesewas(%s) = %d".formatted(c.get("in").asText(), c.get("out").asLong()),
-                    () -> assertEquals(c.get("out").asLong(), Money.toPesewas(dec(c.get("in"))))));
+                    () -> assertEquals(c.get("out").asLong(), Money.ofMajor(dec(c.get("in"))).pesewas())));
         }
 
         for (JsonNode c : each(money.get("fromPesewas"))) {
             tests.add(DynamicTest.dynamicTest("fromPesewas(%d) = %s".formatted(c.get("in").asLong(), c.get("out").asText()),
-                    () -> assertEquals(c.get("out").asText(), Money.fromPesewas(c.get("in").asLong()).toPlainString())));
+                    () -> assertEquals(c.get("out").asText(), Money.ofPesewas(c.get("in").asLong()).toString())));
         }
 
         for (JsonNode c : each(money.get("lineTotal"))) {
@@ -95,17 +101,19 @@ class RulesVectorTest {
                     c.get("quantity").asText(), c.get("unitPrice").asText(),
                     c.get("discount").asText(), c.get("out").asText()),
                     () -> assertEquals(c.get("out").asText(),
-                            Money.lineTotal(dec(c.get("quantity")), dec(c.get("unitPrice")), dec(c.get("discount")))
-                                    .toPlainString())));
+                            Money.lineTotal(
+                                    Quantity.of(dec(c.get("quantity"))),
+                                    dec(c.get("unitPrice")),
+                                    dec(c.get("discount"))).toString())));
         }
 
         for (JsonNode c : each(money.get("sumMoney"))) {
-            List<BigDecimal> values = StreamSupport
+            List<Money> values = StreamSupport
                     .stream(each(c.get("in")).spliterator(), false)
-                    .map(RulesVectorTest::dec)
+                    .map(n -> Money.ofMajor(dec(n)))
                     .toList();
             tests.add(DynamicTest.dynamicTest("sum(%s) = %s".formatted(c.get("in"), c.get("out").asText()),
-                    () -> assertEquals(c.get("out").asText(), Money.sum(values).toPlainString())));
+                    () -> assertEquals(c.get("out").asText(), Money.sum(values).toString())));
         }
 
         return tests;
@@ -118,8 +126,8 @@ class RulesVectorTest {
     List<DynamicTest> quantity() {
         List<DynamicTest> tests = new ArrayList<>();
         for (JsonNode c : each(root.get("quantity").get("roundQuantity"))) {
-            tests.add(DynamicTest.dynamicTest("roundQuantity(%s) = %s".formatted(c.get("in").asText(), c.get("out").asText()),
-                    () -> assertEquals(c.get("out").asText(), Quantity.round(dec(c.get("in"))).toPlainString())));
+            tests.add(DynamicTest.dynamicTest("Quantity(%s) = %s".formatted(c.get("in").asText(), c.get("out").asText()),
+                    () -> assertEquals(c.get("out").asText(), Quantity.of(dec(c.get("in"))).toString())));
         }
         return tests;
     }
@@ -138,18 +146,19 @@ class RulesVectorTest {
                     c.get("out").asText()),
                     () -> assertEquals(c.get("out").asText(),
                             Costing.weightedAverageCost(
-                                    dec(c.get("quantityOnHand")),
-                                    dec(c.get("currentAverage")),
-                                    dec(c.get("quantityReceivedBase")),
-                                    dec(c.get("unitCostPerBase"))).toPlainString())));
+                                    Quantity.of(dec(c.get("quantityOnHand"))),
+                                    Money.ofMajor(dec(c.get("currentAverage"))),
+                                    Quantity.of(dec(c.get("quantityReceivedBase"))),
+                                    Money.ofMajor(dec(c.get("unitCostPerBase")))).toString())));
         }
 
         for (JsonNode c : each(root.get("costPerBaseUnit").get("cases"))) {
             tests.add(DynamicTest.dynamicTest("costPerBaseUnit(%s / %s) = %s".formatted(
                     c.get("purchaseUnitCost").asText(), c.get("conversionFactor").asText(), c.get("out").asText()),
                     () -> assertEquals(c.get("out").asText(),
-                            Money.round(Costing.costPerBaseUnit(
-                                    dec(c.get("purchaseUnitCost")), dec(c.get("conversionFactor")))).toPlainString())));
+                            Costing.costPerBaseUnit(
+                                    Money.ofMajor(dec(c.get("purchaseUnitCost"))),
+                                    dec(c.get("conversionFactor"))).toString())));
         }
 
         return tests;
@@ -210,13 +219,15 @@ class RulesVectorTest {
         List<DynamicTest> tests = new ArrayList<>();
         JsonNode roles = root.get("permissions").get("roles");
 
-        roles.fieldNames().forEachRemaining(role -> {
-            Set<String> expected = new TreeSet<>();
-            for (JsonNode code : each(roles.get(role))) {
+        roles.fieldNames().forEachRemaining(key -> {
+            TreeSet<String> expected = new TreeSet<>();
+            for (JsonNode code : each(roles.get(key))) {
                 expected.add(code.asText());
             }
-            tests.add(DynamicTest.dynamicTest("%s holds %d codes".formatted(role, expected.size()),
-                    () -> assertEquals(expected, new TreeSet<>(Permissions.forRole(role)))));
+            tests.add(DynamicTest.dynamicTest("%s holds %d codes".formatted(key, expected.size()), () -> {
+                Role role = Role.ofKey(key).orElseThrow(() -> new AssertionError("unknown role: " + key));
+                assertEquals(expected, codesOf(role.resolve()));
+            }));
         });
 
         return tests;
@@ -226,37 +237,38 @@ class RulesVectorTest {
     @DisplayName("FR-USER-03 per-user overrides grant and revoke against the baseline")
     void overrides() {
         for (JsonNode c : each(root.get("permissions").get("overrides"))) {
-            String role = c.get("baseRole").asText();
-            String code = c.get("grants").asText();
+            Role role = Role.ofKey(c.get("baseRole").asText()).orElseThrow();
+            Permission code = Permission.ofCode(c.get("grants").asText()).orElseThrow();
 
-            Map<String, Boolean> overrides = new HashMap<>();
-            c.get("override").fields().forEachRemaining(e -> overrides.put(e.getKey(), e.getValue().asBoolean()));
+            Map<Permission, Boolean> overrides = new EnumMap<>(Permission.class);
+            c.get("override").fields().forEachRemaining(e ->
+                    overrides.put(Permission.ofCode(e.getKey()).orElseThrow(), e.getValue().asBoolean()));
 
-            Set<String> resolved = Permissions.resolve(
-                    Permissions.DEFAULT_ROLE_PERMISSIONS.get(role), overrides);
-
-            assertEquals(c.get("expected").asBoolean(), resolved.contains(code),
-                    "%s with override %s on %s".formatted(role, overrides, code));
+            assertEquals(c.get("expected").asBoolean(), role.resolve(overrides).contains(code),
+                    "%s with override %s on %s".formatted(role.key(), overrides, code));
         }
     }
 
     @Test
-    @DisplayName("The 33 codes match the frontend, and the two deferred ones are granted to nobody")
+    @DisplayName("The 33 codes match the frontend, and every wire code round-trips")
     void codeInventory() {
-        Set<String> expected = new TreeSet<>();
+        TreeSet<String> expected = new TreeSet<>();
         for (JsonNode code : each(root.get("permissions").get("allCodes"))) {
             expected.add(code.asText());
         }
 
-        assertEquals(expected, new TreeSet<>(Permissions.ALL));
-        assertEquals(33, Permissions.ALL.size(), "PRD §6 documents 31; permissions.ts carries 33");
+        assertEquals(expected, codesOf(EnumSet.allOf(Permission.class)));
+        assertEquals(33, Permission.values().length, "PRD §6 documents 31; permissions.ts carries 33");
+
+        // Every wire code resolves, so a stale client cannot smuggle an unknown one through.
+        expected.forEach(code -> assertTrue(Permission.ofCode(code).isPresent(), code));
+        assertTrue(Permission.ofCode("not.a.permission").isEmpty());
 
         // stock.transfer is Stage 3 and customer.credit is Stage 2 — seeded so no
         // migration is needed later. Owner currently holds both, mirroring the
-        // frontend; see the open decision on Permissions. No operational role does.
-        assertFalse(Permissions.forRole(Permissions.ROLE_CASHIER).contains(Permissions.STOCK_TRANSFER));
-        assertFalse(Permissions.forRole(Permissions.ROLE_STOREKEEPER).contains(Permissions.STOCK_TRANSFER));
-        assertTrue(Permissions.ALL.contains(Permissions.STOCK_TRANSFER));
-        assertTrue(Permissions.ALL.contains(Permissions.CUSTOMER_CREDIT));
+        // frontend; see the open decision on Permission. No operational role does.
+        assertFalse(Role.CASHIER.baseline().contains(Permission.STOCK_TRANSFER));
+        assertFalse(Role.STOREKEEPER.baseline().contains(Permission.STOCK_TRANSFER));
+        assertFalse(Role.MANAGER.baseline().contains(Permission.STOCK_TRANSFER));
     }
 }
