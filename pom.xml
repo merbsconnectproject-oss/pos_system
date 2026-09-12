@@ -28,6 +28,8 @@
 	</scm>
 	<properties>
 		<java.version>25</java.version>
+		<!-- Not managed by the Spring Boot BOM. -->
+		<bouncycastle.version>1.86</bouncycastle.version>
 	</properties>
 	<dependencies>
 		<!--
@@ -38,6 +40,15 @@
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>
+		</dependency>
+		<!--
+		  Argon2id, per NFR-8. Spring Security's Argon2PasswordEncoder delegates
+		  to BouncyCastle, which is not pulled in by the security starter.
+		-->
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcprov-jdk18on</artifactId>
+			<version>${bouncycastle.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

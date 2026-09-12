@@ -86,43 +86,43 @@ COMMENT ON COLUMN app_user.password_hash IS 'Argon2id';
 COMMENT ON COLUMN app_user.pin_hash      IS 'Argon2id, separate salt — a manager PIN is an approval primitive, not a login';
 
 -- ------------------------------------------------- roles and permissions
-
-CREATE TABLE role (
-    id         UUID     PRIMARY KEY DEFAULT gen_random_uuid(),
-    name       TEXT     NOT NULL UNIQUE,
-    is_system  BOOLEAN  NOT NULL DEFAULT FALSE
-);
-
-CREATE TABLE permission (
-    id           UUID  PRIMARY KEY DEFAULT gen_random_uuid(),
-    code         TEXT  NOT NULL UNIQUE,
-    description  TEXT  NOT NULL,
-    grouping     TEXT  NOT NULL
-);
-
-COMMENT ON TABLE permission IS
-    'PRD §6 documents 31 codes; permissions.ts carries 33. stock.transfer (Stage 3) and customer.credit (Stage 2) are seeded so later stages need no migration.';
-
-CREATE TABLE role_permission (
-    role_id        UUID  NOT NULL REFERENCES role (id)       ON DELETE CASCADE,
-    permission_id  UUID  NOT NULL REFERENCES permission (id) ON DELETE CASCADE,
-    PRIMARY KEY (role_id, permission_id)
-);
+--
+-- DEVIATION FROM PRD §7.1, deliberate.
+--
+-- The PRD models `role`, `permission` and `role_permission` as catalogue
+-- tables. They are omitted here because the catalogue already exists as the
+-- Permission and Role enums, and those enums are asserted against
+-- test-vectors.json — the same file the frontend is checked against.
+--
+-- A catalogue table would be a SECOND source of truth for the 33 codes and the
+-- four baselines, free to drift from the enum the server actually authorises
+-- with. Descriptions and groupings for the permissions screen are served from
+-- the enum too.
+--
+-- What is kept is the part that is genuinely per-user data: role assignment
+-- and FR-USER-03 overrides. Both store the enum key directly.
+--
+-- `role.is_system` anticipated custom roles. Those are not in Stage 1. If they
+-- arrive, add the table then and have the enum seed it.
 
 CREATE TABLE user_role (
-    user_id  UUID  NOT NULL REFERENCES app_user (id) ON DELETE CASCADE,
-    role_id  UUID  NOT NULL REFERENCES role (id)     ON DELETE CASCADE,
-    PRIMARY KEY (user_id, role_id)
+    user_id   UUID  NOT NULL REFERENCES app_user (id) ON DELETE CASCADE,
+    role_key  TEXT  NOT NULL,
+    PRIMARY KEY (user_id, role_key)
 );
+
+COMMENT ON COLUMN user_role.role_key IS 'gh.giftedlabs.pos.rules.Role — owner | manager | cashier | storekeeper';
 
 -- FR-USER-03: per-user overrides on top of the role baseline.
 -- granted = TRUE grants a code the role lacks; FALSE revokes one it has.
 CREATE TABLE user_permission (
-    user_id        UUID     NOT NULL REFERENCES app_user (id)   ON DELETE CASCADE,
-    permission_id  UUID     NOT NULL REFERENCES permission (id) ON DELETE CASCADE,
-    granted        BOOLEAN  NOT NULL,
-    PRIMARY KEY (user_id, permission_id)
+    user_id          UUID     NOT NULL REFERENCES app_user (id) ON DELETE CASCADE,
+    permission_code  TEXT     NOT NULL,
+    granted          BOOLEAN  NOT NULL,
+    PRIMARY KEY (user_id, permission_code)
 );
+
+COMMENT ON COLUMN user_permission.permission_code IS 'gh.giftedlabs.pos.rules.Permission wire code, e.g. sale.void';
 
 CREATE TABLE user_outlet (
     user_id    UUID  NOT NULL REFERENCES app_user (id) ON DELETE CASCADE,
