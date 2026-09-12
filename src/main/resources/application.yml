@@ -22,9 +22,9 @@ spring:
   datasource:
     # Railway injects DATABASE_URL. Locally this falls back to a dev database.
     # DatabaseUrlConfig normalises Railway's postgres:// form into JDBC.
-    url: ${JDBC_DATABASE_URL:jdbc:postgresql://localhost:5432/pos}
-    username: ${DB_USERNAME:pos}
-    password: ${DB_PASSWORD:pos}
+    url: ${JDBC_DATABASE_URL:jdbc:postgresql://localhost:5432/pos_system}
+    username: ${DB_USERNAME:giftedlabs}
+    password: ${DB_PASSWORD:}
     hikari:
       # A counter serves one browser; the consolidator serves one owner.
       # Ten is generous for both and keeps the JVM small enough for Railway's

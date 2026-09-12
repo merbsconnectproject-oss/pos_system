@@ -34,3 +34,6 @@ build/
 
 # Frozen contract vectors, vendored from ../pos-system
 # Regenerate there (npm run gen:vectors), then ./scripts/sync-vectors.sh
+
+# Local secrets — never committed.
+.env
