@@ -5,7 +5,9 @@ import gh.giftedlabs.pos.exception.AuthenticationFailedException;
 import gh.giftedlabs.pos.exception.OutletCodeTakenException;
 import gh.giftedlabs.pos.exception.OutletNotFoundException;
 import gh.giftedlabs.pos.exception.OutletNotPermittedException;
+import gh.giftedlabs.pos.exception.CatalogueConflictException;
 import gh.giftedlabs.pos.exception.IncorrectPinException;
+import gh.giftedlabs.pos.exception.ProductNotFoundException;
 import gh.giftedlabs.pos.exception.InvalidResetTokenException;
 import gh.giftedlabs.pos.exception.SessionAuthenticationException;
 import org.springframework.security.access.AccessDeniedException;
@@ -83,6 +85,26 @@ public class ApiExceptionHandler {
     public ResponseEntity<ApiError> onOutletCodeTaken(OutletCodeTakenException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiError("OUTLET_CODE_TAKEN", ex.getMessage(), Map.of("code", ex.getCode())));
+    }
+
+    /** FR-PROD-02/03: a duplicate SKU or barcode is a conflict, not bad input. */
+    @ExceptionHandler(CatalogueConflictException.class)
+    public ResponseEntity<ApiError> onCatalogueConflict(CatalogueConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError(ex.getCode(), ex.getMessage(), ex.getDetails()));
+    }
+
+    @ExceptionHandler(ProductNotFoundException.class)
+    public ResponseEntity<ApiError> onProductNotFound(ProductNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiError("PRODUCT_NOT_FOUND", "That product no longer exists", Map.of()));
+    }
+
+    /** BR-10: the floor cannot sit above retail — Product enforces the invariant. */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiError> onIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.badRequest()
+                .body(new ApiError("INVALID_REQUEST", ex.getMessage(), Map.of()));
     }
 
     @ExceptionHandler(OutletNotFoundException.class)
