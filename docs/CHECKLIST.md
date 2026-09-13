@@ -1,7 +1,7 @@
 # Build Checklist — Stage 1
 
 **Companion to** PRD v1.0 · SCREEN-INVENTORY.md v1.0 · DELIVERY-PLAN.md
-**Updated** 2026-09-10 · reflects the codebase as it stands, verified rather than assumed.
+**Updated** 2026-09-13 · reflects the codebase as it stands, verified rather than assumed.
 
 Grouped by feature, not by delivery phase, so a feature can be judged complete in one place.
 Every item carries its requirement ID (`FR-`), business rule (`BR-`) or screen ID so it ties back to
@@ -37,7 +37,7 @@ non-deferred item in its section is complete, including its non-functional items
 
 | Feature | Items | Frontend | Backend |
 |---|---:|---:|---:|
-| A · Authentication & session | 12 | 10 done, 2 partial | 0 |
+| A · Authentication & session | 12 | 12 done | 11 done, 1 partial |
 | B · Outlets | 7 | 6 done, 1 deferred | 0 |
 | C · Product catalogue | 14 | 8 done, 3 partial, 1 open, 2 deferred | 0 |
 | D · Units & conversions | 7 | 6 done, 1 open | 0 |
@@ -56,30 +56,30 @@ non-deferred item in its section is complete, including its non-functional items
 | Q · Connectivity & resilience | 8 | 0 done, 2 partial, 5 open, 1 deferred | 0 |
 | R · Cross-cutting non-functional | 18 | 6 done, 4 partial, 8 backend | 0 |
 
-**Frontend ≈ 95% of Stage 1 · Backend 0% · Contract frozen and machine-checked (`npm run check`)**
+**Frontend ≈ 95% of Stage 1 · Backend: A done, B–R not started · Contract frozen and machine-checked (`npm run check`)**
 
 ---
 
 ## A · Authentication & session — `FR-AUTH`
 
 ### Functional
-- [x][ ] Sign in with username or email and password — FR-AUTH-01 · `A-01`
-- [x][ ] Sign-in error state with attempts remaining — FR-AUTH-02 · `A-02`
-- [x][ ] 4–6 digit PIN for counter approvals and unlock — FR-AUTH-02
-- [x][ ] Outlet selection after sign-in; single-outlet users placed automatically — FR-AUTH-03 · `A-03`
-- [x][ ] Lock the POS without ending the shift; unlock with the shift owner's PIN — FR-AUTH-04 · `A-07`
-- [x][ ] Idle timeout locks rather than signs out when a shift is open — FR-AUTH-05 · `A-08`
-- [x][ ] Idle period configurable, not a constant — FR-AUTH-05 · `K-08`
-- [~][ ] Failed sign-in attempts rate limited and logged — FR-AUTH-06 *(UI counts attempts; enforcement is server-side)*
-- [x][ ] Password reset by administrator — FR-AUTH-07 · `A-04` `A-05` `A-06`
-- [~][ ] Self-service reset by email where an address exists — FR-AUTH-07 *(screens exist, no mail transport)*
-- [x][ ] Deactivated user sees a clear message and cannot sign in — FR-AUTH-08 · `A-09`
-- [x][ ] Not-found and server-error pages — `A-10` `A-11`
+- [x][x] Sign in with username or email and password — FR-AUTH-01 · `A-01`
+- [x][x] Sign-in error state with attempts remaining — FR-AUTH-02 · `A-02`
+- [x][x] 4–6 digit PIN for counter approvals and unlock — FR-AUTH-02
+- [x][x] Outlet selection after sign-in; single-outlet users placed automatically — FR-AUTH-03 · `A-03`
+- [x][x] Lock the POS without ending the shift; unlock with the shift owner's PIN — FR-AUTH-04 · `A-07`
+- [x][~] Idle timeout locks rather than signs out when a shift is open — FR-AUTH-05 · `A-08` *(server branch written and tested; unreachable until J sets `OPEN_SHIFT`)*
+- [x][x] Idle period configurable, not a constant — FR-AUTH-05 · `K-08`
+- [x][x] Failed sign-in attempts rate limited and logged — FR-AUTH-06 *(server enforces; 429 with retry-after)*
+- [x][x] Password reset by administrator — FR-AUTH-07 · `A-04` `A-05` `A-06`
+- [x][x] Self-service reset by email where an address exists — FR-AUTH-07 *(Resend; needs a key and verified domain to send)*
+- [x][x] Deactivated user sees a clear message and cannot sign in — FR-AUTH-08 · `A-09` *(also revoked mid-session)*
+- [x][x] Not-found and server-error pages — `A-10` `A-11`
 
 ### Non-functional
-- [ ][ ] Passwords hashed with bcrypt or argon2; PINs hashed separately — NFR-8
-- [ ][ ] Rate limiting on authentication and approval endpoints — NFR-10
-- [x][ ] Locking and unlocking does not close the shift or clear the cart — US-AUTH-1 acceptance
+- [ ][x] Passwords hashed with bcrypt or argon2; PINs hashed separately — NFR-8 *(Argon2id, separate encoders)*
+- [ ][x] Rate limiting on authentication and approval endpoints — NFR-10 *(checked before any hash work)*
+- [x][x] Locking and unlocking does not close the shift or clear the cart — US-AUTH-1 acceptance
 
 ---
 

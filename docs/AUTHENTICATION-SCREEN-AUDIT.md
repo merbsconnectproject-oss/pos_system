@@ -1,6 +1,15 @@
 # Authentication Screen Audit
 
-Date: 2026-09-09
+Date: 2026-09-09 · **Backend section superseded 2026-09-13**
+
+> **The "Remaining Backend Gaps" section below is no longer true.** It was
+> written while auth was frontend-only, against seeded users in `mockData.ts`.
+> Feature A is now implemented server-side in `pos-api` — sessions, Argon2id
+> hashing, rate limiting, endpoint permission checks, screen lock and an
+> append-only audit log. The *screen* conformance table above it still holds
+> and is still the reference for A-01…A-11.
+>
+> Current backend status: `pos-api/PROGRESS.md`, section A.
 
 Source of truth:
 
@@ -43,6 +52,13 @@ This pass covers only `A. Authentication and session`. Later screen groups shoul
 
 ## Remaining Backend Gaps
 
-- Real route URLs such as `/login`, `/select-outlet`, `/lock`, `/404`, and `/500` are represented as SPA states, not browser routes.
-- Server-side authentication, password hashing, endpoint permission checks, and real rate limiting are outside the current mock-data frontend implementation.
-- Reset emails are simulated in UI/audit state; no email service is connected.
+~~Superseded — see the note at the top of this file.~~ What remains:
+
+- Real route URLs such as `/login`, `/select-outlet`, `/lock`, `/404`, and `/500` are still SPA states, not browser routes. Unchanged, and still a deliberate choice.
+- ~~Server-side authentication, password hashing, endpoint permission checks, and real rate limiting~~ — **done**. Argon2id with separately hashed PINs, session cookies, `@PreAuthorize` over the permission codes, and lockout enforced before any hash work.
+- ~~Reset emails are simulated~~ — **done**. Resend over HTTPS; tokens stored as a SHA-256 digest and single-use. Needs an API key and a verified sending domain before mail actually leaves.
+
+One gap the original audit could not have seen: FR-AUTH-06's note that
+"real server-side rate limiting is not possible in the current local-only
+auth model" is now resolved, but the lockout is keyed on the raw identifier,
+so an account with an email address has two independent attempt budgets.
