@@ -24,7 +24,7 @@ import { ACCENT_PRESETS, buildAccentScale, isBlue } from './accent';
 import { costPerBaseUnit, weightedAverageCost } from './stockCosting';
 import { buildErrorCsv, guessMapping, parseDelimited, validateRows } from './productImport';
 import { createBlock, formatReceiptNumber, issueReceiptNumber } from './receiptSequence';
-import { INITIAL_PRODUCTS } from './mockData';
+import { INITIAL_PRODUCTS, OUTLETS } from './mockData';
 
 interface ContractVectors {
   money: {
@@ -316,6 +316,18 @@ console.log('--- FR-PROD-10 / D-12..D-16: import parses, maps, validates ---');
   check('row numbers point at the spreadsheet line', result.valid[0].rowNumber === 2);
   check('new SKUs count as creates', result.toCreate === 2 && result.toUpdate === 0);
 }
+
+// BR-6: {OUTLET}-{TERMINAL}-{SEQ}. The prefix is the OUTLET segment alone, so
+// a hyphen in it yields a four-part number with the terminal repeated. This
+// caught RAD-01/INC-01/APX-01 producing "INC-01-01-004312" on every receipt.
+console.log('--- BR-6: every outlet prefix yields a three-part receipt number ---');
+OUTLETS.forEach((outlet) => {
+  const number = formatReceiptNumber(createBlock(outlet.receiptPrefix, '01', 1), 1);
+  check(
+    `${outlet.name} -> ${number}`,
+    /^[A-Z0-9]{2,6}-[A-Z0-9]{1,4}-\d{6}$/.test(number) && number.split('-').length === 3,
+  );
+});
 
 console.log('--- uniqueness: every barcode maps to one product ---');
 const seen = new Map<string, string>();

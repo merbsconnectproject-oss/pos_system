@@ -302,17 +302,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     return candidate;
   };
 
-  // Derive a receipt prefix like "RAD-01" from the branch name when left blank.
+  /**
+   * Derive a receipt prefix like "RAD" from the branch name when left blank.
+   *
+   * BR-6 numbers receipts `{OUTLET}-{TERMINAL}-{SEQ}` — `INC-01-004312`. The
+   * prefix is the OUTLET segment alone, so it must not contain a hyphen: a
+   * prefix of "RAD-01" yields "RAD-01-01-004312", with the terminal twice and
+   * a number that no longer splits into three. Same-stem branches are
+   * separated with a trailing digit rather than a "-NN" suffix.
+   */
   const suggestReceiptPrefix = (name: string) => {
     const letters = name.replace(/[^a-zA-Z]/g, '').toUpperCase();
     const stem = (letters.slice(0, 3) || 'BRN').padEnd(3, 'X');
-    let index = 1;
-    let candidate = `${stem}-01`;
-    while (outlets.some((o) => o.receiptPrefix.toUpperCase() === candidate)) {
-      index += 1;
-      candidate = `${stem}-${String(index).padStart(2, '0')}`;
-    }
-    return candidate;
+    const taken = (value: string) =>
+      outlets.some((o) => o.receiptPrefix.toUpperCase() === value && o.id !== editingBranch?.id);
+
+    if (!taken(stem)) return stem;
+    let index = 2;
+    while (taken(`${stem}${index}`)) index += 1;
+    return `${stem}${index}`;
   };
 
   const staffCountForBranch = (outletId: OutletId) =>
@@ -351,6 +359,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
 
     const prefix = (branchPrefix.trim() || suggestReceiptPrefix(branchName)).toUpperCase();
+
+    // BR-6: the prefix is the OUTLET segment of {OUTLET}-{TERMINAL}-{SEQ}. A
+    // hyphen here silently produces a four-part receipt number.
+    if (!/^[A-Z0-9]{2,6}$/.test(prefix)) {
+      alert(
+        `Receipt prefix "${prefix}" is not valid. Use 2–6 letters or digits and no hyphen — ` +
+          `the terminal and sequence are added automatically, as in ${prefix.replace(/[^A-Z0-9]/g, '') || 'INC'}-01-004312.`
+      );
+      return;
+    }
+
     const clashesWith = outlets.find(
       (o) => o.receiptPrefix.toUpperCase() === prefix && o.id !== editingBranch?.id
     );
