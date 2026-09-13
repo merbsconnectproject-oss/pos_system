@@ -66,28 +66,25 @@ import { canAccessTab, resolvePermissions } from './permissions';
 import { roundMoney } from './money';
 import { DEFAULT_ACCENT, applyAccent } from './accent';
 import { authApi, AuthApiError, onSessionSignal, type AuthSession } from './authApi';
+import { outletsApi } from './outletsApi';
 
-const localOutletId = (session: AuthSession, outlets: Outlet[]): OutletId => {
-  const active = session.activeOutlet;
-  if (!active) return outlets.find((outlet) => outlet.id !== 'all-outlets')?.id || outlets[0]?.id;
-  return outlets.find((outlet) =>
-    outlet.receiptPrefix.toLowerCase() === active.code.toLowerCase()
-    || outlet.name.toLowerCase() === active.name.toLowerCase()
-  )?.id || active.id;
-};
+/**
+ * Outlets now come from the API, so a session's outlet id *is* the app's outlet
+ * id. The name-and-prefix matching this used to do existed only to bridge
+ * server outlets onto the seeded mock list, and matching on a display name was
+ * never safe — two branches may share one.
+ */
+const localOutletId = (session: AuthSession, outlets: Outlet[]): OutletId =>
+  session.activeOutlet?.id
+  || outlets.find((outlet) => outlet.id !== 'all-outlets')?.id
+  || outlets[0]?.id;
 
 const accountFromSession = (session: AuthSession, outlets: Outlet[]): UserAccount => {
   const role = session.roles.find((value) => ['owner', 'manager', 'cashier', 'storekeeper'].includes(value)) || 'cashier';
   const allServerOutlets = [session.activeOutlet, ...session.outletChoices]
     .filter((outlet): outlet is NonNullable<AuthSession['activeOutlet']> => outlet !== null)
     .filter((outlet, index, list) => list.findIndex((candidate) => candidate.id === outlet.id) === index)
-    .map((outlet) => ({
-      ...outlet,
-      localId: outlets.find((candidate) =>
-        candidate.receiptPrefix.toLowerCase() === outlet.code.toLowerCase()
-        || candidate.name.toLowerCase() === outlet.name.toLowerCase()
-      )?.id || outlet.id,
-    }));
+    .map((outlet) => ({ ...outlet, localId: outlet.id }));
   return {
     id: session.userId,
     fullName: session.fullName,
@@ -108,7 +105,7 @@ const accountFromSession = (session: AuthSession, outlets: Outlet[]): UserAccoun
 
 export default function App() {
   const [outlets, setOutlets] = useState<Outlet[]>(OUTLETS);
-  const [currentOutletId, setCurrentOutletId] = useState<OutletId>('radiance-lighting');
+  const [currentOutletId, setCurrentOutletId] = useState<OutletId>(OUTLETS[0]?.id);
 
   // Authenticated session (null until a staff member signs in)
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
@@ -138,11 +135,15 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    authApi.current()
-      .then((session) => {
+    // Branches are fetched with the session rather than after it: every screen
+    // reads `outlets`, and rendering one against the seeded list first would
+    // show the wrong branch for a frame and scope the dashboard to it.
+    Promise.all([authApi.current(), outletsApi.list()])
+      .then(([session, branches]) => {
         if (!active) return;
-        setCurrentUser(accountFromSession(session, OUTLETS));
-        setCurrentOutletId(localOutletId(session, OUTLETS));
+        if (branches.length > 0) setOutlets(branches);
+        setCurrentUser(accountFromSession(session, branches));
+        setCurrentOutletId(localOutletId(session, branches));
       })
       .catch((failure) => {
         if (active && !(failure instanceof AuthApiError && failure.status === 401)) {
@@ -963,12 +964,40 @@ export default function App() {
   // ==========================================
   // STORES & BRANCHES (Settings → Stores & Branches)
   // ==========================================
+  /**
+   * The server owns the branch list — FR-OUT-06.
+   *
+   * State follows what the API returns rather than what was typed, so a
+   * normalised code or a trimmed name shows the stored value, and a rejection
+   * (no `settings.general`, duplicate code, hyphen in the code) leaves the list
+   * untouched instead of showing a branch that was never saved.
+   */
   const handleAddOutlet = (outlet: Outlet) => {
-    setOutlets((prev) => [...prev, outlet]);
+    void outletsApi.create(outlet)
+      .then((saved) => setOutlets((prev) => [...prev, saved]))
+      .catch(reportOutletFailure);
   };
 
   const handleUpdateOutlet = (outletId: OutletId, changes: Partial<Outlet>) => {
-    setOutlets((prev) => prev.map((o) => (o.id === outletId ? { ...o, ...changes } : o)));
+    const current = outlets.find((o) => o.id === outletId);
+    if (!current) return;
+
+    const merged = { ...current, ...changes };
+    const request = changes.active !== undefined && Object.keys(changes).length === 1
+      ? outletsApi.setActive(outletId, changes.active)
+      : outletsApi.update(outletId, merged);
+
+    void request
+      .then((saved) => setOutlets((prev) => prev.map((o) => (o.id === outletId ? saved : o))))
+      .catch(reportOutletFailure);
+  };
+
+  const reportOutletFailure = (failure: unknown) => {
+    if (failure instanceof AuthApiError && failure.status !== 401 && failure.status !== 423) {
+      alert(failure.message);
+      return;
+    }
+    if (!(failure instanceof AuthApiError)) setAppErrorReference(`OUT-${Date.now().toString().slice(-6)}`);
   };
 
   const handleOpenAddNew = (action: string) => {
