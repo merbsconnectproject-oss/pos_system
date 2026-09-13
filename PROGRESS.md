@@ -1,6 +1,6 @@
 # Progress
 
-**Updated** 2026-09-12 · **Tests** 107 green · **DB** connected to `pos_system`, V1 applied
+**Updated** 2026-09-13 · **Tests** 133 green · **DB** connected to `pos_system`, V1–V2 applied
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (189 items, dual checkbox).
@@ -11,10 +11,10 @@ Updated after every completed feature. Detail lives in
 
 | | Features | Done | In progress | Not started |
 |---|---:|---:|---:|---:|
-| Backend | 18 | 0 | 1 | 17 |
+| Backend | 18 | 1 | 0 | 17 |
 
 ```
-A ██████░░░░  Auth & session      60%   credential checks done; HTTP session binding remains
+A ██████████  Auth & session     100%   FR-AUTH-05's shift branch waits on J to set the flag
 B ░░░░░░░░░░  Outlets              0%
 C ░░░░░░░░░░  Product catalogue    0%
 D ░░░░░░░░░░  Units & conversions  0%
@@ -31,7 +31,7 @@ N ░░░░░░░░░░  Audit                0%
 O ░░░░░░░░░░  Reports & dashboard  0%
 P ░░░░░░░░░░  Settings             0%
 Q ██████████  Connectivity        n/a   local-first removed the offline queue
-R ███░░░░░░░  Cross-cutting       30%   auth hashing, rate limiting, config
+R █████░░░░░  Cross-cutting       50%   auth hashing, rate limiting, config, audit log
 ```
 
 ---
@@ -55,34 +55,51 @@ feeds cut lengths and therefore stock levels.
 
 ---
 
-## A · Authentication & session — in progress
+## A · Authentication & session — done
 
 | Requirement | Status | Where |
 |---|---|---|
-| FR-AUTH-01 sign in with username or email | 🟨 | Credentials verify, but `AuthController` does not yet persist the authenticated principal in the HTTP session |
+| FR-AUTH-01 sign in with username or email | ✅ | `AuthController` → `SessionServiceImpl.establish` |
 | FR-AUTH-02 PIN for counter approvals | ✅ | `verifyApprovalPin` |
 | FR-AUTH-03 outlet selection / auto-placement | ✅ | `place` |
+| FR-AUTH-04 screen lock without ending shift | ✅ | `SessionServiceImpl` lock/unlock; 423 while locked |
+| FR-AUTH-05 idle timeout locks, not signs out | 🟨 | `SessionGuardFilter` is written and tested; the shift branch is unreachable until J sets `OPEN_SHIFT`, which is only ever written `false` today |
 | FR-AUTH-06 rate limiting + logging | ✅ | `InMemoryLoginAttemptService` |
-| FR-AUTH-08 deactivated user, clear message | ✅ | `AuthenticationServiceImpl` |
+| FR-AUTH-07 password reset by administrator | ✅ | `PasswordResetServiceImpl.resetByAdministrator`; refuses self-reset |
+| FR-AUTH-07 self-service reset by email | ✅ | Resend over HTTPS; needs a key and a verified domain to send |
+| FR-AUTH-08 deactivated user, clear message | ✅ | `AuthenticationServiceImpl`; revoked mid-session by `SessionGuardFilter` |
 | NFR-8 separate password and PIN hashing | ✅ | `PasswordEncoderConfig` |
 | NFR-10 rate limiting on auth endpoints | ✅ | checked *before* any hash work |
-| **FR-AUTH-04 screen lock without ending shift** | ⬜ | needs `ScreenLockService` |
-| **FR-AUTH-05 idle timeout locks, not signs out** | ⬜ | needs shift state (blocked on J) |
-| **FR-AUTH-07 password reset by administrator** | ⬜ | |
-| **FR-AUTH-07 self-service reset by email** | ⬜ | ⚠️ no mail transport chosen |
-| **BR-15 audit log** | ⬜ | table not yet created |
+| BR-15 audit log | ✅ | `V2__authentication.sql`, append-only by trigger |
 
-**12 tests**, all naming their requirement.
+**37 tests**, all naming their requirement — 27 at the service layer, 10 on the
+HTTP contract.
+
+**Two defects the service suite could not see.** Both lived in the filter
+chain, which answers before any controller and so never reaches
+`ApiExceptionHandler`: unauthenticated callers got a bodiless 403 from
+Spring's fallback entry point, and a wrong unlock PIN was indistinguishable
+from a dead session. A green suite stayed green through both because every
+test stopped at the service layer. `AuthControllerTest` now drives the real
+chain.
+
+**Known gap, not a blocker.** The lockout key is the raw identifier, so an
+account with an email address has two independent attempt budgets. Case is
+normalised; the username/email split is not.
 
 ---
 
 ## Next up
 
-1. **Finish A** — bind successful sign-in/outlet selection to the Spring Security
-   session, then `FR-AUTH-04`, `FR-AUTH-07`, and audit log. `FR-AUTH-05` needs
-   shift state, so it waits for J.
-2. **B · Outlets** — small, and C/F/G all depend on it.
-3. **C + D · Catalogue and units** — the biggest single chunk.
+1. **B · Outlets** — small, and C/F/G all depend on it. It also carries more
+   weight than its size: the DELIVERY-PLAN week-1 exit is *"a cashier is
+   refused a manager-only endpoint by the server, not the UI"*, and that
+   cannot be shown today because the only permission-guarded endpoint in the
+   codebase is the administrator password reset. B produces the first
+   ordinary one.
+2. **C + D · Catalogue and units** — the biggest single chunk.
+3. **M · Users & permissions** — blocked on the 31-vs-33 decision below, and
+   the longer that waits the more `@PreAuthorize` sites it touches.
 
 ---
 
@@ -91,11 +108,10 @@ feeds cut lengths and therefore stock levels.
 | What | Needed from | Blocks |
 |---|---|---|
 | **Consolidator in scope, or separate quote?** | Client | Owner has no combined view until it ships. PRD §1.2 promises it. |
-| **31 vs 33 permission codes** | You | `permissions.ts` has 33, PRD §6 documents 31. Extras are `stock.transfer` (Stage 3) and `customer.credit` (Stage 2). Owner currently holds both. Decide before M. |
+| **31 vs 33 permission codes** | You | `permissions.ts` has 33, PRD §6 documents 31. Extras are `stock.transfer` (Stage 3) and `customer.credit` (Stage 2). Owner currently holds both. Settle before B, not before M: every controller from B onward hardcodes codes into `@PreAuthorize`, so the cost grows with each feature. |
 | **Acceptance criterion 4 is unsatisfiable** | You | One terminal per outlet + per-outlet stock = the two terminals can never contend. Reword to goods-receipt-vs-sale. |
 | **Stage 2 features expected live?** | Client | Installments, returns, expenses are in the frontend but out of Stage 1 |
 | **Thermal printer ordered?** | You | Acceptance criterion 2 cannot close without one |
-| **Mail transport for FR-AUTH-07** | You | Self-service password reset |
 
 ---
 
