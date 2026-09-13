@@ -1,7 +1,7 @@
 # Build Checklist — Stage 1
 
 **Companion to** PRD v1.0 · SCREEN-INVENTORY.md v1.0 · DELIVERY-PLAN.md
-**Updated** 2026-09-13 · reflects the codebase as it stands, verified rather than assumed.
+**Updated** 2026-09-14 · reflects the codebase as it stands, verified rather than assumed.
 
 Grouped by feature, not by delivery phase, so a feature can be judged complete in one place.
 Every item carries its requirement ID (`FR-`), business rule (`BR-`) or screen ID so it ties back to
@@ -38,9 +38,9 @@ non-deferred item in its section is complete, including its non-functional items
 | Feature | Items | Frontend | Backend |
 |---|---:|---:|---:|
 | A · Authentication & session | 12 | 12 done | 11 done, 1 partial |
-| B · Outlets | 7 | 6 done, 1 deferred | 0 |
-| C · Product catalogue | 14 | 8 done, 3 partial, 1 open, 2 deferred | 0 |
-| D · Units & conversions | 7 | 6 done, 1 open | 0 |
+| B · Outlets | 7 | 6 done, 1 deferred | 6 done, 1 deferred |
+| C · Product catalogue | 14 | 8 done, 3 partial, 1 open, 2 deferred | 10 done, 2 deferred, 2 open |
+| D · Units & conversions | 7 | 6 done, 1 open | 6 done, 1 open |
 | E · Pricing | 8 | 4 done, 2 partial, 2 open | 0 |
 | F · Inventory | 12 | 9 done, 2 partial, 1 deferred | 0 |
 | G · Point of sale | 20 | 15 done, 4 partial, 1 deferred | 0 |
@@ -56,7 +56,7 @@ non-deferred item in its section is complete, including its non-functional items
 | Q · Connectivity & resilience | 8 | 0 done, 2 partial, 5 open, 1 deferred | 0 |
 | R · Cross-cutting non-functional | 18 | 6 done, 4 partial, 8 backend | 0 |
 
-**Frontend ≈ 95% of Stage 1 · Backend: A done, B–R not started · Contract frozen and machine-checked (`npm run check`)**
+**Frontend ≈ 95% of Stage 1 · Backend: A, B, C, D done · E–R not started · Contract frozen and machine-checked (`npm run check`)**
 
 ---
 
@@ -86,18 +86,18 @@ non-deferred item in its section is complete, including its non-functional items
 ## B · Outlets — `FR-OUT`
 
 ### Functional
-- [x][ ] Multiple outlets supported; configured at launch — FR-OUT-01
-- [x][ ] Per-outlet name, trading name, address, phone, receipt footer — FR-OUT-02 · `K-04`
-- [~][ ] Per-outlet logo override — FR-OUT-02 *(field present, no upload/persistence)*
-- [x][ ] Every sale, payment, movement, shift, cash movement and receipt tagged to one outlet — FR-OUT-03
-- [x][ ] Active outlet selected in the header and persists across screens — FR-OUT-04 · `L-10`
-- [x][ ] `outlet.view_all` may select "All outlets"; transactional screens require one — FR-OUT-05
-- [x][ ] Without the permission, the outlet is static text, not a control — FR-OUT-06
+- [x][x] Multiple outlets supported; configured at launch — FR-OUT-01
+- [x][x] Per-outlet name, trading name, address, phone, receipt footer — FR-OUT-02 · `K-04`
+- [~][~] Per-outlet logo override — FR-OUT-02 *(field stored; no upload)*
+- [x][~] Every sale, payment, movement, shift, cash movement and receipt tagged to one outlet — FR-OUT-03 *(outlet_id on every table; the tables land with F and G)*
+- [x][x] Active outlet selected in the header and persists across screens — FR-OUT-04 · `L-10`
+- [x][x] `outlet.view_all` may select "All outlets"; transactional screens require one — FR-OUT-05
+- [x][x] Without the permission, the outlet is static text, not a control — FR-OUT-06 *(server refuses the write)*
 - [-][-] Stock transfer between outlets with in-transit state — FR-OUT-07 *(Stage 3)*
 
 ### Non-functional
-- [x][ ] Adding a third outlet is configuration only, no schema or code change — NFR-16
-- [ ][ ] With Outlet A selected, no Outlet B record appears on any list, report or search — FR-OUT acceptance
+- [x][x] Adding a third outlet is configuration only, no schema or code change — NFR-16
+- [ ][x] With Outlet A selected, no Outlet B record appears on any list, report or search — FR-OUT acceptance *(scoped in OutletServiceImpl.visibleTo)*
 
 ---
 
@@ -105,23 +105,23 @@ non-deferred item in its section is complete, including its non-functional items
 
 ### Functional
 - [x][ ] Product record: name, SKU, category, brand, supplier, base unit, prices, reorder level, image, active flag — FR-PROD-01 · `D-03` `D-04`
-- [ ][ ] SKU auto-generated with manual override — FR-PROD-02
-- [ ][ ] SKU unique across the system — FR-PROD-02
-- [x][ ] Multiple barcodes per product — FR-PROD-03 · `D-06`
-- [x][ ] Each barcode bound to one selling unit, so a carton scan adds a carton — FR-PROD-04
-- [ ][ ] Barcode unique system-wide — FR-PROD-03
-- [x][ ] Categories and brands managed as lists — FR-PROD-05 · `D-09` `D-10`
-- [x][ ] Search matches name, SKU, barcode, brand, category; partial and out-of-order terms — FR-PROD-06
-- [x][ ] Search results show stock at the active outlet — FR-PROD-07
-- [x][ ] Products deactivated, never deleted — FR-PROD-08 · BR-17 · `D-19`
-- [~][ ] Full cost and price history retained and viewable — FR-PROD-09 · `D-08` *(modal renders mock history)*
-- [x][ ] Bulk import: template, upload, column mapping, row validation, error file, preview, commit — FR-PROD-10 · `D-12`…`D-16`
+- [ ][x] SKU auto-generated with manual override — FR-PROD-02 *({OUTLET}-{CATEGORY}-{NNN})*
+- [ ][x] SKU unique across the system — FR-PROD-02 *(unique index on upper(sku))*
+- [x][x] Multiple barcodes per product — FR-PROD-03 · `D-06`
+- [x][x] Each barcode bound to one selling unit, so a carton scan adds a carton — FR-PROD-04 *(a code naming an unsold unit is refused)*
+- [ ][x] Barcode unique system-wide — FR-PROD-03
+- [x][x] Categories and brands managed as lists — FR-PROD-05 · `D-09` `D-10`
+- [x][x] Search matches name, SKU, barcode, brand, category; partial and out-of-order terms — FR-PROD-06
+- [x][ ] Search results show stock at the active outlet — FR-PROD-07 *(blocked on F: stock is per outlet)*
+- [x][x] Products deactivated, never deleted — FR-PROD-08 · BR-17 · `D-19`
+- [~][~] Full cost and price history retained and viewable — FR-PROD-09 · `D-08` *(price history recorded append-only; cost history needs F)*
+- [x][ ] Bulk import: template, upload, column mapping, row validation, error file, preview, commit — FR-PROD-10 · `D-12`…`D-16` *(endpoint not built; SKU blocks needed, see ProductServiceImpl.generateSku)*
 - [~][-] Bulk price update by category, brand or supplier with affected-count preview — FR-PROD-11 · `D-20` *(Stage 2; filters render, apply not wired)*
 - [-][-] Product variants under a parent — FR-PROD-12 · `D-21` *(Stage 2)*
 
 ### Non-functional
-- [ ][ ] Four-term partial query returns the product in the top three in under 300 ms at 3,000 products — NFR-1 · FR-PROD acceptance
-- [ ][ ] Full-text or trigram index on name, SKU, description — PRD §7.5
+- [ ][ ] Four-term partial query returns the product in the top three in under 300 ms at 3,000 products — NFR-1 · FR-PROD acceptance *(indexed, not yet measured at volume)*
+- [ ][x] Full-text or trigram index on name, SKU, description — PRD §7.5 *(pg_trgm GIN on name and sku)*
 - [x][ ] Empty and no-results states — `D-17` `D-18` · `L-03` `L-11`
 
 ---
@@ -129,13 +129,13 @@ non-deferred item in its section is complete, including its non-functional items
 ## D · Units & conversions — `FR-UOM`
 
 ### Functional
-- [x][ ] One base unit per product, the smallest sellable unit — FR-UOM-01
-- [x][ ] Additional selling units with a conversion factor to base — FR-UOM-02 · `D-05`
-- [x][ ] Cashier picks the unit at the counter; quantity and price convert — FR-UOM-03 · `C-04`
-- [x][ ] A selling unit may carry its own price, not a multiple — FR-UOM-04
-- [x][ ] Goods received in a purchase unit, converted to base on receipt — FR-UOM-05
-- [x][ ] Fractional quantities to 3 decimal places — FR-UOM-06 · BR-12
-- [ ][ ] Conversion factor locked once stock or transactions exist — FR-UOM-07
+- [x][x] One base unit per product, the smallest sellable unit — FR-UOM-01
+- [x][x] Additional selling units with a conversion factor to base — FR-UOM-02 · `D-05`
+- [x][x] Cashier picks the unit at the counter; quantity and price convert — FR-UOM-03 · `C-04`
+- [x][x] A selling unit may carry its own price, not a multiple — FR-UOM-04
+- [x][~] Goods received in a purchase unit, converted to base on receipt — FR-UOM-05 *(conversion is here; receiving is F/K)*
+- [x][x] Fractional quantities to 3 decimal places — FR-UOM-06 · BR-12
+- [ ][ ] Conversion factor locked once stock or transactions exist — FR-UOM-07 *(blocked on F: nothing to check against yet)*
 
 ### Non-functional
 - [x][ ] Receiving 3 drums of 100 m gives 300 m; selling 12.5 m leaves 287.5 m; selling a drum leaves 187.5 m — FR-UOM acceptance *(asserted in `contract-check.ts`)*
