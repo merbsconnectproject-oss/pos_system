@@ -75,6 +75,9 @@ public class User {
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 
+    @Column(name = "credentials_changed_at", nullable = false)
+    private Instant credentialsChangedAt = Instant.now();
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -137,6 +140,13 @@ public class User {
     public void setPasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
     }
+
+    public void changePassword(String passwordHash, Instant changedAt) {
+        this.passwordHash = passwordHash;
+        this.credentialsChangedAt = changedAt;
+    }
+
+    public Instant getCredentialsChangedAt() { return credentialsChangedAt; }
 
     public String getPinHash() {
         return pinHash;

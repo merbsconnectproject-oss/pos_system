@@ -53,7 +53,11 @@ public record PosProperties(
             @DefaultValue("5") int maxAttempts,
             @DefaultValue("PT15M") Duration lockoutDuration,
             @DefaultValue("PT15M") Duration attemptWindow,
-            @DefaultValue("PT15M") Duration idleTimeout) {
+            @DefaultValue("PT15M") Duration idleTimeout,
+            @DefaultValue("PT30M") Duration resetTokenTtl,
+            @DefaultValue("http://localhost:8080/reset-password") String resetBaseUrl,
+            @DefaultValue("") String resendApiKey,
+            @DefaultValue("Radiance POS <onboarding@resend.dev>") String resendFrom) {
     }
 
     public record Consolidator(

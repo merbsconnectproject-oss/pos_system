@@ -47,4 +47,7 @@ public interface AuthenticationService {
      * @return true when the PIN matches and the user holds the permission
      */
     boolean verifyApprovalPin(UUID approverId, String pin, gh.giftedlabs.pos.rules.Permission required);
+
+    /** FR-AUTH-04: verify the signed-in shift owner's own PIN for unlock. */
+    boolean verifyOwnPin(UUID userId, String pin);
 }

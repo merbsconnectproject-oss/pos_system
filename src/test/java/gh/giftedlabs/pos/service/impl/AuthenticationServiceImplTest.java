@@ -12,6 +12,7 @@ import gh.giftedlabs.pos.repository.UserRepository;
 import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.rules.Role;
 import gh.giftedlabs.pos.service.LoginAttemptService;
+import gh.giftedlabs.pos.service.AuditService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -58,6 +59,7 @@ class AuthenticationServiceImplTest {
     private PasswordEncoder passwordEncoder;
     private PasswordEncoder pinEncoder;
     private LoginAttemptService loginAttempts;
+    private AuditService audit;
     private AuthenticationServiceImpl service;
 
     private User cashier;
@@ -71,9 +73,10 @@ class AuthenticationServiceImplTest {
         passwordEncoder = mock(PasswordEncoder.class);
         pinEncoder = mock(PasswordEncoder.class);
         loginAttempts = mock(LoginAttemptService.class);
+        audit = mock(AuditService.class);
 
         service = new AuthenticationServiceImpl(
-                users, outlets, passwordEncoder, pinEncoder, loginAttempts,
+                users, outlets, passwordEncoder, pinEncoder, loginAttempts, audit,
                 Clock.fixed(NOW, ZoneOffset.UTC));
 
         inco = outlet("INC", "Inco Hardware");

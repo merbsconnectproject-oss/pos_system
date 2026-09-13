@@ -8,6 +8,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
@@ -48,14 +49,19 @@ import java.util.List;
  * changes no existing authentication.
  */
 @Configuration
-@EnableConfigurationProperties(PosProperties.class)
+@EnableConfigurationProperties({PosProperties.class, BootstrapProperties.class})
 @EnableMethodSecurity   // NFR-9: @PreAuthorize on every mutating endpoint
 public class SecurityConfig {
 
     private final PosProperties properties;
+    private final SessionGuardFilter sessionGuard;
+    private final ApiSecurityErrorHandler securityErrors;
 
-    public SecurityConfig(PosProperties properties) {
+    public SecurityConfig(PosProperties properties, SessionGuardFilter sessionGuard,
+                          ApiSecurityErrorHandler securityErrors) {
         this.properties = properties;
+        this.sessionGuard = sessionGuard;
+        this.securityErrors = securityErrors;
     }
 
     @Bean
@@ -66,6 +72,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/sign-in").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/csrf").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/password-reset/request",
+                                "/api/auth/password-reset/confirm").permitAll()
                         // Shops authenticate with a service key, not a session,
                         // so this path is opened here and guarded by its own filter.
                         .requestMatchers(HttpMethod.POST, "/api/ingest/**").permitAll()
@@ -85,6 +94,14 @@ public class SecurityConfig {
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
 
+                // Rejections from the filter chain never reach
+                // ApiExceptionHandler, so they are shaped here instead. Without
+                // this, "not signed in" arrives as a bodiless 403 that the
+                // client cannot distinguish from "not permitted".
+                .exceptionHandling(errors -> errors
+                        .authenticationEntryPoint(securityErrors)
+                        .accessDeniedHandler(securityErrors))
+
                 .csrf(csrf -> csrf
                         // Cookie-based sessions need CSRF protection. The token
                         // is readable by the frontend so it can echo it back.
@@ -93,6 +110,8 @@ public class SecurityConfig {
                         // Ingest is authenticated by a key in a header, never by
                         // an ambient cookie, so CSRF does not apply to it.
                         .ignoringRequestMatchers("/api/ingest/**"));
+
+        http.addFilterBefore(sessionGuard, AuthorizationFilter.class);
 
         if (consolidator) {
             http.cors(cors -> cors.configurationSource(corsConfigurationSource()));

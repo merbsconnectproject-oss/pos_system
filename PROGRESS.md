@@ -1,6 +1,6 @@
 # Progress
 
-**Updated** 2026-09-12 · **Tests** 106 green · **DB** connected to `pos_system`, V1 applied
+**Updated** 2026-09-12 · **Tests** 107 green · **DB** connected to `pos_system`, V1 applied
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (189 items, dual checkbox).
@@ -14,7 +14,7 @@ Updated after every completed feature. Detail lives in
 | Backend | 18 | 0 | 1 | 17 |
 
 ```
-A ███████░░░  Auth & session      70%   FR-AUTH-01/02/03/06/08 done
+A ██████░░░░  Auth & session      60%   credential checks done; HTTP session binding remains
 B ░░░░░░░░░░  Outlets              0%
 C ░░░░░░░░░░  Product catalogue    0%
 D ░░░░░░░░░░  Units & conversions  0%
@@ -42,10 +42,11 @@ R ███░░░░░░░  Cross-cutting       30%   auth hashing, rate l
 |---|---|
 | Project scaffold | Boot 4.1.1 · Java 25 · Maven wrapper, no local `mvn` needed |
 | Contract vectors | 81 vectors generated from the frontend, read by **both** suites |
+| Database tests | Testcontainers defaults to PostgreSQL 18; local cached-image override is `-Dtest.postgres.image=...` |
 | `rules/` ported | `Money` `Quantity` `Costing` `ReceiptSequence` `Permission` `Role` |
 | Database | `pos_system` on localhost, role `giftedlabs`, **V1 applied** |
 | Deployment config | `counter` / `consolidator` profiles; Railway `DATABASE_URL` + `PORT` handled |
-| Security baseline | Argon2id, separate PIN hashing, session cookies, CSRF, CORS |
+| Security baseline | Argon2id, separate PIN hashing, session-cookie policy, CSRF, CORS |
 
 **Two bugs found and fixed in the frozen frontend:**
 `roundMoney(1.005)` returned 1.00 where `BigDecimal.HALF_UP` gives 1.01 — the
@@ -58,7 +59,7 @@ feeds cut lengths and therefore stock levels.
 
 | Requirement | Status | Where |
 |---|---|---|
-| FR-AUTH-01 sign in with username or email | ✅ | `AuthenticationServiceImpl.signIn` |
+| FR-AUTH-01 sign in with username or email | 🟨 | Credentials verify, but `AuthController` does not yet persist the authenticated principal in the HTTP session |
 | FR-AUTH-02 PIN for counter approvals | ✅ | `verifyApprovalPin` |
 | FR-AUTH-03 outlet selection / auto-placement | ✅ | `place` |
 | FR-AUTH-06 rate limiting + logging | ✅ | `InMemoryLoginAttemptService` |
@@ -77,7 +78,8 @@ feeds cut lengths and therefore stock levels.
 
 ## Next up
 
-1. **Finish A** — `FR-AUTH-04`, `FR-AUTH-07`, audit log. `FR-AUTH-05` needs
+1. **Finish A** — bind successful sign-in/outlet selection to the Spring Security
+   session, then `FR-AUTH-04`, `FR-AUTH-07`, and audit log. `FR-AUTH-05` needs
    shift state, so it waits for J.
 2. **B · Outlets** — small, and C/F/G all depend on it.
 3. **C + D · Catalogue and units** — the biggest single chunk.

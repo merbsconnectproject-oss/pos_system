@@ -3,6 +3,10 @@ package gh.giftedlabs.pos.controller;
 import gh.giftedlabs.pos.dto.ApiError;
 import gh.giftedlabs.pos.exception.AuthenticationFailedException;
 import gh.giftedlabs.pos.exception.OutletNotPermittedException;
+import gh.giftedlabs.pos.exception.IncorrectPinException;
+import gh.giftedlabs.pos.exception.InvalidResetTokenException;
+import gh.giftedlabs.pos.exception.SessionAuthenticationException;
+import org.springframework.security.access.AccessDeniedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -70,6 +74,33 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiError("OUTLET_NOT_PERMITTED", ex.getMessage(),
                         Map.of("outletId", String.valueOf(ex.getOutletId()))));
+    }
+
+    @ExceptionHandler(SessionAuthenticationException.class)
+    public ResponseEntity<ApiError> onSessionAuthentication(SessionAuthenticationException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiError("SESSION_INVALID", ex.getMessage(), Map.of()));
+    }
+
+    /**
+     * A mistyped unlock PIN. The screen stays locked and the session stays
+     * alive, so this must not look like SESSION_INVALID — FR-AUTH-04.
+     */
+    @ExceptionHandler(IncorrectPinException.class)
+    public ResponseEntity<ApiError> onIncorrectPin(IncorrectPinException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiError("PIN_INCORRECT", ex.getMessage(), Map.of()));
+    }
+
+    @ExceptionHandler(InvalidResetTokenException.class)
+    public ResponseEntity<ApiError> onInvalidResetToken(InvalidResetTokenException ex) {
+        return ResponseEntity.badRequest().body(new ApiError("RESET_TOKEN_INVALID", ex.getMessage(), Map.of()));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiError> onAccessDenied(AccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiError("ACCESS_DENIED", "You do not have permission to do that", Map.of()));
     }
 
     /** Bean Validation failures, rendered per field so the form can mark them. */

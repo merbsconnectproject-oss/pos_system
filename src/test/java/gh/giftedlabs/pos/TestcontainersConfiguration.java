@@ -7,12 +7,17 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 @TestConfiguration(proxyBeanMethods = false)
-class TestcontainersConfiguration {
+public class TestcontainersConfiguration {
 
 	@Bean
 	@ServiceConnection
-	PostgreSQLContainer postgresContainer() {
-		return new PostgreSQLContainer(DockerImageName.parse("postgres:latest"));
+	public PostgreSQLContainer postgresContainer() {
+		// CI and release validation use PostgreSQL 18. Developers may point this
+		// at an already-cached compatible image when working without registry access.
+		String image = System.getProperty("test.postgres.image", "postgres:18");
+		DockerImageName dockerImage = DockerImageName.parse(image)
+				.asCompatibleSubstituteFor("postgres");
+		return new PostgreSQLContainer(dockerImage);
 	}
 
 }

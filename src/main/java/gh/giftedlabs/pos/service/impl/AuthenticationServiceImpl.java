@@ -12,6 +12,7 @@ import gh.giftedlabs.pos.repository.UserRepository;
 import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.rules.Role;
 import gh.giftedlabs.pos.service.AuthenticationService;
+import gh.giftedlabs.pos.service.AuditService;
 import gh.giftedlabs.pos.service.LoginAttemptService;
 import gh.giftedlabs.pos.service.LoginAttemptService.Decision;
 import org.slf4j.Logger;
@@ -46,6 +47,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final PasswordEncoder passwordEncoder;
     private final PasswordEncoder pinEncoder;
     private final LoginAttemptService loginAttempts;
+    private final AuditService audit;
     private final Clock clock;
 
     public AuthenticationServiceImpl(
@@ -54,12 +56,14 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             PasswordEncoder passwordEncoder,
             @Qualifier("pinEncoder") PasswordEncoder pinEncoder,
             LoginAttemptService loginAttempts,
+            AuditService audit,
             Clock clock) {
         this.users = users;
         this.outlets = outlets;
         this.passwordEncoder = passwordEncoder;
         this.pinEncoder = pinEncoder;
         this.loginAttempts = loginAttempts;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -72,6 +76,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         // endpoint to burn CPU - FR-AUTH-06, NFR-10.
         Decision decision = loginAttempts.check(identifier);
         if (!decision.allowed()) {
+            audit.record(null, "AUTH_SIGN_IN_RATE_LIMITED", "user", null, null,
+                    java.util.Map.of("identifier", identifier), null, null, clientIp);
             log.warn("Sign-in blocked for '{}' from {} - locked out for a further {}s",
                     identifier, clientIp, decision.retryAfter().toSeconds());
             throw new AuthenticationFailedException(
@@ -87,6 +93,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         // endpoint cannot be used to discover which usernames exist.
         if (found.isEmpty() || !passwordEncoder.matches(request.password(), found.get().getPasswordHash())) {
             Decision afterFailure = loginAttempts.recordFailure(identifier);
+            audit.record(found.map(User::getId).orElse(null), "AUTH_SIGN_IN_FAILED", "user",
+                    found.map(User::getId).orElse(null), null,
+                    java.util.Map.of("identifier", identifier, "attemptsRemaining", afterFailure.attemptsRemaining()),
+                    null, null, clientIp);
             log.warn("Failed sign-in for '{}' from {} - {} attempts remaining",
                     identifier, clientIp, afterFailure.attemptsRemaining());
             throw new AuthenticationFailedException(
@@ -102,6 +112,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         // password so the message is only ever shown to someone who proved they
         // own the account - otherwise it leaks which usernames exist.
         if (!user.isActive()) {
+            audit.record(user.getId(), "AUTH_SIGN_IN_DEACTIVATED", "user", user.getId(),
+                    null, null, null, null, clientIp);
             log.warn("Sign-in refused for deactivated user '{}' from {}", identifier, clientIp);
             throw new AuthenticationFailedException(
                     Reason.ACCOUNT_DEACTIVATED,
@@ -163,6 +175,21 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             return false;
         }
 
+        loginAttempts.recordSuccess(throttleKey);
+        return true;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean verifyOwnPin(UUID userId, String pin) {
+        String throttleKey = "unlock:" + userId;
+        if (!loginAttempts.check(throttleKey).allowed()) return false;
+        Optional<User> found = users.findById(userId);
+        if (found.isEmpty() || !found.get().isActive() || !found.get().hasPin()
+                || !pinEncoder.matches(pin, found.get().getPinHash())) {
+            loginAttempts.recordFailure(throttleKey);
+            return false;
+        }
         loginAttempts.recordSuccess(throttleKey);
         return true;
     }

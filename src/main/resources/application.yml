@@ -15,6 +15,11 @@ spring:
   application:
     name: pos-api
 
+  autoconfigure:
+    # Authentication is established explicitly by AuthController; never create
+    # Spring Boot's generated development user or print a password at startup.
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+
   profiles:
     # A counter PC is the common case and the one a developer runs locally.
     default: counter
@@ -62,6 +67,10 @@ server:
     include-message: never       # errors are shaped by ApiExceptionHandler
     include-stacktrace: never
   forward-headers-strategy: framework   # X-Forwarded-* from Railway/Cloudflare
+  servlet:
+    # Application-level idle handling distinguishes expiry from an open-shift lock.
+    session:
+      timeout: ${HTTP_SESSION_TIMEOUT:PT12H}
 
 management:
   endpoints:
@@ -80,6 +89,16 @@ logging:
     gh.giftedlabs.pos: ${LOG_LEVEL:INFO}
 
 pos:
+  bootstrap:
+    enabled: ${POS_BOOTSTRAP_ADMIN_ENABLED:false}
+    username: ${POS_BOOTSTRAP_ADMIN_USERNAME:admin}
+    full-name: ${POS_BOOTSTRAP_ADMIN_NAME:System Administrator}
+    email: ${POS_BOOTSTRAP_ADMIN_EMAIL:}
+    password: ${POS_BOOTSTRAP_ADMIN_PASSWORD:}
+    pin: ${POS_BOOTSTRAP_ADMIN_PIN:}
+    outlet-code: ${POS_BOOTSTRAP_OUTLET_CODE:RAD}
+    outlet-name: ${POS_BOOTSTRAP_OUTLET_NAME:Radiance Lighting}
+    receipt-prefix: ${POS_BOOTSTRAP_RECEIPT_PREFIX:RAD}
   auth:
     max-attempts: ${AUTH_MAX_ATTEMPTS:5}
     lockout-duration: ${AUTH_LOCKOUT:PT15M}
@@ -87,3 +106,7 @@ pos:
     # FR-AUTH-05: configurable, not a constant. With an open shift the POS
     # locks rather than signing out.
     idle-timeout: ${AUTH_IDLE_TIMEOUT:PT15M}
+    reset-token-ttl: ${AUTH_RESET_TOKEN_TTL:PT30M}
+    reset-base-url: ${AUTH_RESET_BASE_URL:http://localhost:5173/reset-password}
+    resend-api-key: ${RESEND_API_KEY:}
+    resend-from: ${RESEND_FROM:Radiance POS <onboarding@resend.dev>}
