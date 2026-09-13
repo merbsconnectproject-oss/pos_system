@@ -91,7 +91,7 @@ class AuthenticationServiceImplTest {
     }
 
     private Outlet outlet(String code, String name) {
-        Outlet outlet = new Outlet(code, name, code);
+        Outlet outlet = new Outlet(code, name);
         ReflectionTestUtils.setField(outlet, "id", UUID.randomUUID());
         return outlet;
     }

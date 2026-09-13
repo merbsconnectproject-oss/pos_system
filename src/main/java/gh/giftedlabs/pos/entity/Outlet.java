@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
@@ -28,7 +29,13 @@ public class Outlet {
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
+    /**
+     * BR-6: the {@code {OUTLET}} segment of a receipt number — {@code INC} in
+     * {@code INC-01-004312}. No hyphen: one here makes the number four parts
+     * with the terminal repeated. Enforced by {@code outlet_code_is_receipt_safe}.
+     */
     @NotBlank
+    @Pattern(regexp = "[A-Z0-9]{2,6}", message = "Use 2-6 letters or digits, no hyphen")
     @Column(name = "code", nullable = false, unique = true)
     private String code;
 
@@ -45,17 +52,19 @@ public class Outlet {
     @Column(name = "phone")
     private String phone;
 
+    /** FR-OUT-02: shown in the header and grouped on reports. */
+    @Column(name = "town")
+    private String town;
+
+    /** FR-OUT-02: display only. Naming a manager here grants nothing. */
+    @Column(name = "manager_name")
+    private String managerName;
+
     @Column(name = "receipt_footer")
     private String receiptFooter;
 
     @Column(name = "logo_url")
     private String logoUrl;
-
-    /** BR-6: the {OUTLET} segment of a receipt number, e.g. INC in INC-01-004312. */
-    @NotBlank
-    @Size(max = 8)
-    @Column(name = "receipt_prefix", nullable = false)
-    private String receiptPrefix;
 
     /** BR-17: deactivation, never deletion — historical documents reference this row. */
     @Column(name = "is_active", nullable = false)
@@ -71,14 +80,22 @@ public class Outlet {
         // JPA
     }
 
-    public Outlet(String code, String name, String receiptPrefix) {
+    public Outlet(String code, String name) {
         this.code = code;
         this.name = name;
-        this.receiptPrefix = receiptPrefix;
     }
 
     public UUID getId() {
         return id;
+    }
+
+    /**
+     * Renaming the receipt code changes what future receipts print. Past
+     * receipts keep the number they were issued — BR-6 numbers are never
+     * reused, so they are not rewritten either.
+     */
+    public void setCode(String code) {
+        this.code = code;
     }
 
     public String getCode() {
@@ -133,8 +150,20 @@ public class Outlet {
         this.logoUrl = logoUrl;
     }
 
-    public String getReceiptPrefix() {
-        return receiptPrefix;
+    public String getTown() {
+        return town;
+    }
+
+    public void setTown(String town) {
+        this.town = town;
+    }
+
+    public String getManagerName() {
+        return managerName;
+    }
+
+    public void setManagerName(String managerName) {
+        this.managerName = managerName;
     }
 
     public boolean isActive() {

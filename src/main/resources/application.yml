@@ -98,7 +98,6 @@ pos:
     pin: ${POS_BOOTSTRAP_ADMIN_PIN:}
     outlet-code: ${POS_BOOTSTRAP_OUTLET_CODE:RAD}
     outlet-name: ${POS_BOOTSTRAP_OUTLET_NAME:Radiance Lighting}
-    receipt-prefix: ${POS_BOOTSTRAP_RECEIPT_PREFIX:RAD}
   auth:
     max-attempts: ${AUTH_MAX_ATTEMPTS:5}
     lockout-duration: ${AUTH_LOCKOUT:PT15M}

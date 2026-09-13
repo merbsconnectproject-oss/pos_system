@@ -48,7 +48,7 @@ public class InitialAdminBootstrap implements ApplicationRunner {
 
         Outlet outlet = outlets.findByCodeIgnoreCase(properties.outletCode())
                 .orElseGet(() -> outlets.save(new Outlet(
-                        properties.outletCode(), properties.outletName(), properties.receiptPrefix())));
+                        properties.outletCode(), properties.outletName())));
 
         User owner = new User(properties.username(), properties.fullName(),
                 passwords.encode(properties.password()));

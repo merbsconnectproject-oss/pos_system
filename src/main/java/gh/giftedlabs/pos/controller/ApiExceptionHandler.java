@@ -2,6 +2,8 @@ package gh.giftedlabs.pos.controller;
 
 import gh.giftedlabs.pos.dto.ApiError;
 import gh.giftedlabs.pos.exception.AuthenticationFailedException;
+import gh.giftedlabs.pos.exception.OutletCodeTakenException;
+import gh.giftedlabs.pos.exception.OutletNotFoundException;
 import gh.giftedlabs.pos.exception.OutletNotPermittedException;
 import gh.giftedlabs.pos.exception.IncorrectPinException;
 import gh.giftedlabs.pos.exception.InvalidResetTokenException;
@@ -74,6 +76,19 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiError("OUTLET_NOT_PERMITTED", ex.getMessage(),
                         Map.of("outletId", String.valueOf(ex.getOutletId()))));
+    }
+
+    /** BR-6: receipt codes are unique per branch, so this is a conflict. */
+    @ExceptionHandler(OutletCodeTakenException.class)
+    public ResponseEntity<ApiError> onOutletCodeTaken(OutletCodeTakenException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError("OUTLET_CODE_TAKEN", ex.getMessage(), Map.of("code", ex.getCode())));
+    }
+
+    @ExceptionHandler(OutletNotFoundException.class)
+    public ResponseEntity<ApiError> onOutletNotFound(OutletNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiError("OUTLET_NOT_FOUND", "That branch no longer exists", Map.of()));
     }
 
     @ExceptionHandler(SessionAuthenticationException.class)

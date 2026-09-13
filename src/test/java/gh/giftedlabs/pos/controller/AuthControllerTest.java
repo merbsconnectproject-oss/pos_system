@@ -79,8 +79,9 @@ class AuthControllerTest {
         // identifier, so a shared name would leak lockouts between tests.
         username = "cashier-" + UUID.randomUUID().toString().substring(0, 8);
 
+        // BR-6: the code is the receipt segment, so it must stay hyphen-free.
         Outlet outlet = outlets.save(new Outlet(
-                "T" + username.substring(8, 12).toUpperCase(), "Test Outlet " + username, "TST"));
+                "T" + username.substring(8, 12).toUpperCase(), "Test Outlet " + username));
         outletId = outlet.getId();
 
         User user = new User(username, "Test Cashier", passwords.encode(PASSWORD));

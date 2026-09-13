@@ -17,5 +17,9 @@ public interface OutletRepository extends JpaRepository<Outlet, UUID> {
 
     boolean existsByCodeIgnoreCase(String code);
 
-    boolean existsByReceiptPrefixIgnoreCase(String receiptPrefix);
+    boolean existsByCodeIgnoreCaseAndIdNot(String code, UUID id);
+
+    List<Outlet> findAllByIdInOrderByNameAsc(java.util.Collection<UUID> ids);
+
+    List<Outlet> findAllByOrderByNameAsc();
 }

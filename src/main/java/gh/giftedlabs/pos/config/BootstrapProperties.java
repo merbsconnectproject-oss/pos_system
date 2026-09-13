@@ -13,6 +13,5 @@ public record BootstrapProperties(
         @DefaultValue("") String password,
         @DefaultValue("") String pin,
         @DefaultValue("RAD") String outletCode,
-        @DefaultValue("Radiance Lighting") String outletName,
-        @DefaultValue("RAD") String receiptPrefix) {
+        @DefaultValue("Radiance Lighting") String outletName) {
 }
