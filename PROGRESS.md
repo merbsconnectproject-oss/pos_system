@@ -1,6 +1,6 @@
 # Progress
 
-**Updated** 2026-09-13 · **Tests** 133 green · **DB** connected to `pos_system`, V1–V2 applied
+**Updated** 2026-09-14 · **Tests** 156 green · **DB** connected to `pos_system`, V1–V4 applied
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (189 items, dual checkbox).
@@ -11,13 +11,13 @@ Updated after every completed feature. Detail lives in
 
 | | Features | Done | In progress | Not started |
 |---|---:|---:|---:|---:|
-| Backend | 18 | 1 | 0 | 17 |
+| Backend | 18 | 4 | 0 | 14 |
 
 ```
 A ██████████  Auth & session     100%   FR-AUTH-05's shift branch waits on J to set the flag
-B ░░░░░░░░░░  Outlets              0%
-C ░░░░░░░░░░  Product catalogue    0%
-D ░░░░░░░░░░  Units & conversions  0%
+B ██████████  Outlets            100%   reads scoped by assignment; writes need settings.general
+C ████████░░  Product catalogue   80%   FR-PROD-07 and -10 wait on F and on SKU blocks
+D █████████░  Units & conversions  90%   FR-UOM-07 waits on F for something to check against
 E ░░░░░░░░░░  Pricing              0%
 F ░░░░░░░░░░  Inventory            0%
 G ░░░░░░░░░░  Point of sale        0%
@@ -91,15 +91,19 @@ normalised; the username/email split is not.
 
 ## Next up
 
-1. **B · Outlets** — small, and C/F/G all depend on it. It also carries more
-   weight than its size: the DELIVERY-PLAN week-1 exit is *"a cashier is
-   refused a manager-only endpoint by the server, not the UI"*, and that
-   cannot be shown today because the only permission-guarded endpoint in the
-   codebase is the administrator password reset. B produces the first
-   ordinary one.
-2. **C + D · Catalogue and units** — the biggest single chunk.
-3. **M · Users & permissions** — blocked on the 31-vs-33 decision below, and
-   the longer that waits the more `@PreAuthorize` sites it touches.
+1. **F · Inventory** — `stock_level` and `inventory_movement`, with the
+   weighted-average cost of BR-4. Four items across C and D are waiting on
+   it: FR-PROD-07 (stock on search results), FR-UOM-07 (lock a conversion
+   factor once stock exists), cost history, and goods receipt. It is also
+   what makes `ProductView` able to carry the per-outlet maps the frontend's
+   `types.ts` expects.
+2. **E · Pricing** — per-outlet overrides on top of the price history that
+   C already records.
+3. **FR-PROD-10 · bulk import** — the endpoint reuses the frontend's
+   validation rules, but needs SKU blocks first: `generateSku` counts rows,
+   which is right for hand entry and wrong for two importers running at
+   once. Allocate a block the way BR-6 does for receipts.
+4. **M · Users & permissions** — blocked on the 31-vs-33 decision below.
 
 ---
 
