@@ -6,17 +6,142 @@
  * FR-PROD-04 unit-bound barcodes, and PRD §11 acceptance criterion 7.
  * If one of these fails, the API contract and the UI have drifted apart.
  */
-import { DEFAULT_ROLE_PERMISSIONS, resolvePermissions, canAccessTab, PERMISSION_CODES } from './permissions';
-import { roundMoney, sumMoney, lineTotal, moneyEquals, toPesewas, roundQuantity } from './money';
+import { readFileSync } from 'node:fs';
+
+import {
+  DEFAULT_ROLE_PERMISSIONS,
+  resolvePermissions,
+  canAccessTab,
+  PERMISSION_CODES,
+  type PermissionCode,
+  type PermissionOverrides,
+  type UserRole,
+} from './permissions';
+import { roundMoney, sumMoney, lineTotal, moneyEquals, toPesewas, fromPesewas, roundQuantity } from './money';
 import { findByBarcode, findByBarcodeOrSku } from './catalogue';
 import { createScanDetector } from './useScanner';
 import { ACCENT_PRESETS, buildAccentScale, isBlue } from './accent';
 import { costPerBaseUnit, weightedAverageCost } from './stockCosting';
 import { buildErrorCsv, guessMapping, parseDelimited, validateRows } from './productImport';
+import { createBlock, formatReceiptNumber, issueReceiptNumber } from './receiptSequence';
 import { INITIAL_PRODUCTS } from './mockData';
+
+interface ContractVectors {
+  money: {
+    roundMoney: Array<{ in: string; out: string }>;
+    toPesewas: Array<{ in: string; out: number }>;
+    fromPesewas: Array<{ in: number; out: string }>;
+    lineTotal: Array<{ quantity: string; unitPrice: string; discount: string; out: string }>;
+    sumMoney: Array<{ in: string[]; out: string }>;
+  };
+  quantity: { roundQuantity: Array<{ in: string; out: string }> };
+  weightedAverageCost: {
+    cases: Array<{
+      quantityOnHand: string;
+      currentAverage: string;
+      quantityReceivedBase: string;
+      unitCostPerBase: string;
+      out: string;
+    }>;
+  };
+  costPerBaseUnit: {
+    cases: Array<{ purchaseUnitCost: string; conversionFactor: string; out: string }>;
+  };
+  receiptNumber: {
+    cases: Array<{ outletPrefix: string; terminalCode: string; sequence: number; out: string }>;
+    blockExhaustion: { start: number; size: number; issued: string[]; thirdCallRefused: boolean };
+  };
+  permissions: {
+    allCodes: PermissionCode[];
+    roles: Record<UserRole, PermissionCode[]>;
+    overrides: Array<{
+      baseRole: UserRole;
+      override: PermissionOverrides;
+      grants: PermissionCode;
+      expected: boolean;
+    }>;
+  };
+}
+
+const vectors = JSON.parse(
+  readFileSync(new URL('../docs/contract/test-vectors.json', import.meta.url), 'utf8'),
+) as ContractVectors;
 
 let fail = 0;
 const check = (name: string, cond: boolean) => { if (!cond) { console.log('FAIL:', name); fail++; } else console.log('  ok:', name); };
+const fixedMoney = (value: number) => value.toFixed(2);
+const fixedQuantity = (value: number) => value.toFixed(3);
+
+console.log('--- frozen contract vectors (shared with the Java backend) ---');
+vectors.money.roundMoney.forEach((test) =>
+  check(`roundMoney(${test.in}) = ${test.out}`, fixedMoney(roundMoney(Number(test.in))) === test.out));
+vectors.money.toPesewas.forEach((test) =>
+  check(`toPesewas(${test.in}) = ${test.out}`, toPesewas(Number(test.in)) === test.out));
+vectors.money.fromPesewas.forEach((test) =>
+  check(`fromPesewas(${test.in}) = ${test.out}`, fixedMoney(fromPesewas(test.in)) === test.out));
+vectors.money.lineTotal.forEach((test) =>
+  check(
+    `lineTotal(${test.quantity}, ${test.unitPrice}, ${test.discount}) = ${test.out}`,
+    fixedMoney(lineTotal(Number(test.quantity), Number(test.unitPrice), Number(test.discount))) === test.out,
+  ));
+vectors.money.sumMoney.forEach((test) =>
+  check(`sumMoney(${test.in.join(', ')}) = ${test.out}`, fixedMoney(sumMoney(test.in.map(Number))) === test.out));
+vectors.quantity.roundQuantity.forEach((test) =>
+  check(
+    `roundQuantity(${test.in}) = ${test.out}`,
+    fixedQuantity(roundQuantity(Number(test.in))) === test.out,
+  ));
+vectors.weightedAverageCost.cases.forEach((test) =>
+  check(
+    `weightedAverageCost(...)= ${test.out}`,
+    fixedMoney(weightedAverageCost(
+      Number(test.quantityOnHand),
+      Number(test.currentAverage),
+      Number(test.quantityReceivedBase),
+      Number(test.unitCostPerBase),
+    )) === test.out,
+  ));
+vectors.costPerBaseUnit.cases.forEach((test) =>
+  check(
+    `costPerBaseUnit(${test.purchaseUnitCost}, ${test.conversionFactor}) = ${test.out}`,
+    fixedMoney(roundMoney(costPerBaseUnit(Number(test.purchaseUnitCost), Number(test.conversionFactor)))) === test.out,
+  ));
+vectors.receiptNumber.cases.forEach((test) => {
+  const block = createBlock(test.outletPrefix, test.terminalCode, test.sequence);
+  check(
+    `receipt ${test.outletPrefix}-${test.terminalCode} sequence ${test.sequence}`,
+    formatReceiptNumber(block, test.sequence) === test.out,
+  );
+});
+{
+  const test = vectors.receiptNumber.blockExhaustion;
+  let block = createBlock('INC', '01', test.start, test.size);
+  const issued: string[] = [];
+  for (let i = 0; i < test.size; i++) {
+    const next = issueReceiptNumber(block);
+    issued.push(next.receiptNumber);
+    block = next.block;
+  }
+  let refused = false;
+  try {
+    issueReceiptNumber(block);
+  } catch {
+    refused = true;
+  }
+  check('receipt block issues the frozen sequence', JSON.stringify(issued) === JSON.stringify(test.issued));
+  check('receipt block refuses the next number', refused === test.thirdCallRefused);
+}
+check('permission code list matches the frozen contract',
+  JSON.stringify(PERMISSION_CODES) === JSON.stringify(vectors.permissions.allCodes));
+Object.entries(vectors.permissions.roles).forEach(([role, expected]) => {
+  const actual = [...resolvePermissions(DEFAULT_ROLE_PERMISSIONS[role as UserRole]).codes].sort();
+  check(`${role} permission baseline matches`, JSON.stringify(actual) === JSON.stringify(expected));
+});
+vectors.permissions.overrides.forEach((test) =>
+  check(
+    `${test.baseRole} override for ${test.grants} matches`,
+    resolvePermissions(DEFAULT_ROLE_PERMISSIONS[test.baseRole], test.override).has(test.grants) === test.expected,
+  ));
 
 console.log('--- PRD acceptance 7: a cashier sees no cost, no profit, no reports ---');
 const cashier = resolvePermissions(DEFAULT_ROLE_PERMISSIONS.cashier);
@@ -32,7 +157,7 @@ console.log('--- PRD §6 matrix spot checks ---');
 const owner = resolvePermissions(DEFAULT_ROLE_PERMISSIONS.owner);
 const manager = resolvePermissions(DEFAULT_ROLE_PERMISSIONS.manager);
 const keeper = resolvePermissions(DEFAULT_ROLE_PERMISSIONS.storekeeper);
-check('owner has all 31 codes', owner.codes.length === PERMISSION_CODES.length);
+check('owner has all configured codes', owner.codes.length === PERMISSION_CODES.length);
 check('manager lacks user.manage', !manager.has('user.manage'));
 check('manager lacks outlet.view_all', !manager.has('outlet.view_all'));
 check('manager lacks settings.general', !manager.has('settings.general'));

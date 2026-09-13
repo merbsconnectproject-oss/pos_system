@@ -412,6 +412,38 @@ Return valid JSON only. Do not wrap in backticks or markdown if possible.`;
   }
 });
 
+// Keep the browser on one origin so the backend session and CSRF cookies work
+// in both development and production.
+app.use('/api', async (req, res) => {
+  const apiBaseUrl = process.env.POS_API_URL || 'http://localhost:8080';
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(req.headers)) {
+    if (value === undefined || ['host', 'content-length', 'connection'].includes(name)) continue;
+    headers.set(name, Array.isArray(value) ? value.join(', ') : value);
+  }
+
+  try {
+    const response = await fetch(`${apiBaseUrl}${req.originalUrl}`, {
+      method: req.method,
+      headers,
+      body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body ?? {}),
+      redirect: 'manual',
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    response.headers.forEach((value, name) => {
+      if (!['content-length', 'transfer-encoding', 'connection', 'set-cookie'].includes(name)) {
+        res.setHeader(name, value);
+      }
+    });
+    const cookies = response.headers.getSetCookie();
+    if (cookies.length > 0) res.setHeader('set-cookie', cookies);
+    res.status(response.status).send(Buffer.from(await response.arrayBuffer()));
+  } catch {
+    res.status(502).json({ code: 'API_UNAVAILABLE', message: 'Cannot reach the POS API' });
+  }
+});
+
 // 3. Vite development middleware or static production serving
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {

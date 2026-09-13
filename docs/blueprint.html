@@ -1,0 +1,1516 @@
+<title>POS Stage 1 Blueprint</title>
+
+<style>
+  /* ============================================================
+     Tokens — light is the base. Derived from the product's own
+     design system (DESIGN-SYSTEM-SNAPSHOT.md): burnt orange accent,
+     slate structural neutrals. No blue accent anywhere — acceptance
+     criterion 11 forbids it in the product, so the spec honours it.
+     ============================================================ */
+  :root {
+    --accent:        #c55200;
+    --accent-hover:  #b14900;
+    --accent-quiet:  #fdf0e6;
+    --accent-line:   #f0c9a8;
+
+    --ground:        #f8fafc;
+    --paper:         #ffffff;
+    --sunken:        #f1f5f9;
+
+    --ink:           #0f172a;
+    --ink-muted:     #475569;
+    --ink-subtle:    #64748b;
+
+    --line:          #e2e8f0;
+    --line-strong:   #cbd5e1;
+
+    --ok:            #15803d;
+    --ok-quiet:      #ecfdf3;
+    --warn:          #b45309;
+    --warn-quiet:    #fffbeb;
+    --stop:          #b91c1c;
+    --stop-quiet:    #fef2f2;
+
+    --sans: "Plus Jakarta Sans", ui-sans-serif, "Segoe UI", Roboto, system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
+
+    --r-sm: 4px;
+    --r:    7px;
+    --r-lg: 11px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --accent:        #f0842f;
+      --accent-hover:  #ff9a4d;
+      --accent-quiet:  #2a1809;
+      --accent-line:   #573317;
+
+      --ground:        #0b1016;
+      --paper:         #121a23;
+      --sunken:        #0e151d;
+
+      --ink:           #e6edf5;
+      --ink-muted:     #9fb0c3;
+      --ink-subtle:    #7d8ea2;
+
+      --line:          #1e2a37;
+      --line-strong:   #2c3d4e;
+
+      --ok:            #56d68a;
+      --ok-quiet:      #0d2418;
+      --warn:          #e8a33d;
+      --warn-quiet:    #2a1e07;
+      --stop:          #f2716b;
+      --stop-quiet:    #2b1111;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --accent:        #f0842f;
+    --accent-hover:  #ff9a4d;
+    --accent-quiet:  #2a1809;
+    --accent-line:   #573317;
+
+    --ground:        #0b1016;
+    --paper:         #121a23;
+    --sunken:        #0e151d;
+
+    --ink:           #e6edf5;
+    --ink-muted:     #9fb0c3;
+    --ink-subtle:    #7d8ea2;
+
+    --line:          #1e2a37;
+    --line-strong:   #2c3d4e;
+
+    --ok:            #56d68a;
+    --ok-quiet:      #0d2418;
+    --warn:          #e8a33d;
+    --warn-quiet:    #2a1e07;
+    --stop:          #f2716b;
+    --stop-quiet:    #2b1111;
+  }
+
+  /* ============================================================ */
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .shell {
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+    gap: 56px;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 32px 120px;
+    align-items: start;
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    grid-column: 1 / -1;
+    border-bottom: 2px solid var(--ink);
+    padding: 64px 0 28px;
+    margin-bottom: 16px;
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 18px;
+  }
+
+  h1 {
+    font-size: clamp(34px, 5.2vw, 52px);
+    line-height: 1.04;
+    letter-spacing: -0.028em;
+    font-weight: 800;
+    margin: 0 0 20px;
+    text-wrap: balance;
+    max-width: 17ch;
+  }
+
+  .standfirst {
+    font-size: 18.5px;
+    line-height: 1.55;
+    color: var(--ink-muted);
+    max-width: 62ch;
+    margin: 0 0 30px;
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    overflow: hidden;
+    background: var(--paper);
+    width: fit-content;
+    max-width: 100%;
+  }
+  .fact {
+    padding: 11px 20px;
+    border-right: 1px solid var(--line);
+  }
+  .fact:last-child { border-right: 0; }
+  .fact dt {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-subtle);
+    margin: 0 0 3px;
+  }
+  .fact dd {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- nav rail ---------- */
+
+  nav.rail {
+    position: sticky;
+    top: 28px;
+    font-size: 13.5px;
+  }
+  nav.rail .rail-label {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-subtle);
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  nav.rail ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    counter-reset: rail;
+  }
+  nav.rail a {
+    display: flex;
+    gap: 10px;
+    padding: 4px 8px 4px 0;
+    color: var(--ink-muted);
+    text-decoration: none;
+    border-radius: var(--r-sm);
+    counter-increment: rail;
+    line-height: 1.4;
+  }
+  nav.rail a::before {
+    content: counter(rail, decimal-leading-zero);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--ink-subtle);
+    padding-top: 3px;
+    flex: none;
+  }
+  nav.rail a:hover { color: var(--accent); }
+  nav.rail a:hover::before { color: var(--accent); }
+  nav.rail a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* ---------- body ---------- */
+
+  main { min-width: 0; }
+
+  section { margin-bottom: 68px; scroll-margin-top: 24px; }
+
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--ink);
+    margin: 0 0 26px;
+    padding-bottom: 11px;
+    border-bottom: 1px solid var(--ink);
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  h2 .n {
+    color: var(--accent);
+    font-size: 11.5px;
+  }
+
+  h3 {
+    font-size: 20px;
+    letter-spacing: -0.014em;
+    font-weight: 700;
+    margin: 38px 0 12px;
+    text-wrap: balance;
+  }
+  h3:first-of-type { margin-top: 0; }
+
+  h4 {
+    font-size: 15.5px;
+    font-weight: 680;
+    margin: 26px 0 8px;
+  }
+
+  p { margin: 0 0 15px; max-width: 68ch; }
+  main > section > p { color: var(--ink-muted); }
+
+  a { color: var(--accent); }
+
+  strong { font-weight: 680; color: var(--ink); }
+
+  ul, ol.body-list {
+    margin: 0 0 16px;
+    padding-left: 20px;
+    max-width: 68ch;
+    color: var(--ink-muted);
+  }
+  li { margin-bottom: 7px; }
+  li::marker { color: var(--ink-subtle); }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.855em;
+    background: var(--sunken);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    padding: 1px 5px;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  pre {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.62;
+    background: var(--sunken);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 18px 20px;
+    overflow-x: auto;
+    margin: 0 0 20px;
+    color: var(--ink);
+  }
+  pre code {
+    background: none;
+    border: 0;
+    padding: 0;
+    font-size: inherit;
+    white-space: pre;
+  }
+
+  /* ---------- reference chip: ties every claim to the PRD ---------- */
+
+  .ref {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    border: 1px solid var(--accent-line);
+    background: var(--accent-quiet);
+    color: var(--accent);
+    border-radius: var(--r-sm);
+    padding: 1px 5px;
+    white-space: nowrap;
+  }
+
+  /* ---------- status pills ---------- */
+
+  .pill {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+    padding: 2.5px 8px;
+    border-radius: 999px;
+    border: 1px solid;
+    white-space: nowrap;
+  }
+  .pill.settled { color: var(--ok);   background: var(--ok-quiet);   border-color: var(--ok); }
+  .pill.open    { color: var(--warn); background: var(--warn-quiet); border-color: var(--warn); }
+  .pill.risk    { color: var(--stop); background: var(--stop-quiet); border-color: var(--stop); }
+
+  /* ---------- tables ---------- */
+
+  .scroll { overflow-x: auto; margin: 0 0 22px; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 14px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+  }
+  th, td {
+    text-align: left;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  thead th {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--ink-subtle);
+    background: var(--sunken);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td { color: var(--ink-muted); }
+  td:first-child { color: var(--ink); font-weight: 600; }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* ---------- decision entries ---------- */
+
+  .decision {
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    background: var(--paper);
+    padding: 16px 20px;
+    margin-bottom: 10px;
+  }
+  .decision-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .decision-head .what {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-subtle);
+  }
+  .decision-head .verdict {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .swap {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-subtle);
+    margin-bottom: 7px;
+  }
+  .swap .was { text-decoration: line-through; }
+  .swap .arrow { color: var(--accent); padding: 0 5px; }
+  .decision p { margin: 0; font-size: 14.5px; color: var(--ink-muted); max-width: 74ch; }
+
+  /* ---------- callouts ---------- */
+
+  .note {
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--ink-subtle);
+    border-radius: 0 var(--r) var(--r) 0;
+    background: var(--paper);
+    padding: 15px 20px;
+    margin: 0 0 22px;
+  }
+  .note.watch  { border-left-color: var(--warn); background: var(--warn-quiet); }
+  .note.danger { border-left-color: var(--stop); background: var(--stop-quiet); }
+  .note.good   { border-left-color: var(--ok);   background: var(--ok-quiet); }
+  .note .tag {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 6px;
+  }
+  .note.watch  .tag { color: var(--warn); }
+  .note.danger .tag { color: var(--stop); }
+  .note.good   .tag { color: var(--ok); }
+  .note .tag:only-child { margin-bottom: 0; }
+  .note p:last-child { margin-bottom: 0; }
+  .note p { font-size: 14.5px; }
+
+  /* ---------- week timeline ---------- */
+
+  .week {
+    display: grid;
+    grid-template-columns: 68px minmax(0, 1fr);
+    gap: 20px;
+    padding: 18px 0;
+    border-top: 1px solid var(--line);
+  }
+  .week:last-child { border-bottom: 1px solid var(--line); }
+  .week-n {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    padding-top: 3px;
+  }
+  .week h4 { margin: 0 0 8px; font-size: 16px; }
+  .week ul { margin: 0 0 12px; font-size: 14.5px; }
+  .exit {
+    font-size: 13.5px;
+    border-left: 2px solid var(--accent-line);
+    padding-left: 13px;
+    color: var(--ink-muted);
+    max-width: 66ch;
+  }
+  .exit b {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  footer {
+    grid-column: 1 / -1;
+    border-top: 2px solid var(--ink);
+    padding-top: 20px;
+    font-size: 13px;
+    color: var(--ink-subtle);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+  }
+  footer span { font-family: var(--mono); font-size: 12px; }
+
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0 22px 80px; }
+    nav.rail { display: none; }
+    .masthead { padding-top: 44px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="shell">
+
+  <header class="masthead">
+    <p class="eyebrow">Stage 1 · Backend &amp; Deployment</p>
+    <h1>POS &amp; Inventory System Blueprint</h1>
+    <p class="standfirst">
+      The build document for the backend of a point-of-sale and inventory system serving two
+      independent shops — Inco Hardware and Radiance Lighting. It records what was decided,
+      what the server owes the frontend, and what is still waiting on the client. Where it
+      conflicts with earlier planning documents, this one governs the build.
+    </p>
+    <dl class="facts">
+      <div class="fact"><dt>Stack</dt><dd>Spring Boot · Java 21</dd></div>
+      <div class="fact"><dt>Topology</dt><dd>Local-first</dd></div>
+      <div class="fact"><dt>Hosting</dt><dd>GH₵ 0 / year</dd></div>
+      <div class="fact"><dt>Requirements</dt><dd>141 must-have</dd></div>
+      <div class="fact"><dt>Window</dt><dd>6 weeks</dd></div>
+    </dl>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <div class="rail-label">Contents</div>
+    <ol>
+      <li><a href="#decisions">Decision record</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#data">Data model</a></li>
+      <li><a href="#rules">Rules the server owns</a></li>
+      <li><a href="#drift">The drift problem</a></li>
+      <li><a href="#permissions">Permissions</a></li>
+      <li><a href="#packages">Package structure</a></li>
+      <li><a href="#api">API surface</a></li>
+      <li><a href="#printing">Printing</a></li>
+      <li><a href="#backup">Backup &amp; recovery</a></li>
+      <li><a href="#install">Packaging &amp; install</a></li>
+      <li><a href="#online">Path to online</a></li>
+      <li><a href="#timeline">Six weeks</a></li>
+      <li><a href="#acceptance">Acceptance</a></li>
+      <li><a href="#open">Open questions</a></li>
+      <li><a href="#risks">Risks</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- ============================================= -->
+    <section id="decisions">
+      <h2><span class="n">01</span> Decision record</h2>
+      <p>
+        Each of these was reached by working a constraint until it forced an answer. The
+        <span class="swap"><span class="was">struck</span><span class="arrow">→</span></span>
+        entries are positions held earlier in planning and since overturned — recorded so nobody
+        re-argues them from the old documents.
+      </p>
+
+      <div class="decision">
+        <div class="decision-head">
+          <span class="what">Language</span>
+          <span class="verdict">Java 21 · Spring Boot 3</span>
+          <span class="pill settled">Settled</span>
+        </div>
+        <div class="swap"><span class="was">TypeScript / Node</span><span class="arrow">→</span>Java</div>
+        <p>
+          The developer who will hold the pager writes Java. That outweighs the convenience of
+          importing the frontend's rules directly. The reusable frontend logic is roughly 520
+          lines — three to four days to port — against which Spring Security, Flyway,
+          <code>@Lock(PESSIMISTIC_WRITE)</code>, Bean Validation, <code>BigDecimal</code> and
+          Testcontainers give back comparable time on work the plan already schedules.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-head">
+          <span class="what">Topology</span>
+          <span class="verdict">Local-first, one instance per shop</span>
+          <span class="pill settled">Settled</span>
+        </div>
+        <div class="swap"><span class="was">Cloud, shared instance</span><span class="arrow">→</span>Local per outlet</div>
+        <p>
+          The application and its database run on the counter PC. Each shop is self-contained.
+          This deletes the two hardest deliverables in the original plan — the offline queue and
+          the separate print service — and removes the connectivity dependency that was the
+          project's top risk. The cost is the owner's consolidated view, which is deferred.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-head">
+          <span class="what">Database</span>
+          <span class="verdict">PostgreSQL 18, installed locally</span>
+          <span class="pill settled">Settled</span>
+        </div>
+        <p>
+          Not SQLite and not H2. Identical schema, identical Flyway migrations and identical SQL
+          mean that going online later is a connection string plus a sync layer, rather than a
+          rewrite. Postgres on Windows is a routine install and sits at roughly 250&nbsp;MB.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-head">
+          <span class="what">Persistence</span>
+          <span class="verdict">Spring Data JPA + JdbcTemplate</span>
+          <span class="pill settled">Settled</span>
+        </div>
+        <p>
+          JPA for transactional paths, where <code>@Lock(PESSIMISTIC_WRITE)</code> expresses
+          <span class="ref">BR-8</span> directly. Plain <code>JdbcTemplate</code> for the sixteen
+          reports, so aggregations are written as SQL instead of fought through an ORM.
+          Flyway owns the schema; Hibernate never generates DDL.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-head">
+          <span class="what">Primary keys</span>
+          <span class="verdict">UUID everywhere</span>
+          <span class="pill settled">Settled</span>
+        </div>
+        <p>
+          The single most consequential choice in this document. Two local databases both counting
+          from 1 will collide catastrophically if they are ever merged into one cloud instance.
+          UUIDs make that merge a weekend instead of a migration project. The PRD already puts
+          <code>uuid UNIQUE</code> on <code>sale</code> <span class="ref">BR-7</span>; this extends
+          it to every table as the actual primary key.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-head">
+          <span class="what">Printing</span>
+          <span class="verdict">In-process, via javax.print</span>
+          <span class="pill settled">Settled</span>
+        </div>
+        <div class="swap"><span class="was">Separate Go/Windows service</span><span class="arrow">→</span>In-process</div>
+        <p>
+          Once the server runs on the counter PC there is nothing for a separate print service to
+          bridge. ESC/POS bytes go straight to the Windows spooler in RAW mode from the same
+          process that completed the sale. One deliverable and one installer disappear.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-head">
+          <span class="what">Hosting</span>
+          <span class="verdict">None. Nightly backup to Cloudflare R2</span>
+          <span class="pill settled">Settled</span>
+        </div>
+        <div class="swap"><span class="was">Railway · ~$96/yr</span><span class="arrow">→</span>$0 + free-tier R2</div>
+        <p>
+          With no server there is no hosting bill. The only recurring infrastructure is an
+          off-site backup target, and a day's trading compresses to a couple of megabytes —
+          comfortably inside R2's free tier for the life of the system.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-head">
+          <span class="what">Offline</span>
+          <span class="verdict">Native, not a queue</span>
+          <span class="pill settled">Settled</span>
+        </div>
+        <p>
+          <span class="ref">FR-SYNC-08</span> — full-day offline — was a Stage 3 could-have priced
+          separately. Local-first delivers it as a property of the architecture rather than a
+          feature, and simultaneously satisfies <span class="ref">NFR-2</span>,
+          <span class="ref">NFR-4</span> and <span class="ref">NFR-5</span> without an offline
+          queue existing at all.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================================= -->
+    <section id="architecture">
+      <h2><span class="n">02</span> Architecture</h2>
+      <p>
+        One installable artifact per shop. The cashier opens Chrome at <code>localhost</code>;
+        everything behind that is a single Java process and a local Postgres service.
+      </p>
+
+<pre><code>  COUNTER PC — Inco Hardware            COUNTER PC — Radiance Lighting
+  ┌────────────────────────────┐        ┌────────────────────────────┐
+  │  Chrome → localhost:8080   │        │  Chrome → localhost:8080   │
+  ├────────────────────────────┤        ├────────────────────────────┤
+  │  pos-app.msi               │        │  pos-app.msi               │
+  │  ├── JRE 21 (bundled)      │        │  ├── JRE 21 (bundled)      │
+  │  ├── Spring Boot           │        │  ├── Spring Boot           │
+  │  │   └── serves Vite build │        │  │   └── serves Vite build │
+  │  ├── javax.print → ESC/POS │        │  ├── javax.print → ESC/POS │
+  │  └── Postgres 18 (service) │        │  └── Postgres 18 (service) │
+  │      outlet_id = INC       │        │      outlet_id = RAD       │
+  └─────────────┬──────────────┘        └─────────────┬──────────────┘
+                │  nightly pg_dump, retry until sent  │
+                └──────────────┬──────────────────────┘
+                               ▼
+                    ┌──────────────────────┐
+                    │  Cloudflare R2       │   off-site, 30-day
+                    │  free tier           │   retention  NFR-6
+                    └──────────────────────┘</code></pre>
+
+      <p>
+        The frontend is built by Vite and copied into <code>src/main/resources/static</code>, so it
+        ships inside the same JAR. No separate web host, no CORS, no cross-origin cookie question —
+        which retires the week-one decision the original plan flagged as a rework risk.
+      </p>
+
+      <div class="note good">
+        <span class="tag">Why this fits the business</span>
+        <p>
+          One checkout terminal per outlet <span class="ref">AS-4</span> and non-overlapping
+          catalogues mean each terminal is the sole writer to its own shop's stock. The hardest
+          part of offline POS — reconciling concurrent writers — does not exist here. The
+          architecture matches how the shops actually trade.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================================= -->
+    <section id="data">
+      <h2><span class="n">03</span> Data model</h2>
+      <p>
+        Taken wholesale from PRD §7, with three amendments. Flyway migrations are generated from
+        it in week 1 and are the only thing permitted to change the schema.
+      </p>
+
+      <h3>Three amendments to PRD §7</h3>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Amendment</th><th>Applies to</th><th>Why it cannot wait</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>UUID</code> primary keys</td>
+              <td>Every table</td>
+              <td>Sequential integers in two independent databases collide on merge. Retrofitting after go-live means rewriting every foreign key in live trading data.</td>
+            </tr>
+            <tr>
+              <td><code>outlet_id</code> retained</td>
+              <td>Every outlet-scoped table</td>
+              <td>Each local database holds exactly one outlet, so the column looks redundant today. It is what makes the owner's combined dashboard work unchanged after a merge, and <span class="ref">NFR-16</span> already requires it.</td>
+            </tr>
+            <tr>
+              <td><code>synced_at</code> nullable</td>
+              <td>Every syncable table</td>
+              <td>Already present on <code>sale</code> in PRD §7.3. Extending it now costs a column; adding it later costs a migration across live data.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Entity groups</h3>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Group</th><th>Tables</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Identity</td><td><code>outlet</code>, <code>terminal</code>, <code>user</code>, <code>role</code>, <code>permission</code>, <code>role_permission</code>, <code>user_role</code>, <code>user_permission</code>, <code>user_outlet</code></td><td><code>terminal</code> carries <code>seq_block_start/end/current</code> for <span class="ref">BR-6</span></td></tr>
+            <tr><td>Catalogue</td><td><code>product</code>, <code>category</code>, <code>brand</code>, <code>unit</code>, <code>product_unit</code>, <code>product_barcode</code>, <code>product_outlet_price</code>, <code>price_history</code></td><td>Barcodes bind to a <em>unit</em>, not just a product <span class="ref">FR-PROD-04</span></td></tr>
+            <tr><td>Inventory</td><td><code>stock_level</code>, <code>inventory_movement</code></td><td><code>PRIMARY KEY (product_id, outlet_id)</code>. Movements are insert-only.</td></tr>
+            <tr><td>Sales</td><td><code>sale</code>, <code>sale_item</code>, <code>payment</code>, <code>sale_void</code>, <code>held_sale</code></td><td>Held carts are not sales and live in their own table</td></tr>
+            <tr><td>Purchasing</td><td><code>supplier</code>, <code>goods_receipt</code>, <code>goods_receipt_item</code></td><td>Receipt recalculates weighted average cost <span class="ref">BR-4</span></td></tr>
+            <tr><td>Cash</td><td><code>shift</code>, <code>cash_movement</code></td><td>Blind count; variance revealed only after submission <span class="ref">BR-14</span></td></tr>
+            <tr><td>Parties</td><td><code>customer</code>, <code>customer_type</code></td><td>Deactivation, never deletion <span class="ref">BR-17</span></td></tr>
+            <tr><td>Audit</td><td><code>audit_log</code></td><td>Append-only, with no application path to edit or delete <span class="ref">BR-15</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Constraints that carry business meaning</h3>
+      <p>
+        These are not incidental indexes. Each one is a business rule the database enforces so that
+        no code path can bypass it.
+      </p>
+      <ul>
+        <li><code>UNIQUE(shift.user_id) WHERE status='open'</code> and <code>UNIQUE(shift.terminal_id) WHERE status='open'</code> — one open shift per user and per terminal <span class="ref">BR-13</span></li>
+        <li><code>UNIQUE(sale.uuid)</code> and <code>UNIQUE(payment.uuid)</code> — idempotency on retries <span class="ref">BR-7</span></li>
+        <li><code>UNIQUE(sale.receipt_number)</code> — gapless, never reused <span class="ref">BR-6</span></li>
+        <li><code>CHECK(stock_level.quantity_base &gt;= 0)</code>, lifted only on the explicit flagged oversell path <span class="ref">BR-9</span></li>
+        <li><code>UNIQUE(product.sku)</code>, <code>UNIQUE(product_barcode.barcode)</code>, <code>UNIQUE(customer.phone)</code></li>
+        <li>Trigram index on <code>product(name, sku, description)</code> for the 300&nbsp;ms search target <span class="ref">NFR-1</span></li>
+      </ul>
+
+      <div class="note good">
+        <span class="tag">Local-first makes NFR-1 easier</span>
+        <p>
+          The 300&nbsp;ms search target was written against a network round trip to a shared
+          catalogue of 3,000 products. On a local Postgres, serving only the slice its own shop
+          stocks, the working set sits in shared buffers and the query never leaves the machine.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================================= -->
+    <section id="rules">
+      <h2><span class="n">04</span> Rules the server owns</h2>
+      <p>
+        Seventeen business rules govern the system and override any conflicting requirement. The
+        interface is never the only control <span class="ref">NFR-9</span> — every rule below is
+        enforced server-side regardless of what the frontend already does.
+      </p>
+
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Rule</th><th>Obligation</th><th>Enforced at</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>BR-1</td><td>Stock is never on the product record — always per product per outlet</td><td>Schema</td></tr>
+            <tr><td>BR-2</td><td>Every stock change writes a movement row; level equals the sum of its movements</td><td>Service + nightly job</td></tr>
+            <tr><td>BR-3</td><td>Completed sales are immutable; correction is by void with reversing movements</td><td>Service</td></tr>
+            <tr><td>BR-4</td><td>Weighted average cost per outlet, recalculated on receipt</td><td><code>rules.Costing</code></td></tr>
+            <tr><td>BR-5</td><td>Cost frozen on the sale line at the moment of sale</td><td>Service</td></tr>
+            <tr><td>BR-6</td><td>Receipt numbers per outlet, gapless, never reused, from a pre-allocated block</td><td><code>rules.ReceiptSequence</code></td></tr>
+            <tr><td>BR-7</td><td>Client-generated UUID; a second submission is rejected</td><td>Unique constraint</td></tr>
+            <tr><td>BR-8</td><td>Stock decrement in a transaction with a row lock and availability check</td><td><code>@Lock(PESSIMISTIC_WRITE)</code></td></tr>
+            <tr><td>BR-9</td><td>Negative stock blocked unless <code>stock.oversell</code>; movement flagged</td><td>Service + CHECK</td></tr>
+            <tr><td>BR-10</td><td>Below floor price requires <code>sale.approve_below_floor</code>; approver recorded</td><td>Service</td></tr>
+            <tr><td>BR-11</td><td>Money in pesewas as integers; half-up, per line, totals from rounded lines</td><td><code>rules.Money</code></td></tr>
+            <tr><td>BR-12</td><td>Quantities to 3 decimal places in the base unit</td><td><code>rules.Quantity</code></td></tr>
+            <tr><td>BR-13</td><td>One open shift per user and per terminal</td><td>Partial unique index</td></tr>
+            <tr><td>BR-14</td><td>Expected cash formula; counted cash entered blind</td><td>Service</td></tr>
+            <tr><td>BR-15</td><td>Audit log append-only, including for the Owner</td><td>No update/delete path</td></tr>
+            <tr><td>BR-16</td><td>No user may alter their own permissions</td><td>Service guard</td></tr>
+            <tr><td>BR-17</td><td>Deactivation, never deletion</td><td>Service</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note watch">
+        <span class="tag">BR-8 still matters — for a different reason than the PRD gives</span>
+        <p>
+          With one terminal per outlet and non-overlapping catalogues, two terminals can never
+          contend for the same <code>stock_level</code> row. The lock earns its keep on a path the
+          PRD does not name: <strong>the storekeeper receiving goods on a tablet while the cashier
+          sells the same product at the till.</strong> That happens weekly. Test that, not a
+          two-terminal race that cannot occur.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================================= -->
+    <section id="drift">
+      <h2><span class="n">05</span> The drift problem</h2>
+      <p>
+        Two languages now enforce the same money and permission rules. Drift between them is the
+        failure mode that produces unexplainable shift variances months after go-live — small,
+        intermittent, and very expensive to diagnose. This section is the defence.
+      </p>
+
+      <h3>The rounding mismatch, measured</h3>
+      <p>
+        <code>money.ts</code> nudges with <code>Number.EPSILON</code> to defeat float error. Near
+        100 the gap between doubles is roughly 1.4&nbsp;×&nbsp;10⁻¹⁴ — far larger than EPSILON — so
+        the nudge does nothing and the value rounds down. Java's <code>BigDecimal</code> rounds up.
+        Run against the real implementation:
+      </p>
+
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Input</th><th class="num">money.ts today</th><th class="num">BigDecimal HALF_UP</th><th>Verdict</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="num">0.125</td><td class="num">0.13</td><td class="num">0.13</td><td>agree</td></tr>
+            <tr><td class="num">2.675</td><td class="num">2.68</td><td class="num">2.68</td><td>agree</td></tr>
+            <tr><td class="num">1.115</td><td class="num">1.12</td><td class="num">1.12</td><td>agree</td></tr>
+            <tr><td class="num">1.005</td><td class="num">1.00</td><td class="num">1.01</td><td><span class="pill risk">Differs</span></td></tr>
+            <tr><td class="num">0.145</td><td class="num">0.14</td><td class="num">0.15</td><td><span class="pill risk">Differs</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        Java is the one that is correct. Replicating the JavaScript bug would be the wrong fix —
+        change the frontend instead. Normalising the scaled value before rounding brings
+        <code>money.ts</code> into agreement on every case tested:
+      </p>
+
+<pre><code>// src/money.ts — BR-11
+export function roundMoney(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  const sign = value &lt; 0 ? -1 : 1;
+  return (sign * Math.round(
+    Number((Math.abs(value) * 100).toPrecision(12))
+  )) / 100;
+}</code></pre>
+
+      <p>
+        Apply the same normalisation to <code>toPesewas</code>. This is a week-1 task and must land
+        before any sale path is written on either side.
+      </p>
+
+      <h3>Shared test vectors</h3>
+      <p>
+        The durable fix is a single file that both implementations are tested against, so they
+        cannot silently disagree:
+      </p>
+
+<pre><code>docs/contract/test-vectors.json
+  ├── money            inputs → expected pesewas          BR-11
+  ├── quantity         inputs → expected 3dp base units   BR-12
+  ├── weightedAvgCost  (onHand, avg, recvQty, recvCost) → new avg   BR-4
+  ├── receiptNumber    (outlet, terminal, seq) → formatted string   BR-6
+  ├── barcodeResolve   code → { productSku, unitName, factor }      FR-PROD-04
+  └── permissions      role → resolved code list, plus overrides    §6
+
+read by →  src/contract-check.ts        (npm run check)
+read by →  RulesVectorTest.java         (mvn test)</code></pre>
+
+      <div class="note danger">
+        <span class="tag">Non-negotiable</span>
+        <p>
+          Neither implementation gets its own private expectations. If a vector needs to change,
+          it changes in one file and both sides fail together until they agree. This is the only
+          mechanism keeping a TypeScript frontend and a Java backend honest about money.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================================= -->
+    <section id="permissions">
+      <h2><span class="n">06</span> Permissions</h2>
+      <p>
+        A role supplies a baseline; per-user overrides grant or revoke individual codes on top of
+        it <span class="ref">FR-USER-03</span>. Resolution happens server-side on every request.
+      </p>
+
+      <div class="note watch">
+        <span class="tag">Discrepancy to resolve in week 1</span>
+        <p>
+          <code>permissions.ts</code> defines <strong>33</strong> codes. The PRD §6 matrix
+          documents <strong>31</strong>. The two extras are <code>stock.transfer</code> (Stage 3,
+          stock movement between outlets) and <code>customer.credit</code> (Stage 2, credit sales).
+          The delivery plan compounds it by referring to "the 31 codes".
+        </p>
+        <p>
+          <strong>Recommendation:</strong> seed all 33, so no migration is needed when Stage 2 and 3
+          land, and leave the two deferred codes ungranted on every role including Owner. Then
+          amend <code>contract-check.ts</code>, which currently asserts the Owner holds every code
+          — an assertion that would otherwise force you to grant capabilities that have no
+          endpoints behind them.
+        </p>
+      </div>
+
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Role</th><th class="num">Codes</th><th>Scope</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Owner</td><td class="num">33</td><td>Whole business, both outlets. Sole holder of <code>user.manage</code>, <code>outlet.view_all</code>, <code>settings.general</code>, <code>product.import</code></td></tr>
+            <tr><td>Manager</td><td class="num">28</td><td>One outlet, operational. Approves below-floor sales and voids, closes the day</td></tr>
+            <tr><td>Cashier</td><td class="num">7</td><td>Sell, discount to limit, reprint, open and close own shift. No cost, no profit, no reports</td></tr>
+            <tr><td>Storekeeper</td><td class="num">7</td><td>Catalogue and stock. Sees cost, cannot sell, cannot see reports</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Enforcement</h4>
+      <ul>
+        <li>Argon2id for passwords; PINs hashed separately with their own salt <span class="ref">NFR-8</span></li>
+        <li>Method-level <code>@PreAuthorize("hasAuthority('sale.void')")</code> on every mutating endpoint</li>
+        <li>Rate limiting on authentication and approval endpoints <span class="ref">NFR-10</span></li>
+        <li>A guard rejecting any permission change whose subject is the acting user <span class="ref">BR-16</span></li>
+        <li>Cashier's <code>sale.view_all</code> resolves to own-sales-only, not a blanket grant</li>
+      </ul>
+
+      <div class="note watch">
+        <span class="tag">Local-first changes the threat model</span>
+        <p>
+          The database now sits on a shop-floor PC. Physical access is data access. Set a real
+          Postgres password rather than trust authentication, run the service under a dedicated
+          Windows account, and do not enable remote connections. Full disk encryption is worth
+          raising with the client but is their call, not a Stage 1 deliverable.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================================= -->
+    <section id="packages">
+      <h2><span class="n">07</span> Package structure</h2>
+      <p>
+        One package carries more weight than the rest: <code>rules</code> holds the logic ported
+        from the frontend, kept free of Spring and of persistence so the test vectors can exercise
+        it directly.
+      </p>
+
+<pre><code>gh.giftedlabs.pos
+├── config/          security, Flyway, Jackson, printing beans
+├── rules/           ◄ ported from the frontend — no Spring, no JPA
+│   ├── Money.java              BR-11   ← money.ts
+│   ├── Quantity.java           BR-12   ← money.ts
+│   ├── Costing.java            BR-4    ← stockCosting.ts
+│   ├── ReceiptSequence.java    BR-6    ← receiptSequence.ts
+│   ├── BarcodeResolver.java    FR-PROD-04 ← catalogue.ts
+│   ├── Permissions.java        §6      ← permissions.ts
+│   └── ProductImportRules.java FR-PROD-09 ← productImport.ts
+├── domain/
+│   ├── identity/    outlet, terminal, user, role, permission
+│   ├── catalogue/   product, unit, barcode, pricing
+│   ├── inventory/   stock level, movement, goods receipt
+│   ├── sales/       sale, item, payment, void, held cart
+│   ├── cash/        shift, cash movement
+│   └── party/       customer, supplier
+├── api/             controllers + request/response DTOs
+├── reporting/       JdbcTemplate queries, one class per report
+├── printing/        ESC/POS builder, spooler transport
+└── ops/             nightly reconciliation, backup, seq block issue
+
+src/main/resources
+├── db/migration/    V1__identity.sql … Flyway, the only DDL
+└── static/          Vite build output — the frontend ships in the JAR</code></pre>
+
+      <p>
+        <code>rules</code> depends on nothing else in the tree. Everything else may depend on it.
+        That single constraint is what keeps the vector tests meaningful.
+      </p>
+    </section>
+
+    <!-- ============================================= -->
+    <section id="api">
+      <h2><span class="n">08</span> API surface</h2>
+      <p>
+        The contract is frozen and machine-checked against the frontend. These are the groups the
+        backend must satisfy; shapes come from <code>types.ts</code> and are verified by
+        <code>npm run check</code>.
+      </p>
+
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Group</th><th>Covers</th><th>Notable</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Auth</td><td>Sign in, sign out, session, manager PIN verification</td><td>PIN check is an approval primitive, not a login</td></tr>
+            <tr><td>Catalogue</td><td>Products, units, barcodes, categories, brands, pricing, import</td><td>Search filters to the outlet's own stocked slice</td></tr>
+            <tr><td>Inventory</td><td>Stock levels, movements, adjustments, goods receipt</td><td>Receipt recalculates weighted average in one transaction</td></tr>
+            <tr><td>Sales</td><td>Create, void, reprint, history, held carts</td><td>Idempotent on client UUID; issues receipt number from block</td></tr>
+            <tr><td>Payments</td><td>Cash, mobile money, card, split tender</td><td>Own UUID, separately idempotent</td></tr>
+            <tr><td>Cash</td><td>Open shift, cash movements, blind close, end of day</td><td>Variance withheld until after submission</td></tr>
+            <tr><td>Parties</td><td>Customers, suppliers</td><td>Deactivate, never delete</td></tr>
+            <tr><td>Reports</td><td>Sixteen reports plus owner and manager dashboards</td><td>Profit fields omitted without <code>report.view_profit</code></td></tr>
+            <tr><td>Admin</td><td>Users, roles, overrides, outlets, terminals, settings, audit</td><td>Audit is read-only over the wire</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note watch">
+        <span class="tag">Count check</span>
+        <p>
+          <span class="ref">FR-RPT-04</span> names sixteen reports. The delivery plan refers to
+          "the fifteen report queries". Recount against the PRD list when you scope week 4 —
+          one of the two documents is wrong.
+        </p>
+      </div>
+
+      <p>
+        Every mutating endpoint carries Bean Validation on its request body and a
+        <code>@PreAuthorize</code> on its permission code. Responses omit fields the caller has no
+        right to see rather than nulling them — a cashier's payload must contain no cost field at
+        all <span class="ref">§11.7</span>.
+      </p>
+    </section>
+
+    <!-- ============================================= -->
+    <section id="printing">
+      <h2><span class="n">09</span> Printing</h2>
+      <p>
+        Receipt layout is specified in PRD §9. The printer is a USB thermal unit on the same
+        machine, addressed through the Windows spooler in RAW mode.
+      </p>
+      <ul>
+        <li>Receipt begins printing within one second of sale completion <span class="ref">NFR-3</span></li>
+        <li>Printer, paper width, test print and auto-print are configurable per terminal <span class="ref">FR-RCPT-08</span>, <span class="ref">FR-SET-05</span></li>
+        <li>A sale completed with the printer switched off is never lost; the receipt prints on retry <span class="ref">§11.2</span></li>
+        <li>Reprints are permitted under <code>sale.reprint</code> and are marked as reprints on the slip</li>
+      </ul>
+
+      <div class="note danger">
+        <span class="tag">Buy the printer in week 1</span>
+        <p>
+          This was the cheapest de-risking item in the original plan and it still is. Without a
+          physical ESC/POS device on the desk, acceptance criterion 2 cannot be signed off and
+          printing stays unknown until install day. Nothing about local-first changes that.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================================= -->
+    <section id="backup">
+      <h2><span class="n">10</span> Backup &amp; recovery</h2>
+      <p>
+        This is the real cost of local-first, and the one place the architecture is weaker than
+        managed hosting. It is solvable, but only if it is built in week 2 rather than week 6.
+      </p>
+
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Requirement</th><th>Target</th><th>Mechanism</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="ref">NFR-6</span></td><td>Daily off-site, 30-day retention</td><td>Nightly <code>pg_dump</code>, gzipped, uploaded to Cloudflare R2 with retry until acknowledged</td></tr>
+            <tr><td><span class="ref">NFR-7</span></td><td>RPO 15 minutes</td><td>WAL archiving to a second local disk, plus the nightly off-site dump</td></tr>
+            <tr><td><span class="ref">NFR-7</span></td><td>RTO 4 hours</td><td>Reinstall the MSI on a replacement PC and restore the most recent dump</td></tr>
+            <tr><td><span class="ref">FR-SET-07</span></td><td>Visible backup status</td><td>Settings surfaces last successful backup and restore history</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note danger">
+        <span class="tag">The failure this prevents</span>
+        <p>
+          A counter PC's disk dying takes that shop's entire trading history with it. There is no
+          managed provider standing behind this any more. The nightly upload is not a nice-to-have
+          — it is the only thing between the client and total loss, and it must be proven working
+          at both shops before go-live, not assumed.
+        </p>
+      </div>
+
+      <p>
+        A restore is actually performed during week 6, into a scratch database, and the result
+        recorded. An untested backup is not a backup.
+      </p>
+    </section>
+
+    <!-- ============================================= -->
+    <section id="install">
+      <h2><span class="n">11</span> Packaging &amp; install</h2>
+      <p>
+        <code>jpackage</code> produces a Windows MSI carrying a trimmed JRE, so the counter PC
+        needs no Java installed and no runtime to keep patched.
+      </p>
+      <ul>
+        <li>Spring Boot registers as a Windows service and starts on boot — the shop must be able to trade after a power cut without anyone running a command</li>
+        <li>Postgres installs alongside as its own service, with a generated password stored in the app's configuration</li>
+        <li>First run walks through outlet identity, terminal code, receipt sequence block and printer selection</li>
+        <li>A desktop shortcut opens Chrome directly at <code>localhost:8080</code> in kiosk mode</li>
+      </ul>
+
+      <div class="note watch">
+        <span class="tag">Updates are now a site visit</span>
+        <p>
+          Every fix means touching two Windows machines instead of pushing to a host. Budget
+          remote-desktop sessions through hypercare, and consider a version check that tells the
+          operator an update is available rather than discovering it on a phone call.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================================= -->
+    <section id="online">
+      <h2><span class="n">12</span> Path to online</h2>
+      <p>
+        Going online later must not be a rewrite. It stays cheap only if four things hold from
+        week 1 — all of them free now, all of them expensive to retrofit into live trading data.
+      </p>
+
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Must hold</th><th>Cost now</th><th>Cost if retrofitted</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>UUID primary keys</td><td>Nothing</td><td>Rewrite every foreign key across both shops' live data</td></tr>
+            <tr><td><code>outlet_id</code> on every scoped table</td><td>One column</td><td>Backfill, plus every query rewritten</td></tr>
+            <tr><td><code>synced_at</code> present and nullable</td><td>One column</td><td>Migration across live data</td></tr>
+            <tr><td>Same Postgres, same Flyway migrations both sides</td><td>Nothing</td><td>Dialect port and a second migration history</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>How the owner sees both shops while away</h3>
+      <p>
+        This is the question local-first has to answer, and it has a cheaper answer than full
+        replication — because of what the requirement actually asks for.
+        <span class="ref">FR-RPT-01</span> wants "today's sales, estimated profit, expected cash,
+        low stock count, open shifts", separately and combined. That is five numbers per outlet.
+        A summary, not a drill-down.
+      </p>
+
+<pre><code>  Inco counter PC  ──┐   POST snapshot every 15 min
+                     │   outbound only · per-outlet token
+  Radiance PC     ───┤
+                     ▼
+         ┌───────────────────────────┐
+         │  the same JAR, in cloud   │   owner opens from anywhere
+         │  --spring.profiles-       │   any browser, nothing
+         │      active=consolidator  │   installed
+         └───────────────────────────┘</code></pre>
+
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Phase</th><th>Delivers</th><th>Work</th><th>Cost</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1 · Consolidator</td>
+              <td><span class="ref">FR-RPT-01</span> in full — both outlets, separately and combined, 15 minutes stale</td>
+              <td>~3–5 days. A Spring profile on the existing JAR</td>
+              <td class="num">~$96/yr</td>
+            </tr>
+            <tr>
+              <td>2 · Full sync</td>
+              <td>Every report and drill-down remotely <span class="ref">FR-RPT-03</span> <span class="ref">FR-RPT-04</span></td>
+              <td>1–2 weeks. Widen what gets pushed; infrastructure already stands</td>
+              <td class="num">no change</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        Phase 1 is a stepping stone, not a throwaway — phase 2 extends the same push over the same
+        connection to the same instance. Both reuse the codebase, so there is no second system to
+        learn or maintain.
+      </p>
+
+      <div class="note good">
+        <span class="tag">Why this beats the original cloud plan</span>
+        <p>
+          Under the old architecture, the cloud instance going down stopped both shops trading.
+          Under this one it means the owner's dashboard is stale until it returns — the tills never
+          notice. The cloud has moved from system of record to optional convenience, which is the
+          risk posture local-first was bought for.
+        </p>
+      </div>
+
+      <h4>Two details that decide whether it is trusted</h4>
+      <ul>
+        <li>
+          <strong>Outbound only.</strong> Shops push; nothing connects inward to a counter PC. No
+          port forwarding, no static IP, no attack surface on a machine sitting on a shop floor.
+          A per-outlet token is sufficient authentication.
+        </li>
+        <li>
+          <strong>Show the staleness.</strong> "Inco — as of 14:32", and when a shop's connection
+          drops, "Radiance — last seen 2 hours ago". The dashboard must never imply live figures it
+          does not have. An owner trusting the number matters more than the number being fresh.
+        </li>
+      </ul>
+
+      <div class="note watch">
+        <span class="tag">Still needs client sign-off</span>
+        <p>
+          PRD §1.2 promises "one owner's view of the whole business" and the installation plan's
+          exit condition is that the owner sees both outlets on one dashboard. Phase 1 delivers
+          that — but it sits outside the six weeks, and until it ships the owner sees one shop at a
+          time. Agree in week 1 whether phase 1 is inside this engagement or quoted separately.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================================= -->
+    <section id="timeline">
+      <h2><span class="n">13</span> Six weeks</h2>
+      <p>
+        Same six weeks, healthier shape. The offline queue and the separate print service are
+        gone — roughly two weeks of the riskiest work — replaced by about one week of predictable
+        packaging and backup work. Week 6 is no longer a cliff.
+      </p>
+
+      <div class="week">
+        <div class="week-n">Week 1</div>
+        <div>
+          <h4>Foundations</h4>
+          <ul>
+            <li>Spring Boot skeleton; Flyway migrations from §7 with UUID keys, <code>outlet_id</code>, <code>synced_at</code></li>
+            <li><code>rules</code> package ported; <code>test-vectors.json</code> read by both sides</li>
+            <li><code>money.ts</code> rounding fix applied and re-frozen</li>
+            <li>Argon2id passwords and separate PIN hashing; sessions; the 33 permission codes</li>
+            <li>Resolve the 31-vs-33 discrepancy; reword acceptance criterion 4; order the thermal printer</li>
+          </ul>
+          <p class="exit"><b>Exit</b> A cashier signs in against the local API and is refused a manager-only endpoint by the server. Both test suites read the same vector file and pass.</p>
+        </div>
+      </div>
+
+      <div class="week">
+        <div class="week-n">Week 2</div>
+        <div>
+          <h4>Catalogue, stock, backups</h4>
+          <ul>
+            <li>Products, units, conversions, unit-bound barcodes; outlet-scoped search</li>
+            <li><code>stock_level</code> and <code>inventory_movement</code>; goods receipt with weighted average cost</li>
+            <li>Import endpoint reusing the frontend's validation rules</li>
+            <li><strong>Nightly backup to R2, working and verified</strong> — moved forward from week 6</li>
+          </ul>
+          <p class="exit"><b>Exit</b> Receiving three drums of 100&nbsp;m cable moves stock to 300&nbsp;m against the real database, quantity equals the sum of movements, and last night's dump is in R2.</p>
+        </div>
+      </div>
+
+      <div class="week">
+        <div class="week-n">Week 3</div>
+        <div>
+          <h4>Selling</h4>
+          <ul>
+            <li>Sale, sale item, payment; idempotency on both UUIDs</li>
+            <li>Atomic decrement with row lock and availability check</li>
+            <li>Receipt number issued from the terminal's pre-allocated block</li>
+            <li>Void with reversing movements; below-floor approval recorded; flagged oversell path</li>
+          </ul>
+          <p class="exit"><b>Exit</b> A goods receipt on a tablet and a sale at the till, hitting the same product at the same moment, produce one correct outcome. The same sale submitted twice records once.</p>
+        </div>
+      </div>
+
+      <div class="week">
+        <div class="week-n">Week 4</div>
+        <div>
+          <h4>Cash, parties, reporting</h4>
+          <ul>
+            <li>Shifts, blind count, variance, cash movements, end of day</li>
+            <li>Customers and suppliers</li>
+            <li>The sixteen reports from frozen costs; gross profit, COGS, discount and void logs</li>
+          </ul>
+          <p class="exit"><b>Exit</b> A blind close records variance against the cashier, demands a note past the threshold, and the day reconciles.</p>
+        </div>
+      </div>
+
+      <div class="week">
+        <div class="week-n">Week 5</div>
+        <div>
+          <h4>Integration &amp; printing</h4>
+          <ul>
+            <li>Every view off mock state onto the API; loading, error and retry throughout</li>
+            <li>ESC/POS output on the real printer; per-terminal configuration; reprints</li>
+            <li>Vite build served from the JAR; kiosk shortcut</li>
+            <li>Search under 300&nbsp;ms against a synthetic 3,000-product catalogue</li>
+          </ul>
+          <p class="exit"><b>Exit</b> No component imports <code>mockData</code>, and a full day of trading can be done against a real receipt printer.</p>
+        </div>
+      </div>
+
+      <div class="week">
+        <div class="week-n">Week 6</div>
+        <div>
+          <h4>Packaging &amp; acceptance</h4>
+          <ul>
+            <li><code>jpackage</code> MSI with bundled JRE and Postgres; Windows service; first-run wizard</li>
+            <li>Nightly stock reconciliation job <span class="ref">NFR-17</span></li>
+            <li><strong>A restore actually performed</strong> and recorded</li>
+            <li>All twelve acceptance criteria scripted and repeatable; security pass on every endpoint</li>
+          </ul>
+          <p class="exit"><b>Exit</b> A clean Windows machine goes from MSI to a printed sale without a developer present. Power pulled mid-sale, the committed sale survives.</p>
+        </div>
+      </div>
+
+      <div class="note good">
+        <span class="tag">Where the slack went</span>
+        <p>
+          Backups moved from week 6 to week 2, and printing from week 6 to week 5. Week 6 now holds
+          only packaging and acceptance — work whose shape is known in advance. That is the first
+          version of this plan where the final week is not carrying an unsolved problem.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================================= -->
+    <section id="acceptance">
+      <h2><span class="n">14</span> Acceptance</h2>
+      <p>
+        Twelve criteria from PRD §11. Local-first changes what two of them mean, and one is
+        unsatisfiable as written.
+      </p>
+
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>#</th><th>Criterion</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="num">1</td><td>Five-line sale, scanner and keyboard only, prints, decrements the selling outlet only</td><td><span class="pill settled">Unchanged</span></td></tr>
+            <tr><td class="num">2</td><td>Sale with the printer off is not lost; prints on retry</td><td><span class="pill open">Needs the printer</span></td></tr>
+            <tr><td class="num">3</td><td>A sale submitted twice records once</td><td><span class="pill settled">Unchanged</span></td></tr>
+            <tr><td class="num">4</td><td>Two terminals racing for the last unit — one sale, one refusal</td><td><span class="pill risk">Rewrite</span></td></tr>
+            <tr><td class="num">5</td><td>Receive 3 × 100&nbsp;m, sell 12.5&nbsp;m, leaves 287.5&nbsp;m at correct weighted average</td><td><span class="pill settled">Unchanged</span></td></tr>
+            <tr><td class="num">6</td><td>Void leaves both records visible, restores stock, appears on the void report</td><td><span class="pill settled">Unchanged</span></td></tr>
+            <tr><td class="num">7</td><td>Cashier sees no cost, no profit, no reports anywhere</td><td><span class="pill settled">Unchanged</span></td></tr>
+            <tr><td class="num">8</td><td>Below-floor sale needs a manager PIN; approver stored on the sale</td><td><span class="pill settled">Simpler — PIN check is local</span></td></tr>
+            <tr><td class="num">9</td><td>Blind close records variance, requires a note past threshold</td><td><span class="pill settled">Unchanged</span></td></tr>
+            <tr><td class="num">10</td><td>Disconnect mid-sale, reconnect, exactly one correct sale at the server</td><td><span class="pill open">Reinterpret</span></td></tr>
+            <tr><td class="num">11</td><td>Accent colour change repaints every accent surface, no blue anywhere</td><td><span class="pill settled">Frontend, already met</span></td></tr>
+            <tr><td class="num">12</td><td>For every product at every outlet, quantity equals the sum of its movements</td><td><span class="pill settled">Nightly job proves it</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note danger">
+        <span class="tag">Criterion 4 cannot be demonstrated on this hardware</span>
+        <p>
+          One terminal per outlet <span class="ref">AS-4</span>, plus <code>stock_level</code> keyed
+          on <code>(product_id, outlet_id)</code>, plus non-overlapping catalogues, means the only
+          two terminals in the system can never touch the same row. Discovering this in week 6
+          would mean a criterion that cannot be signed off.
+        </p>
+        <p>
+          <strong>Proposed wording:</strong> <em>"A goods receipt and a sale hitting the same
+          product at the same outlet simultaneously produce one correct stock level, or a clear
+          refusal if stock is insufficient."</em> That tests the same lock on a collision that
+          genuinely occurs.
+        </p>
+      </div>
+
+      <div class="note watch">
+        <span class="tag">Criterion 10 needs restating</span>
+        <p>
+          There is no network in the sale path any more, so "disconnect mid-sale" is now a power
+          cut, not a dropout. Restate it against <span class="ref">NFR-5</span>: pull power
+          mid-sale, and on restart the committed sale is present exactly once and the uncommitted
+          one left no trace.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================================= -->
+    <section id="open">
+      <h2><span class="n">15</span> Open questions</h2>
+      <p>
+        Seven questions were open in PRD §13. Local-first answers two of them and adds two new
+        ones. These need the client, not the developer.
+      </p>
+
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Question</th><th>Blocks</th><th>State</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Is the consolidator (§12 phase 1) inside this engagement, or quoted separately?</td><td>Scope and sign-off — the owner has no combined view until it ships</td><td><span class="pill risk">New · blocking</span></td></tr>
+            <tr><td>Who pays for, and owns, the counter PCs now that they hold the only copy of the data?</td><td>Backup responsibility</td><td><span class="pill risk">New</span></td></tr>
+            <tr><td>Mobile money merchant account and statement format</td><td>Reconciliation presentation</td><td><span class="pill open">Still open</span></td></tr>
+            <tr><td>Are Stage 2 features the client has seen in the frontend — installments, returns, expenses — expected live?</td><td>Scope</td><td><span class="pill open">Settle in week 1</span></td></tr>
+            <tr><td>Discount ceilings, variance threshold, approval limits</td><td>Nothing — ship defaults</td><td><span class="pill settled">Configurable</span></td></tr>
+            <tr><td>Internet quality and outage duration at each shop</td><td>Was FR-SYNC scope</td><td><span class="pill settled">Moot — local-first</span></td></tr>
+            <tr><td>Connectivity at the second outlet</td><td>Was the top project risk</td><td><span class="pill settled">Moot — local-first</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================= -->
+    <section id="risks">
+      <h2><span class="n">16</span> Risks</h2>
+
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Risk</th><th>Impact</th><th>Mitigation</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Counter PC disk failure</td>
+              <td>Total loss of one shop's trading history</td>
+              <td>Nightly R2 upload built in week 2 and proven at both shops before go-live</td>
+            </tr>
+            <tr>
+              <td>Money rules drift between Java and TypeScript</td>
+              <td>Unexplainable shift variances months later</td>
+              <td>Shared <code>test-vectors.json</code> read by both suites; neither side owns private expectations</td>
+            </tr>
+            <tr>
+              <td>Client expects the combined dashboard at handover</td>
+              <td>Headline feature missing on the day</td>
+              <td>The consolidator (§12 phase 1) delivers it for ~$96/yr and 3–5 days. Agree in week 1 whether it is in scope or quoted separately — written, not verbal</td>
+            </tr>
+            <tr>
+              <td>No printer to develop against</td>
+              <td>Printing untested; criterion 2 cannot close</td>
+              <td>Order in week 1. Unchanged from the original plan and still the cheapest de-risking available</td>
+            </tr>
+            <tr>
+              <td>Two databases drift on catalogue and prices</td>
+              <td>Same product priced differently per shop</td>
+              <td>Low exposure — the shops stock different goods. Revisit if overlap grows</td>
+            </tr>
+            <tr>
+              <td>Updates require site visits</td>
+              <td>Slow hypercare, fixes batched</td>
+              <td>Version check in the app; remote-desktop sessions budgeted into the deployment window</td>
+            </tr>
+            <tr>
+              <td>Stage 2 features assumed in scope because they exist in the frontend</td>
+              <td>Silent scope creep of weeks</td>
+              <td>Settle in week 1 — installments, returns and expenses are built but out of Stage 1</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <span>Stage 1 · Backend blueprint</span>
+    <span>Supersedes DELIVERY-PLAN.md where they conflict</span>
+    <span>Governed by PRD v1.0</span>
+  </footer>
+
+</div>

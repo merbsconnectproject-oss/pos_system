@@ -65,6 +65,46 @@ import {
 import { canAccessTab, resolvePermissions } from './permissions';
 import { roundMoney } from './money';
 import { DEFAULT_ACCENT, applyAccent } from './accent';
+import { authApi, AuthApiError, onSessionSignal, type AuthSession } from './authApi';
+
+const localOutletId = (session: AuthSession, outlets: Outlet[]): OutletId => {
+  const active = session.activeOutlet;
+  if (!active) return outlets.find((outlet) => outlet.id !== 'all-outlets')?.id || outlets[0]?.id;
+  return outlets.find((outlet) =>
+    outlet.receiptPrefix.toLowerCase() === active.code.toLowerCase()
+    || outlet.name.toLowerCase() === active.name.toLowerCase()
+  )?.id || active.id;
+};
+
+const accountFromSession = (session: AuthSession, outlets: Outlet[]): UserAccount => {
+  const role = session.roles.find((value) => ['owner', 'manager', 'cashier', 'storekeeper'].includes(value)) || 'cashier';
+  const allServerOutlets = [session.activeOutlet, ...session.outletChoices]
+    .filter((outlet): outlet is NonNullable<AuthSession['activeOutlet']> => outlet !== null)
+    .filter((outlet, index, list) => list.findIndex((candidate) => candidate.id === outlet.id) === index)
+    .map((outlet) => ({
+      ...outlet,
+      localId: outlets.find((candidate) =>
+        candidate.receiptPrefix.toLowerCase() === outlet.code.toLowerCase()
+        || candidate.name.toLowerCase() === outlet.name.toLowerCase()
+      )?.id || outlet.id,
+    }));
+  return {
+    id: session.userId,
+    fullName: session.fullName,
+    username: session.username,
+    email: '',
+    phone: '',
+    role,
+    outletId: session.mustChooseOutlet || session.outletChoices.length > 1
+      ? 'all-outlets'
+      : localOutletId(session, outlets),
+    active: true,
+    pinCode: '',
+    effectivePermissions: session.permissions,
+    serverOutlets: allServerOutlets,
+    lastLogin: new Date().toLocaleString('en-GB'),
+  };
+};
 
 export default function App() {
   const [outlets, setOutlets] = useState<Outlet[]>(OUTLETS);
@@ -72,6 +112,7 @@ export default function App() {
 
   // Authenticated session (null until a staff member signs in)
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [sessionLockReason, setSessionLockReason] = useState<'manual' | 'expired' | null>(null);
   const [unlockPin, setUnlockPin] = useState('');
   const [unlockError, setUnlockError] = useState<string | null>(null);
@@ -92,7 +133,24 @@ export default function App() {
     const handleOffline = () => setIsOffline(true);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
+        return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    authApi.current()
+      .then((session) => {
+        if (!active) return;
+        setCurrentUser(accountFromSession(session, OUTLETS));
+        setCurrentOutletId(localOutletId(session, OUTLETS));
+      })
+      .catch((failure) => {
+        if (active && !(failure instanceof AuthApiError && failure.status === 401)) {
+          setAppErrorReference(`AUTH-${Date.now().toString().slice(-6)}`);
+        }
+      })
+      .finally(() => { if (active) setAuthLoading(false); });
+    return () => { active = false; };
   }, []);
 
   // Core entities state
@@ -139,14 +197,25 @@ export default function App() {
 
   const currentOutlet = outlets.find((o) => o.id === currentOutletId) || outlets[0];
   const roleBaseline = rolesPermissions.find((item) => item.role === currentUser?.role)?.permissions;
-  const permissions = resolvePermissions(roleBaseline || [], currentUser?.permissionOverrides);
+  const permissions = resolvePermissions(
+    currentUser?.effectivePermissions || roleBaseline || [],
+    currentUser?.effectivePermissions ? undefined : currentUser?.permissionOverrides,
+  );
   const can = permissions.has;
   const handleSelectOutlet = (outletId: OutletId) => {
     // FR-OUT-05/06: only outlet.view_all may leave the assigned branch.
     if (!currentUser) return;
     if (!can('outlet.view_all') && outletId !== currentUser.outletId) return;
     if (currentUser.outletId !== 'all-outlets' && outletId !== currentUser.outletId) return;
-    setCurrentOutletId(outletId);
+    const serverOutlet = currentUser.serverOutlets?.find((outlet) => outlet.localId === outletId);
+    if (!serverOutlet) {
+      setCurrentOutletId(outletId);
+      return;
+    }
+    void authApi.selectOutlet(serverOutlet.id).then((session) => {
+      setCurrentOutletId(localOutletId(session, outlets));
+      setCurrentUser(accountFromSession(session, outlets));
+    }).catch(() => setAppErrorReference(`AUTH-${Date.now().toString().slice(-6)}`));
   };
   const validTabs = new Set([
     'dashboard',
@@ -238,27 +307,13 @@ export default function App() {
     // FR-AUTH-05 / K-08: the idle lock period is configurable, not a constant.
     const idleTimeoutMs = Math.max(1, generalSettings.thresholds.idleLockMinutes) * 60 * 1000;
     let timeoutId = window.setTimeout(() => {
-      setSessionLockReason('expired');
-      appendAuditLog({
-        actor: currentUser.fullName,
-        action: 'SESSION_EXPIRED_LOCK',
-        entity: `User: ${currentUser.username}`,
-        outletName: currentOutlet.name,
-        details: 'Idle timeout reached. The terminal was locked without ending the shift.',
-      });
+      handleLockSession('expired');
     }, idleTimeoutMs);
 
     const resetIdleTimer = () => {
       window.clearTimeout(timeoutId);
       timeoutId = window.setTimeout(() => {
-        setSessionLockReason('expired');
-        appendAuditLog({
-          actor: currentUser.fullName,
-          action: 'SESSION_EXPIRED_LOCK',
-          entity: `User: ${currentUser.username}`,
-          outletName: currentOutlet.name,
-          details: 'Idle timeout reached. The terminal was locked without ending the shift.',
-        });
+        handleLockSession('expired');
       }, idleTimeoutMs);
     };
 
@@ -807,95 +862,56 @@ export default function App() {
     setAuditLogs((prev) => [stamped, ...prev]);
   };
 
-  const handleAuthenticated = (user: UserAccount, selectedOutletId?: OutletId) => {
-    const signedInAt =
-      new Date().toLocaleDateString('en-GB') +
-      ' ' +
-      new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    setUsers((prev) =>
-      prev.map((u) =>
-        u.id === user.id
-          ? {
-              ...u,
-              ...user,
-              lastLogin: signedInAt,
-            }
-          : u
-      )
-    );
-
-    // Open the session on the branch this account is assigned to.
-    const scopedOutlet =
-      selectedOutletId ||
-      (user.outletId === 'all-outlets'
-        ? outlets.find((o) => o.id !== 'all-outlets' && o.active !== false)?.id || outlets[0]?.id
-        : outlets.find((o) => o.id === user.outletId)?.id || outlets[0]?.id);
-    if (scopedOutlet) setCurrentOutletId(scopedOutlet);
-
-    setCurrentUser({ ...user, lastLogin: signedInAt });
+  const handleAuthenticated = (session: AuthSession) => {
+    setCurrentOutletId(localOutletId(session, outlets));
+    setCurrentUser(accountFromSession(session, outlets));
+    setAuthLoading(false);
     setActiveTab('dashboard');
-
-    appendAuditLog({
-      actor: user.fullName,
-      action: 'USER_SIGN_IN',
-      entity: `User: ${user.username}`,
-      outletName:
-        selectedOutletId
-          ? outlets.find((o) => o.id === selectedOutletId)?.name || 'Selected Branch'
-          : user.outletId === 'all-outlets'
-          ? 'All Outlets (HQ)'
-          : outlets.find((o) => o.id === user.outletId)?.name || 'Unassigned Branch',
-      details: `Signed in to the terminal as ${user.role.replace('_', ' ')}.`,
-    });
   };
 
   const handleLockSession = (reason: 'manual' | 'expired' = 'manual') => {
     if (!currentUser) return;
-    setUnlockPin('');
-    setUnlockError(null);
-    setSessionLockReason(reason);
-    appendAuditLog({
-      actor: currentUser.fullName,
-      action: reason === 'expired' ? 'SESSION_EXPIRED_LOCK' : 'SCREEN_LOCK',
-      entity: `User: ${currentUser.username}`,
-      outletName: currentOutlet.name,
-      details:
-        reason === 'expired'
-          ? 'Idle timeout reached. The terminal was locked without ending the shift.'
-          : 'Locked the terminal without ending the active shift.',
+    void authApi.lock().then(() => {
+      setUnlockPin('');
+      setUnlockError(null);
+      setSessionLockReason(reason);
+    }).catch((failure) => {
+      // A dead session arrives as an 'ended' signal and is handled centrally;
+      // anything else here is a real server fault.
+      const ended = failure instanceof AuthApiError && failure.status === 401;
+      if (!ended) setAppErrorReference(`AUTH-${Date.now().toString().slice(-6)}`);
     });
   };
 
   const handleUnlockSession = (e: FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
-    if (unlockPin !== currentUser.pinCode) {
-      setUnlockError('Incorrect PIN. Enter the shift owner PIN to unlock this terminal.');
-      return;
-    }
-    setSessionLockReason(null);
-    setUnlockPin('');
-    setUnlockError(null);
-    appendAuditLog({
-      actor: currentUser.fullName,
-      action: 'SCREEN_UNLOCK',
-      entity: `User: ${currentUser.username}`,
-      outletName: currentOutlet.name,
-      details: 'Unlocked the terminal with the shift owner PIN.',
+    void authApi.unlock(unlockPin).then(() => {
+      setSessionLockReason(null);
+      setUnlockPin('');
+      setUnlockError(null);
+    }).catch((failure) => {
+      if (!(failure instanceof AuthApiError)) {
+        setUnlockError('Could not unlock the terminal.');
+        return;
+      }
+      // PIN_INCORRECT leaves the session and the open shift alone, so the
+      // message belongs on the unlock form. Anything else has already been
+      // published as a session signal.
+      setUnlockError(failure.code === 'PIN_INCORRECT'
+        ? failure.message
+        : 'Could not unlock the terminal. Sign in again if this continues.');
     });
   };
 
-  const handleSignOut = () => {
-    if (currentUser) {
-      appendAuditLog({
-        actor: currentUser.fullName,
-        action: 'USER_SIGN_OUT',
-        entity: `User: ${currentUser.username}`,
-        outletName: currentOutlet.name,
-        details: 'Ended the terminal session.',
-      });
-    }
+  /**
+   * Return the UI to the sign-in screen without telling the server anything.
+   *
+   * Kept separate from {@link handleSignOut} because the server-ended case must
+   * not call `/sign-out`: that request would 401, publish another 'ended'
+   * signal, and tear down again in a loop.
+   */
+  const resetToSignIn = () => {
     setCurrentUser(null);
     setSessionLockReason(null);
     setUnlockPin('');
@@ -905,6 +921,25 @@ export default function App() {
     setSearchOpen(false);
     setShiftModalOpen(false);
   };
+
+  const handleSignOut = () => {
+    if (currentUser) void authApi.signOut().catch(() => undefined);
+    resetToSignIn();
+  };
+
+  // The server can lock or end this session on its own — an idle terminal with
+  // an open shift, or an account deactivated mid-shift. Those arrive on
+  // whichever request happens to be in flight, so they are handled once here
+  // instead of at every call site.
+  useEffect(() => onSessionSignal((signal) => {
+    if (signal === 'ended') {
+      resetToSignIn();
+      return;
+    }
+    setUnlockPin('');
+    setUnlockError(null);
+    setSessionLockReason((current) => current ?? 'expired');
+  }));
 
   const handleUpdateUserPassword = (userId: string, newPassword: string) => {
     setUsers((prev) =>
@@ -949,16 +984,20 @@ export default function App() {
   };
 
   // Gate the whole application behind the sign-in flow.
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-sm font-bold text-white">
+        Starting secure session…
+      </div>
+    );
+  }
+
   if (!currentUser) {
     return (
       <AuthView
-        users={users}
-        outlets={outlets}
         companyName={generalSettings.companyName}
         accentColor={accentColor}
         onAuthenticated={handleAuthenticated}
-        onUpdateUserPassword={handleUpdateUserPassword}
-        onAddAuditLog={appendAuditLog}
       />
     );
   }

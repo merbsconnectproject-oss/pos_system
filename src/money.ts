@@ -17,18 +17,28 @@
  * therefore total 0.26, not 0.25.
  */
 
-/** Half-up to 2dp. JavaScript's Math.round is half-up for positives but half-away-from-zero is wanted for negatives (refunds). */
+/**
+ * Half-up to 2dp. JavaScript's Math.round is half-up for positives but
+ * half-away-from-zero is wanted for negatives (refunds).
+ *
+ * The scaled value is normalised with `toPrecision(12)` before rounding.
+ * A `Number.EPSILON` nudge is not enough: near 100 the gap between adjacent
+ * doubles is ~1.4e-14, far larger than EPSILON, so `1.005 * 100` sits at
+ * 100.49999999999999 and rounds *down*. That disagreed with the server's
+ * `BigDecimal.setScale(2, HALF_UP)` by one pesewa on values like 1.005 and
+ * 0.145. Both sides are now pinned by docs/contract/test-vectors.json.
+ */
 export function roundMoney(value: number): number {
   if (!Number.isFinite(value)) return 0;
   const sign = value < 0 ? -1 : 1;
-  return (sign * Math.round(Math.abs(value) * 100 + Number.EPSILON)) / 100;
+  return (sign * Math.round(Number((Math.abs(value) * 100).toPrecision(12)))) / 100;
 }
 
-/** Major units (GH₵ 18.50) → wire format (1850). */
+/** Major units (GH₵ 18.50) → wire format (1850). Same normalisation as `roundMoney`. */
 export function toPesewas(major: number): number {
   if (!Number.isFinite(major)) return 0;
   const sign = major < 0 ? -1 : 1;
-  return sign * Math.round(Math.abs(major) * 100 + Number.EPSILON);
+  return sign * Math.round(Number((Math.abs(major) * 100).toPrecision(12)));
 }
 
 /** Wire format (1850) → major units (18.50). */
@@ -49,11 +59,15 @@ export function sumMoney(values: number[]): number {
   return roundMoney(values.reduce((total, value) => total + roundMoney(value), 0));
 }
 
-/** BR-12: quantities are stored to 3 decimal places in the base unit. */
+/**
+ * BR-12: quantities are stored to 3 decimal places in the base unit.
+ * Normalised the same way as `roundMoney` — see the note there — so this
+ * agrees with the server's `setScale(3, HALF_UP)` on cut lengths.
+ */
 export function roundQuantity(value: number): number {
   if (!Number.isFinite(value)) return 0;
   const sign = value < 0 ? -1 : 1;
-  return (sign * Math.round(Math.abs(value) * 1000 + Number.EPSILON)) / 1000;
+  return (sign * Math.round(Number((Math.abs(value) * 1000).toPrecision(12)))) / 1000;
 }
 
 /**

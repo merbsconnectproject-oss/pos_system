@@ -258,6 +258,10 @@ export interface UserAccount {
   password?: string; // Standing sign-in credential
   /** FR-USER-03 / screen J-07: grants and revocations against the role baseline. */
   permissionOverrides?: PermissionOverrides;
+  /** Resolved by the API. UI hiding uses this; the server remains authoritative. */
+  effectivePermissions?: PermissionCode[];
+  /** UUID/code pairs retained for server-backed outlet switching. */
+  serverOutlets?: Array<{ id: string; code: string; name: string; localId: OutletId }>;
 }
 
 /**
