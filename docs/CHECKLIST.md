@@ -54,11 +54,11 @@ non-deferred item in its section is complete, including its non-functional items
 | N · Audit | 6 | 2 done, 2 partial, 2 open | 4 done, 1 partial, 1 open |
 | O · Reports & dashboard | 10 | 6 done, 2 partial, 1 open, 1 deferred | 9 open, 1 deferred |
 | P · Settings | 12 | 8 done, 4 partial | 5 done, 2 partial, 4 open, 1 n/a |
-| Q · Connectivity & resilience | 10 | 2 partial, 7 open, 1 deferred | 9 open, 1 deferred |
+| Q · Connectivity & resilience | 13 | 3 done, 1 partial, 4 open, 1 deferred, 4 n/a | 1 done, 5 open, 1 deferred, 6 n/a |
 | R · Cross-cutting non-functional | 22 | 4 done, 3 partial, 15 open | 3 done, 3 partial, 16 open |
 
-**229 items · 102 complete · frontend 136 done · backend 118 done, 14 partial,
-12 not applicable · contract frozen and machine-checked (`npm run check`)**
+**232 items · 109 complete · frontend 139 done · backend 119 done, 14 partial,
+18 not applicable · contract frozen and machine-checked (`npm run check`)**
 
 > The table above is generated from the boxes below, so the two cannot drift.
 > Read it with one caveat: many items have no backend half — a scanner that
@@ -82,7 +82,7 @@ non-deferred item in its section is complete, including its non-functional items
 | ✅ | P Settings | the thresholds are configuration now, and the rules read them |
 | ✅ | L Customers | one list, found by phone however it is written |
 | ⬜ | I Receipts · O Reports | not started |
-| — | Q Connectivity | n/a — local-first removed the offline queue |
+| ◐ | Q Connectivity | local-first removes the queue; power loss and the owner's push remain |
 
 **Release gates** — 1 ⬜ · 2 ⬜ (needs the printer) · **3 ✅** same payment twice records
 once · **4 ✅** two terminals cannot sell the same last unit.
@@ -438,19 +438,33 @@ held sales, which live only in the browser.
 
 ## Q · Connectivity & resilience — `FR-SYNC`
 
+> **Read this section against the topology, not the PRD.** FR-SYNC was written for
+> PRD §2.2's original shape — both shops talking to one cloud database, with a queue
+> in the browser to survive dropouts. The implementation plan superseded that with
+> **local-first**: the server runs on the counter PC, beside its own Postgres, so the
+> till never crosses a network to record a sale. Several FR-SYNC items are moot in
+> that shape rather than outstanding, and are marked `[·]` with the reason.
+>
+> What is *not* moot: power loss, and the outbound push to the owner's consolidator.
+
 ### Functional
-- [ ][ ] Catalogue and prices cached locally so search and scanning work regardless of connection — FR-SYNC-01
-- [ ][ ] Sales recorded locally and queued during a connection loss — FR-SYNC-02
-- [~][ ] Queued sales retain receipt numbers from the pre-allocated block — FR-SYNC-03 · BR-6 *(block module written; queue not)*
-- [~][ ] Persistent non-blocking banner shows offline status and queued count — FR-SYNC-04 · `C-33` *(banner present; no count)*
-- [ ][ ] On reconnection the queue is submitted in order, idempotently — FR-SYNC-05 · BR-7 · `C-34`
-- [ ][ ] Conflicts surfaced on an exceptions report, never silently resolved — FR-SYNC-06
-- [ ][ ] Abrupt power loss does not corrupt data or lose a committed sale — FR-SYNC-07 · NFR-5
+- [x][·] Catalogue and prices cached locally so search and scanning work regardless of connection — FR-SYNC-01 *(the catalogue is on the same machine; there is nothing to cache)*
+- [·][·] Sales recorded locally and queued during a connection loss — FR-SYNC-02 *(a sale is already written locally — the queue existed to cross a network that is no longer between the till and its database)*
+- [x][x] Queued sales retain receipt numbers from the pre-allocated block — FR-SYNC-03 · BR-6 *(blocks are issued and gapless; nothing depends on a connection)*
+- [~][ ] Persistent non-blocking banner shows offline status — FR-SYNC-04 · `C-33` *(the banner now means "the owner's view is stale", not "you cannot sell"; it has not been re-pointed)*
+- [·][·] On reconnection the queue is submitted in order, idempotently — FR-SYNC-05 · BR-7 · `C-34` *(no queue; BR-7 idempotency is built and tested on the sale itself)*
+- [·][·] Conflicts surfaced on an exceptions report, never silently resolved — FR-SYNC-06 *(conflicts arose from offline sales racing the server; with one writer per outlet there is no race)*
+- [ ][ ] Abrupt power loss does not corrupt data or lose a committed sale — FR-SYNC-07 · NFR-5 *(**still fully in scope.** Power cuts are routine; this is a UPS plus a proven Postgres durability setting, and neither has been done)*
 - [-][-] Full-day offline operation with reconciliation — FR-SYNC-08 *(Stage 3)*
 
 ### Non-functional
-- [ ][ ] Counter functions tolerate dropouts of up to 15 minutes without interrupting trade — NFR-4
-- [ ][ ] Disconnect mid-sale, reconnect: exactly one correct sale at the server — FR-SYNC acceptance · release gate 10
+- [x][·] Counter functions tolerate dropouts without interrupting trade — NFR-4 *(the counter does not use the internet to trade)*
+- [·][·] Disconnect mid-sale, reconnect: exactly one correct sale at the server — FR-SYNC acceptance · release gate 10 *(gate rewritten below — there is no "at the server" any more)*
+
+### What replaces them — the owner's view
+- [ ][ ] Each shop pushes a snapshot outbound to the consolidator on an interval, retrying through outages — Phase 1
+- [ ][ ] The owner's dashboard shows staleness per shop: *"Radiance — last seen 2 hours ago"* — Phase 1
+- [ ][ ] A shop that cannot reach the consolidator keeps trading and nobody at the counter notices — Phase 1
 
 ---
 
