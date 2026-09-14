@@ -21,6 +21,9 @@ public interface SaleService {
     /** BR-3 · FR-POS-19: void with a reason, writing reversing movements. */
     SaleView voidSale(UUID saleId, String reason, PosPrincipal actor, String clientIp);
 
+    /** FR-RCPT-06: record a permitted receipt reprint without changing the sale. */
+    SaleView reprint(UUID saleId, PosPrincipal actor, String clientIp);
+
     SaleView get(UUID saleId);
 
     /** FR-POS-18. */

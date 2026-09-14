@@ -73,6 +73,13 @@ public class SaleController {
         return sales.voidSale(id, body.reason(), actor, clientIp(request));
     }
 
+    @PostMapping("/{id}/reprint")
+    @PreAuthorize("hasAuthority('" + Permission.Codes.SALE_REPRINT + "')")
+    public SaleView reprint(@PathVariable UUID id, @AuthenticationPrincipal PosPrincipal actor,
+                            HttpServletRequest request) {
+        return sales.reprint(id, actor, clientIp(request));
+    }
+
     public record VoidRequest(@NotBlank(message = "A void needs a reason") @Size(max = 300) String reason) {
     }
 

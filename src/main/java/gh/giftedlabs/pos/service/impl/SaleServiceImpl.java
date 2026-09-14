@@ -180,6 +180,17 @@ public class SaleServiceImpl implements SaleService {
     }
 
     @Override
+    @Transactional
+    public SaleView reprint(UUID saleId, PosPrincipal actor, String clientIp) {
+        Sale sale = sales.findById(saleId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No such sale"));
+        audit.record(actor.userId(), "RECEIPT_REPRINTED", "sale", sale.getId(), null,
+                Map.of("receipt", sale.getReceiptNumber(), "reprint", true),
+                sale.getOutletId(), sale.getTerminalId(), clientIp);
+        return view(sale);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public SaleView get(UUID saleId) {
         return view(sales.findById(saleId)
