@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -36,4 +37,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByUsernameIgnoreCase(String username);
 
     boolean existsByEmailIgnoreCase(String email);
+
+    /** Staff assigned to one outlet — the only people a counter override can be. */
+    @Query("select u from User u join u.outletIds o where o = :outletId and u.active = true")
+    List<User> findActiveAtOutlet(@Param("outletId") UUID outletId);
 }

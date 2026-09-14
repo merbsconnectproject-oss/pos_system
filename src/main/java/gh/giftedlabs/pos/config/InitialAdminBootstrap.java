@@ -1,8 +1,10 @@
 package gh.giftedlabs.pos.config;
 
 import gh.giftedlabs.pos.entity.Outlet;
+import gh.giftedlabs.pos.entity.Terminal;
 import gh.giftedlabs.pos.entity.User;
 import gh.giftedlabs.pos.repository.OutletRepository;
+import gh.giftedlabs.pos.repository.TerminalRepository;
 import gh.giftedlabs.pos.repository.UserRepository;
 import gh.giftedlabs.pos.rules.Role;
 import org.slf4j.Logger;
@@ -22,12 +24,15 @@ public class InitialAdminBootstrap implements ApplicationRunner {
     private final BootstrapProperties properties;
     private final UserRepository users;
     private final OutletRepository outlets;
+    private final TerminalRepository terminals;
     private final PasswordEncoder passwords;
     private final PasswordEncoder pins;
 
     public InitialAdminBootstrap(BootstrapProperties properties, UserRepository users,
-            OutletRepository outlets, @Qualifier("passwordEncoder") PasswordEncoder passwords,
+            OutletRepository outlets, TerminalRepository terminals,
+            @Qualifier("passwordEncoder") PasswordEncoder passwords,
             @Qualifier("pinEncoder") PasswordEncoder pins) {
+        this.terminals = terminals;
         this.properties = properties;
         this.users = users;
         this.outlets = outlets;
@@ -49,6 +54,13 @@ public class InitialAdminBootstrap implements ApplicationRunner {
         Outlet outlet = outlets.findByCodeIgnoreCase(properties.outletCode())
                 .orElseGet(() -> outlets.save(new Outlet(
                         properties.outletCode(), properties.outletName())));
+
+        // BR-6: a till cannot number a receipt without a block, and a shop
+        // cannot sell without a till. One is created with the first outlet so
+        // the install is usable rather than usable-after-a-settings-trip.
+        if (terminals.findByOutletIdAndCodeIgnoreCase(outlet.getId(), "01").isEmpty()) {
+            terminals.save(new Terminal(outlet.getId(), "01", "Counter 1", 1L, 10_000L));
+        }
 
         User owner = new User(properties.username(), properties.fullName(),
                 passwords.encode(properties.password()));

@@ -165,6 +165,13 @@ public enum Permission {
         this.description = description;
     }
 
+    /** Look a permission up by its wire code. */
+    public static java.util.Optional<Permission> fromCode(String code) {
+        return java.util.Arrays.stream(values())
+                .filter(permission -> permission.code().equals(code))
+                .findFirst();
+    }
+
     public String code() {
         return code;
     }

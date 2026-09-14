@@ -13,7 +13,9 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.web.csrf.CsrfToken;
@@ -95,6 +97,39 @@ public class AuthController {
         resets.resetByAdministrator(actor.userId(), userId, body.newPassword(), clientIp(request));
         return ResponseEntity.noContent().build();
     }
+
+    /**
+     * FR-AUTH-02 · BR-10 · FR-POS-11: a manager authorising something at the
+     * counter.
+     *
+     * <p>The PIN is checked here, not in the browser. A screen that validates
+     * its own override has no override — it has a formality, and the answer is
+     * in the page source.
+     *
+     * <p>Answers only "yes, and it was this person" or "no". It grants nothing
+     * by itself: the approver's id travels on the sale line or the void that
+     * needed it, and that write is authorised again on its own terms.
+     */
+    @PostMapping("/approve")
+    @PreAuthorize("isAuthenticated()")
+    public ApprovalResult approve(@Valid @RequestBody ApprovalRequest body,
+                                  @AuthenticationPrincipal PosPrincipal actor, HttpServletRequest request) {
+        Permission required = Permission.fromCode(body.permission())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown permission"));
+
+        UUID outletId = body.outletId() != null ? body.outletId() : actor.outletId();
+        return authentication.findApprover(body.pin(), required, outletId)
+                .map(approverId -> new ApprovalResult(true, approverId, authentication.nameOf(approverId)))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "That PIN cannot authorise this. Ask a manager who holds it."));
+    }
+
+    public record ApprovalRequest(
+            @NotBlank @jakarta.validation.constraints.Pattern(regexp = "\\d{4,6}") String pin,
+            @NotBlank String permission,
+            UUID outletId) {}
+
+    public record ApprovalResult(boolean approved, UUID approverId, String approverName) {}
 
     public record PinRequest(@NotBlank @jakarta.validation.constraints.Pattern(regexp = "\\d{4,6}") String pin) {}
     public record ResetRequest(@NotBlank @Email @Size(max = 320) String email) {}

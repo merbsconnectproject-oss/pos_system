@@ -179,6 +179,45 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         return true;
     }
 
+    /**
+     * FR-AUTH-02 · BR-10: identify the manager behind a counter override.
+     *
+     * <p>Throttled on the outlet rather than on a user, because the caller does
+     * not yet know who is being identified — without that, an attacker could
+     * try a PIN against every manager in turn for free.
+     *
+     * <p>Every candidate's hash is compared even after a match, so the time
+     * taken does not reveal how far down the list the right person was.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public String nameOf(UUID userId) {
+        return users.findById(userId).map(User::getFullName).orElse("(removed)");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UUID> findApprover(String pin, Permission required, UUID outletId) {
+        String throttleKey = "approve:" + outletId;
+        if (!loginAttempts.check(throttleKey).allowed()) return Optional.empty();
+
+        UUID approver = null;
+        for (User candidate : users.findActiveAtOutlet(outletId)) {
+            if (!candidate.hasPin() || !candidate.resolvePermissions().contains(required)) continue;
+            if (pinEncoder.matches(pin, candidate.getPinHash()) && approver == null) {
+                approver = candidate.getId();
+            }
+        }
+
+        if (approver == null) {
+            loginAttempts.recordFailure(throttleKey);
+            log.warn("Failed counter override for {} at outlet {}", required.code(), outletId);
+            return Optional.empty();
+        }
+        loginAttempts.recordSuccess(throttleKey);
+        return Optional.of(approver);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public boolean verifyOwnPin(UUID userId, String pin) {

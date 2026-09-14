@@ -10,6 +10,7 @@ import gh.giftedlabs.pos.exception.CatalogueListException;
 import gh.giftedlabs.pos.exception.IncorrectPinException;
 import gh.giftedlabs.pos.exception.InsufficientStockException;
 import gh.giftedlabs.pos.exception.ProductNotFoundException;
+import gh.giftedlabs.pos.exception.SaleException;
 import gh.giftedlabs.pos.exception.InvalidResetTokenException;
 import gh.giftedlabs.pos.exception.SessionAuthenticationException;
 import org.springframework.security.access.AccessDeniedException;
@@ -101,6 +102,18 @@ public class ApiExceptionHandler {
     @ExceptionHandler(CatalogueListException.class)
     public ResponseEntity<ApiError> onCatalogueList(CatalogueListException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError(ex.getCode(), ex.getMessage(), ex.getDetails()));
+    }
+
+    /**
+     * FR-POS · FR-PAY: a sale that cannot be completed as submitted.
+     *
+     * <p>422 rather than 400: the request is well formed and the client did
+     * nothing wrong syntactically — the sale simply does not settle.
+     */
+    @ExceptionHandler(SaleException.class)
+    public ResponseEntity<ApiError> onSale(SaleException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(new ApiError(ex.getCode(), ex.getMessage(), ex.getDetails()));
     }
 

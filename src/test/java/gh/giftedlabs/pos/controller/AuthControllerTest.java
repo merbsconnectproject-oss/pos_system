@@ -259,6 +259,51 @@ class AuthControllerTest {
         }
     }
 
+    @Nested
+    @DisplayName("a counter override")
+    class Approval {
+
+        @Test
+        @DisplayName("names the manager whose PIN it is — FR-AUTH-02, BR-10")
+        void namesTheApprover() throws Exception {
+            Session session = signIn(username, PASSWORD);
+
+            mvc.perform(session.authorise(post("/api/auth/approve"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(Map.of(
+                                    "pin", PIN, "permission", "sale.void"))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.approved").value(true))
+                    .andExpect(jsonPath("$.approverName").value("Test Cashier"));
+        }
+
+        @Test
+        @DisplayName("refuses a wrong PIN — the browser cannot decide this")
+        void refusesAWrongPin() throws Exception {
+            Session session = signIn(username, PASSWORD);
+
+            mvc.perform(session.authorise(post("/api/auth/approve"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(Map.of(
+                                    "pin", "0000", "permission", "sale.void"))))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("refuses a valid PIN for a permission its owner lacks — BR-10")
+        void pinIsNotAuthority() throws Exception {
+            Session session = signIn(username, PASSWORD);
+
+            // The seeded user is an OWNER and holds everything, so ask for a
+            // code no role carries: a correct PIN must still not authorise it.
+            mvc.perform(session.authorise(post("/api/auth/approve"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(Map.of(
+                                    "pin", PIN, "permission", "not.a.real.permission"))))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
     // --- helpers -----------------------------------------------------------
     //
     // MockMvc holds no cookie jar, so a session is carried explicitly: the

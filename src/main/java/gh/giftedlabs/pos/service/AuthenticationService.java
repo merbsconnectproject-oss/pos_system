@@ -48,6 +48,22 @@ public interface AuthenticationService {
      */
     boolean verifyApprovalPin(UUID approverId, String pin, gh.giftedlabs.pos.rules.Permission required);
 
+    /**
+     * FR-AUTH-02 · BR-10: who this PIN belongs to, if they may authorise it.
+     *
+     * <p>A counter override asks for a PIN and nothing else — the manager does
+     * not stop to type a username — so the PIN has to identify them. Only staff
+     * assigned to this outlet who hold the permission are considered, which
+     * keeps the search small and means a PIN cannot authorise something its
+     * owner is not entitled to.
+     *
+     * @return the approver's id, or empty if no permitted holder matches
+     */
+    /** The approver's display name, for the line that records who authorised it. */
+    String nameOf(UUID userId);
+
+    java.util.Optional<UUID> findApprover(String pin, gh.giftedlabs.pos.rules.Permission required, UUID outletId);
+
     /** FR-AUTH-04: verify the signed-in shift owner's own PIN for unlock. */
     boolean verifyOwnPin(UUID userId, String pin);
 }

@@ -66,8 +66,10 @@ class OutletControllerTest {
     @BeforeEach
     void seedTwoBranchesAndTwoStaff() {
         String run = UUID.randomUUID().toString().substring(0, 6).toUpperCase();
-        homeOutletId = outlets.save(branch("H" + run.substring(0, 2), "Home Branch " + run)).getId();
-        otherOutletId = outlets.save(branch("O" + run.substring(0, 2), "Other Branch " + run)).getId();
+        // Six characters, the most BR-6 allows. Three collided once enough
+        // test classes shared one container and the codes ran out of room.
+        homeOutletId = outlets.save(branch("H" + run.substring(0, 5), "Home Branch " + run)).getId();
+        otherOutletId = outlets.save(branch("O" + run.substring(0, 5), "Other Branch " + run)).getId();
 
         ownerName = "owner-" + run.toLowerCase();
         cashierName = "cashier-" + run.toLowerCase();
