@@ -11,28 +11,30 @@ Updated after every completed feature. Detail lives in
 
 | | Features | Done | In progress | Not started |
 |---|---:|---:|---:|---:|
-| Backend | 18 | 8 | 1 | 9 |
+| Backend | 18 | 12 | 3 | 3 |
 
 ```
-A ██████████  Auth & session     100%   FR-AUTH-05's shift branch waits on J to set the flag
+A ██████████  Auth & session     100%   FR-AUTH-05 reachable since J; idle lock is a setting since P
 B ██████████  Outlets            100%   reads scoped by assignment; writes need settings.general
 C █████████░  Product catalogue   90%   FR-PROD-10 bulk import needs SKU blocks
 D █████████░  Units & conversions  90%   FR-UOM-07 lock-once-stock-exists still open
 E ███░░░░░░░  Pricing             30%   three prices and history land with C; overrides open
-F █████████░  Inventory           90%   FR-INV-06 approval gate waits on P's thresholds
-G █████████░  Point of sale       90%   discount ceiling waits on P; gates 3 and 4 pass
+F ██████████  Inventory          100%   FR-INV-06 enforced against P's threshold
+G ██████████  Point of sale      100%   discount ceiling enforced; gates 3 and 4 pass
 H █████████░  Payments            90%   denomination shortcuts are frontend-only
-I ░░░░░░░░░░  Receipts & printing  0%
-J ░░░░░░░░░░  Shifts & cash        0%
+I ░░░░░░░░░░  Receipts & printing  0%   blocked on the thermal printer
+J ██████████  Shifts & cash      100%   blind close, BR-13 by index, BR-14 computed; gate 9 passes
 K ████████░░  Suppliers & receipt  80%   purchase history per product still to query
 L ░░░░░░░░░░  Customers            0%
-M ░░░░░░░░░░  Users & permissions  0%
+M ██████████  Users & permissions 100%  BR-16 on every path that changes a privilege
 N █████████░  Audit               90%   every built action logs; read endpoint and view live
-O ░░░░░░░░░░  Reports & dashboard  0%
-P ░░░░░░░░░░  Settings             0%
+O ░░░░░░░░░░  Reports & dashboard  0%   the dashboard still computes from loaded lists
+P ████████░░  Settings            80%   thresholds live and read by the rules; backup/export open
 Q ██████████  Connectivity        n/a   local-first removed the offline queue
 R ███████░░░  Cross-cutting       70%   hashing, rate limiting, audit, idempotency, row locks
 ```
+
+263 tests, all green.
 
 ---
 
@@ -91,20 +93,15 @@ normalised; the username/email split is not.
 
 ## Next up
 
-1. **J · Shifts & cash** — the last thing between here and a day's trading
-   that closes. Cash movements, opening float, blind count and variance
-   (BR-14). It also unblocks FR-AUTH-05: `SessionGuardFilter` reads an
-   `OPEN_SHIFT` flag that nothing ever sets to true, so the idle-lock branch
-   is unreachable until J sets it.
-2. **M · Users & permissions** — the only screen where staff are still
-   invented by the browser, and the one that makes the permission checks
-   everywhere else mean something. Blocked on the 31-vs-33 decision below.
-3. **L · Customers** — small, and the POS already attaches one to a sale.
-4. **P · Settings** — carries two gates other features are waiting on: the
-   adjustment approval threshold (FR-INV-06) and the discount ceiling
-   (FR-POS-10). Both are currently unenforced on either side.
-5. **O · Reports** — the dashboard computes its own figures from loaded
-   lists today, which is fine at one outlet and wrong at two.
+1. **L · Customers** — the last screen where records are invented by the
+   browser. Small, and the POS already attaches one to a sale, so the work is
+   mostly the record itself and a search that a counter can use one-handed.
+2. **O · Reports** — the dashboard computes its own figures from whatever
+   lists happen to be loaded, which is fine at one outlet and wrong at two.
+   It is also the one place an owner would notice a number being wrong last.
+3. **E · Pricing** — the overrides and the margin pair. `product_price_history`
+   already records who changed a price and when; nothing reads it back.
+4. **I · Receipts & printing** — blocked on the printer, not on us.
 
 ---
 
@@ -113,7 +110,7 @@ normalised; the username/email split is not.
 | What | Needed from | Blocks |
 |---|---|---|
 | **Consolidator in scope, or separate quote?** | Client | Owner has no combined view until it ships. PRD §1.2 promises it. |
-| **31 vs 33 permission codes** | You | `permissions.ts` has 33, PRD §6 documents 31. Extras are `stock.transfer` (Stage 3) and `customer.credit` (Stage 2). Owner currently holds both. Settle before B, not before M: every controller from B onward hardcodes codes into `@PreAuthorize`, so the cost grows with each feature. |
+| ~~**31 vs 33 permission codes**~~ | *Taken* | Kept all 33 with `stock.transfer` and `customer.credit` flagged `futureStage`. Removing them meant amending the frozen contract and its vectors now and restoring them later; keeping them costs nothing, since no endpoint checks a code whose feature does not exist. Reversal instructions are on `Permission.isFutureStage()`. |
 | **Acceptance criterion 4 is unsatisfiable** | You | One terminal per outlet + per-outlet stock = the two terminals can never contend. Reword to goods-receipt-vs-sale. |
 | **Stage 2 features expected live?** | Client | Installments, returns, expenses are in the frontend but out of Stage 1 |
 | **Thermal printer ordered?** | You | Acceptance criterion 2 cannot close without one |
