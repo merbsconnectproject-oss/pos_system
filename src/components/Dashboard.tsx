@@ -595,76 +595,66 @@ export const Dashboard: React.FC<DashboardProps> = ({
   }
 
   if (isCashier) {
+    const cashierStats = [
+      { label: "Today's sales", value: formatMoney(metrics.salesToday), icon: Banknote, trend: sevenDayTrends.sales },
+      { label: 'Expected cash', value: formatMoney(metrics.expectedCash), icon: Wallet, trend: sevenDayTrends.cash },
+      { label: 'Transactions', value: String(metrics.transactions), icon: Receipt, trend: sevenDayTrends.transactions },
+      { label: 'Average sale', value: formatMoney(metrics.averageSale), icon: BarChart3, trend: sevenDayTrends.averageSale },
+    ];
+    const cashierWhiteCards = [
+      { label: 'Shift status', value: shiftInfo.isOpen ? 'Open' : 'Closed', helper: shiftInfo.isOpen ? `Opened ${shiftInfo.openedAt}` : 'Start required', icon: Clock },
+      { label: 'Low stock count', value: String(metrics.lowStockCount), helper: 'Products at reorder level', icon: AlertTriangle },
+      { label: 'Catalogue items', value: String(scopedProducts.length), helper: `Available at ${currentOutlet.name}`, icon: Package },
+      { label: 'Last receipt', value: scopedSales[0]?.receiptNumber || '—', helper: scopedSales[0] ? scopedSales[0].createdAt : 'No completed sales yet', icon: FileText },
+    ];
+
     return (
-      <div className="p-4 sm:p-6 md:p-8 space-y-6 max-w-[1200px] mx-auto">
-        <section className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+      <div className="p-4 sm:p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
+        <section className="bg-white border border-slate-200 rounded-2xl px-5 pb-5 pt-3 sm:px-6 sm:pb-6 sm:pt-4">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-5">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full bg-accent-50 border border-accent-200 text-accent-700 px-3 py-1 text-xs font-bold">
-                <UserCheck className="w-3.5 h-3.5" />
-                {roleLabel[currentUser.role]}
-              </span>
-              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 mt-4">
-                {shiftInfo.isOpen ? 'Continue selling' : 'Open shift to begin'}
-              </h1>
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 mt-0">{greeting}, {currentUser.username}</h1>
               <p className="text-sm text-slate-500 mt-2 max-w-xl">
                 {shiftInfo.isOpen
-                  ? `Your ${currentOutlet.name} shift opened at ${shiftInfo.openedAt}. Keep serving from the POS terminal.`
-                  : 'A shift must be opened before this terminal can process sales.'}
+                  ? `Your ${currentOutlet.name} shift opened at ${shiftInfo.openedAt}. Track your selling activity and keep serving from the POS terminal.`
+                  : `Your ${currentOutlet.name} terminal is ready. Open a shift before processing sales.`}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={shiftInfo.isOpen ? onOpenPos : onOpenShift}
-              className="px-6 py-4 rounded-2xl bg-accent-500 hover:bg-accent-600 text-white font-black text-sm flex items-center justify-center gap-2 shadow-xs"
-            >
-              <ShoppingBag className="w-5 h-5" />
-              <span>{shiftInfo.isOpen ? 'Continue selling' : 'Open shift'}</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-2 rounded-xl bg-accent-50 border border-accent-200 text-accent-700 px-3 py-2 text-xs font-bold"><UserCheck className="w-3.5 h-3.5" />{roleLabel[currentUser.role]}</span>
+              <button type="button" onClick={shiftInfo.isOpen ? onOpenPos : onOpenShift} className="px-5 py-3 rounded-xl bg-accent-500 hover:bg-accent-600 text-white font-black text-sm flex items-center justify-center gap-2 shadow-xs">
+                <ShoppingBag className="w-4 h-4" /><span>{shiftInfo.isOpen ? 'Continue selling' : 'Open shift'}</span><ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </section>
 
-        <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[
-            {
-              label: 'Own sales today',
-              value: formatMoney(metrics.salesToday),
-              helper: `${metrics.transactions} completed receipts`,
-              trend: sevenDayTrends.sales,
-              trendDetail: `${formatMoney(sevenDayTrends.last7dRev)} (last 7 days) vs ${formatMoney(sevenDayTrends.prev7dRev)} (previous 7 days)`,
-            },
-            {
-              label: 'Shift status',
-              value: shiftInfo.isOpen ? 'Open' : 'Closed',
-              helper: shiftInfo.isOpen ? shiftInfo.openedAt : 'Start required',
-              trend: shiftInfo.isOpen ? 0 : -100,
-              trendDetail: shiftInfo.isOpen ? 'Shift open & active' : 'Shift closed',
-            },
-            {
-              label: 'Expected cash',
-              value: formatMoney(metrics.expectedCash),
-              helper: 'Visible for cashier closeout',
-              trend: sevenDayTrends.cash,
-              trendDetail: `${formatMoney(sevenDayTrends.last7dCash)} (last 7 days) vs ${formatMoney(sevenDayTrends.prev7dCash)} (previous 7 days)`,
-            },
-          ].map((item) => (
-            <div key={item.label} className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col justify-between">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wide text-slate-400">{item.label}</div>
-                <div className="text-xl font-black text-slate-900 mt-2 font-mono">{item.value}</div>
-                {item.trend !== undefined && (
-                  <div className="mt-2.5">
-                    <TrendIndicator percentage={item.trend} variant="light" detail={item.trendDetail} />
-                  </div>
-                )}
-              </div>
-              <div className="text-xs text-slate-500 mt-3 pt-2.5 border-t border-slate-100">{item.helper}</div>
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {cashierStats.map(({ label, value, icon: Icon, trend }) => (
+            <div key={label} className="bg-slate-950 border border-slate-900 rounded-2xl p-5 text-white flex flex-col justify-between min-h-[148px]">
+              <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wide text-slate-300">{label}</span><div className="w-10 h-10 rounded-xl bg-white/8 border border-white/10 flex items-center justify-center"><Icon className="w-5 h-5 text-accent-300" /></div></div>
+              <div className="mt-4 text-2xl font-black text-white font-mono">{value}</div>
+              <div className="mt-3"><TrendIndicator percentage={trend} variant="dark" /></div>
             </div>
           ))}
         </section>
 
-        <RecentSalesCard sales={scopedSales} onSelectTab={onSelectTab} />
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {cashierWhiteCards.map(({ label, value, helper, icon: Icon }) => (
+            <div key={label} className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col justify-between min-h-[148px]"><div className="flex items-start justify-between gap-3"><div><div className="text-xs font-bold uppercase tracking-wide text-slate-400">{label}</div><div className="text-2xl font-black text-slate-900 mt-2 font-mono">{value}</div></div><div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0"><Icon className="w-5 h-5 text-slate-400" /></div></div><div className="text-xs text-slate-500 mt-3 pt-2.5 border-t border-slate-100">{helper}</div></div>
+          ))}
+        </section>
+
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2"><CashierSalesChart sales={scopedSales} accentColor={accentColor} /></div>
+          <CashierPaymentChart sales={scopedSales} accentColor={accentColor} />
+        </section>
+
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <LowStockCard items={lowStockItems} onViewAll={onViewAllLowStock} />
+          <RecentSalesCard sales={scopedSales} onSelectTab={onSelectTab} />
+          <TopSellersCard products={scopedProducts} onSelectTab={onSelectTab} />
+        </section>
       </div>
     );
   }
@@ -877,6 +867,33 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </section>
     </div>
   );
+};
+
+const CashierSalesChart = ({ sales, accentColor }: { sales: CompletedSale[]; accentColor: string }) => {
+  const points = useMemo(() => {
+    const days = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date();
+      date.setHours(0, 0, 0, 0);
+      date.setDate(date.getDate() - (6 - index));
+      return date;
+    });
+    return days.map((day) => {
+      const next = new Date(day);
+      next.setDate(next.getDate() + 1);
+      const total = sales.filter((sale) => { const time = parseSaleTimestamp(sale.createdAt); return time >= day.getTime() && time < next.getTime(); }).reduce((sum, sale) => sum + sale.total, 0);
+      return { label: day.toLocaleDateString('en-US', { weekday: 'short' }), total };
+    });
+  }, [sales]);
+  const max = Math.max(...points.map((point) => point.total), 1);
+  return <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs flex flex-col h-full"><div className="flex items-center justify-between pb-4 border-b border-slate-200"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl flex items-center justify-center border" style={{ backgroundColor: 'var(--accent-50, #fff7ed)', color: accentColor, borderColor: 'var(--accent-200, #fed7aa)' }}><TrendingUp className="w-5 h-5" /></div><div><h3 className="font-black text-slate-800 text-base">My sales activity</h3><p className="text-[11px] text-slate-400 font-medium">Your completed sales over the last 7 days</p></div></div><span className="text-xs font-bold text-slate-500">GH₵</span></div><div className="flex-1 min-h-[220px] flex items-end gap-2 sm:gap-4 pt-6 pb-5">{points.map((point) => <div key={point.label} className="flex-1 h-full flex flex-col items-center justify-end gap-2"><div className="w-full max-w-10 rounded-t-lg transition-all" title={`GH₵ ${point.total.toFixed(2)}`} style={{ height: `${Math.max(point.total > 0 ? (point.total / max) * 100 : 3, 3)}%`, backgroundColor: accentColor }} /><span className="text-[10px] font-mono font-bold text-slate-400">{point.label}</span></div>)}</div></div>;
+};
+
+const CashierPaymentChart = ({ sales, accentColor }: { sales: CompletedSale[]; accentColor: string }) => {
+  const methods = ['cash', 'mobile_money', 'card'] as const;
+  const labels: Record<string, string> = { cash: 'Cash', mobile_money: 'Mobile money', card: 'Card' };
+  const totals = methods.map((method) => ({ method, total: sales.flatMap((sale) => sale.payments).filter((payment) => payment.method === method).reduce((sum, payment) => sum + payment.amount, 0) }));
+  const grandTotal = totals.reduce((sum, item) => sum + item.total, 0);
+  return <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs flex flex-col h-full"><div className="flex items-center gap-3 pb-4 border-b border-slate-200"><div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center"><Wallet className="w-5 h-5" style={{ color: accentColor }} /></div><div><h3 className="font-black text-slate-800 text-base">Payment mix</h3><p className="text-[11px] text-slate-400 font-medium">How your receipts were tendered</p></div></div><div className="mt-5 space-y-5">{totals.map(({ method, total }) => { const pct = grandTotal > 0 ? (total / grandTotal) * 100 : 0; return <div key={method}><div className="flex items-center justify-between text-xs font-bold text-slate-700"><span>{labels[method]}</span><span className="font-mono">GH₵ {total.toFixed(2)}</span></div><div className="mt-2 h-2 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: method === 'cash' ? accentColor : method === 'mobile_money' ? 'var(--chart-2, #0f766e)' : 'var(--chart-4, #7c3f8f)' }} /></div><div className="mt-1 text-[10px] text-slate-400">{pct.toFixed(0)}% of your recorded takings</div></div>; })}</div>{grandTotal === 0 && <div className="mt-5 rounded-xl bg-slate-50 border border-slate-200 p-4 text-xs text-slate-500">No completed payments in this scope yet.</div>}</div>;
 };
 
 const LowStockCard = ({ items, onViewAll }: { items: Product[]; onViewAll: () => void }) => (
