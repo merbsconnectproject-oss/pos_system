@@ -68,6 +68,10 @@ export interface Product {
   tradePrice: number;
   floorPrice: number; // Minimum allowable price without manager PIN (BR-10)
   costPrice: Record<string, number>; // Weighted average cost per outlet (BR-4)
+  /** FR-PRICE-08: the latest purchase cost per outlet, for the replacement margin. */
+  replacementCost?: Record<string, number>;
+  /** FR-PRICE-03: where a branch charges something other than the shared price. */
+  outletPrices?: Record<string, { retailPrice?: number; tradePrice?: number; floorPrice?: number }>;
   stock: Record<string, number>; // Stock held per outlet (BR-1, BR-12)
   minStockAlert: Record<string, number>;
   imageUrl: string;

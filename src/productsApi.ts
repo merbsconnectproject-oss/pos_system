@@ -113,3 +113,61 @@ export const productsApi = {
   byBarcode: (code: string) =>
     request<ProductWire>(`/api/products/barcode/${encodeURIComponent(code)}`).then(toProduct),
 };
+
+/**
+ * Per-branch prices and price history — FR-PRICE-03, FR-PRICE-06.
+ *
+ * Null is sent and read as null throughout. "This branch charges the shared
+ * price" and "this branch charges nothing" are different answers, and a
+ * resolved number for both would make them identical.
+ */
+export interface OutletPriceWire {
+  outletId: string;
+  retailPrice: number | null;
+  tradePrice: number | null;
+  floorPrice: number | null;
+  updatedAt: string;
+}
+
+export interface PriceHistoryWire {
+  id: string;
+  retailPrice: number;
+  tradePrice: number;
+  floorPrice: number;
+  changedBy: string | null;
+  changedAt: string;
+}
+
+export const pricingApi = {
+  /** FR-PRICE-03: every branch that charges something different. */
+  overrides: (productId: string) =>
+    request<OutletPriceWire[]>(`/api/products/${encodeURIComponent(productId)}/prices`),
+
+  setOverride: (
+    productId: string,
+    outletId: string,
+    prices: { retailPrice?: number | null; tradePrice?: number | null; floorPrice?: number | null },
+  ) =>
+    request<OutletPriceWire>(
+      `/api/products/${encodeURIComponent(productId)}/prices/${encodeURIComponent(outletId)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          retailPrice: prices.retailPrice ?? null,
+          tradePrice: prices.tradePrice ?? null,
+          floorPrice: prices.floorPrice ?? null,
+        }),
+      },
+    ),
+
+  /** Back to the shared price. */
+  clearOverride: (productId: string, outletId: string) =>
+    request<void>(
+      `/api/products/${encodeURIComponent(productId)}/prices/${encodeURIComponent(outletId)}`,
+      { method: 'DELETE' },
+    ),
+
+  /** FR-PRICE-06: what this product has been priced at, and by whom. */
+  history: (productId: string) =>
+    request<PriceHistoryWire[]>(`/api/products/${encodeURIComponent(productId)}/price-history`),
+};

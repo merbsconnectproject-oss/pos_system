@@ -12,7 +12,16 @@ export interface StockWire {
   productId: string;
   outletId: string;
   quantity: number;
-  averageCost: number;
+  /**
+   * BR-4 · FR-PRICE-07: absent for a user without `price.view_cost`.
+   *
+   * Absent, not zero. A zero cost reads as "this was free", which is a claim;
+   * missing reads as "you were not told", which is true — and the difference
+   * matters on a valuation.
+   */
+  averageCost?: number | null;
+  /** FR-PRICE-08: the unit cost of the most recent delivery, where known. */
+  lastPurchaseCost?: number | null;
   reorderLevel: number;
   low: boolean;
 }
@@ -128,14 +137,18 @@ export const withStock = (products: Product[], levels: StockWire[]): Product[] =
     const rows = byProduct.get(product.id) || [];
     const stock: Record<string, number> = {};
     const costPrice: Record<string, number> = {};
+    const replacementCost: Record<string, number> = {};
     const minStockAlert: Record<string, number> = {};
 
     rows.forEach((row) => {
       stock[row.outletId] = row.quantity;
-      costPrice[row.outletId] = row.averageCost;
+      // FR-PRICE-07: no entry rather than a zero, so a screen without the
+      // permission shows a gap instead of a cost of nothing.
+      if (row.averageCost != null) costPrice[row.outletId] = row.averageCost;
+      if (row.lastPurchaseCost != null) replacementCost[row.outletId] = row.lastPurchaseCost;
       minStockAlert[row.outletId] = row.reorderLevel;
     });
 
-    return { ...product, stock, costPrice, minStockAlert };
+    return { ...product, stock, costPrice, replacementCost, minStockAlert };
   });
 };

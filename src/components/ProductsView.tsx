@@ -1007,8 +1007,42 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   <div>Retail <strong className="block text-slate-900">{formatMoney(selectedProduct.retailPrice)}</strong></div>
                   <div>Trade <strong className="block text-slate-900">{formatMoney(selectedProduct.tradePrice)}</strong></div>
                   <div>Floor <strong className="block text-slate-900">{formatMoney(selectedProduct.floorPrice)}</strong></div>
-                  {canViewCost && <div>Cost <strong className="block text-slate-900">{formatMoney(selectedProduct.costPrice[stockKeyFor(selectedProduct, currentOutlet)] || 0)}</strong></div>}
-                  {canViewCost && <div>Margin <strong className="block text-emerald-700">{Math.max(0, ((selectedProduct.retailPrice - (selectedProduct.costPrice[stockKeyFor(selectedProduct, currentOutlet)] || 0)) / selectedProduct.retailPrice) * 100).toFixed(1)}%</strong></div>}
+                  {canViewCost && (() => {
+                    // FR-PRICE-08: both margins side by side. The accounting
+                    // margin is against the weighted average of what is on the
+                    // shelf; the replacement margin is against what the last
+                    // delivery cost — one says what the sale earned, the other
+                    // says whether the price still works.
+                    const key = stockKeyFor(selectedProduct, currentOutlet);
+                    const averageCost = selectedProduct.costPrice[key];
+                    const latestCost = selectedProduct.replacementCost?.[key];
+                    // A loss reads as a loss. Flooring it at zero is how a
+                    // product sold below cost looks fine on a product screen.
+                    const margin = (cost?: number) =>
+                      cost == null || selectedProduct.retailPrice <= 0
+                        ? '—'
+                        : `${(((selectedProduct.retailPrice - cost) / selectedProduct.retailPrice) * 100).toFixed(1)}%`;
+                    const tone = (cost?: number) =>
+                      cost != null && cost > selectedProduct.retailPrice ? 'text-rose-700' : 'text-emerald-700';
+
+                    return (
+                      <>
+                        <div>Cost <strong className="block text-slate-900">{averageCost == null ? '—' : formatMoney(averageCost)}</strong></div>
+                        <div>
+                          Accounting margin
+                          <strong className={`block ${tone(averageCost)}`}>{margin(averageCost)}</strong>
+                        </div>
+                        <div>
+                          Latest purchase
+                          <strong className="block text-slate-900">{latestCost == null ? '—' : formatMoney(latestCost)}</strong>
+                        </div>
+                        <div>
+                          Replacement margin
+                          <strong className={`block ${tone(latestCost)}`}>{margin(latestCost)}</strong>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </section>
               <section className="rounded-xl border border-slate-200 overflow-hidden bg-white">

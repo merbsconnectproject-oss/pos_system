@@ -303,10 +303,9 @@ export const PosModal: React.FC<PosModalProps> = ({
       ? product.sellingUnits[selectedUnitIndex]
       : { name: product.baseUnit, conversionFactor: 1, price: product.retailPrice, tradePrice: product.tradePrice };
 
-    // Apply trade price if customer is electrician or contractor
-    const isTradeCustomer = selectedCustomer && (selectedCustomer.customerType === 'electrician' || selectedCustomer.customerType === 'contractor');
-    const unitPrice = isTradeCustomer ? (unit.tradePrice || product.tradePrice) : (unit.price || product.retailPrice);
-    const frozenCost = (product.costPrice[outletId] || product.retailPrice * 0.7) * unit.conversionFactor;
+    // FR-PRICE-04 · FR-PRICE-05: the customer's level, then their agreed rate.
+    const unitPrice = priceFor(product, unit, selectedCustomer);
+    const frozenCost = frozenCostFor(product, unit.conversionFactor);
 
     // BR-9 / FR-POS-13: negative stock is blocked unless the user holds stock.oversell.
     const stockOnHand = product.stock[outletId] || 0;
@@ -374,12 +373,10 @@ export const PosModal: React.FC<PosModalProps> = ({
       const product = line.product;
       const nextUnit = product.sellingUnits?.find((unit) => unit.name === nextUnitName);
       const factor = nextUnit?.conversionFactor ?? 1;
-      const isTrade = selectedCustomer &&
-        (selectedCustomer.customerType === 'electrician' || selectedCustomer.customerType === 'contractor');
-      const price = isTrade
-        ? nextUnit?.tradePrice ?? product.tradePrice * factor
-        : nextUnit?.price ?? product.retailPrice * factor;
-      const frozenCost = (product.costPrice[outletId] || product.retailPrice * 0.7) * factor;
+      const price = priceFor(product,
+        { price: nextUnit?.price, tradePrice: nextUnit?.tradePrice, conversionFactor: factor },
+        selectedCustomer);
+      const frozenCost = frozenCostFor(product, factor);
       return prev.map((item) =>
         item.product.id === productId && item.selectedUnit === currentUnitName
           ? {
@@ -492,19 +489,16 @@ export const PosModal: React.FC<PosModalProps> = ({
     const found = customers.find((c) => c.phone.includes(phone));
     if (found) {
       setSelectedCustomer(found);
-      // Recalculate cart items with trade pricing if trade customer!
-      if (found.customerType === 'electrician' || found.customerType === 'contractor') {
-        setCart((prev) =>
-          prev.map((item) => {
-            const tradePrice = item.product.tradePrice * item.conversionFactor;
-            return {
-              ...item,
-              unitPrice: tradePrice,
-              lineTotal: lineTotal(item.quantity, tradePrice),
-            };
-          })
-        );
-      }
+      // FR-PRICE-04: attaching a customer re-prices what is already rung up.
+      // Every line, not only the trade ones — a customer attached by mistake
+      // and then removed has to go back to retail too.
+      setCart((prev) =>
+        prev.map((item) => {
+          const price = priceFor(item.product,
+            { conversionFactor: item.conversionFactor }, found);
+          return { ...item, unitPrice: price, lineTotal: lineTotal(item.quantity, price, item.discount) };
+        }),
+      );
     }
   };
 
@@ -583,6 +577,51 @@ export const PosModal: React.FC<PosModalProps> = ({
     setCartDiscountPercent(nextDiscount);
     setDiscountModalOpen(false);
   };
+
+  /**
+   * FR-PRICE-04: which price level this customer buys at.
+   *
+   * <p>The server decides it from the customer type and sends it on the
+   * record. This screen used to test `type === 'electrician' || 'contractor'`
+   * in three separate places — which quietly charged a **company** retail,
+   * because that case was never in the list.
+   */
+  const priceLevel = (customer: Customer | null): 'RETAIL' | 'TRADE' => {
+    if (!customer) return 'RETAIL';
+    if (customer.priceLevel) return customer.priceLevel;
+    // Only reached for a customer created in this tab before the save returns.
+    return customer.customerType === 'retail' ? 'RETAIL' : 'TRADE';
+  };
+
+  /**
+   * FR-PRICE-04 · FR-PRICE-05: the price this customer pays for this unit.
+   *
+   * <p>The level first, then their agreed rate on top. The server allows a
+   * discount up to that rate without counting it against the cashier's own
+   * ceiling, so the two have to agree about what the rate means.
+   */
+  const priceFor = (
+    product: Product,
+    unit: { price?: number; tradePrice?: number; conversionFactor: number },
+    customer: Customer | null,
+  ) => {
+    const base = priceLevel(customer) === 'TRADE'
+      ? unit.tradePrice ?? product.tradePrice * unit.conversionFactor
+      : unit.price ?? product.retailPrice * unit.conversionFactor;
+
+    const rate = customer?.discountRate ?? 0;
+    return rate > 0 ? roundMoney(base * (1 - rate / 100)) : base;
+  };
+
+  /**
+   * BR-5: what this line cost, frozen.
+   *
+   * <p>Zero when nothing was recorded — stock adjusted in rather than
+   * received has no cost, and 70% of retail was a guess that looked precise
+   * on a profit report.
+   */
+  const frozenCostFor = (product: Product, factor: number) =>
+    (product.costPrice[outletId] ?? 0) * factor;
 
   const handleQuickCreateCustomer = async (e: React.FormEvent) => {
     e.preventDefault();

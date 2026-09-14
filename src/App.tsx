@@ -61,6 +61,7 @@ import { authApi, AuthApiError, onSessionSignal, type AuthSession } from './auth
 import { outletsApi } from './outletsApi';
 import { auditApi } from './auditApi';
 import { productsApi } from './productsApi';
+import type { StockWire } from './stockApi';
 import { stockApi, withStock, type MovementType } from './stockApi';
 import { suppliersApi, goodsReceiptApi } from './suppliersApi';
 import { salesApi, toCompletedSale, cartFromWire } from './salesApi';
@@ -696,10 +697,12 @@ export default function App() {
         const line = result.lines[0];
         if (line) {
           applyLevel(productId, {
+            productId,
             outletId: currentOutlet.id,
             quantity: line.resultingQuantity,
             averageCost: line.resultingAverageCost,
             reorderLevel: product?.minStockAlert[currentOutlet.id] ?? 0,
+            low: line.resultingQuantity <= (product?.minStockAlert[currentOutlet.id] ?? 0),
           });
         }
       })
@@ -749,11 +752,16 @@ export default function App() {
   };
 
   /** One product's figures for one outlet, replaced with what the server holds. */
-  const applyLevel = (productId: string, level: { outletId: string; quantity: number; averageCost: number; reorderLevel: number }) => {
+  const applyLevel = (productId: string, level: StockWire) => {
     setProducts((prev) => prev.map((product) => product.id !== productId ? product : {
       ...product,
       stock: { ...product.stock, [level.outletId]: level.quantity },
-      costPrice: { ...product.costPrice, [level.outletId]: level.averageCost },
+      // FR-PRICE-07: a caller without `price.view_cost` is sent no cost, and
+      // the map keeps the gap rather than filling it with a zero that would
+      // read as "this was free".
+      costPrice: level.averageCost == null
+        ? product.costPrice
+        : { ...product.costPrice, [level.outletId]: level.averageCost },
       minStockAlert: { ...product.minStockAlert, [level.outletId]: level.reorderLevel },
     }));
   };
