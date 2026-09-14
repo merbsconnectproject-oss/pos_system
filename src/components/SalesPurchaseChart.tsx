@@ -118,22 +118,22 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = ({ accentCo
       </div>
 
       {/* Sub-header Legend */}
-      <div className="flex items-center gap-3 py-3">
-        <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 shadow-2xs">
+      <div className="flex flex-wrap items-center gap-2 py-3">
+        <div className="flex min-w-0 items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 shadow-2xs">
           <span
             className="w-2.5 h-2.5 rounded-full"
             style={{ backgroundColor: accentColor || 'var(--chart-1, #c55200)' }}
           ></span>
           <span className="text-xs text-slate-500 font-medium">Total POS Sales</span>
-          <span className="text-xs font-black text-slate-900 ml-1 font-mono">GH₵ 48.9K</span>
+          <span className="text-xs font-black text-slate-900 ml-1 font-mono shrink-0">GH₵ 48.9K</span>
         </div>
-        <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 shadow-2xs">
+        <div className="flex min-w-0 items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 shadow-2xs">
           <span
             className="w-2.5 h-2.5 rounded-full"
             style={{ backgroundColor: 'var(--chart-2, #0f766e)' }}
           ></span>
           <span className="text-xs text-slate-500 font-medium">Goods Received (GRN)</span>
-          <span className="text-xs font-black text-slate-900 ml-1 font-mono">GH₵ 24.1K</span>
+          <span className="text-xs font-black text-slate-900 ml-1 font-mono shrink-0">GH₵ 24.1K</span>
         </div>
       </div>
 
