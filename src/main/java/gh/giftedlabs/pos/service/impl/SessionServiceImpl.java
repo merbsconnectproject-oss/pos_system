@@ -28,7 +28,6 @@ public class SessionServiceImpl implements SessionService {
     public static final String RESULT = "POS_SIGN_IN_RESULT";
     public static final String LOCKED = "POS_LOCKED";
     public static final String LAST_ACTIVITY = "POS_LAST_ACTIVITY";
-    public static final String OPEN_SHIFT = "POS_OPEN_SHIFT";
 
     private final AuthenticationService authentication;
     private final UserRepository users;
@@ -48,7 +47,6 @@ public class SessionServiceImpl implements SessionService {
         save(result, request, response);
         session.setAttribute(RESULT, result);
         session.setAttribute(LOCKED, false);
-        session.setAttribute(OPEN_SHIFT, false);
         session.setAttribute(LAST_ACTIVITY, clock.instant());
         audit.record(result.userId(), "AUTH_SIGN_IN", "user", result.userId(), null,
                 Map.of("username", result.username()), activeOutletId(result), null, ip);

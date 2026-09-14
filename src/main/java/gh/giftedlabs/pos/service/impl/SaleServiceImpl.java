@@ -12,6 +12,8 @@ import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.AuditService;
 import gh.giftedlabs.pos.service.InventoryService;
 import gh.giftedlabs.pos.service.SaleService;
+import gh.giftedlabs.pos.service.ShiftService;
+import gh.giftedlabs.pos.exception.ShiftException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,12 +44,15 @@ public class SaleServiceImpl implements SaleService {
     private final UserRepository users;
     private final StockLevelRepository levels;
     private final InventoryService inventory;
+    private final ShiftService shiftsService;
     private final AuditService audit;
     private final Clock clock;
 
     public SaleServiceImpl(SaleRepository sales, ProductRepository products, TerminalRepository terminals,
                            OutletRepository outlets, UserRepository users, StockLevelRepository levels,
-                           InventoryService inventory, AuditService audit, Clock clock) {
+                           InventoryService inventory, ShiftService shiftsService,
+                           AuditService audit, Clock clock) {
+        this.shiftsService = shiftsService;
         this.sales = sales;
         this.products = products;
         this.terminals = terminals;
@@ -73,6 +78,12 @@ public class SaleServiceImpl implements SaleService {
         Optional<Sale> existing = sales.findById(request.id());
         if (existing.isPresent()) return view(existing.get());
 
+        // FR-POS-02 · BR-13: takings have to land in a shift, or a cash-up has
+        // nothing to count them against. The till already prompts; this is what
+        // makes it true rather than advisory.
+        UUID shiftId = shiftsService.openShiftFor(actor.userId())
+                .orElseThrow(ShiftException::noOpenShift);
+
         Terminal terminal = terminalFor(request, actor);
         String receiptNumber = nextReceiptNumber(terminal, request.outletId());
 
@@ -89,6 +100,7 @@ public class SaleServiceImpl implements SaleService {
                 actor.userId(), subtotal, discountTotal, total, changeDue, clock.instant());
         sale.setCustomer(request.customerId(), blankToNull(request.customerName()),
                 blankToNull(request.customerPhone()));
+        sale.assignShift(shiftId);
 
         priced.forEach(line -> sale.addItem(line.toItem()));
         request.payments().forEach(payment -> sale.addPayment(new Payment(

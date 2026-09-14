@@ -5,6 +5,7 @@ import gh.giftedlabs.pos.entity.User;
 import gh.giftedlabs.pos.repository.UserRepository;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.AuditService;
+import gh.giftedlabs.pos.service.ShiftService;
 import gh.giftedlabs.pos.service.impl.SessionServiceImpl;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.*;
@@ -28,6 +29,7 @@ class SessionGuardFilterTest {
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
     private FilterChain chain;
+    private ShiftService shiftService;
     private UUID userId;
     private Instant now;
 
@@ -39,7 +41,16 @@ class SessionGuardFilterTest {
         var props = new PosProperties(new PosProperties.Deployment(PosProperties.Mode.COUNTER, "INC", "01"), auth,
                 new PosProperties.Consolidator(false, "", "", Duration.ofMinutes(15), Duration.ofSeconds(10),
                         new PosProperties.Ingest("", Duration.ofMinutes(45))), new PosProperties.Web(""));
-        filter = new SessionGuardFilter(users, props, audit, new ObjectMapper(), Clock.fixed(now, ZoneOffset.UTC));
+        // FR-AUTH-05 now asks the shift service rather than reading a session
+        // flag, so the two outcomes are driven by what it answers.
+        shiftService = mock(ShiftService.class);
+        filter = new SessionGuardFilter(users, props, audit, new ObjectMapper(),
+                Clock.fixed(now, ZoneOffset.UTC), new org.springframework.beans.factory.ObjectProvider<>() {
+                    @Override public ShiftService getObject() { return shiftService; }
+                    @Override public ShiftService getObject(Object... args) { return shiftService; }
+                    @Override public ShiftService getIfAvailable() { return shiftService; }
+                    @Override public ShiftService getIfUnique() { return shiftService; }
+                });
         request = new MockHttpServletRequest("GET", "/api/products"); response = new MockHttpServletResponse();
         chain = mock(FilterChain.class); userId = UUID.randomUUID();
         User user = new User("ama", "Ama", "hash");
@@ -55,12 +66,12 @@ class SessionGuardFilterTest {
     @Nested @DisplayName("idle outcome depends on shift state")
     class Idle {
         @Test void noOpenShiftExpiresSession() throws Exception {
-            request.getSession().setAttribute(SessionServiceImpl.OPEN_SHIFT, false);
+            when(shiftService.openShiftFor(userId)).thenReturn(Optional.empty());
             filter.doFilter(request, response, chain);
             assertEquals(401, response.getStatus()); verifyNoInteractions(chain);
         }
         @Test void openShiftLocksInsteadOfSigningOut() throws Exception {
-            request.getSession().setAttribute(SessionServiceImpl.OPEN_SHIFT, true);
+            when(shiftService.openShiftFor(userId)).thenReturn(Optional.of(UUID.randomUUID()));
             filter.doFilter(request, response, chain);
             assertEquals(423, response.getStatus());
             assertTrue((Boolean) request.getSession().getAttribute(SessionServiceImpl.LOCKED));

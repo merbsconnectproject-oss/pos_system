@@ -43,6 +43,15 @@ public class Sale {
     @Column(name = "cashier_id", nullable = false, updatable = false)
     private UUID cashierId;
 
+    /**
+     * FR-POS-02 · BR-14: the shift this was rung up in.
+     *
+     * <p>Nullable because sales recorded before J existed have none, and
+     * rewriting history to pretend otherwise would be worse than a gap.
+     */
+    @Column(name = "shift_id", updatable = false)
+    private UUID shiftId;
+
     @Column(name = "customer_id", updatable = false)
     private UUID customerId;
 
@@ -115,6 +124,8 @@ public class Sale {
     public UUID getOutletId() { return outletId; }
     public UUID getTerminalId() { return terminalId; }
     public UUID getCashierId() { return cashierId; }
+    public UUID getShiftId() { return shiftId; }
+    public void assignShift(UUID shiftId) { this.shiftId = shiftId; }
     public UUID getCustomerId() { return customerId; }
     public String getCustomerName() { return customerName; }
     public String getCustomerPhone() { return customerPhone; }

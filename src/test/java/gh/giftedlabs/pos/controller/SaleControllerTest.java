@@ -15,6 +15,7 @@ import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.InventoryService;
 import gh.giftedlabs.pos.service.LoginAttemptService;
 import gh.giftedlabs.pos.service.SaleService;
+import gh.giftedlabs.pos.service.ShiftService;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -69,6 +70,7 @@ class SaleControllerTest {
     @Autowired LoginAttemptService loginAttempts;
     @Autowired InventoryService inventory;
     @Autowired SaleService saleService;
+    @Autowired ShiftService shiftService;
     @Autowired @Qualifier("passwordEncoder") PasswordEncoder passwords;
 
     private String ownerName;
@@ -92,6 +94,11 @@ class SaleControllerTest {
         ownerId = users.save(owner).getId();
 
         loginAttempts.recordSuccess(ownerName);
+
+        // FR-POS-02 · BR-13: a sale has to land in a shift, so every test that
+        // sells needs one open. Its own test asserts the refusal.
+        shiftService.open(terminalId, 20_000L,
+                new PosPrincipal(ownerId, ownerName, outletId, Instant.now()), "127.0.0.1");
     }
 
     @Nested
@@ -468,6 +475,34 @@ class SaleControllerTest {
     }
 
     @Nested
+    @DisplayName("without an open shift")
+    class NoShift {
+
+        @Test
+        @DisplayName("a sale is refused by the server, not just the till — FR-POS-02, BR-13")
+        void refusesToSell() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Unshifted " + run, "pcs", "10.00", "20");
+
+            // A second cashier at this outlet has no shift of their own.
+            String otherName = "cashier-" + run.toLowerCase();
+            User other = new User(otherName, "Other Cashier", passwords.encode(PASSWORD));
+            other.assignRole(Role.CASHIER);
+            other.assignOutlet(outletId);
+            users.save(other);
+            loginAttempts.recordSuccess(otherName);
+
+            Session theirs = signInAs(otherName);
+            mvc.perform(theirs.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(sale(
+                                    line(productId, "pcs", "1", "10.00"), cash(1000L)))))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("NO_OPEN_SHIFT"));
+        }
+    }
+
+    @Nested
     @DisplayName("speed")
     class Speed {
 
@@ -671,6 +706,10 @@ class SaleControllerTest {
     }
 
     private Session signIn() throws Exception {
+        return signInAs(ownerName);
+    }
+
+    private Session signInAs(String identifier) throws Exception {
         MockHttpSession http = new MockHttpSession();
         MvcResult csrf = mvc.perform(get("/api/auth/csrf").session(http))
                 .andExpect(status().isOk()).andReturn();
@@ -679,7 +718,7 @@ class SaleControllerTest {
         MvcResult signedIn = mvc.perform(post("/api/auth/sign-in").session(http)
                         .header("X-XSRF-TOKEN", token).cookie(new Cookie("XSRF-TOKEN", token))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(Map.of("identifier", ownerName, "password", PASSWORD))))
+                        .content(json.writeValueAsString(Map.of("identifier", identifier, "password", PASSWORD))))
                 .andExpect(status().isOk()).andReturn();
 
         return new Session((MockHttpSession) signedIn.getRequest().getSession(false), token);

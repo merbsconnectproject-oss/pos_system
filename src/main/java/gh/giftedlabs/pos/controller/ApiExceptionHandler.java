@@ -11,6 +11,7 @@ import gh.giftedlabs.pos.exception.IncorrectPinException;
 import gh.giftedlabs.pos.exception.InsufficientStockException;
 import gh.giftedlabs.pos.exception.ProductNotFoundException;
 import gh.giftedlabs.pos.exception.SaleException;
+import gh.giftedlabs.pos.exception.ShiftException;
 import gh.giftedlabs.pos.exception.InvalidResetTokenException;
 import gh.giftedlabs.pos.exception.SessionAuthenticationException;
 import org.springframework.security.access.AccessDeniedException;
@@ -114,6 +115,19 @@ public class ApiExceptionHandler {
     @ExceptionHandler(SaleException.class)
     public ResponseEntity<ApiError> onSale(SaleException ex) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(new ApiError(ex.getCode(), ex.getMessage(), ex.getDetails()));
+    }
+
+    /**
+     * FR-CASH · BR-13: a shift that cannot be opened or closed as asked.
+     *
+     * <p>409, because every one of these is a state conflict — a shift is
+     * already open, already closed, or the drawer does not balance well enough
+     * to close without a word of explanation.
+     */
+    @ExceptionHandler(ShiftException.class)
+    public ResponseEntity<ApiError> onShift(ShiftException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiError(ex.getCode(), ex.getMessage(), ex.getDetails()));
     }
 
