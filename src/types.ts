@@ -154,10 +154,18 @@ export interface Customer {
   name: string;
   phone: string; // Primary lookup (FR-CUST-03)
   customerType: 'retail' | 'electrician' | 'contractor' | 'company';
+  /** FR-CUST-06: computed from their sales by the server, never stored. */
   totalPurchased: number;
   salesCount: number;
   discountRate?: number;
   notes?: string;
+  /** FR-CUST-02: the form already asks for these; the record now keeps them. */
+  email?: string;
+  address?: string;
+  /** BR-17: deactivated, never deleted — they are on receipts already printed. */
+  active?: boolean;
+  /** FR-CUST-04: which of the product's prices applies. Decided by the server. */
+  priceLevel?: 'RETAIL' | 'TRADE';
 }
 
 export interface Supplier {

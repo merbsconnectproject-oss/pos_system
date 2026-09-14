@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Briefcase, CalendarClock, CreditCard, Edit2, Phone, Plus, Search, Users, X } from 'lucide-react';
 import { CompletedSale, Customer, Outlet } from '../types';
 import { InfoHint } from './InfoHint';
+import { customersApi } from '../customersApi';
+import { toCompletedSale } from '../salesApi';
 
 type CustomerMode = 'list' | 'purchases' | 'types' | 'credit';
 
@@ -9,8 +11,10 @@ interface CustomersViewProps {
   customers: Customer[];
   sales?: CompletedSale[];
   outlets?: Outlet[];
-  onAddCustomer: (customer: Customer) => void;
-  onUpdateCustomer?: (customer: Customer) => void;
+  onAddCustomer: (customer: Customer) => Promise<Customer>;
+  onUpdateCustomer?: (customer: Customer) => Promise<Customer>;
+  /** BR-17: deactivated, never deleted — they are on receipts already printed. */
+  onSetCustomerActive?: (customerId: string, active: boolean) => Promise<Customer>;
 }
 
 const formatMoney = (amount: number) => `GH₵ ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -21,12 +25,15 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
   outlets = [],
   onAddCustomer,
   onUpdateCustomer,
+  onSetCustomerActive,
 }) => {
   const [activeMode, setActiveMode] = useState<CustomerMode>('list');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: '',
     phone: '',
@@ -47,50 +54,110 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
 
   const startCreate = () => {
     setEditingCustomer(null);
+    setSaveError(null);
     setForm({ name: '', phone: '', email: '', address: '', customerType: '', notes: '' });
     setModalOpen(true);
   };
 
   const startEdit = (customer: Customer) => {
     setEditingCustomer(customer);
+    setSaveError(null);
     setForm({
       name: customer.name,
       phone: customer.phone,
-      email: '',
-      address: '',
+      // FR-CUST-02: the form has always asked for these; the record keeps them
+      // now, so editing shows what was entered instead of a blank box.
+      email: customer.email || '',
+      address: customer.address || '',
       customerType: customer.customerType,
       notes: customer.notes || '',
     });
     setModalOpen(true);
   };
 
-  const submitCustomer = (event: React.FormEvent) => {
+  /**
+   * FR-CUST-02 · FR-CUST-03: saved by the server.
+   *
+   * <p>The discount rate is not recomputed from the type here. A shop that
+   * agreed 15% with one contractor should not have it quietly reset to the
+   * contractor default because somebody corrected a spelling — the server
+   * fills in the type's rate only when there is no rate yet.
+   */
+  const submitCustomer = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!form.customerType) return;
+    if (!form.customerType || saving) return;
+
     const customer: Customer = {
-      id: editingCustomer?.id || `cust-${Date.now()}`,
+      id: editingCustomer?.id || '',
       name: form.name.trim(),
       phone: form.phone.trim(),
+      email: form.email.trim(),
+      address: form.address.trim(),
       customerType: form.customerType,
       totalPurchased: editingCustomer?.totalPurchased || 0,
       salesCount: editingCustomer?.salesCount || 0,
-      discountRate:
-        form.customerType === 'electrician'
-          ? 8
-          : form.customerType === 'contractor'
-          ? 10
-          : form.customerType === 'company'
-          ? 12
-          : 0,
+      discountRate: editingCustomer?.discountRate,
       notes: form.notes.trim(),
     };
-    if (editingCustomer && onUpdateCustomer) onUpdateCustomer(customer);
-    else onAddCustomer(customer);
-    setModalOpen(false);
+
+    setSaving(true);
+    setSaveError(null);
+    try {
+      if (editingCustomer && onUpdateCustomer) await onUpdateCustomer(customer);
+      else await onAddCustomer(customer);
+      setModalOpen(false);
+    } catch (failure) {
+      // Usually FR-CUST-03: that number already belongs to somebody, and the
+      // server says who.
+      setSaveError(failure instanceof Error ? failure.message : 'That customer could not be saved.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const customerSales = (customer: Customer) =>
-    sales.filter((sale) => sale.customerId === customer.id || sale.customerPhone === customer.phone || sale.customerName === customer.name);
+  /**
+   * FR-CUST-06 · FR-CUST-05: their purchases, from the server, across every
+   * branch.
+   *
+   * <p>Filtering the sales this tab happens to have loaded would show a
+   * customer part of their own history — the recent list is capped, and a
+   * purchase at the other branch may never have been loaded here at all.
+   */
+  const [history, setHistory] = useState<CompletedSale[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedCustomer) {
+      setHistory([]);
+      return;
+    }
+
+    let current = true;
+    setHistoryLoading(true);
+    customersApi
+      .history(selectedCustomer.id)
+      .then((wires) => {
+        if (!current) return;
+        setHistory(wires.map((wire) => toCompletedSale(
+          wire,
+          [],
+          outlets.find((outlet) => outlet.id === wire.outletId)?.name || '',
+        )));
+      })
+      .catch(() => {
+        // The rest of the record is still worth showing; an empty history with
+        // the loading note gone reads as "no purchases", so say nothing here
+        // and let the count on the record speak.
+        if (current) setHistory([]);
+      })
+      .finally(() => {
+        if (current) setHistoryLoading(false);
+      });
+
+    // The customer can change while a request is in flight; only the newest
+    // answer is allowed to land.
+    return () => { current = false; };
+  }, [selectedCustomer, outlets]);
 
   const typeRows = [
     ['retail', 'Retail Standard', 'Retail price', 0],
@@ -163,6 +230,14 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                         <div className="flex justify-center gap-1.5">
                           <button onClick={() => setSelectedCustomer(customer)} className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold hover:bg-slate-200">View</button>
                           <button onClick={() => startEdit(customer)} className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold hover:bg-slate-200">Edit</button>
+                          {onSetCustomerActive && (
+                            <button
+                              onClick={() => void onSetCustomerActive(customer.id, customer.active === false)}
+                              className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold hover:bg-slate-200"
+                            >
+                              {customer.active === false ? 'Restore' : 'Deactivate'}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -263,7 +338,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
               <section className="rounded-xl border border-slate-200 overflow-hidden">
                 <div className="px-4 py-3 bg-slate-50 border-b border-slate-200"><h3 className="text-sm font-black text-slate-900">Purchase history</h3></div>
                 <div className="divide-y divide-slate-100">
-                  {customerSales(selectedCustomer).map((sale) => (
+                  {history.map((sale) => (
                     <div key={sale.id} className="px-4 py-3 flex justify-between gap-3 text-sm">
                       <div>
                         <div className="font-bold text-slate-800">{sale.receiptNumber}</div>
@@ -272,7 +347,10 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                       <div className="font-black text-slate-900">{formatMoney(sale.total)}</div>
                     </div>
                   ))}
-                  {customerSales(selectedCustomer).length === 0 && <div className="py-8 text-center text-sm text-slate-500">No linked purchases yet.</div>}
+                  {historyLoading && <div className="py-8 text-center text-sm text-slate-500">Loading purchases…</div>}
+                  {!historyLoading && history.length === 0 && (
+                    <div className="py-8 text-center text-sm text-slate-500">No linked purchases yet.</div>
+                  )}
                 </div>
               </section>
             </div>
@@ -294,6 +372,11 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
               <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800"><X className="w-5 h-5" /></button>
             </div>
             <form onSubmit={submitCustomer} className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
+              {saveError && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+                  {saveError}
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <label className="text-sm font-bold text-slate-800">Name or Company *<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-accent-500" /></label>
                 <label className="text-sm font-bold text-slate-800">Phone *<input required value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-accent-500" /></label>
@@ -304,7 +387,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
               <label className="text-sm font-bold text-slate-800 block">Notes<textarea rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-accent-500" /></label>
               <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-slate-200">
                 <button type="button" onClick={() => setModalOpen(false)} className="sm:w-1/3 py-3 rounded-lg border border-slate-300 font-bold text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-                <button type="submit" className="sm:w-2/3 py-3 rounded-lg bg-accent-500 hover:bg-accent-600 text-white font-bold text-sm shadow-xs">{editingCustomer ? 'Save Changes' : 'Save Customer'}</button>
+                <button type="submit" disabled={saving} className="sm:w-2/3 py-3 rounded-lg bg-accent-500 disabled:opacity-50 hover:bg-accent-600 text-white font-bold text-sm shadow-xs">{saving ? 'Saving…' : editingCustomer ? 'Save Changes' : 'Save Customer'}</button>
               </div>
             </form>
           </div>

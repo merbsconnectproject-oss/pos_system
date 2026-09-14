@@ -66,7 +66,12 @@ interface PosModalProps {
   customers: Customer[];
   shiftInfo: ShiftInfo;
   onOpenShift: () => void;
-  onAddCustomer: (customer: Customer) => void;
+  /**
+   * FR-CUST-03: saved by the server, which owns the id and decides whether
+   * that number already belongs to somebody. The saved record comes back and
+   * is what gets attached — a locally invented id would match no customer.
+   */
+  onAddCustomer: (customer: Customer) => Promise<Customer>;
   /**
    * BR-6: the server issues the receipt number, so this returns the committed
    * sale rather than accepting one. The number is printed and handed over — it
@@ -115,6 +120,8 @@ export const PosModal: React.FC<PosModalProps> = ({
   const [holdModalOpen, setHoldModalOpen] = useState(false);
   const [heldDrawerOpen, setHeldDrawerOpen] = useState(false);
   const [discountModalOpen, setDiscountModalOpen] = useState(false);
+  const [customerSaving, setCustomerSaving] = useState(false);
+  const [customerError, setCustomerError] = useState<string | null>(null);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [unitPickerProduct, setUnitPickerProduct] = useState<Product | null>(null);
   const [newCustomerName, setNewCustomerName] = useState('');
@@ -577,24 +584,36 @@ export const PosModal: React.FC<PosModalProps> = ({
     setDiscountModalOpen(false);
   };
 
-  const handleQuickCreateCustomer = (e: React.FormEvent) => {
+  const handleQuickCreateCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCustomerName.trim() || !newCustomerPhone.trim()) return;
-    const customer: Customer = {
-      id: `cust-${Date.now()}`,
-      name: newCustomerName.trim(),
-      phone: newCustomerPhone.trim(),
-      customerType: newCustomerType || 'retail',
-      totalPurchased: 0,
-      salesCount: 0,
-    };
-    onAddCustomer(customer);
-    setSelectedCustomer(customer);
-    setCustomerSearchPhone(customer.phone);
-    setNewCustomerName('');
-    setNewCustomerPhone('');
-    setNewCustomerType('retail');
-    setCustomerModalOpen(false);
+
+    setCustomerSaving(true);
+    setCustomerError(null);
+    try {
+      // The id is the server's. Attaching a locally minted one would put a
+      // customer on the sale that no later screen can look up.
+      const saved = await onAddCustomer({
+        id: '',
+        name: newCustomerName.trim(),
+        phone: newCustomerPhone.trim(),
+        customerType: newCustomerType || 'retail',
+        totalPurchased: 0,
+        salesCount: 0,
+      });
+      setSelectedCustomer(saved);
+      setCustomerSearchPhone(saved.phone);
+      setNewCustomerName('');
+      setNewCustomerPhone('');
+      setNewCustomerType('retail');
+      setCustomerModalOpen(false);
+    } catch (failure) {
+      // FR-CUST-03: most often this is the number already belonging to
+      // somebody, and the server says who.
+      setCustomerError(failure instanceof Error ? failure.message : 'That customer could not be saved.');
+    } finally {
+      setCustomerSaving(false);
+    }
   };
 
   // Complete Payment and Sale
@@ -2009,6 +2028,11 @@ export const PosModal: React.FC<PosModalProps> = ({
               </div>
               <form onSubmit={handleQuickCreateCustomer} className="space-y-3">
                 <div className="text-xs font-black uppercase tracking-wide text-slate-400">Quick create</div>
+                {customerError && (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-bold text-rose-700">
+                    {customerError}
+                  </div>
+                )}
                 <input
                   type="text"
                   value={newCustomerName}
@@ -2035,8 +2059,12 @@ export const PosModal: React.FC<PosModalProps> = ({
                   <option value="contractor">Contractor</option>
                   <option value="company">Company</option>
                 </select>
-                <button type="submit" className="w-full py-3 rounded-xl bg-accent-500 text-white font-black text-sm hover:bg-accent-600">
-                  Create and attach
+                <button
+                  type="submit"
+                  disabled={customerSaving}
+                  className="w-full py-3 rounded-xl bg-accent-500 disabled:opacity-50 text-white font-black text-sm hover:bg-accent-600"
+                >
+                  {customerSaving ? 'Saving…' : 'Create and attach'}
                 </button>
               </form>
             </div>

@@ -64,7 +64,12 @@ interface SettingsViewProps {
   onUpdateOutlet: (outletId: OutletId, changes: Partial<Outlet>) => void;
   currentUser: UserAccount;
   users: UserAccount[];
-  onUpdateUsers: (users: UserAccount[]) => void;
+  /**
+   * FR-USER-01: saved by the server. The whole list goes back and the change
+   * is found by comparing it with what was held — so this resolves only once
+   * the server has accepted it, and rejects when it has not.
+   */
+  onUpdateUsers: (users: UserAccount[]) => Promise<void>;
   rolesPermissions: RolePermissions[];
   onUpdateRolesPermissions: (roles: RolePermissions[]) => void;
   generalSettings: GeneralSettings;
@@ -189,6 +194,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [userOutlet, setUserOutlet] = useState<OutletId | ''>('');
   const [userPin, setUserPin] = useState('');
   const [userMustChangePassword, setUserMustChangePassword] = useState(false);
+  /**
+   * FR-AUTH-07: the password a new account is created with.
+   *
+   * <p>Required, because an account with no password cannot be signed into and
+   * there is no other way in. The server marks the account as needing its
+   * owner to replace this one before it can be used for anything.
+   */
+  const [userPassword, setUserPassword] = useState('');
+  const [userSaving, setUserSaving] = useState(false);
 
   // Password Reset Workflow State
   const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
@@ -547,6 +561,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setUserOutlet('');
     setUserPin('');
     setUserMustChangePassword(false);
+    setUserPassword(generateSecureTempPassword());
     setIsUserModalOpen(true);
   };
 
@@ -558,8 +573,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setUserPhone(u.phone);
     setUserRole(u.role);
     setUserOutlet(u.outletId);
-    setUserPin(u.pinCode || '1234');
+    setUserPin(u.pinCode || '');
     setUserMustChangePassword(!!u.mustChangePasswordOnNextLogin);
+    // Editing never shows or changes a password. Resetting one is its own act,
+    // with its own audit entry, on the reset control below.
+    setUserPassword('');
     setIsUserModalOpen(true);
   };
 
@@ -733,7 +751,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setIsNextLoginPromptOpen(false);
   };
 
-  const handleSaveUser = (e: React.FormEvent) => {
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userFullName.trim() || !userUsername.trim() || !userRole || !userOutlet) {
       alert('Please fill in required fields (Name, Username, Role, and Store Branch).');
@@ -741,6 +759,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
     if (!/^\d{4}$/.test(userPin)) {
       alert('PIN must be exactly 4 numeric digits.');
+      return;
+    }
+    if (!editingUser && userPassword.trim().length < 8) {
+      alert('A new account needs a temporary password of at least 8 characters. They will be asked to change it when they first sign in.');
       return;
     }
 
@@ -760,7 +782,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             }
           : u
       );
-      onUpdateUsers(updated);
+      setUserSaving(true);
+      try {
+        await onUpdateUsers(updated);
+      } catch {
+        // The reason was already shown; the list has been put back to what the
+        // server holds, so the screen is not left claiming a save that failed.
+        setUserSaving(false);
+        return;
+      }
+      setUserSaving(false);
       onAddAuditLog({
         actor: 'Admin',
         action: 'UPDATE_USER',
@@ -782,11 +813,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         outletId: userOutlet,
         active: true,
         pinCode: userPin,
+        // Sent once, on creation. It is never read back from the server.
+        password: userPassword.trim(),
         lastLogin: 'Never',
         avatarUrl: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80`,
         mustChangePasswordOnNextLogin: userMustChangePassword,
       };
-      onUpdateUsers([newUser, ...users]);
+      setUserSaving(true);
+      try {
+        await onUpdateUsers([newUser, ...users]);
+      } catch {
+        setUserSaving(false);
+        return;
+      }
+      setUserSaving(false);
       onAddAuditLog({
         actor: 'Admin',
         action: 'CREATE_USER',
@@ -2611,8 +2651,45 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     onChange={(e) => setUserPin(e.target.value.replace(/\D/g, ''))}
                     className="w-full px-3.5 py-2.5 text-sm text-center tracking-widest bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500 font-mono font-bold"
                   />
+                  <p className="text-[11px] text-slate-500">For counter approvals and unlocking the till — not for signing in.</p>
                 </div>
               </div>
+
+              {/* FR-AUTH-07: how they get in the first time */}
+              {!editingUser && (
+                <div className="space-y-1.5 rounded-xl border border-slate-300 bg-slate-50 p-4">
+                  <label className="text-sm font-bold text-slate-700">Temporary password</label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      required
+                      minLength={8}
+                      value={userPassword}
+                      onChange={(e) => setUserPassword(e.target.value)}
+                      className="flex-1 min-w-[12rem] px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-xl focus:outline-accent-500 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setUserPassword(generateSecureTempPassword())}
+                      className="px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer"
+                    >
+                      Generate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(userPassword).catch(() => {})}
+                      className="px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Give this to them in person. They sign in with it once and are asked to choose
+                    their own password before they can do anything else — until then two people know
+                    this one.
+                  </p>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
@@ -2750,9 +2827,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 text-sm font-bold bg-accent-500 hover:bg-accent-600 text-white rounded-xl shadow-xs transition-colors cursor-pointer"
+                  disabled={userSaving}
+                  className="px-5 py-2.5 text-sm font-bold bg-accent-500 disabled:opacity-50 hover:bg-accent-600 text-white rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
-                  {editingUser ? 'Save User Changes' : 'Create Staff User'}
+                  {userSaving ? 'Saving…' : editingUser ? 'Save User Changes' : 'Create Staff User'}
                 </button>
               </div>
             </form>

@@ -11,6 +11,8 @@ type AuthScreen =
   | 'forgot-password'
   | 'reset-sent'
   | 'set-password'
+  /** FR-AUTH-07: signed in on somebody else's password, and nothing else yet. */
+  | 'choose-own-password'
   | 'account-disabled';
 
 interface AuthViewProps {
@@ -66,6 +68,45 @@ export function AuthView({ companyName, accentColor, onAuthenticated }: AuthView
     event.preventDefault();
     void run(async () => {
       const session = await authApi.signIn(identifier.trim(), password);
+
+      // FR-AUTH-07: before anything else, including choosing a branch. The
+      // server refuses every other call until this is done, so sending them to
+      // the workspace first would be sending them to a wall of 403s.
+      if (session.mustChangePassword) {
+        setPendingSession(session);
+        setNewPassword('');
+        setConfirmPassword('');
+        setScreen('choose-own-password');
+        return;
+      }
+
+      if (session.mustChooseOutlet) {
+        setPendingSession(session);
+        setScreen('outlet-select');
+      } else {
+        onAuthenticated(session);
+      }
+    });
+  };
+
+  /** FR-AUTH-07: replace the password you were given with one only you know. */
+  const chooseOwnPassword = (event: FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    if (newPassword.length < 8) {
+      setError('Your new password must contain at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('The two passwords do not match.');
+      return;
+    }
+    void run(async () => {
+      // The response is the session, re-stamped with the flag cleared.
+      const session = await authApi.changeOwnPassword(password, newPassword);
+      setPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
       if (session.mustChooseOutlet) {
         setPendingSession(session);
         setScreen('outlet-select');
@@ -194,6 +235,46 @@ export function AuthView({ companyName, accentColor, onAuthenticated }: AuthView
               {feedback}
               <button disabled={busy} onClick={() => requestReset()} className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 py-2.5 text-xs font-bold text-slate-600"><RotateCcw className="h-4 w-4" />Resend instructions</button>
               <button onClick={backToSignIn} className="flex w-full items-center justify-center gap-1 text-xs font-bold text-slate-500"><ArrowLeft className="h-4 w-4" />Back to sign in</button>
+            </section>
+          )}
+
+          {screen === 'choose-own-password' && pendingSession && (
+            <section className="space-y-5 rounded-2xl border border-slate-300 bg-white p-7 shadow-xs">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-amber-50">
+                  <KeyRound className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-slate-900">Choose your own password</h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Welcome, {pendingSession.fullName}. The password you just used was chosen by
+                    whoever set up your account, so somebody else knows it. Pick one only you know
+                    before you carry on.
+                  </p>
+                </div>
+              </div>
+              {feedback}
+              <form className="space-y-4" onSubmit={chooseOwnPassword}>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-bold text-slate-700">New password</span>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
+                    <input className={fieldClass} type="password" minLength={8} value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" required />
+                  </div>
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-bold text-slate-700">Confirm password</span>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
+                    <input className={fieldClass} type="password" minLength={8} value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" required />
+                  </div>
+                </label>
+                <button disabled={busy} className={submitClass} style={{ backgroundColor: accentColor }}>
+                  {busy ? 'Saving…' : 'Save and continue'}<KeyRound className="h-4 w-4" />
+                </button>
+              </form>
             </section>
           )}
 

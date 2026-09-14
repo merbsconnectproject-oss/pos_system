@@ -22,6 +22,12 @@ export interface AuthSession {
   outletChoices: AuthOutlet[];
   mustChooseOutlet: boolean;
   pinSet: boolean;
+  /**
+   * FR-AUTH-07: this password was chosen by whoever created the account, so it
+   * has to be replaced before the account can be used. The server refuses
+   * everything else until it is; this is so the screen knows why.
+   */
+  mustChangePassword: boolean;
 }
 
 export const authApi = {
@@ -32,6 +38,18 @@ export const authApi = {
   selectOutlet: (outletId: string) => request<AuthSession>(`/api/auth/outlet/${encodeURIComponent(outletId)}`, { method: 'POST' }),
   lock: () => request<void>('/api/auth/lock', { method: 'POST' }),
   unlock: (pin: string) => request<void>('/api/auth/unlock', { method: 'POST', body: JSON.stringify({ pin }) }),
+  /**
+   * FR-AUTH-07: choose your own password, replacing the one you were given.
+   *
+   * Returns the session, re-stamped. Changing a password signs out every
+   * browser holding the old one; this is the browser that chose the new one,
+   * so it keeps its session and gets back a record with the flag cleared.
+   */
+  changeOwnPassword: (currentPassword: string, newPassword: string) =>
+    request<AuthSession>('/api/auth/password', {
+      method: 'POST', body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
   signOut: () => request<void>('/api/auth/sign-out', { method: 'POST' })
     .finally(forgetCsrf),
 

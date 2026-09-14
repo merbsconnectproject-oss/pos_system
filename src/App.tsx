@@ -28,7 +28,6 @@ import { ReportsView } from './components/ReportsView';
 import { AuthView } from './components/AuthView';
 import {
   OUTLETS,
-  INITIAL_CUSTOMERS,
   INITIAL_AUDIT_LOGS,
   INITIAL_SETTINGS,
   INITIAL_EXPENSES,
@@ -66,6 +65,7 @@ import { stockApi, withStock, type MovementType } from './stockApi';
 import { suppliersApi, goodsReceiptApi } from './suppliersApi';
 import { salesApi, toCompletedSale, cartFromWire } from './salesApi';
 import { shiftsApi, toShiftInfo, toShiftRecord, type CashMovementKind } from './shiftsApi';
+import { customersApi } from './customersApi';
 import { settingsApi } from './settingsApi';
 import { usersApi, toRolePermissions } from './usersApi';
 import { terminalsApi } from './salesApi';
@@ -155,11 +155,11 @@ export default function App() {
     // a rejection is reported rather than swallowed, because a silent empty
     // list looks exactly like "you have no sales yet".
     const [branches, catalogue, movementHistory, supplierList, saleHistory, openShift, shiftHistory,
-           roleCatalogue, settings] =
+           roleCatalogue, settings, customerList] =
       await Promise.allSettled([
         outletsApi.list(), productsApi.list(), stockApi.movements({ limit: 200 }), suppliersApi.list(),
         salesApi.recent(undefined, undefined, 100), shiftsApi.current(), shiftsApi.recent(undefined, 50),
-        usersApi.catalogue(), settingsApi.load(),
+        usersApi.catalogue(), settingsApi.load(), customersApi.list(),
       ]);
 
 
@@ -216,6 +216,9 @@ export default function App() {
     // paints with and the receipt policy it prints. Loaded rather than seeded,
     // because a screen showing a variance threshold the server does not use is
     // telling the shop a rule is in force that is not.
+    // FR-CUST-05: one list for the whole business, not one per branch.
+    if (customerList.status === 'fulfilled') setCustomers(customerList.value);
+
     if (settings.status === 'fulfilled') {
       setGeneralSettings(settings.value);
       setAccentColor(settings.value.accentColor);
@@ -223,7 +226,7 @@ export default function App() {
 
     const loaded: Record<string, PromiseSettledResult<unknown>> = {
       branches, catalogue, movements: movementHistory, suppliers: supplierList, sales: saleHistory,
-      shift: openShift, shiftHistory, roles: roleCatalogue, settings,
+      shift: openShift, shiftHistory, roles: roleCatalogue, settings, customers: customerList,
     };
     Object.entries(loaded).forEach(([name, result]) => {
       if (result.status === 'rejected') console.error(`[workspace] ${name} failed to load`, result.reason);
@@ -262,7 +265,10 @@ export default function App() {
   // makes "not loaded yet" indistinguishable from "this is your catalogue",
   // which is how a stale dashboard survived a sign-in unnoticed.
   const [products, setProducts] = useState<Product[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>(INITIAL_CUSTOMERS);
+  // FR-CUST-05: loaded from the server with the rest of the workspace. Seeded
+  // customers are people the shop has never met, and attaching one to a sale
+  // records a purchase against somebody who does not exist.
+  const [customers, setCustomers] = useState<Customer[]>([]);
   // FR-SUP-01: the directory is the server's.
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   // FR-POS-18: past transactions are the server's — BR-3 makes them
@@ -812,21 +818,38 @@ export default function App() {
     if (!(failure instanceof AuthApiError)) setAppErrorReference(`PRD-${Date.now().toString().slice(-6)}`);
   };
 
-  const handleAddCustomer = (customer: Customer) => {
-    setCustomers((prev) => [customer, ...prev]);
+  /**
+   * FR-CUST-02 · FR-CUST-03: a customer is saved, not held in this tab.
+   *
+   * <p>The server decides the id and the phone's uniqueness, so what comes
+   * back replaces what was sent. A locally invented `cust-1757…` id would be
+   * attached to a sale and match nobody.
+   */
+  const handleAddCustomer = async (customer: Customer) => {
+    const saved = await customersApi.create(customer);
+    setCustomers((prev) => [saved, ...prev.filter((existing) => existing.id !== saved.id)]);
+    return saved;
   };
 
-  const handleUpdateCustomer = (updatedCustomer: Customer) => {
-    setCustomers((prev) =>
-      prev.map((customer) => (customer.id === updatedCustomer.id ? updatedCustomer : customer))
-    );
+  const handleUpdateCustomer = async (updatedCustomer: Customer) => {
+    const saved = await customersApi.update(updatedCustomer);
+    setCustomers((prev) => prev.map((customer) => (customer.id === saved.id ? saved : customer)));
+    // The server writes the audit entry; this is the local view of the log.
     appendAuditLog({
       actor: currentUser?.fullName || 'System',
       action: 'CUSTOMER_UPDATED',
-      entity: `${updatedCustomer.name} (${updatedCustomer.phone})`,
+      entity: `${saved.name} (${saved.phone})`,
       outletName: currentOutlet.name,
       details: 'Customer profile or price-level mapping was updated.',
     });
+    return saved;
+  };
+
+  /** BR-17: deactivated, never deleted — they are on receipts already printed. */
+  const handleSetCustomerActive = async (customerId: string, active: boolean) => {
+    const saved = await customersApi.setActive(customerId, active);
+    setCustomers((prev) => prev.map((customer) => (customer.id === saved.id ? saved : customer)));
+    return saved;
   };
 
   const handleAddSupplier = (supplier: Supplier) => {
@@ -1054,20 +1077,66 @@ export default function App() {
       });
   };
 
-  const handleUpdateUsers = (next: UserAccount[]) => {
-    const reassigned = next.filter((candidate) => {
-      const current = users.find((user) => user.id === candidate.id);
-      return current !== undefined && current.outletId !== candidate.outletId;
-    });
-    if (reassigned.length === 0) return;
-
+  /**
+   * FR-USER-01 · FR-USER-04 · FR-USER-07: the staff screen hands back the whole
+   * list, so the change is found by comparing it with what is held.
+   *
+   * <p>Every kind of change is reconciled — a new account, an edited one, a
+   * deactivation — because a handler that only understood one of them left the
+   * other two looking saved and silently discarded. That is what happened to
+   * the first version of this: a created user got a toast, an id made from a
+   * timestamp, and no row on the server.
+   */
+  const handleUpdateUsers = async (next: UserAccount[]) => {
     const branchIds = outlets.filter((outlet) => outlet.id !== 'all-outlets').map((outlet) => outlet.id);
+    const held = new Map(users.map((user) => [user.id, user]));
 
-    void Promise.all(reassigned.map((user) => usersApi.update(user.id, user, branchIds)))
-      .then(() => usersApi.list(true))
-      .then(setUsers)
-      .catch(reportUserFailure);
+    // A record the server has never seen. Its id was invented by the browser,
+    // so it is matched by absence rather than by id.
+    const created = next.filter((candidate) => !held.has(candidate.id));
+
+    const edited = next.filter((candidate) => {
+      const current = held.get(candidate.id);
+      if (!current) return false;
+      return current.outletId !== candidate.outletId
+        || current.fullName !== candidate.fullName
+        || current.username !== candidate.username
+        || current.email !== candidate.email
+        || current.phone !== candidate.phone
+        || current.role !== candidate.role;
+    });
+
+    // BR-17: deactivation is its own endpoint, not a field on the form.
+    const activeFlips = next.filter((candidate) => {
+      const current = held.get(candidate.id);
+      return current !== undefined && current.active !== candidate.active;
+    });
+
+    if (created.length === 0 && edited.length === 0 && activeFlips.length === 0) return;
+
+    try {
+      for (const account of created) {
+        // FR-AUTH-07: the password typed into the form gets them through the
+        // door once. The server marks the account as needing its owner to
+        // choose their own before it can be used for anything else.
+        await usersApi.create(account, branchIds);
+      }
+      for (const account of edited) {
+        await usersApi.update(account.id, account, branchIds);
+      }
+      for (const account of activeFlips) {
+        await usersApi.setActive(account.id, account.active);
+      }
+      setUsers(await usersApi.list(true));
+    } catch (failure) {
+      // The list is reloaded either way, so the screen shows what the server
+      // holds rather than the edit that did not land.
+      reportUserFailure(failure);
+      setUsers(await usersApi.list(true).catch(() => users));
+      throw failure;
+    }
   };
+
 
   const reportUserFailure = (failure: unknown) => {
     if (failure instanceof AuthApiError && failure.status !== 401 && failure.status !== 423) {
@@ -1468,6 +1537,7 @@ export default function App() {
               outlets={outlets}
               onAddCustomer={handleAddCustomer}
               onUpdateCustomer={handleUpdateCustomer}
+              onSetCustomerActive={handleSetCustomerActive}
             />
           )}
 
@@ -1720,7 +1790,7 @@ export default function App() {
         customers={customers}
         shiftInfo={shiftInfo}
         onOpenShift={() => (permissions.hasAny('shift.open', 'shift.close')) && setShiftModalOpen(true)}
-        onAddCustomer={(customer) => setCustomers((prev) => [customer, ...prev])}
+        onAddCustomer={handleAddCustomer}
         onSaleCompleted={handleSaleCompleted}
       />
 

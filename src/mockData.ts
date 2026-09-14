@@ -858,57 +858,7 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
 ];
 
-export const INITIAL_CUSTOMERS: Customer[] = [
-  {
-    id: 'cust-1',
-    name: 'Kwabena Boateng (General Builder)',
-    phone: '0244123456',
-    customerType: 'contractor',
-    totalPurchased: 24500.00,
-    salesCount: 35,
-    discountRate: 8,
-    notes: 'Koforidua commercial & residential building contractor (Inco Hardware client)',
-  },
-  {
-    id: 'cust-2',
-    name: 'Yaw Mensah (Master Electrician)',
-    phone: '0244567890',
-    customerType: 'electrician',
-    totalPurchased: 18450.00,
-    salesCount: 42,
-    discountRate: 8,
-    notes: 'Certified Master Electrician, Kumasi sub-station & domestic wiring (Apex client)',
-  },
-  {
-    id: 'cust-3',
-    name: 'Kwame Osei (Commercial Electricals)',
-    phone: '0201234567',
-    customerType: 'contractor',
-    totalPurchased: 34200.00,
-    salesCount: 28,
-    discountRate: 10,
-    notes: 'Apex Heights Residential high-voltage engineer (Apex client)',
-  },
-  {
-    id: 'cust-4',
-    name: 'Akosua Frimpong (Home Renovation)',
-    phone: '0559876543',
-    customerType: 'retail',
-    totalPurchased: 3120.00,
-    salesCount: 16,
-    notes: 'Home painting and plumbing renovations in Koforidua',
-  },
-  {
-    id: 'cust-5',
-    name: 'BuildRight Construction Ltd',
-    phone: '0307890123',
-    customerType: 'company',
-    totalPurchased: 89400.00,
-    salesCount: 19,
-    discountRate: 12,
-    notes: 'Institutional building projects procurement',
-  },
-];
+// INITIAL_CUSTOMERS is gone — customers come from the API (FR-CUST-05).
 
 export const INITIAL_SUPPLIERS: Supplier[] = [
   // Inco Hardware Vendors
