@@ -37,26 +37,57 @@ non-deferred item in its section is complete, including its non-functional items
 
 | Feature | Items | Frontend | Backend |
 |---|---:|---:|---:|
-| A · Authentication & session | 12 | 12 done | 11 done, 1 partial |
-| B · Outlets | 7 | 6 done, 1 deferred | 6 done, 1 deferred |
-| C · Product catalogue | 14 | 8 done, 3 partial, 1 open, 2 deferred | 10 done, 2 deferred, 2 open |
-| D · Units & conversions | 7 | 6 done, 1 open | 6 done, 1 open |
-| E · Pricing | 8 | 4 done, 2 partial, 2 open | 3 done (via C), 5 open |
-| F · Inventory | 12 | 9 done, 2 partial, 1 deferred | 8 done, 2 partial, 2 deferred |
-| G · Point of sale | 20 | 15 done, 4 partial, 1 deferred | 8 done, 1 partial, 11 frontend-only |
-| H · Payments | 9 | 6 done, 2 partial, 1 deferred | 7 done, 1 frontend-only, 1 deferred |
-| I · Receipts & printing | 10 | 5 done, 4 partial, 1 deferred | 0 |
-| J · Shifts & cash | 9 | 8 done, 1 partial | 0 |
-| K · Suppliers & goods receipt | 10 | 5 done, 2 partial, 3 deferred | 7 done, 3 deferred |
-| L · Customers | 7 | 5 done, 1 partial, 1 deferred | 0 |
-| M · Users, roles & permissions | 8 | 7 done, 1 partial | 0 |
-| N · Audit | 5 | 1 done, 2 partial, 2 backend-only | 4 done, 1 open |
-| O · Reports & dashboard | 7 | 4 done, 2 partial, 1 deferred | 0 |
-| P · Settings | 8 | 5 done, 3 partial | 0 |
-| Q · Connectivity & resilience | 8 | 0 done, 2 partial, 5 open, 1 deferred | 0 |
-| R · Cross-cutting non-functional | 18 | 6 done, 4 partial, 8 backend | 0 |
+| A · Authentication & session | 15 | 13 done, 2 open | 14 done, 1 partial |
+| B · Outlets | 10 | 7 done, 1 partial, 1 open, 1 deferred | 7 done, 2 partial, 1 deferred |
+| C · Product catalogue | 17 | 9 done, 2 partial, 5 open, 1 deferred | 12 done, 1 partial, 2 open, 2 deferred |
+| D · Units & conversions | 8 | 7 done, 1 open | 6 done, 2 open |
+| E · Pricing | 10 | 6 done, 2 partial, 2 open | 4 done, 1 partial, 5 open |
+| F · Inventory | 15 | 10 done, 2 partial, 2 open, 1 deferred | 9 done, 1 partial, 3 open, 2 deferred |
+| G · Point of sale | 25 | 17 done, 3 partial, 4 open, 1 deferred | 5 done, 19 open, 1 deferred |
+| H · Payments | 11 | 6 done, 2 partial, 2 open, 1 deferred | 7 done, 3 open, 1 deferred |
+| I · Receipts & printing | 13 | 7 done, 3 partial, 2 open, 1 deferred | 12 open, 1 deferred |
+| J · Shifts & cash | 12 | 9 done, 1 partial, 2 open | 12 open |
+| K · Suppliers & goods receipt | 11 | 6 done, 2 partial, 3 deferred | 8 done, 3 deferred |
+| L · Customers | 8 | 6 done, 1 partial, 1 deferred | 7 open, 1 deferred |
+| M · Users, roles & permissions | 12 | 10 done, 1 partial, 1 open | 12 open |
+| N · Audit | 6 | 2 done, 2 partial, 2 open | 4 done, 1 partial, 1 open |
+| O · Reports & dashboard | 10 | 6 done, 2 partial, 1 open, 1 deferred | 9 open, 1 deferred |
+| P · Settings | 12 | 8 done, 4 partial | 12 open |
+| Q · Connectivity & resilience | 10 | 2 partial, 7 open, 1 deferred | 9 open, 1 deferred |
+| R · Cross-cutting non-functional | 22 | 4 done, 3 partial, 15 open | 3 done, 3 partial, 16 open |
 
-**Frontend ≈ 95% of Stage 1 · Backend: A B C D F G H K done, N mostly · E J L M O P Q outstanding · Contract frozen and machine-checked (`npm run check`)**
+**228 items · 60 complete (both boxes) · frontend 134 done · backend 79 done,
+10 partial · contract frozen and machine-checked (`npm run check`)**
+
+> The table above is generated from the boxes below, so the two cannot drift.
+> Read it with one caveat: many items have no backend half — a scanner that
+> distinguishes a scan from typing, or a screen that runs without a sidebar, is
+> finished when the frontend box is ticked. Their backend box stays open and the
+> count reads worse than the truth. G is the clearest case: 19 of its 25 items
+> are the till's own behaviour. **The feature table below is the better read for
+> backend progress.**
+
+### Where the backend stands
+
+| | Feature | State |
+|---|---|---|
+| ✅ | A Auth · B Outlets · C Catalogue · D Units | done |
+| ✅ | F Inventory · G Point of sale · H Payments · K Suppliers | done |
+| 🟨 | N Audit | writes and reads; some actions do not exist yet to log |
+| 🟨 | E Pricing | the three prices and history; per-outlet overrides open |
+| ⬜ | I Receipts · J Shifts · L Customers · M Users · O Reports · P Settings | not started |
+| — | Q Connectivity | n/a — local-first removed the offline queue |
+
+**Release gates** — 1 ⬜ · 2 ⬜ (needs the printer) · **3 ✅** same payment twice records
+once · **4 ✅** two terminals cannot sell the same last unit.
+
+**Still mock in the app:** customers, users, roles, settings, shift records, and the
+Stage 2 modules. Everything else reads and writes the API.
+
+**Waiting on a decision from you:** 31 vs 33 permission codes (blocks M), the thermal
+printer (blocks I and gate 2). Two rules are unenforced on *both* sides because the
+settings holding them do not exist yet — the adjustment approval threshold
+(FR-INV-06) and the discount ceiling (FR-POS-10); both land with P.
 
 ---
 
@@ -104,7 +135,7 @@ non-deferred item in its section is complete, including its non-functional items
 ## C · Product catalogue — `FR-PROD`
 
 ### Functional
-- [x][ ] Product record: name, SKU, category, brand, supplier, base unit, prices, reorder level, image, active flag — FR-PROD-01 · `D-03` `D-04`
+- [x][x] Product record: name, SKU, category, brand, supplier, base unit, prices, reorder level, image, active flag — FR-PROD-01 · `D-03` `D-04` *(reorder level is per outlet and lives on the stock level — BR-1)*
 - [ ][x] SKU auto-generated with manual override — FR-PROD-02 *({OUTLET}-{CATEGORY}-{NNN})*
 - [ ][x] SKU unique across the system — FR-PROD-02 *(unique index on upper(sku))*
 - [x][x] Multiple barcodes per product — FR-PROD-03 · `D-06`
@@ -112,17 +143,17 @@ non-deferred item in its section is complete, including its non-functional items
 - [ ][x] Barcode unique system-wide — FR-PROD-03
 - [x][x] Categories and brands managed as lists — FR-PROD-05 · `D-09` `D-10` *(add, rename, retire; units of measure too — FR-UOM-01)*
 - [x][x] Search matches name, SKU, barcode, brand, category; partial and out-of-order terms — FR-PROD-06
-- [x][ ] Search results show stock at the active outlet — FR-PROD-07 *(blocked on F: stock is per outlet)*
+- [x][x] Search results show stock at the active outlet — FR-PROD-07 *(levels folded into the catalogue at load)*
 - [x][x] Products deactivated, never deleted — FR-PROD-08 · BR-17 · `D-19`
-- [~][~] Full cost and price history retained and viewable — FR-PROD-09 · `D-08` *(price history recorded append-only; cost history needs F)*
-- [x][ ] Bulk import: template, upload, column mapping, row validation, error file, preview, commit — FR-PROD-10 · `D-12`…`D-16` *(endpoint not built; SKU blocks needed, see ProductServiceImpl.generateSku)*
+- [~][~] Full cost and price history retained and viewable — FR-PROD-09 · `D-08` *(price history append-only; cost history is derivable from the ledger but has no endpoint, and the modal still renders mock rows)*
+- [x][ ] Bulk import: template, upload, column mapping, row validation, error file, preview, commit — FR-PROD-10 · `D-12`…`D-16` *(the screen parses and validates locally; no commit endpoint. Needs SKU blocks first — generateSku counts rows, which two importers would race)*
 - [~][-] Bulk price update by category, brand or supplier with affected-count preview — FR-PROD-11 · `D-20` *(Stage 2; filters render, apply not wired)*
 - [-][-] Product variants under a parent — FR-PROD-12 · `D-21` *(Stage 2)*
 
 ### Non-functional
 - [ ][ ] Four-term partial query returns the product in the top three in under 300 ms at 3,000 products — NFR-1 · FR-PROD acceptance *(indexed, not yet measured at volume)*
 - [ ][x] Full-text or trigram index on name, SKU, description — PRD §7.5 *(pg_trgm GIN on name and sku)*
-- [x][ ] Empty and no-results states — `D-17` `D-18` · `L-03` `L-11`
+- [x][x] Empty and no-results states — `D-17` `D-18` · `L-03` `L-11` *(an empty catalogue is now a real answer, not a seeded list)*
 
 ---
 
@@ -133,9 +164,9 @@ non-deferred item in its section is complete, including its non-functional items
 - [x][x] Additional selling units with a conversion factor to base — FR-UOM-02 · `D-05`
 - [x][x] Cashier picks the unit at the counter; quantity and price convert — FR-UOM-03 · `C-04`
 - [x][x] A selling unit may carry its own price, not a multiple — FR-UOM-04
-- [x][~] Goods received in a purchase unit, converted to base on receipt — FR-UOM-05 *(conversion is here; receiving is F/K)*
+- [x][x] Goods received in a purchase unit, converted to base on receipt — FR-UOM-05 *(3 drums of 100 m books in 300 m)*
 - [x][x] Fractional quantities to 3 decimal places — FR-UOM-06 · BR-12
-- [ ][ ] Conversion factor locked once stock or transactions exist — FR-UOM-07 *(blocked on F: nothing to check against yet)*
+- [ ][ ] Conversion factor locked once stock or transactions exist — FR-UOM-07 *(now checkable — movements and sale lines exist — but nothing enforces it: editing a product replaces its units wholesale)*
 
 ### Non-functional
 - [x][ ] Receiving 3 drums of 100 m gives 300 m; selling 12.5 m leaves 287.5 m; selling a drum leaves 187.5 m — FR-UOM acceptance *(asserted in `contract-check.ts`)*
@@ -145,18 +176,18 @@ non-deferred item in its section is complete, including its non-functional items
 ## E · Pricing — `FR-PRICE`
 
 ### Functional
-- [x][ ] Cost, retail and trade price per product — FR-PRICE-01 · `D-07`
-- [x][ ] Floor price below which approval is required — FR-PRICE-02 · BR-10
+- [x][x] Cost, retail and trade price per product — FR-PRICE-01 · `D-07` *(cost is the weighted average per outlet — BR-4)*
+- [x][x] Floor price below which approval is required — FR-PRICE-02 · BR-10 *(server refuses without an approver; approver recorded on the line)*
 - [ ][ ] Per-outlet price override — FR-PRICE-03
-- [x][ ] Customer type determines the price level automatically — FR-PRICE-04
+- [x][ ] Customer type determines the price level automatically — FR-PRICE-04 *(needs L: customers are still mock)*
 - [~][ ] Customer-specific fixed discount or agreed price — FR-PRICE-05 *(field on the record, not applied at the counter)*
-- [~][ ] Price changes versioned with effective date and user — FR-PRICE-06 *(history view is mock)*
-- [x][ ] Cost and margin visible only with `price.view_cost` — FR-PRICE-07
+- [~][~] Price changes versioned with effective date and user — FR-PRICE-06 *(`product_price_history` records who and when, append-only; no read endpoint, so the view is still mock)*
+- [x][ ] Cost and margin visible only with `price.view_cost` — FR-PRICE-07 *(hidden in the UI; the API returns cost to anyone with `stock.view`)*
 - [ ][ ] Accounting margin and replacement margin shown side by side — FR-PRICE-08
 
 ### Non-functional
-- [x][ ] Money held as integer minor units on the wire; half-up rounding per line — BR-11 *(`money.ts`, asserted)*
-- [x][ ] Historical documents keep the price used at the time — BR-5 · FR-PRICE-06
+- [x][x] Money held as integer minor units on the wire; half-up rounding per line — BR-11 *(sale amounts are BIGINT pesewas; per-unit rates keep 4 dp)*
+- [x][x] Historical documents keep the price used at the time — BR-5 · FR-PRICE-06 *(cost frozen on the sale line; asserted against a later repricing)*
 
 ---
 
@@ -410,14 +441,14 @@ non-deferred item in its section is complete, including its non-functional items
 
 ### Availability & durability
 - [ ][ ] NFR-4 · Counter tolerates 15-minute dropouts
-- [ ][ ] NFR-5 · No committed sale lost on abrupt power loss
+- [ ][~] NFR-5 · No committed sale lost on abrupt power loss *(a sale commits in one transaction — receipt number, lines, payments and stock together; not yet tested by pulling the plug)*
 - [ ][ ] NFR-6 · Automated daily off-site backup, 30-day retention, documented and **tested** restore
 - [ ][ ] NFR-7 · Recovery point 15 minutes, recovery time 4 hours
 
 ### Security
-- [ ][ ] NFR-8 · Passwords bcrypt/argon2, PINs hashed separately, TLS on all traffic
-- [ ][ ] NFR-9 · Server-side authorisation on every endpoint
-- [ ][ ] NFR-10 · Rate limiting on authentication and approval endpoints
+- [ ][~] NFR-8 · Passwords bcrypt/argon2, PINs hashed separately, TLS on all traffic *(Argon2id with separate PIN encoder; TLS is a deployment matter, not yet configured)*
+- [ ][x] NFR-9 · Server-side authorisation on every endpoint *(`@PreAuthorize` on every mutating route; unauthenticated is 401, unpermitted is 403)*
+- [ ][x] NFR-10 · Rate limiting on authentication and approval endpoints *(sign-in, unlock and counter overrides, checked before any hash work)*
 
 ### Usability & accessibility
 - [ ][ ] NFR-11 · A cashier reaches competence on core selling in one training session
@@ -427,8 +458,8 @@ non-deferred item in its section is complete, including its non-functional items
 
 ### Maintainability & data
 - [x][ ] NFR-15 · The accent is a single token, no hard-coded accent hex
-- [x][ ] NFR-16 · A third outlet is configuration only
-- [ ][ ] NFR-17 · Nightly job reconciles stock against movement sums and reports drift
+- [x][x] NFR-16 · A third outlet is configuration only *(outlet_id on every table; adding one needs no schema change)*
+- [ ][~] NFR-17 · Nightly job reconciles stock against movement sums and reports drift *(`InventoryService.drift` computes it; nothing schedules it)*
 - [~][ ] NFR-18 · Currency GHS, dates DD/MM/YYYY, 24-hour time *(currency and most dates done; not audited app-wide)*
 
 ### Engineering hygiene
