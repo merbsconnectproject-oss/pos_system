@@ -26,7 +26,8 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import { Outlet, Product } from '../types';
+import { Outlet, Product, Supplier } from '../types';
+import { pricingApi, productsApi, type CostHistoryWire, type PriceHistoryWire } from '../productsApi';
 import type { PermissionSet } from '../permissions';
 import { allBarcodes, barcodeForUnit, makeBarcodes, primaryBarcode } from '../catalogue';
 import {
@@ -50,8 +51,10 @@ interface ProductsViewProps {
   products: Product[];
   currentOutlet: Outlet;
   outlets?: Outlet[];
+  suppliers?: Supplier[];
   onAddProduct: (product: Product) => void;
   onUpdateProduct?: (product: Product) => void;
+  onImportProducts: (products: Product[]) => Promise<{ created: number; updated: number; products: Product[] }>;
   onOpenGoodsReceipt: (productId?: string) => void;
   onOpenAdjustment: (product: Product) => void;
   onToggleActive: (productId: string) => void;
@@ -93,6 +96,8 @@ type ProductForm = {
   barcode: string;
   category: Product['category'] | '';
   brand: string;
+  description: string;
+  supplierId: string;
   baseUnit: Product['baseUnit'] | '';
   retailPrice: string;
   tradePrice: string;
@@ -113,6 +118,8 @@ const emptyProductForm: ProductForm = {
   barcode: '',
   category: '',
   brand: '',
+  description: '',
+  supplierId: '',
   baseUnit: '',
   retailPrice: '',
   tradePrice: '',
@@ -130,8 +137,10 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   products,
   currentOutlet,
   outlets = [currentOutlet],
+  suppliers = [],
   onAddProduct,
   onUpdateProduct,
+  onImportProducts,
   onOpenGoodsReceipt,
   onOpenAdjustment,
   onToggleActive,
@@ -152,6 +161,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [priceHistoryProduct, setPriceHistoryProduct] = useState<Product | null>(null);
+  const [priceHistory, setPriceHistory] = useState<PriceHistoryWire[]>([]);
+  const [costHistory, setCostHistory] = useState<CostHistoryWire[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [barcodeModalOpen, setBarcodeModalOpen] = useState(false);
   const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
@@ -257,6 +269,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       barcode: primaryBarcode(product),
       category: product.category,
       brand: product.brand,
+      description: product.description || '',
+      supplierId: product.supplierId || '',
       baseUnit: product.baseUnit,
       retailPrice: String(product.retailPrice),
       tradePrice: String(product.tradePrice),
@@ -276,7 +290,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const submitProduct = (event: React.FormEvent) => {
     event.preventDefault();
     if (!form.storeId || !form.category || !form.baseUnit) return;
-    const barcode = form.barcode.trim() || String(Math.floor(603000000000 + Math.random() * 90000000000));
+    const barcode = form.barcode.trim();
     const retailPrice = Number(form.retailPrice) || 0;
     const tradePrice = Number(form.tradePrice) || 0;
     const floorPrice = Number(form.floorPrice) || 0;
@@ -305,7 +319,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       outletId: form.storeId,
       category: form.category,
       brand: form.brand.trim() || 'Generic',
-      barcodes: makeBarcodes(barcode, form.baseUnit),
+      description: form.description.trim(),
+      supplierId: form.supplierId || undefined,
+      barcodes: barcode ? makeBarcodes(barcode, form.baseUnit) : [],
       baseUnit: form.baseUnit,
       sellingUnits,
       retailPrice,
@@ -433,7 +449,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
     [importParsed, importMapping, products],
   );
 
-  const commitImport = () => {
+  const commitImport = async () => {
     if (!importValidation) return;
     const created = rowsToProducts(
       importValidation.valid.filter((row) => !row.isUpdate),
@@ -445,10 +461,25 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       stockKeyFor({ outletId: currentOutlet.id } as Product, currentOutlet),
       products,
     );
-    created.forEach((product) => onAddProduct(product));
-    updated.forEach((product) => onUpdateProduct?.(product));
-    setImportResult({ created: created.length, updated: updated.length, skipped: importValidation.invalid.length });
-    setImportStep('result');
+    try {
+      const result = await onImportProducts([...created, ...updated]);
+      setImportResult({ created: result.created, updated: result.updated, skipped: importValidation.invalid.length });
+      setImportStep('result');
+    } catch (failure) {
+      setSetupError(failure instanceof Error ? failure.message : 'The import could not be committed.');
+    }
+  };
+
+  const openHistory = async (product: Product) => {
+    setPriceHistoryProduct(product);
+    setHistoryLoading(true);
+    const [prices, costs] = await Promise.all([
+      pricingApi.history(product.id).catch(() => []),
+      canViewCost ? productsApi.costHistory(product.id).catch(() => []) : Promise.resolve([]),
+    ]);
+    setPriceHistory(prices);
+    setCostHistory(costs);
+    setHistoryLoading(false);
   };
 
   const resetImport = () => {
@@ -990,7 +1021,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   ['Category', selectedProduct.category],
                   ['Brand', selectedProduct.brand],
                   ['Base unit', selectedProduct.baseUnit],
-                  ['Supplier', 'Default supplier'],
+                  ['Supplier', suppliers.find((supplier) => supplier.id === selectedProduct.supplierId)?.name || 'Not assigned'],
                 ].map(([label, value]) => (
                   <div key={label} className="rounded-xl bg-slate-50 border border-slate-200 p-3">
                     <div className="text-[10px] font-black uppercase text-slate-400">{label}</div>
@@ -1001,7 +1032,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               <section className="rounded-xl border border-slate-200 overflow-hidden bg-white">
                 <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                   <h3 className="text-sm font-black text-slate-900">Pricing</h3>
-                  <button onClick={() => setPriceHistoryProduct(selectedProduct)} className="text-xs font-bold text-accent-600 flex items-center gap-1"><History className="w-3.5 h-3.5" /> History</button>
+                  <button onClick={() => void openHistory(selectedProduct)} className="text-xs font-bold text-accent-600 flex items-center gap-1"><History className="w-3.5 h-3.5" /> History</button>
                 </div>
                 <div className="p-4 grid grid-cols-2 gap-3 text-sm">
                   <div>Retail <strong className="block text-slate-900">{formatMoney(selectedProduct.retailPrice)}</strong></div>
@@ -1122,17 +1153,21 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               </div>
               <button onClick={() => setPriceHistoryProduct(null)} className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-5 space-y-2">
-              {[
-                ['Retail price', formatMoney(priceHistoryProduct.retailPrice * 0.94), formatMoney(priceHistoryProduct.retailPrice)],
-                ['Trade price', formatMoney(priceHistoryProduct.tradePrice * 0.96), formatMoney(priceHistoryProduct.tradePrice)],
-                ['Floor price', formatMoney(priceHistoryProduct.floorPrice * 0.95), formatMoney(priceHistoryProduct.floorPrice)],
-              ].map(([field, oldValue, newValue]) => (
-                <div key={field} className="grid grid-cols-[1fr_120px_120px_120px] gap-3 p-3 rounded-xl border border-slate-200 text-sm">
-                  <span className="font-bold text-slate-800">{field}</span>
-                  <span className="text-slate-500">{oldValue}</span>
-                  <span className="font-black text-slate-900">{newValue}</span>
-                  <span className="text-slate-400">Kwame A.</span>
+            <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
+              {historyLoading && <p className="text-sm text-slate-500">Loading recorded history…</p>}
+              {!historyLoading && priceHistory.length === 0 && costHistory.length === 0 && <p className="text-sm text-slate-500">No recorded changes yet.</p>}
+              {priceHistory.map((row) => (
+                <div key={row.id} className="rounded-xl border border-slate-200 p-3 text-sm">
+                  <div className="font-bold text-slate-800">Selling prices</div>
+                  <div className="mt-1 text-slate-600">Retail {formatMoney(row.retailPrice)} · Trade {formatMoney(row.tradePrice)} · Floor {formatMoney(row.floorPrice)}</div>
+                  <div className="mt-1 text-xs text-slate-400">{row.changedBy || 'System'} · {new Date(row.changedAt).toLocaleString()}</div>
+                </div>
+              ))}
+              {costHistory.map((row) => (
+                <div key={row.id} className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 text-sm">
+                  <div className="font-bold text-slate-800">Cost established by {row.movementType === 'RECEIPT' ? 'goods receipt' : 'opening stock'}</div>
+                  <div className="mt-1 text-slate-600">{formatMoney(row.unitCost)} · {row.outletName || 'Outlet'}</div>
+                  <div className="mt-1 text-xs text-slate-400">{row.changedBy || 'System'} · {new Date(row.changedAt).toLocaleString()}</div>
                 </div>
               ))}
             </div>
@@ -1161,7 +1196,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 <label className="text-xs font-bold text-slate-700 md:col-span-2">Product name<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" /></label>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <label className="text-xs font-bold text-slate-700">SKU<input required value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono uppercase text-slate-800 focus:outline-accent-500" /></label>
+                <label className="text-xs font-bold text-slate-700">SKU<input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} placeholder="Leave blank to generate" className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono uppercase text-slate-800 focus:outline-accent-500" /></label>
                 <label className="text-xs font-bold text-slate-700">Primary barcode<input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono text-slate-800 focus:outline-accent-500" /></label>
                 <label className="text-xs font-bold text-slate-700">Category<select required value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as Product['category'] | '' })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500"><option value="" disabled>Select category</option>{setupValues.categories.map((category) => <option key={category.id}>{category.name}</option>)}</select></label>
                 <label className="text-xs font-bold text-slate-700">Brand<input list="known-brands" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" />
@@ -1169,6 +1204,10 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                       the existing ones are offered, so "FOCUS" and "Focus
                       Lighting" do not quietly become two brands. */}
                   <datalist id="known-brands">{setupValues.brands.map((brand) => <option key={brand.id} value={brand.name} />)}</datalist></label>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <label className="text-xs font-bold text-slate-700 md:col-span-2">Description<textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" /></label>
+                <label className="text-xs font-bold text-slate-700">Preferred supplier<select value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500"><option value="">Not assigned</option>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 space-y-4">
                 <h4 className="text-sm font-black text-slate-900 flex items-center gap-2"><Archive className="w-4 h-4 text-accent-500" /> Units and conversions</h4>

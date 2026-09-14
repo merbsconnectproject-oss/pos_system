@@ -16,6 +16,7 @@ export interface ProductWire {
   description?: string | null;
   category?: string | null;
   brand?: string | null;
+  supplierId?: string | null;
   baseUnit: string;
   retailPrice: number;
   tradePrice: number;
@@ -37,6 +38,8 @@ export const toProduct = (wire: ProductWire): Product => ({
   sku: wire.sku,
   category: (wire.category || 'Hardware & Tools') as Product['category'],
   brand: wire.brand || 'Generic',
+  description: wire.description || '',
+  supplierId: wire.supplierId || undefined,
   barcodes: wire.barcodes,
   baseUnit: wire.baseUnit as Product['baseUnit'],
   sellingUnits: wire.sellingUnits.map((unit) => ({
@@ -67,8 +70,10 @@ export const toProduct = (wire: ProductWire): Product => ({
 const fromProduct = (product: Product) => ({
   sku: product.sku || undefined,
   name: product.name,
+  description: product.description || undefined,
   category: product.category,
   brand: product.brand,
+  supplierId: product.supplierId || undefined,
   baseUnit: product.baseUnit,
   retailPrice: product.retailPrice,
   tradePrice: product.tradePrice,
@@ -112,7 +117,28 @@ export const productsApi = {
   /** FR-PROD-03/04: the counter's scan lookup. */
   byBarcode: (code: string) =>
     request<ProductWire>(`/api/products/barcode/${encodeURIComponent(code)}`).then(toProduct),
+
+  /** FR-PROD-10: one atomic server commit after the browser preview. */
+  import: (products: Product[]) =>
+    request<{ created: number; updated: number; products: ProductWire[] }>('/api/products/import', {
+      method: 'POST',
+      body: JSON.stringify({ products: products.map(fromProduct) }),
+    }).then((result) => ({ ...result, products: result.products.map(toProduct) })),
+
+  costHistory: (productId: string) =>
+    request<CostHistoryWire[]>(`/api/products/${encodeURIComponent(productId)}/cost-history`),
 };
+
+export interface CostHistoryWire {
+  id: string;
+  unitCost: number;
+  movementType: 'OPENING' | 'RECEIPT';
+  outletId: string;
+  outletName: string | null;
+  changedById: string | null;
+  changedBy: string | null;
+  changedAt: string;
+}
 
 /**
  * Per-branch prices and price history — FR-PRICE-03, FR-PRICE-06.

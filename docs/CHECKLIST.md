@@ -1,4 +1,4 @@
-a# Build Checklist — Stage 1
+# Build Checklist — Stage 1
 
 **Companion to** PRD v1.0 · SCREEN-INVENTORY.md v1.0 · DELIVERY-PLAN.md
 **Updated** 2026-09-14 · reflects the codebase as it stands, verified rather than assumed.
@@ -165,23 +165,23 @@ and how to reverse it are on `Permission.isFutureStage()`.
 
 ### Functional
 - [x][x] Product record: name, SKU, category, brand, supplier, base unit, prices, reorder level, image, active flag — FR-PROD-01 · `D-03` `D-04` *(reorder level is per outlet and lives on the stock level — BR-1)*
-- [ ][x] SKU auto-generated with manual override — FR-PROD-02 *({OUTLET}-{CATEGORY}-{NNN})*
-- [ ][x] SKU unique across the system — FR-PROD-02 *(unique index on upper(sku))*
+- [x][x] SKU auto-generated with manual override — FR-PROD-02 *({OUTLET}-{CATEGORY}-{NNN}; blank field uses a locked per-prefix sequence)*
+- [x][x] SKU unique across the system — FR-PROD-02 *(unique index on upper(sku); UI surfaces server conflicts)*
 - [x][x] Multiple barcodes per product — FR-PROD-03 · `D-06`
 - [x][x] Each barcode bound to one selling unit, so a carton scan adds a carton — FR-PROD-04 *(a code naming an unsold unit is refused)*
-- [ ][x] Barcode unique system-wide — FR-PROD-03
+- [x][x] Barcode unique system-wide — FR-PROD-03 *(UI surfaces the named server conflict)*
 - [x][x] Categories and brands managed as lists — FR-PROD-05 · `D-09` `D-10` *(add, rename, retire; units of measure too — FR-UOM-01)*
-- [x][x] Search matches name, SKU, barcode, brand, category; partial and out-of-order terms — FR-PROD-06
+- [x][x] Search matches name, SKU, barcode, brand, category and description; partial and out-of-order terms — FR-PROD-06
 - [x][x] Search results show stock at the active outlet — FR-PROD-07 *(levels folded into the catalogue at load)*
 - [x][x] Products deactivated, never deleted — FR-PROD-08 · BR-17 · `D-19`
-- [~][~] Full cost and price history retained and viewable — FR-PROD-09 · `D-08` *(price history append-only; cost history is derivable from the ledger but has no endpoint, and the modal still renders mock rows)*
-- [x][ ] Bulk import: template, upload, column mapping, row validation, error file, preview, commit — FR-PROD-10 · `D-12`…`D-16` *(the screen parses and validates locally; no commit endpoint. Needs SKU blocks first — generateSku counts rows, which two importers would race)*
+- [x][x] Full cost and price history retained and viewable — FR-PROD-09 · `D-08` *(real append-only price rows plus cost-changing OPENING/RECEIPT ledger movements; no fabricated modal rows)*
+- [x][x] Bulk import: template, upload, column mapping, row validation, error file, preview, commit — FR-PROD-10 · `D-12`…`D-16` *(one atomic server commit behind `product.import`; blank SKUs use the concurrency-safe prefix sequence)*
 - [~][-] Bulk price update by category, brand or supplier with affected-count preview — FR-PROD-11 · `D-20` *(Stage 2; filters render, apply not wired)*
 - [-][-] Product variants under a parent — FR-PROD-12 · `D-21` *(Stage 2)*
 
 ### Non-functional
-- [ ][ ] Four-term partial query returns the product in the top three in under 300 ms at 3,000 products — NFR-1 · FR-PROD acceptance *(indexed, not yet measured at volume)*
-- [ ][x] Full-text or trigram index on name, SKU, description — PRD §7.5 *(pg_trgm GIN on name and sku)*
+- [x][x] Four-term partial query returns the product in the top three in under 300 ms at 3,000 products — NFR-1 · FR-PROD acceptance *(real PostgreSQL 18/Testcontainers volume test)*
+- [x][x] Full-text or trigram index on name, SKU, description — PRD §7.5 *(pg_trgm GIN on all three; barcode partial search indexed too)*
 - [x][x] Empty and no-results states — `D-17` `D-18` · `L-03` `L-11` *(an empty catalogue is now a real answer, not a seeded list)*
 
 ---
@@ -484,7 +484,7 @@ held sales, which live only in the browser.
 ## R · Cross-cutting non-functional — `NFR`
 
 ### Performance
-- [ ][ ] NFR-1 · Product search under 300 ms at 3,000 products; scanned line renders under 100 ms
+- [x][ ] NFR-1 · Product search under 300 ms at 3,000 products; scanned line renders under 100 ms *(catalogue half proved; scanner render is a separate POS measurement)*
 - [ ][ ] NFR-2 · Sale completion under 1 s on a normal connection
 - [ ][ ] NFR-3 · Receipt begins printing within 1 s
 

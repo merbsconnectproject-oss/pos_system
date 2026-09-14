@@ -61,6 +61,8 @@ export interface Product {
     | 'Hardware & Tools'
     | 'Plumbing & Pipes';
   brand: string;
+  description?: string;
+  supplierId?: string;
   barcodes: ProductBarcode[]; // FR-PROD-03: many per product, each bound to a unit
   baseUnit: 'm' | 'pcs' | 'length' | 'roll' | 'box' | 'kg' | 'bucket' | 'tin' | 'set' | 'pair';
   sellingUnits?: SellingUnit[];

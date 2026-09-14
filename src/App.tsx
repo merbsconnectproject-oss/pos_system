@@ -884,6 +884,23 @@ export default function App() {
       .catch(reportProductFailure);
   };
 
+  /** FR-PROD-10: one server transaction, then reconcile the catalogue from its response. */
+  const handleImportProducts = async (rows: Product[]) => {
+    const result = await productsApi.import(rows);
+    setProducts((current) => {
+      const importedIds = new Set(result.products.map((product) => product.id));
+      const importedSkus = new Set(result.products.map((product) => product.sku.toLowerCase()));
+      const untouched = current.filter((product) =>
+        !importedIds.has(product.id) && !importedSkus.has(product.sku.toLowerCase()));
+      const reconciled = result.products.map((saved) => {
+        const local = current.find((product) => product.id === saved.id || product.sku.toLowerCase() === saved.sku.toLowerCase());
+        return local ? merged(local, saved) : saved;
+      });
+      return [...reconciled, ...untouched];
+    });
+    return result;
+  };
+
   /**
    * FR-CASH-01 · BR-13: open a shift on the server.
    *
@@ -1407,8 +1424,10 @@ export default function App() {
               products={products}
               currentOutlet={currentOutlet}
               outlets={outlets}
+              suppliers={suppliers}
               onAddProduct={handleAddProduct}
               onUpdateProduct={handleUpdateProduct}
+              onImportProducts={handleImportProducts}
               onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
               onOpenAdjustment={(product) => setAdjustmentTargetProduct(product)}
               onToggleActive={handleToggleActive}
@@ -1421,9 +1440,11 @@ export default function App() {
               products={products}
               currentOutlet={currentOutlet}
               outlets={outlets}
+              suppliers={suppliers}
               mode="import"
               onAddProduct={handleAddProduct}
               onUpdateProduct={handleUpdateProduct}
+              onImportProducts={handleImportProducts}
               onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
               onOpenAdjustment={(product) => setAdjustmentTargetProduct(product)}
               onToggleActive={handleToggleActive}
@@ -1436,9 +1457,11 @@ export default function App() {
               products={products}
               currentOutlet={currentOutlet}
               outlets={outlets}
+              suppliers={suppliers}
               mode="setup"
               onAddProduct={handleAddProduct}
               onUpdateProduct={handleUpdateProduct}
+              onImportProducts={handleImportProducts}
               onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
               onOpenAdjustment={(product) => setAdjustmentTargetProduct(product)}
               onToggleActive={handleToggleActive}
@@ -1451,9 +1474,11 @@ export default function App() {
               products={products}
               currentOutlet={currentOutlet}
               outlets={outlets}
+              suppliers={suppliers}
               mode="bulk-price"
               onAddProduct={handleAddProduct}
               onUpdateProduct={handleUpdateProduct}
+              onImportProducts={handleImportProducts}
               onOpenGoodsReceipt={() => setGoodsReceiptModalOpen(true)}
               onOpenAdjustment={(product) => setAdjustmentTargetProduct(product)}
               onToggleActive={handleToggleActive}

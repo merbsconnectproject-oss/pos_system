@@ -60,17 +60,14 @@ export function parseDelimited(text: string, delimiter = ','): ParsedFile {
 /** The fields an import can populate. */
 export const IMPORT_FIELDS = [
   { key: 'name', label: 'Product name', required: true },
-  { key: 'sku', label: 'SKU', required: true },
+  { key: 'sku', label: 'SKU', required: false },
   { key: 'category', label: 'Category', required: false },
   { key: 'brand', label: 'Brand', required: false },
   { key: 'barcode', label: 'Barcode', required: false },
   { key: 'baseUnit', label: 'Base unit', required: false },
-  { key: 'costPrice', label: 'Cost price', required: false },
   { key: 'retailPrice', label: 'Retail price', required: true },
   { key: 'tradePrice', label: 'Trade price', required: false },
   { key: 'floorPrice', label: 'Floor price', required: false },
-  { key: 'openingStock', label: 'Opening stock', required: false },
-  { key: 'reorderLevel', label: 'Reorder level', required: false },
 ] as const;
 
 export type ImportField = (typeof IMPORT_FIELDS)[number]['key'];
@@ -87,12 +84,9 @@ export function guessMapping(headers: string[]): ColumnMapping {
     brand: ['brand', 'make', 'manufacturer'],
     barcode: ['barcode', 'ean', 'upc'],
     baseUnit: ['baseunit', 'unit', 'uom'],
-    costPrice: ['cost', 'costprice', 'buyingprice', 'purchaseprice'],
     retailPrice: ['retail', 'retailprice', 'price', 'sellingprice'],
     tradePrice: ['trade', 'tradeprice', 'wholesale'],
     floorPrice: ['floor', 'floorprice', 'minprice', 'minimumprice'],
-    openingStock: ['stock', 'openingstock', 'quantity', 'qty', 'onhand'],
-    reorderLevel: ['reorder', 'reorderlevel', 'minstock', 'reorderpoint'],
   };
   headers.forEach((header, index) => {
     const key = normalise(header);
@@ -182,14 +176,11 @@ export function rowsToProducts(rows: ValidatedRow[], outletId: string, existing:
   return rows.map((row) => {
     const current = bySku.get((row.values.sku || '').toLowerCase());
     const retail = roundMoney(Number(row.values.retailPrice) || 0);
-    const cost = roundMoney(Number(row.values.costPrice) || 0);
-    const stock = Number(row.values.openingStock) || 0;
-    const reorder = Number(row.values.reorderLevel) || 0;
     const barcode = row.values.barcode?.trim();
     const baseUnit = (row.values.baseUnit || current?.baseUnit || 'pcs') as Product['baseUnit'];
     return {
       ...(current || {}),
-      id: current?.id || `imp-${row.values.sku}-${Date.now()}`,
+      id: current?.id || `import-row-${row.rowNumber}`,
       name: row.values.name || current?.name || '',
       sku: (row.values.sku || current?.sku || '').toUpperCase(),
       outletId,
@@ -201,12 +192,9 @@ export function rowsToProducts(rows: ValidatedRow[], outletId: string, existing:
       retailPrice: retail || current?.retailPrice || 0,
       tradePrice: roundMoney(Number(row.values.tradePrice) || 0) || current?.tradePrice || retail,
       floorPrice: roundMoney(Number(row.values.floorPrice) || 0) || current?.floorPrice || retail,
-      costPrice: { ...(current?.costPrice || {}), [outletId]: cost || current?.costPrice?.[outletId] || 0 },
-      stock: { ...(current?.stock || {}), [outletId]: stock || current?.stock?.[outletId] || 0 },
-      minStockAlert: {
-        ...(current?.minStockAlert || {}),
-        [outletId]: reorder || current?.minStockAlert?.[outletId] || 0,
-      },
+      costPrice: current?.costPrice || { [outletId]: 0 },
+      stock: current?.stock || { [outletId]: 0 },
+      minStockAlert: current?.minStockAlert || { [outletId]: 0 },
       imageUrl: current?.imageUrl || '',
       active: true,
     } as Product;
@@ -224,12 +212,9 @@ export function buildTemplateCsv(): string {
     'Nexans',
     '6031000200001',
     'm',
-    '12.50',
     '18.50',
     '16.00',
     '15.00',
-    '300',
-    '50',
   ];
   return `${IMPORT_TEMPLATE_HEADERS.join(',')}\n${example.join(',')}\n`;
 }
