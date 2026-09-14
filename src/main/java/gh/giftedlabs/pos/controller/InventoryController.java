@@ -1,10 +1,12 @@
 package gh.giftedlabs.pos.controller;
 
 import gh.giftedlabs.pos.dto.MovementRequest;
+import gh.giftedlabs.pos.dto.MovementView;
 import gh.giftedlabs.pos.dto.StockView;
 import gh.giftedlabs.pos.rules.MovementType;
 import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.security.PosPrincipal;
+import gh.giftedlabs.pos.service.InventoryQueryService;
 import gh.giftedlabs.pos.service.InventoryService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -16,7 +18,10 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import org.springframework.format.annotation.DateTimeFormat;
+
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,10 +37,36 @@ import java.util.UUID;
 @RequestMapping("/api/stock")
 public class InventoryController {
 
-    private final InventoryService inventory;
+    private static final int MAX_PAGE = 500;
 
-    public InventoryController(InventoryService inventory) {
+    private final InventoryService inventory;
+    private final InventoryQueryService history;
+
+    public InventoryController(InventoryService inventory, InventoryQueryService history) {
         this.inventory = inventory;
+        this.history = history;
+    }
+
+    /**
+     * FR-INV-04: the movement history, filterable by product, outlet, type,
+     * user and date. FR-INV-10's exceptions view is the same query with
+     * {@code exceptionsOnly}, because an exception is a movement, not a
+     * separate kind of record.
+     */
+    @GetMapping("/movements")
+    @PreAuthorize("hasAuthority('" + Permission.Codes.STOCK_VIEW + "')")
+    public List<MovementView> movements(
+            @RequestParam(required = false) UUID productId,
+            @RequestParam(required = false) UUID outletId,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) UUID actorId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+            @RequestParam(defaultValue = "false") boolean exceptionsOnly,
+            @RequestParam(defaultValue = "200") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
+        return history.movements(productId, outletId, type, actorId, from, to, exceptionsOnly,
+                Math.clamp(limit, 1, MAX_PAGE), Math.max(0, offset));
     }
 
     @GetMapping("/outlet/{outletId}")

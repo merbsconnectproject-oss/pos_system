@@ -290,6 +290,80 @@ class InventoryControllerTest {
         }
     }
 
+    @Nested
+    @DisplayName("the movement history")
+    class History {
+
+        @Test
+        @DisplayName("shows the running balance before and after each line — FR-INV-04")
+        void showsTheRunningBalance() throws Exception {
+            Session session = signIn(ownerName);
+            String productId = createProduct(session, "Hinge " + run, "pcs");
+
+            receive(session, productId, "100", "3.00");
+            mvc.perform(session.authorise(post("/api/stock/movements"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(
+                                    movement(productId, "ADJUSTMENT_OUT", "30", null, "Miscount"))))
+                    .andExpect(status().isCreated());
+
+            // Newest first: the adjustment took 100 down to 70.
+            mvc.perform(session.authorise(get("/api/stock/movements").param("productId", productId)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(2))
+                    .andExpect(jsonPath("$[0].type").value("ADJUSTMENT_OUT"))
+                    .andExpect(jsonPath("$[0].quantity").value(30.0))
+                    .andExpect(jsonPath("$[0].previousStock").value(100.0))
+                    .andExpect(jsonPath("$[0].newStock").value(70.0))
+                    .andExpect(jsonPath("$[0].reason").value("Miscount"))
+                    .andExpect(jsonPath("$[1].type").value("RECEIPT"))
+                    .andExpect(jsonPath("$[1].previousStock").value(0.0))
+                    .andExpect(jsonPath("$[1].newStock").value(100.0));
+        }
+
+        @Test
+        @DisplayName("keeps the balance right when filtered to one type — FR-INV-04")
+        void balanceSurvivesFiltering() throws Exception {
+            Session session = signIn(ownerName);
+            String productId = createProduct(session, "Bracket " + run, "pcs");
+
+            receive(session, productId, "40", "5.00");
+            mvc.perform(session.authorise(post("/api/stock/movements"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(
+                                    movement(productId, "DAMAGE", "10", null, "Dropped"))))
+                    .andExpect(status().isCreated());
+            receive(session, productId, "25", "5.00");
+
+            // Filtering to receipts must not renumber them as though the damage
+            // never happened: the second receipt still starts from 30.
+            mvc.perform(session.authorise(get("/api/stock/movements")
+                            .param("productId", productId).param("type", "RECEIPT")))
+                    .andExpect(jsonPath("$.length()").value(2))
+                    .andExpect(jsonPath("$[0].previousStock").value(30.0))
+                    .andExpect(jsonPath("$[0].newStock").value(55.0));
+        }
+
+        @Test
+        @DisplayName("finds oversells on their own — FR-INV-10")
+        void findsExceptions() throws Exception {
+            Session session = signIn(ownerName);
+            String productId = createProduct(session, "Clip " + run, "pcs");
+            receive(session, productId, "2", "1.00");
+
+            mvc.perform(session.authorise(post("/api/stock/movements"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(movement(productId, "LOSS", "5", null, "Missing"))))
+                    .andExpect(status().isCreated());
+
+            mvc.perform(session.authorise(get("/api/stock/movements")
+                            .param("productId", productId).param("exceptionsOnly", "true")))
+                    .andExpect(jsonPath("$.length()").value(1))
+                    .andExpect(jsonPath("$[0].type").value("LOSS"))
+                    .andExpect(jsonPath("$[0].exception").value(true));
+        }
+    }
+
     // --- helpers -----------------------------------------------------------
 
     private Map<String, Object> movement(String productId, String type, String quantity,
