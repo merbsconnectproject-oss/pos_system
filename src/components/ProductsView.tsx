@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { InfoHint } from './InfoHint';
+import { ApiError } from '../apiClient';
+import { catalogueApi, loadCatalogueLists, type CatalogueList, type CatalogueListItem } from '../catalogueApi';
 import {
   AlertTriangle,
   Archive,
@@ -75,6 +77,8 @@ const productCategories: Product['category'][] = [
   'Plumbing & Pipes',
 ];
 
+// Kept only as the fallback shape for the product form's typing; the
+// selectable list now comes from /api/catalogue/units.
 const baseUnits: Product['baseUnit'][] = ['m', 'pcs', 'length', 'roll', 'box', 'kg', 'bucket', 'tin', 'set', 'pair'];
 
 const formatMoney = (amount: number) => `GH₵ ${amount.toFixed(2)}`;
@@ -158,13 +162,35 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const [importFileName, setImportFileName] = useState('');
   const [importResult, setImportResult] = useState<{ created: number; updated: number; skipped: number } | null>(null);
   const [bulkPercent, setBulkPercent] = useState(5);
-  const [setupValues, setSetupValues] = useState<Record<'categories' | 'brands' | 'units', string[]>>({
-    categories: [...productCategories],
-    brands: Array.from(new Set(products.map((product) => product.brand))).sort(),
-    units: [...baseUnits],
+  // FR-PROD-05 · FR-UOM-01: the lists are the server's. They were local state
+  // seeded from hard-coded arrays, so every add, rename and retire died on
+  // refresh and the counts were whatever the loaded page happened to hold.
+  const [setupValues, setSetupValues] = useState<Record<CatalogueList, CatalogueListItem[]>>({
+    categories: [], brands: [], units: [],
   });
-  const [setupModal, setSetupModal] = useState<{ type: 'categories' | 'brands' | 'units'; label: string } | null>(null);
+  const [setupModal, setSetupModal] = useState<{ type: CatalogueList; label: string } | null>(null);
   const [setupValue, setSetupValue] = useState('');
+  const [setupError, setSetupError] = useState<string | null>(null);
+
+  const refreshSetup = useCallback(() => {
+    loadCatalogueLists()
+      .then(setSetupValues)
+      .catch(() => setSetupError('Could not load the catalogue lists.'));
+  }, []);
+
+  useEffect(() => { refreshSetup(); }, [refreshSetup]);
+
+  /**
+   * The server's refusal is the message worth showing — it names the entry and
+   * says how many products still use it, which a generic failure cannot.
+   */
+  const runSetupChange = (change: Promise<unknown>) => {
+    setSetupError(null);
+    void change
+      .then(() => refreshSetup())
+      .catch((failure) => setSetupError(
+        failure instanceof ApiError ? failure.message : 'The change could not be saved.'));
+  };
 
   useEffect(() => {
     setActiveMode(mode);
@@ -325,21 +351,27 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   };
 
   const renderSetup = () => {
-    const categoryRows = setupValues.categories.map((category) => ({
-      name: category,
-      count: products.filter((product) => product.category === category).length,
-    }));
-    const brandRows = setupValues.brands.map((brand) => ({
-      name: brand,
-      count: products.filter((product) => product.brand === brand).length,
-    }));
-    const unitRows = setupValues.units.map((unit) => ({
-      name: unit,
-      count: products.filter((product) => product.baseUnit === unit).length,
-    }));
+    // `inUse` is counted by the server across the whole catalogue, not by
+    // filtering whatever products this page happens to have loaded.
+    const toRows = (items: CatalogueListItem[]) =>
+      items.map((item) => ({ id: item.id, name: item.name, count: item.inUse }));
+
+    const categoryRows = toRows(setupValues.categories);
+    const brandRows = toRows(setupValues.brands);
+    const unitRows = toRows(setupValues.units);
 
     return (
       <>
+      {/* The server's refusal names the entry and how many products use it —
+          "Busbar is still used by 3 products" beats a silent no-op. */}
+      {setupError && (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+          <p className="flex-1 text-xs font-semibold text-rose-700">{setupError}</p>
+          <button type="button" onClick={() => setSetupError(null)} className="text-xs font-bold text-rose-500">
+            Dismiss
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         {[
           { title: 'Categories', rows: categoryRows, add: 'Add category', type: 'categories' as const },
@@ -359,10 +391,10 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     <div className="text-xs text-slate-400">{row.count} products using this value</div>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <button onClick={() => { const next = window.prompt(`Rename ${section.title.toLowerCase()}`, row.name); if (next?.trim() && next.trim() !== row.name) setSetupValues((prev) => ({ ...prev, [section.type]: prev[section.type].map((value) => value === row.name ? next.trim() : value) })); }} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" title="Rename">
+                    <button onClick={() => { const next = window.prompt(`Rename ${section.title.toLowerCase()}`, row.name); if (next?.trim() && next.trim() !== row.name) runSetupChange(catalogueApi.rename(section.type, row.id, next.trim())); }} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" title="Rename">
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => setSetupValues((prev) => ({ ...prev, [section.type]: prev[section.type].filter((value) => value !== row.name) }))} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" title="Deactivate">
+                    <button onClick={() => runSetupChange(catalogueApi.setActive(section.type, row.id, false))} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" title="Deactivate">
                       <Power className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -372,7 +404,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           </div>
         ))}
       </div>
-      {setupModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><form onSubmit={(event) => { event.preventDefault(); const value = setupValue.trim(); if (!value) return; setSetupValues((prev) => ({ ...prev, [setupModal.type]: prev[setupModal.type].includes(value) ? prev[setupModal.type] : [...prev[setupModal.type], value] })); setSetupModal(null); setSetupValue(''); }} className="w-full max-w-md rounded-xl border border-slate-300 bg-white shadow-xl"><div className="flex items-center justify-between rounded-t-xl bg-slate-900 px-5 py-4 text-white"><div><p className="text-[10px] font-bold uppercase tracking-wider text-accent-300">Catalogue setup</p><h2 className="mt-1 text-sm font-black">Add {setupModal.label}</h2></div><button type="button" onClick={() => setSetupModal(null)} className="text-xs text-slate-300">Close</button></div><div className="space-y-3 p-5"><label className="block text-xs font-bold text-slate-700">{setupModal.label[0].toUpperCase() + setupModal.label.slice(1)}<input autoFocus required value={setupValue} onChange={(event) => setSetupValue(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-sans" placeholder={`Enter ${setupModal.label}`} /></label><button className="w-full rounded-lg bg-accent-600 px-3 py-2.5 text-xs font-bold text-white">Save {setupModal.label}</button></div></form></div>}
+      {setupModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><form onSubmit={(event) => { event.preventDefault(); const value = setupValue.trim(); if (!value) return; runSetupChange(catalogueApi.add(setupModal.type, value)); setSetupModal(null); setSetupValue(''); }} className="w-full max-w-md rounded-xl border border-slate-300 bg-white shadow-xl"><div className="flex items-center justify-between rounded-t-xl bg-slate-900 px-5 py-4 text-white"><div><p className="text-[10px] font-bold uppercase tracking-wider text-accent-300">Catalogue setup</p><h2 className="mt-1 text-sm font-black">Add {setupModal.label}</h2></div><button type="button" onClick={() => setSetupModal(null)} className="text-xs text-slate-300">Close</button></div><div className="space-y-3 p-5"><label className="block text-xs font-bold text-slate-700">{setupModal.label[0].toUpperCase() + setupModal.label.slice(1)}<input autoFocus required value={setupValue} onChange={(event) => setSetupValue(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-sans" placeholder={`Enter ${setupModal.label}`} /></label><button className="w-full rounded-lg bg-accent-600 px-3 py-2.5 text-xs font-bold text-white">Save {setupModal.label}</button></div></form></div>}
       </>
     );
   };
@@ -696,7 +728,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
-            {['All', ...productCategories].map((category) => <option key={category}>{category}</option>)}
+            {['All', ...setupValues.categories.map((c) => c.name)].map((category) => <option key={category}>{category}</option>)}
           </select>
           <select value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)} className="border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
             {brands.map((brand) => <option key={brand}>{brand}</option>)}
@@ -730,7 +762,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             </select>
           )}
           <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="text-xs font-semibold bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-slate-700">
-            {['All', ...productCategories].map((category) => <option key={category}>{category}</option>)}
+            {['All', ...setupValues.categories.map((c) => c.name)].map((category) => <option key={category}>{category}</option>)}
           </select>
           <select value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)} className="text-xs font-semibold bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-slate-700">
             {brands.map((brand) => <option key={brand}>{brand}</option>)}
@@ -1097,13 +1129,13 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <label className="text-xs font-bold text-slate-700">SKU<input required value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono uppercase text-slate-800 focus:outline-accent-500" /></label>
                 <label className="text-xs font-bold text-slate-700">Primary barcode<input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono text-slate-800 focus:outline-accent-500" /></label>
-                <label className="text-xs font-bold text-slate-700">Category<select required value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as Product['category'] | '' })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500"><option value="" disabled>Select category</option>{productCategories.map((category) => <option key={category}>{category}</option>)}</select></label>
+                <label className="text-xs font-bold text-slate-700">Category<select required value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as Product['category'] | '' })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500"><option value="" disabled>Select category</option>{setupValues.categories.map((category) => <option key={category.id}>{category.name}</option>)}</select></label>
                 <label className="text-xs font-bold text-slate-700">Brand<input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" /></label>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 space-y-4">
                 <h4 className="text-sm font-black text-slate-900 flex items-center gap-2"><Archive className="w-4 h-4 text-accent-500" /> Units and conversions</h4>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <label className="text-xs font-bold text-slate-700">Base unit<select required value={form.baseUnit} onChange={(e) => setForm({ ...form, baseUnit: e.target.value as Product['baseUnit'] | '' })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500"><option value="" disabled>Select unit</option>{baseUnits.map((unit) => <option key={unit}>{unit}</option>)}</select></label>
+                  <label className="text-xs font-bold text-slate-700">Base unit<select required value={form.baseUnit} onChange={(e) => setForm({ ...form, baseUnit: e.target.value as Product['baseUnit'] | '' })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500"><option value="" disabled>Select unit</option>{setupValues.units.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label>
                   <label className="text-xs font-bold text-slate-700">Extra unit<input value={form.sellingUnitName} onChange={(e) => setForm({ ...form, sellingUnitName: e.target.value })} placeholder="Carton, Drum, Box" className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500" /></label>
                   <label className="text-xs font-bold text-slate-700">Factor to base<input type="number" value={form.sellingUnitFactor} onChange={(e) => setForm({ ...form, sellingUnitFactor: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500" /></label>
                   <label className="text-xs font-bold text-slate-700">Unit override price<input type="number" value={form.sellingUnitPrice} onChange={(e) => setForm({ ...form, sellingUnitPrice: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500" /></label>
