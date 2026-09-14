@@ -6,6 +6,7 @@ import gh.giftedlabs.pos.exception.OutletCodeTakenException;
 import gh.giftedlabs.pos.exception.OutletNotFoundException;
 import gh.giftedlabs.pos.exception.OutletNotPermittedException;
 import gh.giftedlabs.pos.exception.CatalogueConflictException;
+import gh.giftedlabs.pos.exception.CatalogueListException;
 import gh.giftedlabs.pos.exception.IncorrectPinException;
 import gh.giftedlabs.pos.exception.ProductNotFoundException;
 import gh.giftedlabs.pos.exception.InvalidResetTokenException;
@@ -19,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -94,6 +96,13 @@ public class ApiExceptionHandler {
                 .body(new ApiError(ex.getCode(), ex.getMessage(), ex.getDetails()));
     }
 
+    /** FR-PROD-05: a duplicate list name, or retiring an entry still in use. */
+    @ExceptionHandler(CatalogueListException.class)
+    public ResponseEntity<ApiError> onCatalogueList(CatalogueListException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError(ex.getCode(), ex.getMessage(), ex.getDetails()));
+    }
+
     @ExceptionHandler(ProductNotFoundException.class)
     public ResponseEntity<ApiError> onProductNotFound(ProductNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -149,6 +158,22 @@ public class ApiExceptionHandler {
 
         return ResponseEntity.badRequest()
                 .body(new ApiError("VALIDATION_FAILED", "Check the highlighted fields", fields));
+    }
+
+    /**
+     * A status a controller chose deliberately.
+     *
+     * <p>Without this the catch-all below swallows it: every
+     * {@code ResponseStatusException} — including a plain 404 — would be logged
+     * as an unhandled error and answered with 500, which is both wrong and
+     * noisy in the log.
+     */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiError> onResponseStatus(ResponseStatusException ex) {
+        HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
+        return ResponseEntity.status(status)
+                .body(new ApiError(status.name(),
+                        ex.getReason() == null ? status.getReasonPhrase() : ex.getReason(), Map.of()));
     }
 
     /**
