@@ -38,16 +38,16 @@ non-deferred item in its section is complete, including its non-functional items
 
 | Feature | Items | Frontend | Backend |
 |---|---:|---:|---:|
-| A · Authentication & session | 15 | 13 done, 2 open | 14 done, 1 partial |
+| A · Authentication & session | 15 | 13 done, 2 open | 15 done |
 | B · Outlets | 10 | 7 done, 1 partial, 1 open, 1 deferred | 7 done, 2 partial, 1 deferred |
 | C · Product catalogue | 17 | 9 done, 2 partial, 5 open, 1 deferred | 12 done, 1 partial, 2 open, 2 deferred |
 | D · Units & conversions | 8 | 7 done, 1 open | 6 done, 2 open |
 | E · Pricing | 10 | 6 done, 2 partial, 2 open | 4 done, 1 partial, 5 open |
 | F · Inventory | 15 | 10 done, 2 partial, 2 open, 1 deferred | 9 done, 1 partial, 3 open, 2 deferred |
-| G · Point of sale | 25 | 17 done, 3 partial, 4 open, 1 deferred | 10 done, 1 partial, 3 open, 1 deferred, 10 n/a |
+| G · Point of sale | 25 | 17 done, 3 partial, 4 open, 1 deferred | 11 done, 1 partial, 2 open, 1 deferred, 10 n/a |
 | H · Payments | 11 | 6 done, 2 partial, 2 open, 1 deferred | 7 done, 3 open, 1 deferred |
 | I · Receipts & printing | 13 | 7 done, 3 partial, 2 open, 1 deferred | 12 open, 1 deferred |
-| J · Shifts & cash | 12 | 9 done, 1 partial, 2 open | 12 open |
+| J · Shifts & cash | 12 | 9 done, 1 partial, 2 open | 10 done, 2 partial |
 | K · Suppliers & goods receipt | 11 | 6 done, 2 partial, 3 deferred | 8 done, 3 deferred |
 | L · Customers | 8 | 6 done, 1 partial, 1 deferred | 7 open, 1 deferred |
 | M · Users, roles & permissions | 12 | 10 done, 1 partial, 1 open | 12 open |
@@ -57,8 +57,8 @@ non-deferred item in its section is complete, including its non-functional items
 | Q · Connectivity & resilience | 10 | 2 partial, 7 open, 1 deferred | 9 open, 1 deferred |
 | R · Cross-cutting non-functional | 22 | 4 done, 3 partial, 15 open | 3 done, 3 partial, 16 open |
 
-**228 items · 70 complete · frontend 134 done · backend 84 done, 11 partial, 10 not applicable · contract frozen and
-machine-checked (`npm run check`)**
+**228 items · 80 complete · frontend 134 done · backend 96 done, 12 partial,
+10 not applicable · contract frozen and machine-checked (`npm run check`)**
 
 > The table above is generated from the boxes below, so the two cannot drift.
 > Read it with one caveat: many items have no backend half — a scanner that
@@ -77,7 +77,8 @@ machine-checked (`npm run check`)**
 | ✅ | G Point of sale | selling, payments, receipt numbers, voids — 10 of its 14 server-side items; the other four wait on J, P and L |
 | 🟨 | N Audit | writes and reads; some actions do not exist yet to log |
 | 🟨 | E Pricing | the three prices and history; per-outlet overrides open |
-| ⬜ | I Receipts · J Shifts · L Customers · M Users · O Reports · P Settings | not started |
+| ✅ | J Shifts & cash | open, cash movements, blind close, variance — release gate 9 passes |
+| ⬜ | I Receipts · L Customers · M Users · O Reports · P Settings | not started |
 | — | Q Connectivity | n/a — local-first removed the offline queue |
 
 **Release gates** — 1 ⬜ · 2 ⬜ (needs the printer) · **3 ✅** same payment twice records
@@ -104,7 +105,7 @@ settings holding them do not exist yet — the adjustment approval threshold
 - [x][x] 4–6 digit PIN for counter approvals and unlock — FR-AUTH-02
 - [x][x] Outlet selection after sign-in; single-outlet users placed automatically — FR-AUTH-03 · `A-03`
 - [x][x] Lock the POS without ending the shift; unlock with the shift owner's PIN — FR-AUTH-04 · `A-07`
-- [x][~] Idle timeout locks rather than signs out when a shift is open — FR-AUTH-05 · `A-08` *(server branch written and tested; unreachable until J sets `OPEN_SHIFT`)*
+- [x][x] Idle timeout locks rather than signs out when a shift is open — FR-AUTH-05 · `A-08` *(the guard asks the shift service, so it cannot go stale)*
 - [x][x] Idle period configurable, not a constant — FR-AUTH-05 · `K-08`
 - [x][x] Failed sign-in attempts rate limited and logged — FR-AUTH-06 *(server enforces; 429 with retry-after)*
 - [x][x] Password reset by administrator — FR-AUTH-07 · `A-04` `A-05` `A-06`
@@ -229,7 +230,7 @@ held sales, which live only in the browser.
 
 ### Functional
 - [x][·] Runs full screen without the application sidebar — FR-POS-01 · `C-01`
-- [x][ ] A shift must be open before selling; otherwise prompt to open one — FR-POS-02 · `C-30` *(the till asks, the server does not. A sale with no open shift is accepted today — needs J)*
+- [x][x] A shift must be open before selling; otherwise prompt to open one — FR-POS-02 · `C-30` *(the server refuses too, so takings cannot land outside a cash-up)*
 - [x][·] Scanner input captured globally, whatever has focus — FR-POS-03
 - [x][·] Scan distinguished from typing by inter-keystroke timing and a terminating Enter — FR-POS-04
 - [x][·] Scanning a product already in the cart increments and flashes that line — FR-POS-05
@@ -301,20 +302,20 @@ held sales, which live only in the browser.
 ## J · Shifts & cash — `FR-CASH`
 
 ### Functional
-- [x][ ] Shift opened with a declared float, tied to user, terminal and outlet — FR-CASH-01 · `C-29`
-- [ ][ ] Only one open shift per user and per terminal — FR-CASH-02 · BR-13
-- [x][ ] Cash movements during a shift, each with a reason — FR-CASH-03 · `H-04` `H-05`
-- [x][ ] Shift close requires a blind count; expected cash hidden until submitted — FR-CASH-04 · `C-31`
-- [x][ ] Variance calculated and recorded against the user, never absorbed — FR-CASH-05 · BR-14 · `C-32`
-- [x][ ] Variance beyond the configured threshold requires a written explanation — FR-CASH-06 · `H-06`
-- [x][ ] Non-cash takings listed by method at close for reconciliation — FR-CASH-07
-- [~][ ] End-of-day report per cashier, per outlet and for the business — FR-CASH-08 · `H-03` *(per outlet done; per cashier thin)*
-- [x][ ] A closed shift cannot be reopened; corrections are separate cash movements — FR-CASH-09
-- [x][ ] Shift list and shift detail — `H-01` `H-02`
+- [x][x] Shift opened with a declared float, tied to user, terminal and outlet — FR-CASH-01 · `C-29`
+- [ ][x] Only one open shift per user and per terminal — FR-CASH-02 · BR-13 *(two partial unique indexes, so a race cannot pass where a check would)*
+- [x][x] Cash movements during a shift, each with a reason — FR-CASH-03 · `H-04` `H-05` *(append-only; the sign belongs to the type)*
+- [x][x] Shift close requires a blind count; expected cash hidden until submitted — FR-CASH-04 · `C-31` *(an open shift returns no expectation, takings or sale total — the UI cannot leak what it never receives)*
+- [x][x] Variance calculated and recorded against the user, never absorbed — FR-CASH-05 · BR-14 · `C-32`
+- [x][~] Variance beyond the configured threshold requires a written explanation — FR-CASH-06 · `H-06` *(enforced; the threshold is a constant at GH₵5.00 until P makes it a setting)*
+- [x][x] Non-cash takings listed by method at close for reconciliation — FR-CASH-07 *(at close, deliberately — listing them earlier would give the count away)*
+- [~][~] End-of-day report per cashier, per outlet and for the business — FR-CASH-08 · `H-03` *(shifts filter by outlet and cashier; a business-wide day report is O)*
+- [x][x] A closed shift cannot be reopened; corrections are separate cash movements — FR-CASH-09 *(database trigger, not just a service check)*
+- [x][x] Shift list and shift detail — `H-01` `H-02`
 
 ### Non-functional
-- [ ][ ] A blind close records the variance against the cashier and demands a note past threshold — release gate 9
-- [x][ ] Expected cash = float + cash sales − cash refunds − cash payouts — BR-14
+- [ ][x] A blind close records the variance against the cashier and demands a note past threshold — release gate 9 *(verified: closing 100.00 short is refused, and the shift stays open so a note can be added)*
+- [x][x] Expected cash = float + cash sales − cash refunds − cash payouts — BR-14 *(computed from the payments each time, never stored)*
 
 ---
 
