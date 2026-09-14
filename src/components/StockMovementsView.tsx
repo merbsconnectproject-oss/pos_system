@@ -12,7 +12,7 @@ interface StockMovementsViewProps {
 export const StockMovementsView: React.FC<StockMovementsViewProps> = ({
   movements,
   currentOutlet,
-  outlets: _outlets,
+  outlets,
 }) => {
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -149,7 +149,10 @@ export const StockMovementsView: React.FC<StockMovementsViewProps> = ({
                   <tr key={m.id} className="hover:bg-slate-50 transition-colors">
                     <td className="py-3 px-4 font-mono text-slate-600 whitespace-nowrap">{m.timestamp}</td>
                     <td className="py-3 px-4 font-semibold text-slate-700">
-                      {m.outletId === 'inco-hardware' ? 'Inco Hardware' : 'Apex Electricals'}
+                      {/* Outlet ids are the server's now. This used to be a
+                          hardcoded two-way guess against mock ids, so every
+                          real movement was labelled "Apex Electricals". */}
+                      {outlets.find((outlet) => outlet.id === m.outletId)?.name || '—'}
                     </td>
                     <td className="py-3 px-4 font-bold text-slate-800">{m.productName}</td>
                     <td className="py-3 px-4">{getTypeBadge(m.type)}</td>

@@ -244,7 +244,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
         sum +
         scopedOutletIds.reduce((outletSum, outletId) => {
           const stock = product.stock[outletId] || 0;
-          const cost = product.costPrice[outletId] || product.retailPrice * 0.7;
+          // FR-INV-09: valuation is at weighted average cost. Stock with no
+          // recorded cost — adjusted in rather than received — is worth zero
+          // here, not 70% of retail. A guess that looks precise is worse on
+          // an owner's valuation than an obvious gap.
+          const cost = product.costPrice[outletId] ?? 0;
           return outletSum + stock * cost;
         }, 0),
       0

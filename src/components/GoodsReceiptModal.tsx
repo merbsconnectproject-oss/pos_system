@@ -44,7 +44,10 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
 
   const product = storeProducts.find((p) => p.id === selectedProductId);
   const currentStock = product ? product.stock[outletId] || 0 : 0;
-  const currentAvgCost = product ? product.costPrice[outletId] || product.retailPrice * 0.7 : 0;
+  // BR-4: the average is whatever has actually been received, and zero
+  // before anything has been. The preview below is indicative only — the
+  // server recomputes it from the ledger when the receipt is posted.
+  const currentAvgCost = product ? (product.costPrice[outletId] ?? 0) : 0;
   const qtyReceivedNum = parseFloat(qtyReceived) || 0;
   const activeUnitCost = parseFloat(unitCost) || 0;
 

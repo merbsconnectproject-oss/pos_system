@@ -31,7 +31,6 @@ import {
   INITIAL_CUSTOMERS,
   INITIAL_SUPPLIERS,
   INITIAL_SALES,
-  INITIAL_MOVEMENTS,
   INITIAL_AUDIT_LOGS,
   INITIAL_USERS,
   INITIAL_ROLES_PERMISSIONS,
@@ -68,6 +67,7 @@ import { authApi, AuthApiError, onSessionSignal, type AuthSession } from './auth
 import { outletsApi } from './outletsApi';
 import { auditApi } from './auditApi';
 import { productsApi } from './productsApi';
+import { stockApi, withStock, type MovementType } from './stockApi';
 
 /**
  * Outlets now come from the API, so a session's outlet id *is* the app's outlet
@@ -150,7 +150,9 @@ export default function App() {
     // Settled, not `all`: a catalogue that fails to load is a poorer screen,
     // not a reason to throw away a valid session and send the user back to
     // sign-in. Each result is applied on its own merits.
-    const [branches, catalogue] = await Promise.allSettled([outletsApi.list(), productsApi.list()]);
+    const [branches, catalogue, movementHistory] = await Promise.allSettled([
+      outletsApi.list(), productsApi.list(), stockApi.movements({ limit: 200 }),
+    ]);
 
     const outletList = branches.status === 'fulfilled' && branches.value.length > 0
       ? branches.value
@@ -158,7 +160,13 @@ export default function App() {
     if (branches.status === 'fulfilled' && branches.value.length > 0) setOutlets(branches.value);
 
     // An empty catalogue is a legitimate answer — a new installation has none.
-    if (catalogue.status === 'fulfilled') setProducts(catalogue.value);
+    // BR-1: stock is per outlet, so it arrives as rows and is folded into each
+    // product's per-outlet maps rather than as a figure on the product.
+    if (catalogue.status === 'fulfilled') {
+      const levels = await stockApi.atOutlet(localOutletId({ ...session }, outletList)).catch(() => []);
+      setProducts(withStock(catalogue.value, levels));
+    }
+    if (movementHistory.status === 'fulfilled') setMovements(movementHistory.value);
 
     setCurrentOutletId(localOutletId(session, outletList));
     setCurrentUser(accountFromSession(session, outletList));
@@ -186,7 +194,9 @@ export default function App() {
   const [customers, setCustomers] = useState<Customer[]>(INITIAL_CUSTOMERS);
   const [suppliers, setSuppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
   const [sales, setSales] = useState<CompletedSale[]>(INITIAL_SALES);
-  const [movements, setMovements] = useState<StockMovement[]>(INITIAL_MOVEMENTS);
+  // The ledger is the server's — BR-2. Seeding it with fiction is how a
+  // stale figure passes for a record of what happened.
+  const [movements, setMovements] = useState<StockMovement[]>([]);
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
   const [shiftRecords, setShiftRecords] = useState<ShiftRecord[]>(INITIAL_SHIFT_RECORDS);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(INITIAL_AUDIT_LOGS);
@@ -637,90 +647,94 @@ export default function App() {
     ]);
   };
 
+  /**
+   * FR-SUP-04 · BR-4: a goods receipt is a stock movement, and the server
+   * recalculates the weighted average from it.
+   *
+   * The modal's own weighted-average figure is no longer trusted — it was
+   * computed from whatever stock the browser held, which is exactly the number
+   * that could be stale. The level that comes back is the one the ledger says.
+   */
   const handleConfirmReceipt = (
     productId: string,
     qtyReceived: number,
-    _unitCost: number,
-    newWeightedAvgCost: number,
+    unitCost: number,
+    _newWeightedAvgCost: number,
     movement: StockMovement
   ) => {
-    const outletKey = movement.outletId;
-
-    // 1. Update product stock and weighted average cost for this outlet
-    setProducts((prev) =>
-      prev.map((p) => {
-        if (p.id === productId) {
-          const prevStock = p.stock[outletKey] || 0;
-          return {
-            ...p,
-            stock: {
-              ...p.stock,
-              [outletKey]: prevStock + qtyReceived,
-            },
-            costPrice: {
-              ...p.costPrice,
-              [outletKey]: newWeightedAvgCost,
-            },
-          };
-        }
-        return p;
-      })
-    );
-
-    // 2. Append movement
-    setMovements((prev) => [movement, ...prev]);
-
-    // 3. Append audit log
-    const auditEntry: AuditLogEntry = {
-      id: `aud-${Date.now()}`,
-      timestamp: movement.timestamp,
-      actor: movement.user,
-      action: 'GOODS_RECEIPT',
-      entity: `${movement.productName} (${movement.referenceNumber})`,
-      outletName: currentOutlet.name,
-      details: `Received ${qtyReceived} units. Weighted avg cost recomputed to GH₵ ${newWeightedAvgCost.toFixed(2)} (BR-4)`,
-    };
-    setAuditLogs((prev) => [auditEntry, ...prev]);
+    void stockApi.record({
+      productId,
+      outletId: currentOutlet.id,
+      type: 'RECEIPT',
+      quantity: qtyReceived,
+      unitCost,
+      note: movement.referenceNumber,
+      sourceType: 'GRN',
+      // BR-7: the reference is the idempotency key, so a double-click books the
+      // goods in once.
+      sourceId: movement.id,
+    })
+      .then((level) => applyLevel(productId, level))
+      .then(refreshMovements)
+      .catch(reportStockFailure);
   };
 
   // PRD FR-STK-07: Stock Adjustment handler
+  /**
+   * FR-INV-05: a physical count becomes an adjustment in whichever direction
+   * closes the gap.
+   *
+   * The modal reports the counted total; the ledger records the difference,
+   * because BR-2 wants the change that happened rather than the number it
+   * ended at. A count that matches writes nothing — there was no movement.
+   */
   const handleConfirmAdjustment = (
     productId: string,
     newStock: number,
     movement: StockMovement
   ) => {
-    const outletKey = movement.outletId;
+    const product = products.find((p) => p.id === productId);
+    const current = product?.stock[currentOutlet.id] ?? 0;
+    const delta = newStock - current;
+    if (delta === 0) return;
 
-    setProducts((prev) =>
-      prev.map((p) => {
-        if (p.id === productId) {
-          return {
-            ...p,
-            stock: {
-              ...p.stock,
-              [outletKey]: newStock,
-            },
-          };
-        }
-        return p;
-      })
-    );
-
-    setMovements((prev) => [movement, ...prev]);
-
-    const auditEntry: AuditLogEntry = {
-      id: `aud-${Date.now()}`,
-      timestamp: movement.timestamp,
-      actor: movement.user,
-      action: 'STOCK_ADJUSTMENT',
-      entity: `${movement.productName}`,
-      outletName: currentOutlet.name,
-      details: `Physical count adjustment to ${newStock}. ${movement.reason}`,
-    };
-    setAuditLogs((prev) => [auditEntry, ...prev]);
+    const type: MovementType = delta > 0 ? 'ADJUSTMENT_IN' : 'ADJUSTMENT_OUT';
+    void stockApi.record({
+      productId,
+      outletId: currentOutlet.id,
+      type,
+      quantity: Math.abs(delta),
+      reason: movement.reason || 'Physical count',
+      note: movement.referenceNumber,
+    })
+      .then((level) => applyLevel(productId, level))
+      .then(refreshMovements)
+      .catch(reportStockFailure);
   };
 
-  // PRD BR-17: Toggle Product Active/Inactive (No destructive deletion)
+  /** One product's figures for one outlet, replaced with what the server holds. */
+  const applyLevel = (productId: string, level: { outletId: string; quantity: number; averageCost: number; reorderLevel: number }) => {
+    setProducts((prev) => prev.map((product) => product.id !== productId ? product : {
+      ...product,
+      stock: { ...product.stock, [level.outletId]: level.quantity },
+      costPrice: { ...product.costPrice, [level.outletId]: level.averageCost },
+      minStockAlert: { ...product.minStockAlert, [level.outletId]: level.reorderLevel },
+    }));
+  };
+
+  const refreshMovements = () =>
+    stockApi.movements({ limit: 200 })
+      .then(setMovements)
+      .catch(() => { /* the ledger is a record to consult, not load-bearing */ });
+
+  const reportStockFailure = (failure: unknown) => {
+    if (failure instanceof AuthApiError && failure.status !== 401 && failure.status !== 423) {
+      alert(failure.message);
+      return;
+    }
+    if (!(failure instanceof AuthApiError)) setAppErrorReference(`STK-${Date.now().toString().slice(-6)}`);
+  };
+
   const handleToggleActive = (productId: string) => {
     const current = products.find((p) => p.id === productId);
     if (!current) return;
