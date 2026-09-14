@@ -52,13 +52,13 @@ non-deferred item in its section is complete, including its non-functional items
 | L · Customers | 8 | 7 done, 1 deferred | 6 done, 1 deferred, 1 n/a |
 | M · Users, roles & permissions | 12 | 10 done, 1 partial, 1 open | 10 done, 2 open |
 | N · Audit | 6 | 2 done, 2 partial, 2 open | 4 done, 1 partial, 1 open |
-| O · Reports & dashboard | 10 | 6 done, 2 partial, 1 open, 1 deferred | 9 open, 1 deferred |
+| O · Reports & dashboard | 10 | 7 done, 1 partial, 1 open, 1 deferred | 6 done, 1 open, 1 deferred, 2 n/a |
 | P · Settings | 12 | 8 done, 4 partial | 5 done, 2 partial, 4 open, 1 n/a |
 | Q · Connectivity & resilience | 13 | 3 done, 1 partial, 4 open, 1 deferred, 4 n/a | 1 done, 5 open, 1 deferred, 6 n/a |
 | R · Cross-cutting non-functional | 22 | 4 done, 3 partial, 15 open | 3 done, 3 partial, 16 open |
 
-**232 items · 109 complete · frontend 139 done · backend 119 done, 14 partial,
-18 not applicable · contract frozen and machine-checked (`npm run check`)**
+**232 items · 116 complete · frontend 140 done · backend 125 done, 14 partial,
+20 not applicable · contract frozen and machine-checked (`npm run check`)**
 
 > The table above is generated from the boxes below, so the two cannot drift.
 > Read it with one caveat: many items have no backend half — a scanner that
@@ -81,7 +81,8 @@ non-deferred item in its section is complete, including its non-functional items
 | ✅ | M Users, roles & permissions | accounts, role baselines, per-user grants — BR-16 holds on every path |
 | ✅ | P Settings | the thresholds are configuration now, and the rules read them |
 | ✅ | L Customers | one list, found by phone however it is written |
-| ⬜ | I Receipts · O Reports | not started |
+| ✅ | O Reports & dashboard | aggregated by the database, over every row |
+| ⬜ | I Receipts | blocked on the thermal printer |
 | ◐ | Q Connectivity | local-first removes the queue; power loss and the owner's push remain |
 
 **Release gates** — 1 ⬜ · 2 ⬜ (needs the printer) · **3 ✅** same payment twice records
@@ -401,18 +402,18 @@ held sales, which live only in the browser.
 ## O · Reports & dashboard — `FR-RPT`
 
 ### Functional
-- [x][ ] Owner dashboard: both outlets separately and combined — FR-RPT-01 · `B-01`
-- [x][ ] Manager and cashier dashboards, scoped and operational — FR-RPT-02 · `B-02` `B-03`
-- [~][ ] Every report filterable by outlet, date range, category, user and payment method — FR-RPT-03 · `I-16` *(outlet and date done; the rest partial)*
-- [~][ ] All fifteen reports present with real data — FR-RPT-04 · `I-02`…`I-15` *(sales, product, category, cashier, customer, profit, best sellers, slow movers, stock, movements, payments, discounts, voids, purchases render; several need server-side aggregation)*
-- [x][ ] Profit and cost figures only for `report.view_profit` — FR-RPT-05
-- [x][ ] Monetary figures calculated from stored frozen costs, never current prices — FR-RPT-06 · BR-5
+- [x][x] Owner dashboard: both outlets separately and combined — FR-RPT-01 · `B-01` *(the combined line is summed from the cards sent, so it always equals what is above it)*
+- [x][x] Manager and cashier dashboards, scoped and operational — FR-RPT-02 · `B-02` `B-03` *(scoped by assignment on the server, not by a URL parameter)*
+- [~][x] Every report filterable by outlet, date range, category, user and payment method — FR-RPT-03 · `I-16` *(the API takes all five; the screen offers outlet and date, so category, user and method have no control yet)*
+- [x][x] All fifteen reports present with real data — FR-RPT-04 · `I-02`…`I-15` *(aggregated over every row, not over what the browser had loaded — which is what made a year-to-date total mean "the last hundred receipts")*
+- [x][x] Profit and cost figures only for `report.view_profit` — FR-RPT-05 *(not computed rather than not displayed: without it the field is absent from the response)*
+- [x][x] Monetary figures calculated from stored frozen costs, never current prices — FR-RPT-06 · BR-5 *(asserted: receiving stock at triple the price does not restate an old sale)*
 - [-][-] Export to Excel and PDF — FR-RPT-07 *(Stage 2; CSV export exists)*
 
 ### Non-functional
-- [x][ ] Dashboard loading skeleton and first-run empty state — `B-04` `B-05`
-- [x][ ] Report empty state offers to widen the range — `I-17`
-- [ ][ ] Report queries perform acceptably against a full year of sales — NFR-1
+- [x][·] Dashboard loading skeleton and first-run empty state — `B-04` `B-05`
+- [x][·] Report empty state offers to widen the range — `I-17` *(and a failure state, so an empty table never reads as "no sales")*
+- [ ][ ] Report queries perform acceptably against a full year of sales — NFR-1 *(not measured — needs a year of seeded sales to mean anything)*
 
 ---
 
