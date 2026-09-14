@@ -51,13 +51,13 @@ non-deferred item in its section is complete, including its non-functional items
 | K · Suppliers & goods receipt | 11 | 6 done, 2 partial, 3 deferred | 8 done, 3 deferred |
 | L · Customers | 8 | 7 done, 1 deferred | 6 done, 1 deferred, 1 n/a |
 | M · Users, roles & permissions | 12 | 10 done, 1 partial, 1 open | 10 done, 2 open |
-| N · Audit | 6 | 2 done, 2 partial, 2 open | 4 done, 1 partial, 1 open |
+| N · Audit | 6 | 4 done, 1 partial, 1 open | 5 done, 1 open |
 | O · Reports & dashboard | 10 | 7 done, 1 partial, 1 open, 1 deferred | 6 done, 1 open, 1 deferred, 2 n/a |
 | P · Settings | 12 | 8 done, 4 partial | 5 done, 2 partial, 4 open, 1 n/a |
 | Q · Connectivity & resilience | 13 | 3 done, 1 partial, 4 open, 1 deferred, 4 n/a | 1 done, 5 open, 1 deferred, 6 n/a |
 | R · Cross-cutting non-functional | 22 | 4 done, 3 partial, 15 open | 3 done, 3 partial, 16 open |
 
-**232 items · 120 complete · frontend 142 done · backend 131 done, 13 partial,
+**232 items · 122 complete · frontend 144 done · backend 132 done, 12 partial,
 20 not applicable · contract frozen and machine-checked (`npm run check`)**
 
 > The table above is generated from the boxes below, so the two cannot drift.
@@ -92,8 +92,19 @@ once · **4 ✅** two terminals cannot sell the same last unit.
 **Measured, not assumed:** a five-line sale commits in **249 ms** against a real
 Postgres — NFR-2 allows 1000.
 
-**Still mock in the app:** the Stage 2 modules only (expenses, accounting, installments).
-Everything else reads and writes the API.
+**Still mock in the app:** nothing invents a figure any more.
+
+The Stage 2 lists — expenses, installment plans, returns — start **empty** rather
+than seeded, because nothing on the server records one. The screens that show them
+say so instead of displaying invented totals. Two placeholders remain and both are
+deliberate: `OUTLETS`, shown before sign-in when no branch is known, and
+`INITIAL_SETTINGS`, which is blank wherever a value would be a claim.
+
+The analytics screen was the worst of it and is worth recording: it did not merely
+show stale seeds, it **computed** figures — revenue was real sales plus a literal,
+COGS was `revenue × 0.641`, the velocity curve was a sine wave, and the category,
+payment, top-mover and ageing tables were literal arrays. All of it now comes from
+the reports API or is empty.
 
 **Waiting on a decision from you:** the thermal printer — it blocks I and release
 gate 2, and there is no way to choose it from here.
@@ -389,9 +400,9 @@ held sales, which live only in the browser.
 ## N · Audit — `FR-AUDIT`
 
 ### Functional
-- [~][x] Entries capture actor, action, entity type and ID, before and after, outlet, terminal, IP, timestamp — FR-AUDIT-01
-- [~][~] All listed actions logged: sign-in, sale, void, discount override, price change, adjustment, receipt, shift, cash movement, user and permission change, settings, reprint, export — FR-AUDIT-02 *(everything built so far logs; shift, cash, user and settings actions do not exist yet)*
-- [ ][x] Append-only; no application path edits or deletes an entry, including for the Owner — FR-AUDIT-03 · BR-15 *(database trigger; no write route exists)*
+- [x][x] Entries capture actor, action, entity type and ID, before and after, outlet, terminal, IP, timestamp — FR-AUDIT-01 *(the view starts empty and shows the server's entries; it used to seed invented ones and keep them if the fetch failed)*
+- [~][x] All listed actions logged: sign-in, sale, void, discount override, price change, adjustment, receipt, shift, cash movement, user and permission change, settings, reprint, export — FR-AUDIT-02 *(every action that exists now logs — shifts, cash, users, settings, customers and branch prices included. Reprint and export are the two that do not exist)*
+- [x][x] Append-only; no application path edits or deletes an entry, including for the Owner — FR-AUDIT-03 · BR-15 *(database trigger; no write route exists, and the screen has no edit control)*
 - [x][x] Filterable by actor, action, entity, outlet and date — FR-AUDIT-04 · `J-08` `J-09`
 - [ ][x] Entries retained for the life of the system — FR-AUDIT-05 *(nothing prunes them; no delete path exists)*
 
@@ -403,7 +414,7 @@ held sales, which live only in the browser.
 ## O · Reports & dashboard — `FR-RPT`
 
 ### Functional
-- [x][x] Owner dashboard: both outlets separately and combined — FR-RPT-01 · `B-01` *(the combined line is summed from the cards sent, so it always equals what is above it)*
+- [x][x] Owner dashboard: both outlets separately and combined — FR-RPT-01 · `B-01` *(the combined line is summed from the cards sent, so it always equals what is above it. **Both charts on it were literal arrays** — a fixed twelve-bar series and three hardcoded customer segments — and are now server-fed)*
 - [x][x] Manager and cashier dashboards, scoped and operational — FR-RPT-02 · `B-02` `B-03` *(scoped by assignment on the server, not by a URL parameter)*
 - [~][x] Every report filterable by outlet, date range, category, user and payment method — FR-RPT-03 · `I-16` *(the API takes all five; the screen offers outlet and date, so category, user and method have no control yet)*
 - [x][x] All fifteen reports present with real data — FR-RPT-04 · `I-02`…`I-15` *(aggregated over every row, not over what the browser had loaded — which is what made a year-to-date total mean "the last hundred receipts")*
