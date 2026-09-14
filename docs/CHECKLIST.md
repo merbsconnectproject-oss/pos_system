@@ -42,7 +42,7 @@ non-deferred item in its section is complete, including its non-functional items
 | B · Outlets | 10 | 7 done, 1 partial, 1 open, 1 deferred | 7 done, 2 partial, 1 deferred |
 | C · Product catalogue | 17 | 9 done, 2 partial, 5 open, 1 deferred | 12 done, 1 partial, 2 open, 2 deferred |
 | D · Units & conversions | 8 | 7 done, 1 open | 6 done, 2 open |
-| E · Pricing | 10 | 6 done, 2 partial, 2 open | 4 done, 1 partial, 5 open |
+| E · Pricing | 10 | 8 done, 2 partial | 10 done |
 | F · Inventory | 15 | 10 done, 2 partial, 2 open, 1 deferred | 9 done, 1 partial, 3 open, 2 deferred |
 | G · Point of sale | 25 | 17 done, 3 partial, 4 open, 1 deferred | 11 done, 1 partial, 2 open, 1 deferred, 10 n/a |
 | H · Payments | 11 | 6 done, 2 partial, 2 open, 1 deferred | 7 done, 3 open, 1 deferred |
@@ -57,7 +57,7 @@ non-deferred item in its section is complete, including its non-functional items
 | Q · Connectivity & resilience | 13 | 3 done, 1 partial, 4 open, 1 deferred, 4 n/a | 1 done, 5 open, 1 deferred, 6 n/a |
 | R · Cross-cutting non-functional | 22 | 4 done, 3 partial, 15 open | 3 done, 3 partial, 16 open |
 
-**232 items · 116 complete · frontend 140 done · backend 125 done, 14 partial,
+**232 items · 120 complete · frontend 142 done · backend 131 done, 13 partial,
 20 not applicable · contract frozen and machine-checked (`npm run check`)**
 
 > The table above is generated from the boxes below, so the two cannot drift.
@@ -82,6 +82,7 @@ non-deferred item in its section is complete, including its non-functional items
 | ✅ | P Settings | the thresholds are configuration now, and the rules read them |
 | ✅ | L Customers | one list, found by phone however it is written |
 | ✅ | O Reports & dashboard | aggregated by the database, over every row |
+| ✅ | E Pricing | branch prices, customer levels, and cost no longer leaks |
 | ⬜ | I Receipts | blocked on the thermal printer |
 | ◐ | Q Connectivity | local-first removes the queue; power loss and the owner's push remain |
 
@@ -195,12 +196,12 @@ and how to reverse it are on `Permission.isFutureStage()`.
 ### Functional
 - [x][x] Cost, retail and trade price per product — FR-PRICE-01 · `D-07` *(cost is the weighted average per outlet — BR-4)*
 - [x][x] Floor price below which approval is required — FR-PRICE-02 · BR-10 *(server refuses without an approver; approver recorded on the line)*
-- [ ][ ] Per-outlet price override — FR-PRICE-03
-- [x][ ] Customer type determines the price level automatically — FR-PRICE-04 *(needs L: customers are still mock)*
-- [~][ ] Customer-specific fixed discount or agreed price — FR-PRICE-05 *(field on the record, not applied at the counter)*
-- [~][~] Price changes versioned with effective date and user — FR-PRICE-06 *(`product_price_history` records who and when, append-only; no read endpoint, so the view is still mock)*
-- [x][ ] Cost and margin visible only with `price.view_cost` — FR-PRICE-07 *(hidden in the UI; the API returns cost to anyone with `stock.view`)*
-- [ ][ ] Accounting margin and replacement margin shown side by side — FR-PRICE-08
+- [~][x] Per-outlet price override — FR-PRICE-03 *(stored level by level, and it is the branch's floor the till is held to — BR-10. The API and the sale path are done; there is no control on the product screen yet)*
+- [x][x] Customer type determines the price level automatically — FR-PRICE-04 *(decided by the server. The screen tested the type by hand in three places and missed `company`, charging every company retail)*
+- [x][x] Customer-specific fixed discount or agreed price — FR-PRICE-05 *(applied at the counter, and it raises the FR-POS-10 ceiling rather than bypassing it — past the deal it is still refused)*
+- [~][x] Price changes versioned with effective date and user — FR-PRICE-06 *(readable now, newest first, with who set each price; no history panel on the product screen yet)*
+- [x][x] Cost and margin visible only with `price.view_cost` — FR-PRICE-07 *(**was a real hole**: `/api/stock/*` returned cost to anyone with `stock.view`, which every cashier has. Stripped at the edge now, and removed rather than zeroed)*
+- [x][x] Accounting margin and replacement margin shown side by side — FR-PRICE-08 *(the weighted average says what the sale earned; the latest receipt says whether the price still works. A loss reads as a loss instead of being floored at zero)*
 
 ### Non-functional
 - [x][x] Money held as integer minor units on the wire; half-up rounding per line — BR-11 *(sale amounts are BIGINT pesewas; per-unit rates keep 4 dp)*
