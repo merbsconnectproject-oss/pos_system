@@ -1354,9 +1354,6 @@ export default function App() {
           {activeTab === 'reports' && (
             <ReportsView
               permissions={permissions}
-              products={products}
-              sales={sales}
-              movements={movements}
               outlets={outlets}
               currentOutlet={currentOutlet}
               currentUser={currentUser}

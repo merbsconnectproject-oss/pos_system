@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowDownRight,
@@ -28,6 +28,7 @@ import { SalesPurchaseChart } from './SalesPurchaseChart';
 import { CustomerOverviewChart } from './CustomerOverviewChart';
 import { CompletedSale, Outlet, OutletId, Product, ShiftInfo, UserAccount } from '../types';
 import type { PermissionSet } from '../permissions';
+import { reportsApi, type DashboardView } from '../reportsApi';
 
 interface DashboardProps {
   products: Product[];
@@ -237,6 +238,56 @@ export const Dashboard: React.FC<DashboardProps> = ({
     [scopedProducts, scopedOutletIds]
   );
 
+  /**
+   * FR-RPT-01 · FR-RPT-02: the headline figures are the server's.
+   *
+   * <p>They used to be summed from whichever sales this tab had loaded — a
+   * hundred of them — so "today" was right only while the shop was quiet, and
+   * the day it was busy the dashboard quietly under-reported. The server
+   * aggregates over every row and scopes to the branches this person is
+   * assigned to.
+   */
+  const [serverDashboard, setServerDashboard] = useState<DashboardView | null>(null);
+  const [serverTrend, setServerTrend] = useState<{ revenue: number; profit: number } | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 86400000);
+
+    Promise.all([
+      reportsApi.dashboard(),
+      // The trend badges compare two real weeks rather than two slices of a
+      // loaded list — a badge that is wrong is worse than no badge.
+      reportsApi.summary({ from: sevenDaysAgo, to: now }),
+      reportsApi.summary({ from: fourteenDaysAgo, to: sevenDaysAgo }),
+    ])
+      .then(([dashboard, thisWeek, lastWeek]) => {
+        if (!current) return;
+        setServerDashboard(dashboard);
+        const change = (now7: number, prev: number) =>
+          prev === 0 ? (now7 > 0 ? 100 : 0) : ((now7 - prev) / prev) * 100;
+        setServerTrend({
+          revenue: change(Number(thisWeek.revenue), Number(lastWeek.revenue)),
+          profit: change(Number(thisWeek.profit ?? 0), Number(lastWeek.profit ?? 0)),
+        });
+      })
+      .catch((error) => {
+        // The dashboard still renders from what is loaded; it just says less.
+        console.error('[dashboard] figures failed to load', error);
+      });
+
+    return () => { current = false; };
+  }, [currentOutlet.id]);
+
+  /** The card for the branch in view, or the combined line for "all". */
+  const serverCard = useMemo(() => {
+    if (!serverDashboard) return null;
+    if (dashboardScope === 'all') return serverDashboard.combined;
+    return serverDashboard.outlets.find((row) => row.outletId === dashboardScope) || null;
+  }, [serverDashboard, dashboardScope]);
+
   const metrics: DashboardMetrics = useMemo(() => {
     const salesToday = scopedSales.reduce((sum, sale) => sum + sale.total, 0);
     const stockValue = scopedProducts.reduce(
@@ -266,17 +317,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
       .filter((payment) => payment.method === 'cash')
       .reduce((sum, payment) => sum + payment.amount, 0);
 
+    // FR-RPT-01: five figures, from the server when it has answered. Stock
+    // valuation stays local — it is a position, not a period, and the products
+    // on screen already carry it.
+    const receipts = serverCard ? serverCard.receiptsToday : transactions;
+    const takings = serverCard ? Number(serverCard.salesToday) : salesToday;
+
     return {
-      salesToday,
-      estimatedProfit,
-      expectedCash: shiftInfo.openingFloat + cashSales,
+      salesToday: takings,
+      estimatedProfit: serverCard?.profitToday == null ? estimatedProfit : Number(serverCard.profitToday),
+      expectedCash: serverCard ? Number(serverCard.expectedCash) : shiftInfo.openingFloat + cashSales,
       stockValue,
-      transactions,
-      averageSale: transactions > 0 ? salesToday / transactions : 0,
-      lowStockCount: lowStockItems.length,
-      openShifts: shiftInfo.isOpen ? 1 : 0,
+      transactions: receipts,
+      averageSale: receipts > 0 ? takings / receipts : 0,
+      lowStockCount: serverCard ? serverCard.lowStockCount : lowStockItems.length,
+      openShifts: serverCard ? serverCard.openShifts : (shiftInfo.isOpen ? 1 : 0),
     };
   }, [
+    serverCard,
     scopedOutletIds,
     scopedProducts,
     scopedSales,
@@ -428,7 +486,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
       value: formatMoney(metrics.salesToday),
       icon: Banknote,
       show: true,
-      trend: sevenDayTrends.sales,
+      // FR-RPT-01: the server compared two real weeks; the local figure is the
+      // fallback while that is in flight.
+      trend: serverTrend ? serverTrend.revenue : sevenDayTrends.sales,
       trendDetail: `${formatMoney(sevenDayTrends.last7dRev)} (last 7 days) vs ${formatMoney(sevenDayTrends.prev7dRev)} (previous 7 days)`,
     },
     {
@@ -436,7 +496,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       value: formatMoney(metrics.estimatedProfit),
       icon: TrendingUp,
       show: canViewProfit,
-      trend: sevenDayTrends.profit,
+      trend: serverTrend ? serverTrend.profit : sevenDayTrends.profit,
       trendDetail: `${formatMoney(sevenDayTrends.last7dProfit)} (last 7 days) vs ${formatMoney(sevenDayTrends.prev7dProfit)} (previous 7 days)`,
     },
     {
