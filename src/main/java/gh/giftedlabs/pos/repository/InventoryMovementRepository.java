@@ -16,6 +16,9 @@ import java.util.UUID;
 /** The stock ledger — BR-2, FR-INV-04. */
 public interface InventoryMovementRepository extends JpaRepository<InventoryMovement, UUID> {
 
+    /** FR-UOM-07: once a product has stock or a transaction, its unit factors are evidence. */
+    boolean existsByProductId(UUID productId);
+
     /**
      * FR-INV-04: filterable by product, outlet, type, user and date.
      *

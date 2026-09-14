@@ -17,6 +17,8 @@ import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -129,6 +131,11 @@ public class ProductServiceImpl implements ProductService {
                 : request.sku().trim().toUpperCase();
         if (products.skuTaken(sku, id)) {
             throw CatalogueConflictException.sku(sku, products.findBySku(sku).map(Product::getName).orElse("another product"));
+        }
+
+        if (movements.existsByProductId(id) && sellingUnitsChanged(product, request.sellingUnits())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Selling unit conversion factors cannot change after stock or transactions exist");
         }
 
         product.setSku(sku);
@@ -263,6 +270,19 @@ public class ProductServiceImpl implements ProductService {
             }
             product.addBarcode(new ProductBarcode(code, barcode.unitName().trim()));
         }
+    }
+
+    private boolean sellingUnitsChanged(Product product, List<ProductRequest.SellingUnitRequest> requested) {
+        List<ProductRequest.SellingUnitRequest> next = requested == null ? List.of() : requested;
+        List<ProductSellingUnit> current = product.getSellingUnits();
+        if (current.size() != next.size()) return true;
+        for (int i = 0; i < current.size(); i++) {
+            ProductSellingUnit existing = current.get(i);
+            ProductRequest.SellingUnitRequest incoming = next.get(i);
+            if (!existing.getName().equalsIgnoreCase(incoming.name().trim())
+                    || existing.getConversionFactor().compareTo(incoming.conversionFactor()) != 0) return true;
+        }
+        return false;
     }
 
     /**

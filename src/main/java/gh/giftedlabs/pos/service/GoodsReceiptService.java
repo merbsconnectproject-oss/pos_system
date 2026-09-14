@@ -19,5 +19,8 @@ public interface GoodsReceiptService {
     /** FR-SUP-07. */
     List<GoodsReceiptView> forSupplier(UUID supplierId);
 
+    /** FR-SUP-07: purchase history for one product across suppliers and outlets. */
+    List<GoodsReceiptView> forProduct(UUID productId);
+
     List<GoodsReceiptView> atOutlet(UUID outletId);
 }

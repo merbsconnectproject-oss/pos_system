@@ -153,6 +153,14 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<GoodsReceiptView> forProduct(UUID productId) {
+        if (!products.existsById(productId)) throw new ProductNotFoundException(productId);
+        return receipts.findDistinctByLinesProductIdOrderByCreatedAtDesc(productId).stream()
+                .map(receipt -> summary(receipt, productId)).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<GoodsReceiptView> atOutlet(UUID outletId) {
         return receipts.findAllByOutletIdOrderByCreatedAtDesc(outletId).stream()
                 .map(this::summary).toList();
@@ -204,10 +212,15 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
     }
 
     private GoodsReceiptView summary(GoodsReceipt receipt) {
+        return summary(receipt, null);
+    }
+
+    private GoodsReceiptView summary(GoodsReceipt receipt, UUID productFilter) {
         String supplierName = suppliers.findById(receipt.getSupplierId())
                 .map(Supplier::getName).orElse("(removed)");
 
         List<GoodsReceiptView.Line> lines = receipt.getLines().stream()
+                .filter(line -> productFilter == null || line.getProductId().equals(productFilter))
                 .map(line -> new GoodsReceiptView.Line(
                         line.getProductId(),
                         products.findById(line.getProductId()).map(Product::getName).orElse("(removed)"),

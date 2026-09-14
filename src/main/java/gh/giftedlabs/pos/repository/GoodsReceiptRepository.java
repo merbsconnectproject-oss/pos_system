@@ -11,6 +11,9 @@ public interface GoodsReceiptRepository extends JpaRepository<GoodsReceipt, UUID
 
     List<GoodsReceipt> findAllBySupplierIdOrderByCreatedAtDesc(UUID supplierId);
 
+    /** FR-SUP-07: receipts that contain a particular product. */
+    List<GoodsReceipt> findDistinctByLinesProductIdOrderByCreatedAtDesc(UUID productId);
+
     List<GoodsReceipt> findAllByOutletIdOrderByCreatedAtDesc(UUID outletId);
 
     /** FR-SUP-06: a document is reversed at most once. */

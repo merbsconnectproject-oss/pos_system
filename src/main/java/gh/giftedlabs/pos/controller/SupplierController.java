@@ -77,6 +77,13 @@ public class SupplierController {
         return receipts.forSupplier(id);
     }
 
+    /** FR-SUP-07: delivery history for one product, including supplier and outlet. */
+    @GetMapping("/products/{productId}/purchase-history")
+    @PreAuthorize("hasAuthority('" + Permission.Codes.STOCK_VIEW + "')")
+    public List<GoodsReceiptView> productHistory(@PathVariable UUID productId) {
+        return receipts.forProduct(productId);
+    }
+
     @GetMapping("/goods-receipts")
     @PreAuthorize("hasAuthority('" + Permission.Codes.STOCK_VIEW + "')")
     public List<GoodsReceiptView> atOutlet(@RequestParam UUID outletId) {

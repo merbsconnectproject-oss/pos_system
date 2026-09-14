@@ -297,6 +297,11 @@ class SupplierControllerTest {
             // 200 + 100 - 100: a reversed delivery is not business done.
             mvc.perform(session.authorise(get("/api/suppliers/" + supplierId)))
                     .andExpect(jsonPath("$.totalSupplied").value(200.0));
+
+            mvc.perform(session.authorise(get("/api/products/" + productId + "/purchase-history")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].supplierName").value("History Supplier " + run))
+                    .andExpect(jsonPath("$[0].lines[0].productId").value(productId));
         }
     }
 
