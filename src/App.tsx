@@ -67,6 +67,7 @@ import { roundMoney } from './money';
 import { DEFAULT_ACCENT, applyAccent } from './accent';
 import { authApi, AuthApiError, onSessionSignal, type AuthSession } from './authApi';
 import { outletsApi } from './outletsApi';
+import { auditApi } from './auditApi';
 
 /**
  * Outlets now come from the API, so a session's outlet id *is* the app's outlet
@@ -927,6 +928,22 @@ export default function App() {
     if (currentUser) void authApi.signOut().catch(() => undefined);
     resetToSignIn();
   };
+
+  /**
+   * BR-15: the audit log is the server's, not the browser's.
+   *
+   * Loaded once the user is known, and only for those who may read it —
+   * `audit.view`. A cashier asking for it gets a 403, which is correct and
+   * would otherwise show up as a console error on every sign-in.
+   */
+  useEffect(() => {
+    if (!currentUser || !can('audit.view')) return;
+    let active = true;
+    auditApi.recent({ limit: 200 })
+      .then((entries) => { if (active) setAuditLogs(entries); })
+      .catch(() => { /* the view keeps whatever it has; the log is not load-bearing */ });
+    return () => { active = false; };
+  }, [currentUser?.id, currentOutletId]);
 
   // The server can lock or end this session on its own — an idle terminal with
   // an open shift, or an account deactivated mid-shift. Those arrive on
