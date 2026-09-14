@@ -5,6 +5,7 @@ import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Creating or editing a product — FR-PROD-01, FR-UOM-02.
@@ -27,6 +28,8 @@ public record ProductRequest(
         String category,
 
         @Size(max = 120) String brand,
+
+        UUID supplierId,
 
         @NotBlank(message = "Choose a base unit")
         @Size(max = 30)

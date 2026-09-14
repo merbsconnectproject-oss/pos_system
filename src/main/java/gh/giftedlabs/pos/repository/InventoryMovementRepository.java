@@ -64,4 +64,15 @@ public interface InventoryMovementRepository extends JpaRepository<InventoryMove
                                        @Param("outletId") UUID outletId,
                                        @Param("receipt") MovementType receipt,
                                        Pageable page);
+
+    /** FR-PROD-09: only movements that actually establish a new cost. */
+    @Query("""
+           select m from InventoryMovement m
+            where m.productId = :productId
+              and m.type in (:types)
+              and m.unitCost is not null
+            order by m.createdAt desc
+           """)
+    List<InventoryMovement> costHistory(@Param("productId") UUID productId,
+                                        @Param("types") List<MovementType> types);
 }

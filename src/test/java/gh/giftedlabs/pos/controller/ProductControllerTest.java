@@ -3,9 +3,14 @@ package gh.giftedlabs.pos.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import gh.giftedlabs.pos.TestcontainersConfiguration;
 import gh.giftedlabs.pos.entity.Outlet;
+import gh.giftedlabs.pos.entity.InventoryMovement;
+import gh.giftedlabs.pos.entity.Supplier;
 import gh.giftedlabs.pos.entity.User;
+import gh.giftedlabs.pos.repository.InventoryMovementRepository;
 import gh.giftedlabs.pos.repository.OutletRepository;
+import gh.giftedlabs.pos.repository.SupplierRepository;
 import gh.giftedlabs.pos.repository.UserRepository;
+import gh.giftedlabs.pos.rules.MovementType;
 import gh.giftedlabs.pos.rules.Role;
 import gh.giftedlabs.pos.service.LoginAttemptService;
 import jakarta.servlet.http.Cookie;
@@ -21,6 +26,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -29,12 +35,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.concurrent.TimeUnit;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The catalogue over HTTP — FR-PROD-02…08, FR-UOM-02/03/04.
@@ -51,6 +62,9 @@ class ProductControllerTest {
     @Autowired ObjectMapper json;
     @Autowired UserRepository users;
     @Autowired OutletRepository outlets;
+    @Autowired SupplierRepository suppliers;
+    @Autowired InventoryMovementRepository movements;
+    @Autowired JdbcTemplate jdbc;
     @Autowired LoginAttemptService loginAttempts;
     @Autowired @Qualifier("passwordEncoder") PasswordEncoder passwords;
 
@@ -75,6 +89,21 @@ class ProductControllerTest {
     @Nested
     @DisplayName("creating a product")
     class Creating {
+
+        @Test
+        @DisplayName("stores the preferred supplier on the product — FR-PROD-01")
+        void storesTheSupplier() throws Exception {
+            Session session = signIn();
+            Supplier supplier = suppliers.save(new Supplier("Catalogue supplier " + run));
+            Map<String, Object> body = cable(null);
+            body.put("supplierId", supplier.getId());
+
+            mvc.perform(session.authorise(post("/api/products"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(body)))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.supplierId").value(supplier.getId().toString()));
+        }
 
         @Test
         @DisplayName("generates a SKU when the field is left blank — FR-PROD-02")
@@ -218,6 +247,48 @@ class ProductControllerTest {
     class Search {
 
         @Test
+        @DisplayName("returns the correct top three for four partial terms under 300ms at 3,000 products — FR-PROD-06 · NFR-1")
+        void meetsTheLoadedCatalogueAcceptanceTarget() throws Exception {
+            Session session = signIn();
+            List<Object[]> rows = new ArrayList<>();
+            for (int i = 0; i < 2_997; i++) {
+                rows.add(new Object[]{"LOAD-" + run + "-" + i, "Loaded fixture " + i, "ordinary stock item"});
+            }
+            for (int i = 1; i <= 3; i++) {
+                rows.add(new Object[]{"TOP-" + run + "-" + i,
+                        "Twin 2.5mm cable target " + i, "Nexans fire-resistant cable"});
+            }
+            jdbc.batchUpdate("""
+                    insert into product (sku, name, description, base_unit, retail_price, trade_price, floor_price)
+                    values (?, ?, ?, 'm', 10, 9, 8)
+                    """, rows);
+
+            // Warm statement/JIT caches; the acceptance measures catalogue search, not first JVM startup.
+            mvc.perform(session.authorise(get("/api/products").param("q", "nex 2.5 fire twin").param("size", "3")))
+                    .andExpect(status().isOk());
+            long started = System.nanoTime();
+            mvc.perform(session.authorise(get("/api/products").param("q", "nex 2.5 fire twin").param("size", "3")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(3))
+                    .andExpect(jsonPath("$.content[0].sku").value(org.hamcrest.Matchers.startsWith("TOP-" + run)));
+            long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+            assertTrue(elapsedMs < 300, "Loaded four-term search took " + elapsedMs + "ms");
+        }
+
+        @Test
+        @DisplayName("searches the description as well as catalogue labels — FR-PROD-06")
+        void searchesDescription() throws Exception {
+            Session session = signIn();
+            Map<String, Object> body = cable(null);
+            body.put("description", "Flame-retardant concealed installation " + run);
+            create(session, body);
+
+            mvc.perform(session.authorise(get("/api/products").param("q", "conceal " + run)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(1));
+        }
+
+        @Test
         @DisplayName("matches partial, out-of-order terms across fields — FR-PROD-06")
         void matchesAcrossFields() throws Exception {
             Session session = signIn();
@@ -286,6 +357,56 @@ class ProductControllerTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.sku").value("KEEP-" + run))
                     .andExpect(jsonPath("$.name").value("Renamed cable"));
+        }
+    }
+
+    @Nested
+    @DisplayName("bulk import")
+    class BulkImport {
+
+        @Test
+        @DisplayName("commits mapped rows server-side and safely allocates blank SKUs — FR-PROD-10 · FR-PROD-02")
+        void commitsRowsAndAllocatesSkus() throws Exception {
+            Session session = signIn();
+            Map<String, Object> first = cable(null);
+            first.put("name", "Imported cable A " + run);
+            first.put("barcodes", List.of());
+            Map<String, Object> second = cable(null);
+            second.put("name", "Imported cable B " + run);
+            second.put("barcodes", List.of());
+
+            mvc.perform(session.authorise(post("/api/products/import"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(Map.of("products", List.of(first, second)))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.created").value(2))
+                    .andExpect(jsonPath("$.updated").value(0))
+                    .andExpect(jsonPath("$.products[0].sku").value("P" + run.substring(0, 5) + "-CAB-001"))
+                    .andExpect(jsonPath("$.products[1].sku").value("P" + run.substring(0, 5) + "-CAB-002"));
+        }
+    }
+
+    @Nested
+    @DisplayName("history")
+    class History {
+
+        @Test
+        @DisplayName("returns real receipt and opening costs with outlet and actor — FR-PROD-09")
+        void returnsCostHistory() throws Exception {
+            Session session = signIn();
+            String productId = create(session, cable(null));
+            User actor = users.findByUsernameOrEmail(ownerName).orElseThrow();
+            UUID outletId = actor.getOutletIds().iterator().next();
+            movements.save(new InventoryMovement(UUID.fromString(productId), outletId, MovementType.OPENING,
+                    new BigDecimal("10.000"), new BigDecimal("7.2500"), null, "Initial count",
+                    "CATALOGUE", UUID.randomUUID(), false, actor.getId(), Instant.now()));
+
+            mvc.perform(session.authorise(get("/api/products/" + productId + "/cost-history")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].unitCost").value(7.25))
+                    .andExpect(jsonPath("$[0].movementType").value("OPENING"))
+                    .andExpect(jsonPath("$[0].outletName").value("Catalogue Branch " + run))
+                    .andExpect(jsonPath("$[0].changedBy").value("Test Owner"));
         }
     }
 

@@ -1,7 +1,6 @@
 package gh.giftedlabs.pos.service.impl;
 
-import gh.giftedlabs.pos.dto.ProductRequest;
-import gh.giftedlabs.pos.dto.ProductView;
+import gh.giftedlabs.pos.dto.*;
 import gh.giftedlabs.pos.entity.*;
 import gh.giftedlabs.pos.exception.CatalogueConflictException;
 import gh.giftedlabs.pos.exception.ProductNotFoundException;
@@ -14,8 +13,10 @@ import jakarta.persistence.EntityManager;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -36,26 +37,36 @@ public class ProductServiceImpl implements ProductService {
     private final BrandRepository brands;
     private final ProductPriceHistoryRepository priceHistory;
     private final OutletRepository outlets;
+    private final SupplierRepository suppliers;
+    private final InventoryMovementRepository movements;
+    private final UserRepository users;
     private final AuditService audit;
     private final Clock clock;
     private final EntityManager entityManager;
+    private final JdbcTemplate jdbc;
 
     public ProductServiceImpl(ProductRepository products, CategoryRepository categories, BrandRepository brands,
                               ProductPriceHistoryRepository priceHistory, OutletRepository outlets,
-                              AuditService audit, Clock clock, EntityManager entityManager) {
+                              SupplierRepository suppliers, InventoryMovementRepository movements,
+                              UserRepository users, AuditService audit, Clock clock,
+                              EntityManager entityManager, JdbcTemplate jdbc) {
         this.products = products;
         this.categories = categories;
         this.brands = brands;
         this.priceHistory = priceHistory;
         this.outlets = outlets;
+        this.suppliers = suppliers;
+        this.movements = movements;
+        this.users = users;
         this.audit = audit;
         this.clock = clock;
         this.entityManager = entityManager;
+        this.jdbc = jdbc;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProductView> search(String query, boolean activeOnly, Pageable pageable) {
+    public Slice<ProductView> search(String query, boolean activeOnly, Pageable pageable) {
         if (query == null || query.isBlank()) {
             Page<Product> page = activeOnly
                     ? products.findAllByActiveTrueOrderByNameAsc(pageable)
@@ -63,35 +74,7 @@ public class ProductServiceImpl implements ProductService {
             return page.map(ProductView::of);
         }
 
-        // FR-PROD-06: partial and out-of-order terms. Each term narrows the set,
-        // and a term may match a different field from its neighbour — "wire 2.5
-        // nexans" has to find a Nexans cable whose name carries neither the
-        // brand nor the terms in that order.
-        List<String> terms = Arrays.stream(query.trim().split("\\s+")).filter(t -> !t.isBlank()).toList();
-
-        Pageable wide = PageRequest.of(0, Math.max(pageable.getPageSize() * 10, 200));
-        Set<UUID> matching = null;
-        Map<UUID, Product> byId = new LinkedHashMap<>();
-
-        for (String term : terms) {
-            Set<UUID> forTerm = new LinkedHashSet<>();
-            for (Product product : products.searchOneTerm(term, activeOnly, wide)) {
-                forTerm.add(product.getId());
-                byId.putIfAbsent(product.getId(), product);
-            }
-            matching = matching == null ? forTerm : intersect(matching, forTerm);
-            if (matching.isEmpty()) break;
-        }
-
-        List<ProductView> hits = (matching == null ? Set.<UUID>of() : matching).stream()
-                .map(byId::get)
-                .sorted(Comparator.comparing(Product::getName))
-                .map(ProductView::of)
-                .toList();
-
-        int from = Math.min((int) pageable.getOffset(), hits.size());
-        int to = Math.min(from + pageable.getPageSize(), hits.size());
-        return new org.springframework.data.domain.PageImpl<>(hits.subList(from, to), pageable, hits.size());
+        return products.searchAllTerms(query.trim(), activeOnly, pageable).map(ProductView::of);
     }
 
     @Override
@@ -122,6 +105,7 @@ public class ProductServiceImpl implements ProductService {
         Product product = new Product(sku, request.name().trim(), request.baseUnit().trim());
         product.setCategory(category);
         product.setBrand(brandNamed(request.brand()));
+        product.setSupplierId(validSupplier(request.supplierId()));
         apply(request, product);
 
         Product saved = products.save(product);
@@ -151,6 +135,7 @@ public class ProductServiceImpl implements ProductService {
         product.setName(request.name().trim());
         product.setCategory(categoryNamed(request.category()));
         product.setBrand(brandNamed(request.brand()));
+        product.setSupplierId(validSupplier(request.supplierId()));
         apply(request, product);
 
         // FR-PROD-09: a row only when something actually moved, so the history
@@ -164,6 +149,45 @@ public class ProductServiceImpl implements ProductService {
         audit.record(actor.userId(), "PRODUCT_UPDATED", "product", id,
                 before, snapshot(product), actor.outletId(), null, clientIp);
         return ProductView.of(product);
+    }
+
+    /** FR-PROD-10: the preview happens in the browser; this is one atomic, authoritative commit. */
+    @Override
+    @Transactional
+    public ProductImportView importProducts(ProductImportRequest request, PosPrincipal actor, String clientIp) {
+        Set<String> submittedSkus = new HashSet<>();
+        List<ProductView> saved = new ArrayList<>();
+        int created = 0;
+        int updated = 0;
+        for (ProductRequest row : request.products()) {
+            String sku = blankToNull(row.sku());
+            if (sku != null && !submittedSkus.add(sku.toUpperCase(Locale.ROOT))) {
+                throw new IllegalArgumentException("Duplicate SKU within import: " + sku);
+            }
+            Optional<Product> existing = sku == null ? Optional.empty() : products.findBySku(sku);
+            if (existing.isPresent()) {
+                saved.add(update(existing.get().getId(), row, actor, clientIp));
+                updated++;
+            } else {
+                saved.add(create(row, actor, clientIp));
+                created++;
+            }
+        }
+        return new ProductImportView(created, updated, saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CostHistoryView> costHistory(UUID productId) {
+        if (!products.existsById(productId)) throw new ProductNotFoundException(productId);
+        return movements.costHistory(productId, List.of(gh.giftedlabs.pos.rules.MovementType.OPENING,
+                        gh.giftedlabs.pos.rules.MovementType.RECEIPT)).stream()
+                .map(row -> new CostHistoryView(row.getId(), row.getUnitCost(), row.getType().name(),
+                        row.getOutletId(), outlets.findById(row.getOutletId()).map(Outlet::getName).orElse(null),
+                        row.getActorId(), row.getActorId() == null ? null
+                                : users.findById(row.getActorId()).map(User::getFullName).orElse(null),
+                        row.getCreatedAt()))
+                .toList();
     }
 
     /** FR-PROD-08 · BR-17. */
@@ -257,13 +281,26 @@ public class ProductServiceImpl implements ProductService {
                 .orElse("GEN");
 
         String prefix = Sku.prefix(outletCode, category == null ? null : category.getName());
-        long next = products.countWithSkuPrefix(prefix) + 1;
-
-        String candidate = prefix + String.format("%03d", next);
-        while (products.skuTaken(candidate, null)) {
-            candidate = prefix + String.format("%03d", ++next);
+        // One transaction-level lock per prefix serialises tills and imports,
+        // while unrelated categories continue in parallel.
+        jdbc.query("select pg_advisory_xact_lock(hashtextextended(?, 0))", rs -> { }, prefix);
+        Long catalogueMaximum = jdbc.queryForObject("""
+                select coalesce(max(substring(sku from char_length(?) + 1)::bigint), 0)
+                  from product
+                 where upper(sku) like upper(?) || '%'
+                   and substring(sku from char_length(?) + 1) ~ '^[0-9]+$'
+                """, Long.class, prefix, prefix, prefix);
+        List<Long> allocated = jdbc.query("select next_value from sku_sequence where prefix = ? for update",
+                (rs, row) -> rs.getLong(1), prefix);
+        long next = Math.max(catalogueMaximum == null ? 0 : catalogueMaximum,
+                allocated.isEmpty() ? 0 : allocated.getFirst()) + 1;
+        if (allocated.isEmpty()) {
+            jdbc.update("insert into sku_sequence (id, prefix, next_value) values (gen_random_uuid(), ?, ?)",
+                    prefix, next);
+        } else {
+            jdbc.update("update sku_sequence set next_value = ?, synced_at = null where prefix = ?", next, prefix);
         }
-        return candidate;
+        return prefix + String.format("%03d", next);
     }
 
     /** FR-PROD-05: the list grows as products are entered rather than by a separate screen. */
@@ -279,15 +316,15 @@ public class ProductServiceImpl implements ProductService {
                 .orElseGet(() -> brands.save(new Brand(name.trim())));
     }
 
+    private UUID validSupplier(UUID supplierId) {
+        if (supplierId == null) return null;
+        if (!suppliers.existsById(supplierId)) throw new IllegalArgumentException("Supplier does not exist");
+        return supplierId;
+    }
+
     private void recordPrices(Product product, PosPrincipal actor) {
         priceHistory.save(new ProductPriceHistory(product.getId(), product.getRetailPrice(),
                 product.getTradePrice(), product.getFloorPrice(), actor.userId(), clock.instant()));
-    }
-
-    private Set<UUID> intersect(Set<UUID> left, Set<UUID> right) {
-        Set<UUID> both = new LinkedHashSet<>(left);
-        both.retainAll(right);
-        return both;
     }
 
     private String blankToNull(String value) {
@@ -302,6 +339,7 @@ public class ProductServiceImpl implements ProductService {
         state.put("name", product.getName());
         state.put("category", product.getCategory() == null ? null : product.getCategory().getName());
         state.put("brand", product.getBrand() == null ? null : product.getBrand().getName());
+        state.put("supplierId", product.getSupplierId());
         state.put("baseUnit", product.getBaseUnit());
         state.put("retailPrice", product.getRetailPrice());
         state.put("tradePrice", product.getTradePrice());

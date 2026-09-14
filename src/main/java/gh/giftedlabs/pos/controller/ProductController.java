@@ -1,10 +1,6 @@
 package gh.giftedlabs.pos.controller;
 
-import gh.giftedlabs.pos.dto.OutletPriceRequest;
-import gh.giftedlabs.pos.dto.OutletPriceView;
-import gh.giftedlabs.pos.dto.PriceHistoryView;
-import gh.giftedlabs.pos.dto.ProductRequest;
-import gh.giftedlabs.pos.dto.ProductView;
+import gh.giftedlabs.pos.dto.*;
 import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.PricingService;
@@ -13,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -46,7 +43,7 @@ public class ProductController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('" + Permission.Codes.STOCK_VIEW + "')")
-    public Page<ProductView> search(@RequestParam(required = false) String q,
+    public Slice<ProductView> search(@RequestParam(required = false) String q,
                                     @RequestParam(defaultValue = "true") boolean activeOnly,
                                     @RequestParam(defaultValue = "0") int page,
                                     @RequestParam(defaultValue = "50") int size) {
@@ -81,6 +78,15 @@ public class ProductController {
     public ProductView create(@Valid @RequestBody ProductRequest body,
                               @AuthenticationPrincipal PosPrincipal actor, HttpServletRequest request) {
         return products.create(body, actor, clientIp(request));
+    }
+
+    /** D-16: commit only the rows the operator already mapped, validated and previewed. */
+    @PostMapping("/import")
+    @PreAuthorize("hasAuthority('" + Permission.Codes.PRODUCT_IMPORT + "')")
+    public ProductImportView importProducts(@Valid @RequestBody ProductImportRequest body,
+                                            @AuthenticationPrincipal PosPrincipal actor,
+                                            HttpServletRequest request) {
+        return products.importProducts(body, actor, clientIp(request));
     }
 
     @PutMapping("/{id}")
@@ -148,5 +154,12 @@ public class ProductController {
             + Permission.Codes.REPORT_VIEW + "')")
     public List<PriceHistoryView> priceHistory(@PathVariable UUID id) {
         return pricing.history(id);
+    }
+
+    /** FR-PROD-09/FR-PRICE-07: cost history is real ledger data and remains cost-protected. */
+    @GetMapping("/{id}/cost-history")
+    @PreAuthorize("hasAuthority('" + Permission.Codes.PRICE_VIEW_COST + "')")
+    public List<CostHistoryView> costHistory(@PathVariable UUID id) {
+        return products.costHistory(id);
     }
 }

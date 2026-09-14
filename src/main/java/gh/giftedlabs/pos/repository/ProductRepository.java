@@ -3,6 +3,7 @@ package gh.giftedlabs.pos.repository;
 import gh.giftedlabs.pos.entity.Product;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -43,6 +44,7 @@ public interface ProductRepository extends JpaRepository<Product, java.util.UUID
            where (:activeOnly = false or p.active = true)
              and (upper(p.name) like upper(concat('%', :term, '%'))
                   or upper(p.sku) like upper(concat('%', :term, '%'))
+                  or upper(p.description) like upper(concat('%', :term, '%'))
                   or upper(b.name) like upper(concat('%', :term, '%'))
                   or upper(c.name) like upper(concat('%', :term, '%'))
                   or upper(bc.code) like upper(concat('%', :term, '%')))
@@ -58,4 +60,31 @@ public interface ProductRepository extends JpaRepository<Product, java.util.UUID
     /** FR-PROD-02: the running number behind an auto-generated SKU. */
     @Query("select count(p) from Product p where upper(p.sku) like upper(concat(:prefix, '%'))")
     long countWithSkuPrefix(@Param("prefix") String prefix);
+
+    /** One ranked SQL query for every out-of-order term — FR-PROD-06 · NFR-1. */
+    @Query(value = """
+            select p.* from product p
+              left join brand b on b.id = p.brand_id
+              left join category c on c.id = p.category_id
+             where (:activeOnly = false or p.is_active = true)
+               and not exists (
+                 select 1
+                   from regexp_split_to_table(trim(:query), '[[:space:]]+') term
+                  where not (
+                    p.name ilike concat('%', term, '%')
+                    or p.sku ilike concat('%', term, '%')
+                    or coalesce(p.description, '') ilike concat('%', term, '%')
+                    or coalesce(b.name, '') ilike concat('%', term, '%')
+                    or coalesce(c.name, '') ilike concat('%', term, '%')
+                    or exists (select 1 from product_barcode bc
+                                where bc.product_id = p.id and bc.code ilike concat('%', term, '%'))
+                  )
+               )
+             order by case when p.name ilike concat('%', :query, '%') then 0 else 1 end,
+                      similarity(lower(concat_ws(' ', p.name, p.sku, p.description, b.name, c.name)), lower(:query)) desc,
+                      p.name
+            """, nativeQuery = true)
+    Slice<Product> searchAllTerms(@Param("query") String query,
+                                  @Param("activeOnly") boolean activeOnly,
+                                  Pageable pageable);
 }
