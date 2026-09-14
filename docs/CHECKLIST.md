@@ -38,7 +38,7 @@ non-deferred item in its section is complete, including its non-functional items
 
 | Feature | Items | Frontend | Backend |
 |---|---:|---:|---:|
-| A · Authentication & session | 15 | 13 done, 2 open | 15 done |
+| A · Authentication & session | 16 | 14 done, 2 open | 16 done |
 | B · Outlets | 10 | 7 done, 1 partial, 1 open, 1 deferred | 7 done, 2 partial, 1 deferred |
 | C · Product catalogue | 17 | 9 done, 2 partial, 5 open, 1 deferred | 12 done, 1 partial, 2 open, 2 deferred |
 | D · Units & conversions | 8 | 7 done, 1 open | 6 done, 2 open |
@@ -49,7 +49,7 @@ non-deferred item in its section is complete, including its non-functional items
 | I · Receipts & printing | 13 | 7 done, 3 partial, 2 open, 1 deferred | 12 open, 1 deferred |
 | J · Shifts & cash | 12 | 9 done, 1 partial, 2 open | 10 done, 2 partial |
 | K · Suppliers & goods receipt | 11 | 6 done, 2 partial, 3 deferred | 8 done, 3 deferred |
-| L · Customers | 8 | 6 done, 1 partial, 1 deferred | 7 open, 1 deferred |
+| L · Customers | 8 | 7 done, 1 deferred | 6 done, 1 deferred, 1 n/a |
 | M · Users, roles & permissions | 12 | 10 done, 1 partial, 1 open | 10 done, 2 open |
 | N · Audit | 6 | 2 done, 2 partial, 2 open | 4 done, 1 partial, 1 open |
 | O · Reports & dashboard | 10 | 6 done, 2 partial, 1 open, 1 deferred | 9 open, 1 deferred |
@@ -57,8 +57,8 @@ non-deferred item in its section is complete, including its non-functional items
 | Q · Connectivity & resilience | 10 | 2 partial, 7 open, 1 deferred | 9 open, 1 deferred |
 | R · Cross-cutting non-functional | 22 | 4 done, 3 partial, 15 open | 3 done, 3 partial, 16 open |
 
-**228 items · 94 complete · frontend 134 done · backend 111 done, 14 partial,
-11 not applicable · contract frozen and machine-checked (`npm run check`)**
+**229 items · 102 complete · frontend 136 done · backend 118 done, 14 partial,
+12 not applicable · contract frozen and machine-checked (`npm run check`)**
 
 > The table above is generated from the boxes below, so the two cannot drift.
 > Read it with one caveat: many items have no backend half — a scanner that
@@ -80,7 +80,8 @@ non-deferred item in its section is complete, including its non-functional items
 | ✅ | J Shifts & cash | open, cash movements, blind close, variance — release gate 9 passes |
 | ✅ | M Users, roles & permissions | accounts, role baselines, per-user grants — BR-16 holds on every path |
 | ✅ | P Settings | the thresholds are configuration now, and the rules read them |
-| ⬜ | I Receipts · L Customers · O Reports | not started |
+| ✅ | L Customers | one list, found by phone however it is written |
+| ⬜ | I Receipts · O Reports | not started |
 | — | Q Connectivity | n/a — local-first removed the offline queue |
 
 **Release gates** — 1 ⬜ · 2 ⬜ (needs the printer) · **3 ✅** same payment twice records
@@ -89,7 +90,7 @@ once · **4 ✅** two terminals cannot sell the same last unit.
 **Measured, not assumed:** a five-line sale commits in **249 ms** against a real
 Postgres — NFR-2 allows 1000.
 
-**Still mock in the app:** customers, and the Stage 2 modules (expenses, accounting).
+**Still mock in the app:** the Stage 2 modules only (expenses, accounting, installments).
 Everything else reads and writes the API.
 
 **Waiting on a decision from you:** the thermal printer — it blocks I and release
@@ -117,6 +118,7 @@ and how to reverse it are on `Permission.isFutureStage()`.
 - [x][x] Idle period configurable, not a constant — FR-AUTH-05 · `K-08`
 - [x][x] Failed sign-in attempts rate limited and logged — FR-AUTH-06 *(server enforces; 429 with retry-after)*
 - [x][x] Password reset by administrator — FR-AUTH-07 · `A-04` `A-05` `A-06`
+- [x][x] An account on a password somebody else chose must replace it before it can be used — FR-AUTH-07 *(a new account, or one an administrator reset: it may sign in and change its password and nothing else, enforced in the session filter)*
 - [x][x] Self-service reset by email where an address exists — FR-AUTH-07 *(Resend; needs a key and verified domain to send)*
 - [x][x] Deactivated user sees a clear message and cannot sign in — FR-AUTH-08 · `A-09` *(also revoked mid-session)*
 - [x][x] Not-found and server-error pages — `A-10` `A-11`
@@ -349,23 +351,23 @@ held sales, which live only in the browser.
 ## L · Customers — `FR-CUST`
 
 ### Functional
-- [x][ ] Sales may complete with no customer attached — FR-CUST-01
-- [x][ ] Customer records: name, phone, email, address, type, notes, active — FR-CUST-02 · `G-03` `G-04`
-- [~][ ] Phone number is the primary lookup key and is unique — FR-CUST-03 *(lookup done; uniqueness is a constraint)*
-- [x][ ] Customer types map to price levels — FR-CUST-04 · `G-06`
-- [x][ ] Customers shared across both outlets — FR-CUST-05
-- [x][ ] Purchase history per customer across both outlets — FR-CUST-06 · `G-05`
+- [x][x] Sales may complete with no customer attached — FR-CUST-01
+- [x][x] Customer records: name, phone, email, address, type, notes, active — FR-CUST-02 · `G-03` `G-04` *(the form collected an email and address and threw them away; the record keeps them now)*
+- [x][x] Phone number is the primary lookup key and is unique — FR-CUST-03 *(normalised to national significant digits, so `0244 123 456` and `+233244123456` are one person; a clash returns the record that already exists)*
+- [x][x] Customer types map to price levels — FR-CUST-04 · `G-06` *(decided by the server — a browser that decides the price level can change it)*
+- [x][x] Customers shared across both outlets — FR-CUST-05
+- [x][x] Purchase history per customer across both outlets — FR-CUST-06 · `G-05` *(computed from the sales each time, never stored; a void leaves the sale in the history and takes it out of the total)*
 - [-][-] Credit limit, balance, ageing, statements, part payments — FR-CUST-07 · `G-08` *(Stage 2; built ahead of scope)*
 
 ### Non-functional
-- [x][ ] Empty state explains walk-in sales need no customer — `G-07`
+- [x][·] Empty state explains walk-in sales need no customer — `G-07` *(what an empty list says is the screen's business)*
 
 ---
 
 ## M · Users, roles & permissions — `FR-USER`
 
 ### Functional
-- [x][x] Every person has an individual account; no shared logins — FR-USER-01 · `J-01` `J-03`
+- [x][x] Every person has an individual account; no shared logins — FR-USER-01 · `J-01` `J-03` *(created with a temporary password they replace on first sign-in)*
 - [x][x] Four seeded roles: Owner, Manager, Cashier, Storekeeper — FR-USER-02 · `J-05` *(the `Role` enum the server authorises with, so the matrix cannot describe rights it does not grant)*
 - [~][x] Permissions granted individually and varied per user, not only per role — FR-USER-03 · `J-07` *(granted, withheld or cleared back to the role — three states. The API is complete; the per-user matrix screen is still to build)*
 - [x][x] Permission matrix over all 31 PRD codes, grouped by area — `J-06` *(33 served, the two Stage 2/3 codes flagged `futureStage` — decision recorded on `Permission`)*
