@@ -27,7 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import { Outlet, Product, Supplier } from '../types';
-import { pricingApi, productsApi, type CostHistoryWire, type PriceHistoryWire } from '../productsApi';
+import { pricingApi, productsApi, type CostHistoryWire, type PriceHistoryWire, type PurchaseHistoryWire } from '../productsApi';
 import type { PermissionSet } from '../permissions';
 import { allBarcodes, barcodeForUnit, makeBarcodes, primaryBarcode } from '../catalogue';
 import {
@@ -163,6 +163,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const [priceHistoryProduct, setPriceHistoryProduct] = useState<Product | null>(null);
   const [priceHistory, setPriceHistory] = useState<PriceHistoryWire[]>([]);
   const [costHistory, setCostHistory] = useState<CostHistoryWire[]>([]);
+  const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistoryWire[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [barcodeModalOpen, setBarcodeModalOpen] = useState(false);
@@ -479,12 +480,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const openHistory = async (product: Product) => {
     setPriceHistoryProduct(product);
     setHistoryLoading(true);
-    const [prices, costs] = await Promise.all([
+    const [prices, costs, purchases] = await Promise.all([
       pricingApi.history(product.id).catch(() => []),
       canViewCost ? productsApi.costHistory(product.id).catch(() => []) : Promise.resolve([]),
+      productsApi.purchaseHistory(product.id).catch(() => []),
     ]);
     setPriceHistory(prices);
     setCostHistory(costs);
+    setPurchaseHistory(purchases);
     setHistoryLoading(false);
   };
 
@@ -1167,7 +1170,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             </div>
             <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
               {historyLoading && <p className="text-sm text-slate-500">Loading recorded history…</p>}
-              {!historyLoading && priceHistory.length === 0 && costHistory.length === 0 && <p className="text-sm text-slate-500">No recorded changes yet.</p>}
+              {!historyLoading && priceHistory.length === 0 && costHistory.length === 0 && purchaseHistory.length === 0 && <p className="text-sm text-slate-500">No recorded changes yet.</p>}
               {priceHistory.map((row) => (
                 <div key={row.id} className="rounded-xl border border-slate-200 p-3 text-sm">
                   <div className="font-bold text-slate-800">Selling prices</div>
@@ -1180,6 +1183,13 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   <div className="font-bold text-slate-800">Cost established by {row.movementType === 'RECEIPT' ? 'goods receipt' : 'opening stock'}</div>
                   <div className="mt-1 text-slate-600">{formatMoney(row.unitCost)} · {row.outletName || 'Outlet'}</div>
                   <div className="mt-1 text-xs text-slate-400">{row.changedBy || 'System'} · {new Date(row.changedAt).toLocaleString()}</div>
+                </div>
+              ))}
+              {purchaseHistory.map((receipt) => (
+                <div key={receipt.id} className="rounded-xl border border-blue-200 bg-blue-50/40 p-3 text-sm">
+                  <div className="font-bold text-slate-800">Purchase from {receipt.supplierName}</div>
+                  <div className="mt-1 text-slate-600">{receipt.lines.map((line) => `${line.quantity} ${line.purchaseUnit} @ ${formatMoney(line.unitCost)}`).join(' · ')}</div>
+                  <div className="mt-1 text-xs text-slate-400">{receipt.reference || 'Goods receipt'} · {receipt.confirmedAt ? new Date(receipt.confirmedAt).toLocaleString() : 'Recorded'}{receipt.reversed ? ' · Reversed' : ''}</div>
                 </div>
               ))}
             </div>

@@ -61,15 +61,24 @@ export interface ReceiptLineDraft {
 export interface ReceiptResultLine {
   productId: string;
   productName: string;
+  purchaseUnit: string;
+  conversionFactor: number;
+  quantity: number;
   quantityInBaseUnits: number;
+  unitCost: number;
+  lineTotal: number;
   resultingQuantity: number;
   resultingAverageCost: number;
 }
 
 export interface ReceiptResult {
   id: string;
+  outletId?: string;
+  supplierId?: string;
   supplierName: string;
   reference?: string | null;
+  note?: string | null;
+  confirmedAt?: string;
   total: number;
   reversesId?: string | null;
   reversed: boolean;
@@ -96,6 +105,7 @@ export const suppliersApi = {
       .then(toSupplier),
 
   history: (id: string) => request<ReceiptResult[]>(`/api/suppliers/${encodeURIComponent(id)}/receipts`),
+  productHistory: (productId: string) => request<ReceiptResult[]>(`/api/products/${encodeURIComponent(productId)}/purchase-history`),
 };
 
 export const goodsReceiptApi = {

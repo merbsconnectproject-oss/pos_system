@@ -40,10 +40,10 @@ non-deferred item in its section is complete, including its non-functional items
 |---|---:|---:|---:|
 | A · Authentication & session | 16 | 14 done, 2 open | 16 done |
 | B · Outlets | 10 | 7 done, 1 partial, 1 open, 1 deferred | 7 done, 2 partial, 1 deferred |
-| C · Product catalogue | 17 | 9 done, 2 partial, 5 open, 1 deferred | 12 done, 1 partial, 2 open, 2 deferred |
+| C · Product catalogue | 17 | 15 done, 1 partial, 1 deferred | 15 done, 2 deferred |
 | D · Units & conversions | 8 | 7 done, 1 open | 6 done, 2 open |
 | E · Pricing | 10 | 8 done, 2 partial | 10 done |
-| F · Inventory | 15 | 10 done, 2 partial, 2 open, 1 deferred | 9 done, 1 partial, 3 open, 2 deferred |
+| F · Inventory | 15 | 10 done, 2 partial, 1 open, 1 deferred, 1 n/a | 10 done, 1 partial, 2 open, 2 deferred |
 | G · Point of sale | 25 | 17 done, 3 partial, 4 open, 1 deferred | 11 done, 1 partial, 2 open, 1 deferred, 10 n/a |
 | H · Payments | 11 | 6 done, 2 partial, 2 open, 1 deferred | 7 done, 3 open, 1 deferred |
 | I · Receipts & printing | 13 | 7 done, 3 partial, 2 open, 1 deferred | 12 open, 1 deferred |
@@ -53,12 +53,15 @@ non-deferred item in its section is complete, including its non-functional items
 | M · Users, roles & permissions | 12 | 10 done, 1 partial, 1 open | 10 done, 2 open |
 | N · Audit | 6 | 4 done, 1 partial, 1 open | 5 done, 1 open |
 | O · Reports & dashboard | 10 | 7 done, 1 partial, 1 open, 1 deferred | 6 done, 1 open, 1 deferred, 2 n/a |
-| P · Settings | 12 | 8 done, 4 partial | 5 done, 2 partial, 4 open, 1 n/a |
+| P · Settings | 12 | 9 done, 3 partial | 6 done, 2 partial, 3 open, 1 n/a |
 | Q · Connectivity & resilience | 13 | 3 done, 1 partial, 4 open, 1 deferred, 4 n/a | 1 done, 5 open, 1 deferred, 6 n/a |
-| R · Cross-cutting non-functional | 22 | 4 done, 3 partial, 15 open | 3 done, 3 partial, 16 open |
+| R · Cross-cutting non-functional | 22 | 6 done, 3 partial, 12 open, 1 n/a | 6 done, 2 partial, 14 open |
 
-**232 items · 122 complete · frontend 144 done · backend 132 done, 12 partial,
+**231 items · 130 complete · frontend 153 done · backend 140 done, 10 partial,
 20 not applicable · contract frozen and machine-checked (`npm run check`)**
+
+**Overall active Stage 1 completion: 61%** — 130 of 213 applicable,
+non-deferred items are complete. Partials are not counted as complete.
 
 > The table above is generated from the boxes below, so the two cannot drift.
 > Read it with one caveat: many items have no backend half — a scanner that
@@ -195,7 +198,7 @@ and how to reverse it are on `Permission.isFutureStage()`.
 - [x][x] A selling unit may carry its own price, not a multiple — FR-UOM-04
 - [x][x] Goods received in a purchase unit, converted to base on receipt — FR-UOM-05 *(3 drums of 100 m books in 300 m)*
 - [x][x] Fractional quantities to 3 decimal places — FR-UOM-06 · BR-12
-- [ ][ ] Conversion factor locked once stock or transactions exist — FR-UOM-07 *(now checkable — movements and sale lines exist — but nothing enforces it: editing a product replaces its units wholesale)*
+- [x][x] Conversion factor locked once stock or transactions exist — FR-UOM-07 *(product updates reject selling-unit name/factor changes after inventory movements exist)*
 
 ### Non-functional
 - [x][ ] Receiving 3 drums of 100 m gives 300 m; selling 12.5 m leaves 287.5 m; selling a drum leaves 187.5 m — FR-UOM acceptance *(asserted in `contract-check.ts`)*
@@ -238,7 +241,7 @@ and how to reverse it are on `Permission.isFutureStage()`.
 
 ### Non-functional
 - [ ][x] For any product at any outlet, quantity equals the sum of its movement deltas — FR-INV acceptance · BR-2 *(`InventoryService.drift`, asserted on every sale test)*
-- [ ][ ] Nightly reconciliation job proves it and reports drift — NFR-17 *(drift() exists; nothing schedules it)*
+- [·][x] Nightly reconciliation job proves it and reports drift — NFR-17 *(`ScheduledJobs.reconcileStock`, 02:30 daily; reports rather than corrects, since a level that repaired itself would hide the bug that caused it. No screen: the drift log is for whoever is fixing it, not for a cashier)*
 - [x][ ] Cash movements are not stock movements, so the stock ledger holds only stock — BR-2
 
 ---
@@ -351,7 +354,7 @@ held sales, which live only in the browser.
 - [x][x] Confirming writes stock movements and recalculates weighted average cost — FR-SUP-04 · BR-4
 - [x][x] The confirmation screen shows resulting stock and the new average cost before commit — FR-SUP-05 · `E-05`
 - [~][x] A confirmed receipt cannot be edited; it is reversed by a correcting document — FR-SUP-06 *(server refuses the edit and writes the reversal; no UI button yet)*
-- [~][x] Purchase history per supplier and per product — FR-SUP-07 · `F-05` `F-06` *(per supplier done; per product needs a query)*
+- [x][x] Purchase history per supplier and per product — FR-SUP-07 · `F-05` `F-06` *(supplier and product-scoped receipt history are available)*
 - [-][-] Purchase orders, partial and over/short delivery — FR-SUP-08 *(Stage 2)*
 - [-][-] Landed cost apportionment — FR-SUP-09 *(Stage 2)*
 - [-][-] Supplier invoices, payments and balances — FR-SUP-10 *(Stage 2)*
@@ -435,12 +438,42 @@ held sales, which live only in the browser.
 - [x][x] Business profile: legal name, trading name, contact details — FR-SET-01 · `K-02`
 - [~][~] Logo upload and persistence — FR-SET-01 *(the URL is stored and served; there is no upload endpoint, so the picture has to already live somewhere)*
 - [x][x] Per-outlet settings: name, address, phone, receipt footer, reorder defaults, receipt prefix — FR-SET-02 · `K-03` `K-04` *(the reorder default applies when a product first gets a level at that branch, and never overwrites one somebody chose)*
-- [x][x] Accent colour from a preset palette or hex, with live preview; orange default; no blue — FR-SET-03 · `K-06` *(validated as `#RRGGBB` by the schema and the request)*
+- [x][x] Accent colour from a preset palette or hex, with live preview; orange default; no blue — FR-SET-03 · `K-06` *(validated as `#RRGGBB` by the schema and the request; the same Appearance section now persists a 90–130% font scale and an allowlist of five safe font stacks)*
 - [x][·] Accent applied as a CSS custom property; semantic colours fixed and unaffected — FR-SET-04 *(how a colour is applied is the browser's business; the server stores which colour)*
 - [~][~] Terminal settings: printer, paper width, test print, auto-print — FR-SET-05 · `K-07` *(paper width and auto-print are stored; the printer itself waits on the hardware — see I)*
 - [x][x] Operational thresholds: idle lock, adjustment approval, cash variance, discount ceilings — FR-SET-06 · `K-08` *(and **read by the rules**: FR-CASH-06, FR-INV-06, FR-POS-10 and FR-AUTH-05 each take their number from here)*
-- [~][ ] Backup status, last successful backup, restore history — FR-SET-07 · `K-09` *(nothing takes a backup yet, so there is no status to report — left open rather than shown as healthy)*
-- [~][ ] Data export of all business data on request — FR-SET-08 · `K-10`
+- [x][x] Backup status, last successful backup, restore history — FR-SET-07 · `K-09` *(the screen reads `GET /api/backups`: live recovery point, whether the copy left the machine, and every run with its failure reason in full. "Healthy" requires off-site, so a local-only shop is told so rather than shown green)*
+- [~][ ] Data export of all business data on request — FR-SET-08 · `K-10` *(the JSON snapshot is the browser's own records; a server-side export of everything is still open)*
+
+---
+
+## S · Expenses, P&L and installment plans
+
+Not in the original Stage 1 scope — the frontend carried both screens and neither
+had a server. Built on request, because an entry that vanishes on refresh is not
+a feature somebody can use.
+
+### Functional
+- [x][x] Operating expenses recorded, amended and removed, with the date the money was spent *(the date is the spend date, not the entry date: a September P&L has to include rent typed in October)*
+- [x][x] Expense removal keeps the row — a filed P&L has to keep reproducing *(voided, never deleted)*
+- [x][x] Period totals and the per-category breakdown come from the database *(paid and owed counted apart: an unpaid invoice has not reduced the bank balance)*
+- [x][x] Profit & loss: revenue, cost of sales, gross profit, operating expenses, net profit — `report.view_pl`
+- [x][x] Installment plans with a generated schedule, persisted in full *(the customer can be handed the whole schedule on day one)*
+- [x][x] Payments apply to the oldest unpaid installment first and spill forward *(so "what is overdue" stays answerable)*
+- [x][x] Outstanding balance computed, never stored *(cannot drift from the payments)*
+- [x][x] Overpayment refused, and the message says what is actually outstanding
+- [x][x] A plan written off stops accepting money — needs `settings.general` as well as `customer.credit`
+- [·][x] Overdue computed from today rather than stored *(a stored flag is wrong every morning until something runs)*
+
+### Permissions
+- [x][x] `expense.view` and `expense.manage` are their own codes *(the screen was gated on `cash.movement`, so anyone who could bank the takings could read the payroll)*
+- [x][x] `report.view_pl` is separate from `report.view_profit` *(gross profit is trading; net profit is the whole cost base)*
+- [x][x] `customer.credit` authorises the installment routes *(it had been a placeholder since week 1 with nothing behind it)*
+- [x][x] BR-11 throughout: pesewas on the wire, one rounding rule, installments sum to the balance exactly
+
+### Non-functional
+- [·][x] NFR-9 · Every permission is enforced by an endpoint or inside an operation, or named as not-yet-built with the reason — `PermissionEnforcementTest` *(reads the real handler methods; verified to fail when the enforcement is removed)*
+- [·][x] Per-user grant and revoke honoured on real endpoints — FR-USER-03 *(granting `expense.view` to one cashier opens the read and not the write)*
 
 ### Non-functional
 - [x][ ] Changing the accent updates every accent surface, with no blue anywhere — release gate 11 *(621 literals migrated; asserted)*
@@ -491,8 +524,8 @@ held sales, which live only in the browser.
 ### Availability & durability
 - [ ][ ] NFR-4 · Counter tolerates 15-minute dropouts
 - [ ][~] NFR-5 · No committed sale lost on abrupt power loss *(a sale commits in one transaction — receipt number, lines, payments and stock together; not yet tested by pulling the plug)*
-- [ ][ ] NFR-6 · Automated daily off-site backup, 30-day retention, documented and **tested** restore
-- [ ][ ] NFR-7 · Recovery point 15 minutes, recovery time 4 hours
+- [x][x] NFR-6 · Automated daily off-site backup, 30-day retention, documented and **tested** restore *(`pg_dump -Fc` every 15 min, S3-compatible upload for R2; two-tier pruning — every copy for 2 days, then one a day to 30. Documented in `restore.sh`, tested by `BackupRestoreTest`, which dumps a real database, destroys it and puts it back with the script's own arguments)*
+- [x][x] NFR-7 · Recovery point 15 minutes, recovery time 4 hours *(the interval is the recovery point, and the screen reports the **live** one rather than the configured target. Recovery time is minutes of `pg_restore` on a shop's database; the rest of the four hours is reaching the shop with a machine)*
 
 ### Security
 - [ ][~] NFR-8 · Passwords bcrypt/argon2, PINs hashed separately, TLS on all traffic *(Argon2id with separate PIN encoder; TLS is a deployment matter, not yet configured)*
@@ -508,7 +541,7 @@ held sales, which live only in the browser.
 ### Maintainability & data
 - [x][ ] NFR-15 · The accent is a single token, no hard-coded accent hex
 - [x][x] NFR-16 · A third outlet is configuration only *(outlet_id on every table; adding one needs no schema change)*
-- [ ][~] NFR-17 · Nightly job reconciles stock against movement sums and reports drift *(`InventoryService.drift` computes it; nothing schedules it)*
+- [·][x] NFR-17 · Nightly job reconciles stock against movement sums and reports drift *(scheduled at 02:30; `drift()` had existed since F with nothing calling it — the quiet way a requirement gets marked done)*
 - [~][ ] NFR-18 · Currency GHS, dates DD/MM/YYYY, 24-hour time *(currency and most dates done; not audited app-wide)*
 
 ### Engineering hygiene

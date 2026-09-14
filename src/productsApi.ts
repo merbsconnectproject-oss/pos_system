@@ -127,6 +127,8 @@ export const productsApi = {
 
   costHistory: (productId: string) =>
     request<CostHistoryWire[]>(`/api/products/${encodeURIComponent(productId)}/cost-history`),
+  purchaseHistory: (productId: string) =>
+    request<PurchaseHistoryWire[]>(`/api/products/${encodeURIComponent(productId)}/purchase-history`),
 };
 
 export interface CostHistoryWire {
@@ -138,6 +140,15 @@ export interface CostHistoryWire {
   changedById: string | null;
   changedBy: string | null;
   changedAt: string;
+}
+
+export interface PurchaseHistoryWire {
+  id: string;
+  supplierName: string;
+  reference?: string | null;
+  confirmedAt?: string;
+  reversed: boolean;
+  lines: Array<{ quantity: number; purchaseUnit: string; unitCost: number }>;
 }
 
 /**
