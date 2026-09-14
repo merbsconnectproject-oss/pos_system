@@ -43,7 +43,7 @@ class SessionServiceImplTest {
     private SignInResult result(UUID outlet) {
         return new SignInResult(userId, "ama", "Ama", Set.of("cashier"), Set.of("pos.sell"),
                 outlet == null ? null : new SignInResult.OutletSummary(outlet, "INC", "Inco"),
-                List.of(), outlet == null, true);
+                List.of(), outlet == null, true, false);
     }
 
     @Nested @DisplayName("FR-AUTH-01 · successful sign-in establishes a server session")

@@ -19,7 +19,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
@@ -244,6 +246,47 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 null, clientIp);
     }
 
+    /**
+     * FR-AUTH-07: choose your own password.
+     *
+     * <p>The one path that clears {@code mustChangePassword}, because it is the
+     * only one where the person typing the new password is the person the
+     * account belongs to. An administrator's reset sets the flag; only this
+     * takes it away.
+     *
+     * <p>The current password is required even when the flag is set. The
+     * temporary one was handed over in person, and asking for it back proves
+     * the browser sitting on this session is the one it was handed to.
+     */
+    @Override
+    @Transactional
+    public void changeOwnPassword(UUID userId, String currentPassword, String newPassword, String clientIp) {
+        User user = users.findById(userId)
+                .filter(User::isActive)
+                .orElseThrow(AuthenticationServiceImpl::wrongPassword);
+
+        String throttleKey = "password-change:" + userId;
+        if (!loginAttempts.check(throttleKey).allowed()) throw wrongPassword();
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            loginAttempts.recordFailure(throttleKey);
+            throw wrongPassword();
+        }
+        if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+            // Re-typing the password an administrator chose would satisfy the
+            // rule while leaving two people knowing it.
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Choose a password you have not used here before");
+        }
+        loginAttempts.recordSuccess(throttleKey);
+
+        user.changePassword(passwordEncoder.encode(newPassword), clock.instant());
+        user.ownPasswordChosen();
+
+        audit.record(userId, "AUTH_PASSWORD_CHANGED", "user", userId, null,
+                java.util.Map.of("byOwner", true), user.getOutletIds().stream().findFirst().orElse(null),
+                null, clientIp);
+    }
+
     private static AuthenticationFailedException wrongPassword() {
         return new AuthenticationFailedException(AuthenticationFailedException.Reason.BAD_CREDENTIALS,
                 "That password is not right");
@@ -269,6 +312,16 @@ public class AuthenticationServiceImpl implements AuthenticationService {
      * means the client must choose, and {@code mustChooseOutlet} says so rather
      * than leaving the caller to infer it from a null.
      */
+    @Override
+    @Transactional(readOnly = true)
+    public SignInResult describe(UUID userId, UUID activeOutletId) {
+        User user = users.findById(userId)
+                .filter(User::isActive)
+                .orElseThrow(() -> new AuthenticationFailedException(
+                        Reason.BAD_CREDENTIALS, "Session is no longer valid"));
+        return place(user, activeOutletId);
+    }
+
     private SignInResult place(User user, UUID requestedOutletId) {
         List<Outlet> assigned = outlets.findAllById(user.getOutletIds()).stream()
                 .filter(Outlet::isActive)
@@ -302,7 +355,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 summarise(active),
                 assigned.stream().map(this::summarise).toList(),
                 active == null,
-                user.hasPin());
+                user.hasPin(),
+                user.mustChangePassword());
     }
 
     private SignInResult.OutletSummary summarise(Outlet outlet) {

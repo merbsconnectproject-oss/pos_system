@@ -25,4 +25,14 @@ public interface SaleService {
 
     /** FR-POS-18. */
     List<SaleView> recent(UUID outletId, String query, int limit);
+
+    /**
+     * FR-CUST-06: one customer's purchases, across every branch.
+     *
+     * <p>Here rather than on the customer service because it returns sales,
+     * and there should be exactly one piece of code that turns a Sale into a
+     * SaleView — two would drift, and the one that drifted would be the one
+     * the customer is looking at.
+     */
+    List<SaleView> forCustomer(UUID customerId, int limit);
 }

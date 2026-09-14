@@ -64,6 +64,18 @@ public class SessionServiceImpl implements SessionService {
         return result;
     }
 
+    @Override public SignInResult refreshCredentials(HttpServletRequest request,
+                                                     HttpServletResponse response) {
+        PosPrincipal principal = principal();
+        // Re-read rather than re-use what the session holds: the password
+        // change cleared a flag, and the stale copy still says it is set.
+        SignInResult result = authentication.describe(principal.userId(), principal.outletId());
+        save(result, request, response);
+        request.getSession().setAttribute(RESULT, result);
+        request.getSession().setAttribute(LAST_ACTIVITY, clock.instant());
+        return result;
+    }
+
     @Override public SignInResult current(HttpServletRequest request) {
         PosPrincipal principal = principal();
         var user = users.findById(principal.userId())

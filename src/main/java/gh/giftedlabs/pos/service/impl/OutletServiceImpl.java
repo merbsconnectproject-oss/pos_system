@@ -7,7 +7,9 @@ import gh.giftedlabs.pos.entity.User;
 import gh.giftedlabs.pos.exception.OutletCodeTakenException;
 import gh.giftedlabs.pos.exception.OutletNotFoundException;
 import gh.giftedlabs.pos.exception.OutletNotPermittedException;
+import gh.giftedlabs.pos.entity.Terminal;
 import gh.giftedlabs.pos.repository.OutletRepository;
+import gh.giftedlabs.pos.repository.TerminalRepository;
 import gh.giftedlabs.pos.repository.UserRepository;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.AuditService;
@@ -32,11 +34,17 @@ import java.util.UUID;
 @Service
 public class OutletServiceImpl implements OutletService {
 
+    /** BR-6: what a new branch's first till is given to number receipts with. */
+    private static final long FIRST_BLOCK_SIZE = 10_000L;
+
     private final OutletRepository outlets;
     private final UserRepository users;
+    private final TerminalRepository terminals;
     private final AuditService audit;
 
-    public OutletServiceImpl(OutletRepository outlets, UserRepository users, AuditService audit) {
+    public OutletServiceImpl(OutletRepository outlets, UserRepository users,
+                             TerminalRepository terminals, AuditService audit) {
+        this.terminals = terminals;
         this.outlets = outlets;
         this.users = users;
         this.audit = audit;
@@ -77,6 +85,14 @@ public class OutletServiceImpl implements OutletService {
         Outlet outlet = new Outlet(code, request.name().trim());
         apply(request, outlet);
         Outlet saved = outlets.save(outlet);
+
+        // BR-6: a branch with no till cannot number a receipt, and the first
+        // attempt to sell there fails with NO_TERMINAL. V9 backfilled the
+        // branches that existed then; a branch created from the settings screen
+        // needs the same thing, or it opens unable to trade.
+        Terminal firstTill = new Terminal(saved.getId(), "01", "Counter 1",
+                terminals.highestAllocatedAt(saved.getId()) + 1, FIRST_BLOCK_SIZE);
+        terminals.save(firstTill);
 
         audit.record(actor.userId(), "OUTLET_CREATED", "outlet", saved.getId(),
                 null, snapshot(saved), actor.outletId(), null, clientIp);

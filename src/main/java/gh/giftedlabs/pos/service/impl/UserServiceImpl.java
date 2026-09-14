@@ -82,6 +82,10 @@ public class UserServiceImpl implements UserService {
         }
 
         User user = new User(username, request.fullName().trim(), passwords.encode(request.password()));
+        // FR-AUTH-07: whoever creates the account knows the password they typed
+        // into the form. It gets the new member of staff through the door once,
+        // and then they choose their own.
+        user.requirePasswordChange();
         applyContact(request, user);
         applyRoles(request.roles(), user);
         applyOutlets(request.outletIds(), user);

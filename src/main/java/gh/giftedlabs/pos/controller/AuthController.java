@@ -117,6 +117,28 @@ public class AuthController {
      * an administrator typed for you says only that somebody who had been told
      * the number approved it.
      */
+    /**
+     * FR-AUTH-07: choose your own password.
+     *
+     * <p>Allowed while the account is still on an administrator's password —
+     * it is the one thing such an account may do, and the only way out of that
+     * state.
+     */
+    @PostMapping("/password")
+    @PreAuthorize("isAuthenticated()")
+    public SignInResult changeOwnPassword(@Valid @RequestBody PasswordChange body,
+                                          @AuthenticationPrincipal PosPrincipal actor,
+                                          HttpServletRequest request, HttpServletResponse response) {
+        authentication.changeOwnPassword(actor.userId(), body.currentPassword(), body.newPassword(),
+                clientIp(request));
+
+        // Changing a password signs out every browser holding the old one.
+        // This is the browser that just chose the new one, so it is stamped
+        // forward rather than thrown out — and the session that comes back has
+        // the must-change flag cleared.
+        return sessions.refreshCredentials(request, response);
+    }
+
     @PostMapping("/pin")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> setOwnPin(@Valid @RequestBody PinChange body,
@@ -139,6 +161,11 @@ public class AuthController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN,
                         "That PIN cannot authorise this. Ask a manager who holds it."));
     }
+
+    public record PasswordChange(
+            @NotBlank(message = "Enter your current password") String currentPassword,
+            @NotBlank @Size(min = 8, max = 256,
+                    message = "A password needs at least 8 characters") String newPassword) {}
 
     public record PinChange(
             @NotBlank(message = "Enter your password") String currentPassword,

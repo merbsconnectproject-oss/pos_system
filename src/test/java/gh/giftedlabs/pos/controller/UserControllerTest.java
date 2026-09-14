@@ -84,6 +84,130 @@ class UserControllerTest {
     }
 
     @Nested
+    @DisplayName("a new account's first sign-in")
+    class FirstSignIn {
+
+        @Test
+        @DisplayName("is created with a password, and appears in the list — FR-USER-01")
+        void createdAccountsExist() throws Exception {
+            Session session = signIn(ownerName);
+            Map<String, Object> body = account("newhire-" + run.toLowerCase(), "New Hire");
+
+            String id = create(session, body);
+
+            mvc.perform(session.authorise(get("/api/users")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[?(@.id == '" + id + "')].fullName").value("New Hire"));
+        }
+
+        @Test
+        @DisplayName("an account with no password is refused — there would be no way in")
+        void aPasswordIsRequired() throws Exception {
+            Session session = signIn(ownerName);
+            Map<String, Object> body = account("nopass-" + run.toLowerCase(), "No Password");
+            body.remove("password");
+
+            mvc.perform(session.authorise(post("/api/users"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(body)))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("signs in on the password they were given, and can do nothing else — FR-AUTH-07")
+        void mustChooseTheirOwnFirst() throws Exception {
+            String username = "hire2-" + run.toLowerCase();
+            create(signIn(ownerName), account(username, "Second Hire"));
+            loginAttempts.recordSuccess(username);
+
+            Session theirs = signIn(username);
+
+            // Signing in works and says why the door is otherwise shut.
+            mvc.perform(theirs.authorise(get("/api/auth/session")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.mustChangePassword").value(true));
+
+            mvc.perform(theirs.authorise(get("/api/products")))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PASSWORD_CHANGE_REQUIRED"));
+
+            // Re-typing the password they were handed is not choosing one.
+            mvc.perform(theirs.authorise(post("/api/auth/password"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(Map.of(
+                                    "currentPassword", PASSWORD, "newPassword", PASSWORD))))
+                    .andExpect(status().isBadRequest());
+
+            // The session that chose the password keeps working — being signed
+            // out for having chosen a password would send them straight back
+            // to a screen demanding they choose one.
+            mvc.perform(theirs.authorise(post("/api/auth/password"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(Map.of(
+                                    "currentPassword", PASSWORD, "newPassword", "Their-Own-Pass-99"))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.mustChangePassword").value(false));
+
+            mvc.perform(theirs.authorise(get("/api/products")))
+                    .andExpect(status().isOk());
+
+            // And the account is theirs from any browser.
+            Session after = signInWith(username, "Their-Own-Pass-99");
+            mvc.perform(after.authorise(get("/api/auth/session")))
+                    .andExpect(jsonPath("$.mustChangePassword").value(false));
+            mvc.perform(after.authorise(get("/api/products")))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("the wrong current password changes nothing — FR-AUTH-06")
+        void theCurrentPasswordIsChecked() throws Exception {
+            String username = "hire3-" + run.toLowerCase();
+            create(signIn(ownerName), account(username, "Third Hire"));
+            loginAttempts.recordSuccess(username);
+
+            Session theirs = signIn(username);
+            mvc.perform(theirs.authorise(post("/api/auth/password"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(Map.of(
+                                    "currentPassword", "not-the-one", "newPassword", "Their-Own-Pass-99"))))
+                    .andExpect(status().isUnauthorized());
+
+            // Still on the password they were given, still shut out.
+            mvc.perform(signIn(username).authorise(get("/api/products")))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("an administrator's reset puts the account back in that state — FR-AUTH-07")
+        void anAdminResetRequiresAChangeToo() throws Exception {
+            String username = "hire4-" + run.toLowerCase();
+            String id = create(signIn(ownerName), account(username, "Fourth Hire"));
+            loginAttempts.recordSuccess(username);
+
+            // They choose their own, and the account is theirs.
+            Session theirs = signIn(username);
+            mvc.perform(theirs.authorise(post("/api/auth/password"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(Map.of(
+                                    "currentPassword", PASSWORD, "newPassword", "Their-Own-Pass-99"))))
+                    .andExpect(status().isOk());
+
+            // Then they forget it and an owner resets it — two people know the
+            // new one, so it is a temporary password again.
+            mvc.perform(signIn(ownerName).authorise(post("/api/auth/users/" + id + "/password-reset"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(Map.of("newPassword", "Reset-By-Owner-1"))))
+                    .andExpect(status().isNoContent());
+
+            loginAttempts.recordSuccess(username);
+            Session afterReset = signInWith(username, "Reset-By-Owner-1");
+            mvc.perform(afterReset.authorise(get("/api/auth/session")))
+                    .andExpect(jsonPath("$.mustChangePassword").value(true));
+        }
+    }
+
+    @Nested
     @DisplayName("nobody edits their own rights")
     class BR16 {
 
@@ -388,6 +512,10 @@ class UserControllerTest {
     }
 
     private Session signIn(String identifier) throws Exception {
+        return signInWith(identifier, PASSWORD);
+    }
+
+    private Session signInWith(String identifier, String password) throws Exception {
         MockHttpSession http = new MockHttpSession();
         MvcResult csrf = mvc.perform(get("/api/auth/csrf").session(http))
                 .andExpect(status().isOk()).andReturn();
@@ -396,7 +524,7 @@ class UserControllerTest {
         MvcResult signedIn = mvc.perform(post("/api/auth/sign-in").session(http)
                         .header("X-XSRF-TOKEN", token).cookie(new Cookie("XSRF-TOKEN", token))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(Map.of("identifier", identifier, "password", PASSWORD))))
+                        .content(json.writeValueAsString(Map.of("identifier", identifier, "password", password))))
                 .andExpect(status().isOk()).andReturn();
 
         return new Session((MockHttpSession) signedIn.getRequest().getSession(false), token);

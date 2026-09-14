@@ -84,6 +84,16 @@ public class SessionGuardFilter extends OncePerRequestFilter {
         if (locked && !allowedWhileLocked) {
             reject(response, 423, "SCREEN_LOCKED", "Unlock the POS to continue"); return;
         }
+
+        // FR-AUTH-07: an account still on the password an administrator chose
+        // may sign in, change it, and nothing else. Enforced here rather than
+        // by the screen, because a password two people know is a credential
+        // either of them can use — including from a different browser.
+        if (currentUser.get().mustChangePassword()
+                && !path.equals("/api/auth/password") && !allowedWhileLocked) {
+            reject(response, 403, "PASSWORD_CHANGE_REQUIRED",
+                    "Choose your own password before continuing"); return;
+        }
         if (!locked) session.setAttribute(SessionServiceImpl.LAST_ACTIVITY, now);
         chain.doFilter(request, response);
     }

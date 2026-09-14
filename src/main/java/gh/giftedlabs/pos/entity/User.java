@@ -78,6 +78,17 @@ public class User {
     @Column(name = "credentials_changed_at", nullable = false)
     private Instant credentialsChangedAt = Instant.now();
 
+    /**
+     * FR-AUTH-07: somebody else chose this password.
+     *
+     * <p>True from the moment an administrator sets one — on creation or on a
+     * reset — and false again once the owner has chosen their own. While it is
+     * true the account can sign in and do nothing else, because a password two
+     * people know is not yet an identity.
+     */
+    @Column(name = "must_change_password", nullable = false)
+    private boolean mustChangePassword = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -148,6 +159,24 @@ public class User {
     public void setPasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
     }
+
+    public boolean mustChangePassword() { return mustChangePassword; }
+
+    /**
+     * FR-AUTH-07: an administrator set this password, so its owner must replace it.
+     *
+     * <p>Called after {@link #changePassword}, never instead of it: the hash
+     * has to change as well as the flag.
+     */
+    public void requirePasswordChange() { this.mustChangePassword = true; }
+
+    /**
+     * The owner has chosen their own password.
+     *
+     * <p>Separate from {@link #changePassword} because an administrator's reset
+     * also changes the password and must <em>not</em> clear this.
+     */
+    public void ownPasswordChosen() { this.mustChangePassword = false; }
 
     public void changePassword(String passwordHash, Instant changedAt) {
         this.passwordHash = passwordHash;

@@ -26,7 +26,13 @@ public record SignInResult(
         OutletSummary activeOutlet,
         List<OutletSummary> outletChoices,
         boolean mustChooseOutlet,
-        boolean pinSet) {
+        boolean pinSet,
+        /**
+         * FR-AUTH-07: this password was set by somebody else and has to be
+         * replaced before the account can be used. The server enforces it;
+         * this is so the client knows which screen to show.
+         */
+        boolean mustChangePassword) {
 
     /** Minimal outlet projection — the sign-in screen needs a name, not the row. */
     public record OutletSummary(UUID id, String code, String name) {

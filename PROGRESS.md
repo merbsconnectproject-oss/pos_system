@@ -1,6 +1,6 @@
 # Progress
 
-**Updated** 2026-09-14 · **Tests** 214 green · **DB** connected to `pos_system`, V1–V9 applied
+**Updated** 2026-09-14 · **Tests** 295 green · **DB** connected to `pos_system`, V1–V13 applied
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (189 items, dual checkbox).
@@ -11,7 +11,7 @@ Updated after every completed feature. Detail lives in
 
 | | Features | Done | In progress | Not started |
 |---|---:|---:|---:|---:|
-| Backend | 18 | 12 | 3 | 3 |
+| Backend | 18 | 13 | 3 | 2 |
 
 ```
 A ██████████  Auth & session     100%   FR-AUTH-05 reachable since J; idle lock is a setting since P
@@ -25,7 +25,7 @@ H █████████░  Payments            90%   denomination shortcu
 I ░░░░░░░░░░  Receipts & printing  0%   blocked on the thermal printer
 J ██████████  Shifts & cash      100%   blind close, BR-13 by index, BR-14 computed; gate 9 passes
 K ████████░░  Suppliers & receipt  80%   purchase history per product still to query
-L ░░░░░░░░░░  Customers            0%
+L ██████████  Customers          100%   shared directory, phone lookup, pricing and cross-outlet history
 M ██████████  Users & permissions 100%  BR-16 on every path that changes a privilege
 N █████████░  Audit               90%   every built action logs; read endpoint and view live
 O ░░░░░░░░░░  Reports & dashboard  0%   the dashboard still computes from loaded lists
@@ -34,7 +34,7 @@ Q ██████████  Connectivity        n/a   local-first removed 
 R ███████░░░  Cross-cutting       70%   hashing, rate limiting, audit, idempotency, row locks
 ```
 
-263 tests, all green.
+295 tests, all green.
 
 ---
 
@@ -93,15 +93,12 @@ normalised; the username/email split is not.
 
 ## Next up
 
-1. **L · Customers** — the last screen where records are invented by the
-   browser. Small, and the POS already attaches one to a sale, so the work is
-   mostly the record itself and a search that a counter can use one-handed.
-2. **O · Reports** — the dashboard computes its own figures from whatever
+1. **O · Reports** — the dashboard computes its own figures from whatever
    lists happen to be loaded, which is fine at one outlet and wrong at two.
    It is also the one place an owner would notice a number being wrong last.
-3. **E · Pricing** — the overrides and the margin pair. `product_price_history`
+2. **E · Pricing** — the overrides and the margin pair. `product_price_history`
    already records who changed a price and when; nothing reads it back.
-4. **I · Receipts & printing** — blocked on the printer, not on us.
+3. **I · Receipts & printing** — blocked on the printer, not on us.
 
 ---
 

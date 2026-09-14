@@ -83,4 +83,23 @@ public interface AuthenticationService {
      *         password does not match
      */
     void changeOwnPin(UUID userId, String currentPassword, String newPin, String clientIp);
+
+    /**
+     * FR-AUTH-07: choose your own password.
+     *
+     * <p>The only path that clears the must-change flag an administrator's
+     * password set. A reset by somebody else changes the password and leaves
+     * the flag standing, because the point of the flag is that two people know
+     * the current one.
+     */
+    void changeOwnPassword(UUID userId, String currentPassword, String newPassword, String clientIp);
+
+    /**
+     * This user as they stand now, with no credential check.
+     *
+     * <p>For re-reading a session whose user has changed underneath it — a
+     * password chosen, a permission granted. It proves nothing by itself and
+     * must never be called on anything but an already-authenticated session.
+     */
+    SignInResult describe(UUID userId, UUID activeOutletId);
 }

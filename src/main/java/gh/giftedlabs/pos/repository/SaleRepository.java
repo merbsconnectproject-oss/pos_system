@@ -23,6 +23,10 @@ public interface SaleRepository extends JpaRepository<Sale, UUID> {
      * unable to infer its type, and it reports {@code upper(bytea) does not
      * exist} — the same trap the audit query fell into.
      */
+    /** FR-CUST-06 · `G-05`: one customer's purchases, across every branch. */
+    @Query("select s from Sale s where s.customerId = :customerId order by s.createdAt desc")
+    List<Sale> forCustomer(@Param("customerId") UUID customerId, Pageable page);
+
     @Query("""
            select s from Sale s
             where (:outletId is null or s.outletId = :outletId)

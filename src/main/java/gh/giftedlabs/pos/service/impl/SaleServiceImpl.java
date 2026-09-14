@@ -44,6 +44,7 @@ public class SaleServiceImpl implements SaleService {
     private final TerminalRepository terminals;
     private final OutletRepository outlets;
     private final UserRepository users;
+    private final CustomerRepository customers;
     private final StockLevelRepository levels;
     private final InventoryService inventory;
     private final ShiftService shiftsService;
@@ -53,7 +54,8 @@ public class SaleServiceImpl implements SaleService {
     private final Clock clock;
 
     public SaleServiceImpl(SaleRepository sales, ProductRepository products, TerminalRepository terminals,
-                           OutletRepository outlets, UserRepository users, StockLevelRepository levels,
+                           OutletRepository outlets, UserRepository users, CustomerRepository customers,
+                           StockLevelRepository levels,
                            InventoryService inventory, ShiftService shiftsService,
                            SettingsService settings, UserService staff,
                            AuditService audit, Clock clock) {
@@ -65,6 +67,7 @@ public class SaleServiceImpl implements SaleService {
         this.terminals = terminals;
         this.outlets = outlets;
         this.users = users;
+        this.customers = customers;
         this.levels = levels;
         this.inventory = inventory;
         this.audit = audit;
@@ -105,8 +108,7 @@ public class SaleServiceImpl implements SaleService {
 
         Sale sale = new Sale(request.id(), receiptNumber, request.outletId(), terminal.getId(),
                 actor.userId(), subtotal, discountTotal, total, changeDue, clock.instant());
-        sale.setCustomer(request.customerId(), blankToNull(request.customerName()),
-                blankToNull(request.customerPhone()));
+        attachCustomer(sale, request);
         sale.assignShift(shiftId);
 
         priced.forEach(line -> sale.addItem(line.toItem()));
@@ -186,6 +188,45 @@ public class SaleServiceImpl implements SaleService {
         String term = query == null ? "" : query.trim();
         return sales.search(outletId, term, org.springframework.data.domain.PageRequest.of(0, limit))
                 .stream().map(this::view).toList();
+    }
+
+    /** FR-CUST-06 · `G-05`. */
+    @Override
+    @Transactional(readOnly = true)
+    public List<SaleView> forCustomer(UUID customerId, int limit) {
+        return sales.forCustomer(customerId, org.springframework.data.domain.PageRequest.of(0, limit))
+                .stream().map(this::view).toList();
+    }
+
+    /**
+     * FR-CUST-01 · FR-CUST-02: a sale may name a customer, and need not.
+     *
+     * <p>When one is named, the name and number are read from the record
+     * rather than taken from the request. The browser's copy can be a page old
+     * — the customer may have corrected their number in between — and the
+     * receipt should carry what the business holds, not what a tab remembers.
+     *
+     * <p>A deactivated customer is refused rather than silently dropped. BR-17
+     * deactivates the people a shop has stopped dealing with, and a sale that
+     * quietly becomes a walk-in is a sale nobody can explain later.
+     */
+    private void attachCustomer(Sale sale, SaleRequest request) {
+        if (request.customerId() == null) {
+            // FR-CUST-01: a walk-in may still leave a name for the receipt.
+            sale.setCustomer(null, blankToNull(request.customerName()),
+                    blankToNull(request.customerPhone()));
+            return;
+        }
+
+        Customer customer = customers.findById(request.customerId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "That customer no longer exists"));
+        if (!customer.isActive()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "%s is no longer an active customer".formatted(customer.getName()));
+        }
+
+        sale.setCustomer(customer.getId(), customer.getName(), customer.getPhone());
     }
 
     // --- internals ---------------------------------------------------------

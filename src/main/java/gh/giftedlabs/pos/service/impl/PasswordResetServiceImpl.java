@@ -84,6 +84,8 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         if (actorId.equals(targetId)) throw new AccessDeniedException("Use your own password-change flow");
         var user = users.findById(targetId).orElseThrow(() -> new IllegalArgumentException("User not found"));
         user.changePassword(encoder.encode(newPassword), clock.instant());
+        // FR-AUTH-07: the administrator knows this one too.
+        user.requirePasswordChange();
         audit.record(actorId, "AUTH_PASSWORD_RESET_BY_ADMIN", "user", targetId,
                 null, Map.of("passwordReset", true), null, null, ip);
     }

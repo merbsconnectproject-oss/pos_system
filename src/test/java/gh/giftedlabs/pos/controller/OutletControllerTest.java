@@ -97,6 +97,34 @@ class OutletControllerTest {
     }
 
     @Nested
+    @DisplayName("a new branch can trade")
+    class ReadyToTrade {
+
+        @Test
+        @DisplayName("is created with a till, so its first sale can be numbered — BR-6")
+        void comesWithATill() throws Exception {
+            Session session = signIn(ownerName);
+            String code = "T" + UUID.randomUUID().toString().substring(0, 3).toUpperCase();
+
+            MvcResult created = mvc.perform(session.authorise(post("/api/outlets"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(Map.of(
+                                    "code", code,
+                                    "name", "New Branch " + code,
+                                    "town", "Koforidua"))))
+                    .andExpect(status().isCreated()).andReturn();
+            String outletId = json.readTree(created.getResponse().getContentAsString()).get("id").asText();
+
+            // Without this the branch opens unable to sell: the first attempt
+            // fails with NO_TERMINAL and nothing on the screen explains why.
+            mvc.perform(session.authorise(get("/api/terminals").param("outletId", outletId)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(1))
+                    .andExpect(jsonPath("$[0].code").value("01"));
+        }
+    }
+
+    @Nested
     @DisplayName("a cashier")
     class Cashier {
 

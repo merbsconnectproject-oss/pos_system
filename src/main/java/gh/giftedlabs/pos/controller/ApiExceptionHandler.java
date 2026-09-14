@@ -9,6 +9,7 @@ import gh.giftedlabs.pos.exception.CatalogueConflictException;
 import gh.giftedlabs.pos.exception.CatalogueListException;
 import gh.giftedlabs.pos.exception.IncorrectPinException;
 import gh.giftedlabs.pos.exception.ApprovalRequiredException;
+import gh.giftedlabs.pos.exception.CustomerPhoneTakenException;
 import gh.giftedlabs.pos.exception.InsufficientStockException;
 import gh.giftedlabs.pos.exception.ProductNotFoundException;
 import gh.giftedlabs.pos.exception.SaleException;
@@ -152,6 +153,20 @@ public class ApiExceptionHandler {
     public ResponseEntity<ApiError> onApprovalRequired(ApprovalRequiredException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiError("APPROVAL_REQUIRED", ex.getMessage(), ex.getDetails()));
+    }
+
+    /**
+     * FR-CUST-03: the number belongs to somebody already.
+     *
+     * <p>The existing customer is named in the details so the screen can offer
+     * to open them rather than leaving the counter to invent a second number.
+     */
+    @ExceptionHandler(CustomerPhoneTakenException.class)
+    public ResponseEntity<ApiError> onCustomerPhoneTaken(CustomerPhoneTakenException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError("CUSTOMER_PHONE_TAKEN", ex.getMessage(),
+                        Map.of("customerId", String.valueOf(ex.getExistingId()),
+                                "name", ex.getExistingName())));
     }
 
     @ExceptionHandler(ProductNotFoundException.class)
