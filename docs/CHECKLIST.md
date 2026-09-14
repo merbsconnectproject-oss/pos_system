@@ -1,4 +1,4 @@
-# Build Checklist — Stage 1
+a# Build Checklist — Stage 1
 
 **Companion to** PRD v1.0 · SCREEN-INVENTORY.md v1.0 · DELIVERY-PLAN.md
 **Updated** 2026-09-14 · reflects the codebase as it stands, verified rather than assumed.

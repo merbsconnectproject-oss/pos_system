@@ -838,10 +838,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <SalesPurchaseChart accentColor={accentColor} />
+          <SalesPurchaseChart
+            accentColor={accentColor}
+            outletId={dashboardScope === 'all' ? null : dashboardScope}
+          />
         </div>
         <div>
-          <CustomerOverviewChart accentColor={accentColor} />
+          <CustomerOverviewChart
+            accentColor={accentColor}
+            outletId={dashboardScope === 'all' ? null : dashboardScope}
+            canViewReports={permissions.has('report.view')}
+          />
         </div>
       </section>
 

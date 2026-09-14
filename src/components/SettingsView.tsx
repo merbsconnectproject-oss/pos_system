@@ -70,6 +70,14 @@ interface SettingsViewProps {
    * the server has accepted it, and rejects when it has not.
    */
   onUpdateUsers: (users: UserAccount[]) => Promise<void>;
+  /**
+   * FR-USER-01: create one account.
+   *
+   * <p>Separate from {@link onUpdateUsers} because a create should not depend
+   * on something noticing a new row in a list it was handed. Rejects when the
+   * server refuses, so this screen never claims a save that did not happen.
+   */
+  onCreateUser: (account: UserAccount) => Promise<UserAccount>;
   rolesPermissions: RolePermissions[];
   onUpdateRolesPermissions: (roles: RolePermissions[]) => void;
   generalSettings: GeneralSettings;
@@ -120,6 +128,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   currentUser,
   users,
   onUpdateUsers,
+  onCreateUser,
   rolesPermissions,
   onUpdateRolesPermissions,
   generalSettings,
@@ -821,8 +830,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       };
       setUserSaving(true);
       try {
-        await onUpdateUsers([newUser, ...users]);
-      } catch {
+        await onCreateUser(newUser);
+      } catch (failure) {
+        // Say why, here, on the form that is still open. A silent return left
+        // the modal closed and the list unchanged with no explanation.
+        alert(failure instanceof Error
+          ? failure.message
+          : 'That account could not be created.');
         setUserSaving(false);
         return;
       }

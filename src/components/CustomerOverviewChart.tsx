@@ -1,11 +1,26 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ArrowUpRight, Users, ShieldCheck } from 'lucide-react';
+import { reportsApi, type ReportRow } from '../reportsApi';
 
 interface CustomerOverviewChartProps {
   accentColor?: string;
+  /** The branch in view, or null for every branch the caller may see. */
+  outletId?: string | null;
+  /** FR-RPT-05: the breakdown needs `report.view`; without it there is nothing to draw. */
+  canViewReports?: boolean;
 }
 
-export const CustomerOverviewChart: React.FC<CustomerOverviewChartProps> = ({ accentColor }) => {
+const LABELS: Record<string, string> = {
+  electrician: 'Electricians (Trade)',
+  contractor: 'Contractors',
+  company: 'Companies',
+  retail: 'Retail',
+  'walk-in': 'Walk-ins',
+};
+
+export const CustomerOverviewChart: React.FC<CustomerOverviewChartProps> = ({
+  accentColor, outletId, canViewReports = true,
+}) => {
   const [filter, setFilter] = useState<'Today' | 'This Week' | 'This Month'>('Today');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [hoveredSegment, setHoveredSegment] = useState<string | null>(null);
@@ -14,11 +29,56 @@ export const CustomerOverviewChart: React.FC<CustomerOverviewChartProps> = ({ ac
   const secondaryColor = 'var(--chart-2, #0f766e)';
   const tertiaryColor = 'var(--chart-4, #7c3f8f)';
 
-  const segments = [
-    { label: 'Electricians (Trade)', pct: 45, color: primaryColor, amount: 'GH₵ 22.5K', count: 184 },
-    { label: 'Contractors', pct: 35, color: secondaryColor, amount: 'GH₵ 17.2K', count: 96 },
-    { label: 'Retail Walk-ins', pct: 20, color: tertiaryColor, amount: 'GH₵ 9.8K', count: 312 },
-  ];
+  /**
+   * FR-CUST-04 · FR-RPT-04: takings by the kind of customer, from the server.
+   *
+   * <p>These three rows used to be literals — 45% electricians, GH₵ 22.5K, 184
+   * of them — on the owner's dashboard, whatever the shop had actually sold.
+   */
+  const [rows, setRows] = useState<ReportRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!canViewReports) { setRows([]); setLoading(false); return; }
+
+    let current = true;
+    const to = new Date();
+    const days = filter === 'Today' ? 1 : filter === 'This Week' ? 7 : 30;
+    const from = new Date(to.getTime() - days * 86400000);
+
+    setLoading(true);
+    reportsApi.breakdown('customer_type', { from, to, outletId })
+      .then((result) => { if (current) setRows(result); })
+      .catch(() => { if (current) setRows([]); })
+      .finally(() => { if (current) setLoading(false); });
+
+    return () => { current = false; };
+  }, [filter, outletId, canViewReports]);
+
+  const palette = [primaryColor, secondaryColor, tertiaryColor];
+
+  const { segments, receipts } = useMemo(() => {
+    const total = rows.reduce((sum, row) => sum + Number(row.revenue), 0);
+    const count = rows.reduce((sum, row) => sum + Number(row.quantity), 0);
+    return {
+      receipts: count,
+      segments: rows.map((row, index) => ({
+        label: LABELS[row.key] || row.name,
+        // No takings is 0%, not a division by zero drawn as a full ring.
+        pct: total > 0 ? Math.round((Number(row.revenue) / total) * 100) : 0,
+        color: palette[index % palette.length],
+        amount: `GH₵ ${Number(row.revenue).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        count: Number(row.quantity),
+      })),
+    };
+  }, [rows, primaryColor, secondaryColor, tertiaryColor]);
+
+  // The donut's two rings, drawn from the real shares rather than from
+  // offsets somebody worked out once by hand.
+  const OUTER = 2 * Math.PI * 38;
+  const INNER = 2 * Math.PI * 25;
+  const outer = segments[0]?.pct ?? 0;
+  const inner = segments[1]?.pct ?? 0;
 
   return (
     <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between h-full">
@@ -74,19 +134,19 @@ export const CustomerOverviewChart: React.FC<CustomerOverviewChartProps> = ({ ac
               stroke="currentColor"
               fill="transparent"
             />
-            {/* Segment 1: Electricians (45% -> 45 * 2.387 = 107.4) */}
+            {/* The largest share, on the outer ring. */}
             <circle
               cx="50"
               cy="50"
               r="38"
               stroke={primaryColor}
-              strokeWidth={hoveredSegment === 'Electricians (Trade)' ? '11' : '9'}
-              strokeDasharray="238.76"
-              strokeDashoffset="131.3"
+              strokeWidth={hoveredSegment === segments[0]?.label ? '11' : '9'}
+              strokeDasharray={OUTER}
+              strokeDashoffset={OUTER * (1 - outer / 100)}
               strokeLinecap="round"
               fill="transparent"
               className="transition-all duration-300 cursor-pointer"
-              onMouseEnter={() => setHoveredSegment('Electricians (Trade)')}
+              onMouseEnter={() => setHoveredSegment(segments[0]?.label ?? null)}
               onMouseLeave={() => setHoveredSegment(null)}
             />
 
@@ -100,32 +160,39 @@ export const CustomerOverviewChart: React.FC<CustomerOverviewChartProps> = ({ ac
               stroke="currentColor"
               fill="transparent"
             />
-            {/* Segment 2: Contractors (35% -> 35 * 1.57 = 55) */}
+            {/* The second share, on the inner ring. */}
             <circle
               cx="50"
               cy="50"
               r="25"
               stroke={secondaryColor}
-              strokeWidth={hoveredSegment === 'Contractors' ? '9' : '7'}
-              strokeDasharray="157.08"
-              strokeDashoffset="80"
+              strokeWidth={hoveredSegment === segments[1]?.label ? '9' : '7'}
+              strokeDasharray={INNER}
+              strokeDashoffset={INNER * (1 - inner / 100)}
               strokeLinecap="round"
               fill="transparent"
               className="transition-all duration-300 cursor-pointer"
-              onMouseEnter={() => setHoveredSegment('Contractors')}
+              onMouseEnter={() => setHoveredSegment(segments[1]?.label ?? null)}
               onMouseLeave={() => setHoveredSegment(null)}
             />
           </svg>
 
           {/* Center text */}
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-xs font-black text-slate-800">592</span>
-            <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Clients</span>
+            <span className="text-xs font-black text-slate-800">{receipts}</span>
+            <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Receipts</span>
           </div>
         </div>
 
         {/* Legend & Breakdown stats */}
         <div className="flex flex-col gap-2.5 flex-1 w-full">
+          {!loading && segments.length === 0 && (
+            <div className="py-6 text-center text-xs font-semibold text-slate-400">
+              {canViewReports
+                ? 'No sales in this period yet.'
+                : 'Customer figures need the reporting permission.'}
+            </div>
+          )}
           {segments.map((s) => (
             <div
               key={s.label}

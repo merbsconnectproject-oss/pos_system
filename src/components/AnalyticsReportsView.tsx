@@ -56,6 +56,14 @@ import {
 import { Product, Outlet, CompletedSale, Expense, CustomerInstallmentPlan, ReturnExchangeRecord } from '../types';
 import { exportToCsv } from '../utils/csvExport';
 import { InfoHint } from './InfoHint';
+import {
+  reportsApi,
+  type DashboardView,
+  type ReportFilters,
+  type ReportRow,
+  type ReportSummary,
+  type SeriesPoint,
+} from '../reportsApi';
 
 interface AnalyticsReportsViewProps {
   products: Product[];
@@ -239,252 +247,257 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
   }, [installmentPlans, selectedOutlet]);
 
   // Financial Metrics
+  /**
+   * FR-RPT-04: every figure on this screen comes from the server.
+   *
+   * <p>What was here before invented most of them. Revenue was real sales
+   * **plus a literal** (28,370 or 108,420 depending on the branch); COGS was
+   * `revenue * 0.641`, which produced the 35.9% margin quoted in the executive
+   * summary regardless of what anything cost; the transaction count added 142;
+   * the fourteen-day velocity curve was a sine wave; and the category,
+   * payment, top-product and outlet tables were literal arrays. On an owner's
+   * analytics screen those are not placeholders, they are claims about money.
+   */
+  const analyticsFilters = useMemo<ReportFilters>(() => {
+    const to = new Date();
+    const from = new Date(to.getTime() - 14 * 86400000);
+    return { from, to, outletId: selectedOutlet === 'all' ? null : selectedOutlet };
+  }, [selectedOutlet]);
+
+  const [summary, setSummary] = useState<ReportSummary | null>(null);
+  const [series, setSeries] = useState<SeriesPoint[]>([]);
+  const [categoryRows, setCategoryRows] = useState<ReportRow[]>([]);
+  const [paymentRows, setPaymentRows] = useState<ReportRow[]>([]);
+  const [topRows, setTopRows] = useState<ReportRow[]>([]);
+  const [dashboard, setDashboard] = useState<DashboardView | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [analyticsFailed, setAnalyticsFailed] = useState(false);
+
+  useEffect(() => {
+    let current = true;
+    setAnalyticsLoading(true);
+    setAnalyticsFailed(false);
+
+    Promise.all([
+      reportsApi.summary(analyticsFilters),
+      reportsApi.series('DAY', analyticsFilters),
+      reportsApi.breakdown('category', analyticsFilters, 12),
+      reportsApi.breakdown('payment', analyticsFilters),
+      reportsApi.ranking('best', analyticsFilters, 6),
+      reportsApi.dashboard(),
+    ])
+      .then(([loadedSummary, loadedSeries, categories, payments, top, dash]) => {
+        if (!current) return;
+        setSummary(loadedSummary);
+        setSeries(loadedSeries);
+        setCategoryRows(categories);
+        setPaymentRows(payments);
+        setTopRows(top);
+        setDashboard(dash);
+      })
+      .catch(() => {
+        if (!current) return;
+        // Empty and said out loud. Falling back to something plausible is how
+        // this screen came to be lying in the first place.
+        setAnalyticsFailed(true);
+        setSummary(null); setSeries([]); setCategoryRows([]);
+        setPaymentRows([]); setTopRows([]); setDashboard(null);
+      })
+      .finally(() => { if (current) setAnalyticsLoading(false); });
+
+    return () => { current = false; };
+  }, [analyticsFilters]);
+
+  const num = (value: number | null | undefined) => Number(value ?? 0);
+
   const metrics = useMemo(() => {
-    // Add baseline showroom sales for accurate multi-outlet presentation
-    const baseRevenue =
-      selectedOutlet === 'radiance-lighting'
-        ? 34850
-        : selectedOutlet === 'inco-hardware'
-        ? 45200
-        : selectedOutlet === 'apex-electricals'
-        ? 28370
-        : 108420;
+    const grossRevenue = num(summary?.revenue);
+    // BR-5 · FR-RPT-06: the cost frozen on each line when it was sold. Null
+    // when this user may not see cost, and then so is everything derived
+    // from it — rather than a percentage of revenue standing in for it.
+    const cogs = num(summary?.cost);
+    const grossProfit = num(summary?.profit);
 
-    const actualSalesTotal = filteredSales.reduce((sum, s) => sum + (s.status !== 'VOIDED' ? s.total : 0), 0);
-    const grossRevenue = actualSalesTotal + baseRevenue;
-
-    // Estimate COGS (approx 64.1% cost baseline, giving 35.9% gross margin)
-    const estimatedCOGS = Number((grossRevenue * 0.641).toFixed(2));
-    const grossProfit = Number((grossRevenue - estimatedCOGS).toFixed(2));
-    const grossMarginPct = Number(((grossProfit / grossRevenue) * 100).toFixed(1));
-
-    const totalOpex =
-      (selectedOutlet === 'radiance-lighting' ? 11250 : selectedOutlet === 'all' ? 18650 : 7400) +
-      filteredExpenses.reduce((sum, e) => sum + (e.status === 'PAID' ? e.amount : 0), 0);
-
-    const netIncome = Number((grossProfit - totalOpex).toFixed(2));
-    const netMarginPct = Number(((netIncome / grossRevenue) * 100).toFixed(1));
-
-    const totalTransactions = filteredSales.length + (selectedOutlet === 'all' ? 142 : 48);
-    const averageOrderValue = Number((grossRevenue / Math.max(1, totalTransactions)).toFixed(2));
-
-    const activeCreditReceivables = filteredInstallments.reduce((sum, p) => sum + p.remainingBalance, 0) + (selectedOutlet === 'all' ? 18200 : selectedOutlet === 'radiance-lighting' ? 14300 : 3900);
-    const returnsVolume = returnsExchanges.reduce((sum, r) => sum + r.returnedSubtotal, 0) + 4250;
-    const returnRatePct = Number(((returnsVolume / grossRevenue) * 100).toFixed(2));
+    const totalOpex = filteredExpenses.reduce((sum, e) => sum + (e.status === 'PAID' ? e.amount : 0), 0);
+    const netIncome = grossProfit - totalOpex;
+    const totalTransactions = summary?.saleCount ?? 0;
 
     return {
       grossRevenue,
-      estimatedCOGS,
+      estimatedCOGS: cogs,
       grossProfit,
-      grossMarginPct,
+      grossMarginPct: num(summary?.marginPercent),
       totalOpex,
       netIncome,
-      netMarginPct,
+      netMarginPct: grossRevenue === 0 ? 0 : Number(((netIncome / grossRevenue) * 100).toFixed(1)),
       totalTransactions,
-      averageOrderValue,
-      activeCreditReceivables,
-      returnsVolume,
-      returnRatePct,
+      averageOrderValue: num(summary?.averageSale),
+      voidCount: summary?.voidCount ?? 0,
+      voidedValue: num(summary?.voidedValue),
+      discountTotal: num(summary?.discountTotal),
+      // Stage 2. Zero because nothing records one — which is the truth here,
+      // not a placeholder standing in for a number we have not fetched.
+      activeCreditReceivables: filteredInstallments.reduce((sum, plan) => sum + (plan.remainingBalance ?? 0), 0),
+      returnsVolume: returnsExchanges.length,
+      returnRatePct: totalTransactions === 0
+        ? 0
+        : Number(((returnsExchanges.length / totalTransactions) * 100).toFixed(1)),
     };
-  }, [filteredSales, filteredExpenses, filteredInstallments, returnsExchanges, selectedOutlet]);
+  }, [summary, filteredExpenses, filteredInstallments, returnsExchanges]);
 
-  // Quick Snapshot KPIs (Dynamic per Selected Outlet)
   const quickSnapshot = useMemo(() => {
-    let baseDaily = 11750;
-    let dailyTarget = 14000;
-    let baseRetention = 81.6;
-    let outletDisplayName = 'All Outlets (Consolidated)';
-    let dailyTrend = '+16.2%';
+    const outletDisplayName = selectedOutlet === 'all'
+      ? 'All branches'
+      : outlets.find((outlet) => outlet.id === selectedOutlet)?.name || 'This branch';
 
-    if (selectedOutlet === 'radiance-lighting') {
-      baseDaily = 4850;
-      dailyTarget = 5500;
-      baseRetention = 78.4;
-      outletDisplayName = 'Radiance Lighting Showroom';
-      dailyTrend = '+18.4%';
-    } else if (selectedOutlet === 'inco-hardware') {
-      baseDaily = 5420;
-      dailyTarget = 6200;
-      baseRetention = 84.6;
-      outletDisplayName = 'Inco Hardware Trade Counter';
-      dailyTrend = '+12.1%';
-    } else if (selectedOutlet === 'apex-electricals') {
-      baseDaily = 3180;
-      dailyTarget = 3800;
-      baseRetention = 73.2;
-      outletDisplayName = 'Apex Electricals Branch';
-      dailyTrend = '+9.8%';
-    }
+    // Today is the last bucket the server returned, not a base figure.
+    const today = series.length > 0 ? series[series.length - 1] : null;
 
-    const actualCompletedSales = filteredSales
-      .filter((s) => s.status === 'COMPLETED')
-      .reduce((sum, s) => sum + s.total, 0);
-
-    const dailyRevenue = baseDaily + (actualCompletedSales > 0 ? actualCompletedSales * 0.15 : 0);
-    const dailyTargetPace = Math.min(100, Number(((dailyRevenue / dailyTarget) * 100).toFixed(1)));
-
-    // Dynamic customer retention derived from transaction history
-    const customerMap: Record<string, number> = {};
-    filteredSales.forEach((s) => {
-      const name = s.customerName?.trim();
-      if (name && name !== 'Walk-in Customer') {
-        customerMap[name] = (customerMap[name] || 0) + 1;
-      }
-    });
-    const uniqueKnown = Object.keys(customerMap).length;
-    const repeatCount = Object.values(customerMap).filter((cnt) => cnt > 1).length;
-    let retentionRate = baseRetention;
-    if (uniqueKnown > 0) {
-      const liveRate = (repeatCount / uniqueKnown) * 100;
-      retentionRate = Number(((baseRetention * 0.7) + (liveRate * 0.3)).toFixed(1));
-    }
-
-    const profitMargin = metrics.grossMarginPct;
-    const aov = metrics.averageOrderValue;
+    // The trend is the last seven buckets against the seven before them —
+    // two real weeks, rather than a literal like the '+16.2%' that used to
+    // sit here whatever the shop had done.
+    const half = Math.floor(series.length / 2);
+    const recent = series.slice(half).reduce((sum, point) => sum + num(point.sales), 0);
+    const earlier = series.slice(0, half).reduce((sum, point) => sum + num(point.sales), 0);
+    const change = earlier === 0 ? (recent > 0 ? 100 : 0) : ((recent - earlier) / earlier) * 100;
 
     return {
-      dailyRevenue,
-      dailyTarget,
-      dailyTargetPace,
-      dailyTrend,
-      profitMargin,
-      retentionRate,
-      aov,
       outletDisplayName,
+      dailySales: num(today?.sales),
+      dailyRevenue: num(today?.sales),
+      dailyReceipts: today?.receipts ?? 0,
+      aov: metrics.averageOrderValue,
+      profitMargin: metrics.grossMarginPct ?? 0,
+      dailyTrend: `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`,
+      // FR-SET has no daily target and nobody has set one, so there is nothing
+      // to pace against. Zero reads as "no target", which is the case.
+      dailyTarget: 0,
+      dailyTargetPace: 0,
+      // Retention needs repeat-purchase history over a longer window than
+      // this screen asks for. Zero until something computes it.
+      retentionRate: 0,
     };
-  }, [selectedOutlet, filteredSales, metrics]);
+  }, [selectedOutlet, outlets, series, metrics.averageOrderValue, metrics.grossMarginPct]);
 
-  const snapshotSeries = useMemo(() => ({
-    dailyRevenue: [82, 88, 84, 94, 91, 100, 96].map((value, index) => ({ name: `${index + 1}`, value: Math.round(quickSnapshot.dailyRevenue * (value / 100)) })),
-    profitMargin: [31, 34, 33, 36, 35, 37, quickSnapshot.profitMargin].map((value, index) => ({ name: `${index + 1}`, value })),
-    retentionRate: [74, 76, 75, 79, 78, 80, quickSnapshot.retentionRate].map((value, index) => ({ name: `${index + 1}`, value })),
-    aov: [88, 94, 91, 98, 96, 103, 100].map((value, index) => ({ name: `${index + 1}`, value: Math.round(quickSnapshot.aov * (value / 100)) })),
-  }), [quickSnapshot]);
+  const snapshotSeries = useMemo(() => {
+    const daily = series.map((point, index) => ({ name: `${index + 1}`, value: num(point.sales) }));
+    return {
+      sales: daily,
+      dailyRevenue: daily,
+      receipts: series.map((point, index) => ({ name: `${index + 1}`, value: point.receipts })),
+      aov: series.map((point, index) => ({
+        name: `${index + 1}`,
+        value: point.receipts > 0 ? Math.round(num(point.sales) / point.receipts) : 0,
+      })),
+      // Nothing computes these per day; an empty sparkline draws nothing,
+      // which is better than drawing a shape that means nothing.
+      profitMargin: [] as Array<{ name: string; value: number }>,
+      retentionRate: [] as Array<{ name: string; value: number }>,
+    };
+  }, [series]);
 
-  // Chart 1: Sales & Margin Velocity Data (14-day chronological curve)
-  const salesVelocityData = useMemo(() => {
-    const days = [
-      'Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Day 7',
-      'Day 8', 'Day 9', 'Day 10', 'Day 11', 'Day 12', 'Day 13', 'Day 14',
-    ];
-
-    const baseRev = selectedOutlet === 'radiance-lighting' ? 2400 : selectedOutlet === 'all' ? 7600 : 3200;
-
-    return days.map((day, idx) => {
-      // Dynamic cyclic variance
-      const multiplier = 0.75 + Math.sin(idx * 0.8) * 0.35 + (idx % 3 === 0 ? 0.25 : 0);
-      const revenue = Math.round(baseRev * multiplier);
-      const cogs = Math.round(revenue * (0.62 + (idx % 4) * 0.015));
-      const profit = revenue - cogs;
-      const margin = Number(((profit / revenue) * 100).toFixed(1));
-
-      return {
-        name: day,
-        revenue,
-        cogs,
-        profit,
-        margin,
-      };
-    });
-  }, [selectedOutlet]);
-
-  const operatingPerformanceData = useMemo(
-    () => salesVelocityData.map((point, index) => ({
-      name: point.name.replace('Day ', 'D'),
-      sales: point.revenue,
-      expenses: Math.round(metrics.totalOpex / 14 + (index % 4) * 95),
+  /** Chart 1: takings, cost and margin per day — FR-RPT-04, FR-RPT-06. */
+  const salesVelocityData = useMemo(
+    () => series.map((point) => ({
+      name: point.bucket.slice(-5),
+      revenue: num(point.sales),
+      // Per-day cost is not in the series; the screen shows takings and
+      // purchases, and the margin comes from the period summary instead of
+      // being guessed per bar.
+      // Per-day cost is not in the series; the period's margin is on the
+      // summary above rather than guessed per bar.
+      cogs: 0,
+      profit: 0,
+      margin: 0,
+      purchases: num(point.purchases),
     })),
-    [salesVelocityData, metrics.totalOpex]
+    [series],
   );
 
-  // Chart 2: Multi-Outlet Comparative Data
+  /** Chart: takings against goods received, per day. */
+  const operatingPerformanceData = useMemo(
+    () => series.map((point) => ({
+      name: point.bucket.slice(-5),
+      sales: num(point.sales),
+      expenses: num(point.purchases),
+    })),
+    [series],
+  );
+
+  /** Chart 2: one row per branch, from the dashboard the server scopes. */
   const outletComparisonData = useMemo(() => {
-    return [
-      {
-        outlet: 'Radiance Lighting',
-        location: 'East Legon, Accra',
-        revenue: 34850,
-        profit: 13940,
-        margin: 40.0,
-        aov: 1245,
-        transactions: 28,
-        activeCredit: 14300,
-      },
-      {
-        outlet: 'Inco Hardware',
-        location: 'Heavy Ind., Tema',
-        revenue: 45200,
-        profit: 15368,
-        margin: 34.0,
-        aov: 565,
-        transactions: 80,
-        activeCredit: 2400,
-      },
-      {
-        outlet: 'Apex Electricals',
-        location: 'Spintex Rd, Accra',
-        revenue: 28370,
-        profit: 9642,
-        margin: 34.0,
-        aov: 746,
-        transactions: 38,
-        activeCredit: 1500,
-      },
-    ];
-  }, []);
-
-  // Chart 3: Category Breakdown
-  const categoryData = useMemo(() => {
-    const rawCategories = [
-      { name: 'Lighting & Lamps', revenue: 38500, margin: 42.5, items: 34 },
-      { name: 'Cables & Wires', revenue: 27200, margin: 29.8, items: 22 },
-      { name: 'Protection & Breakers', revenue: 16800, margin: 36.2, items: 18 },
-      { name: 'Switches & Sockets', revenue: 11400, margin: 38.0, items: 26 },
-      { name: 'Hardware & Tools', revenue: 8500, margin: 31.5, items: 15 },
-      { name: 'Solar & Inverters', revenue: 6020, margin: 35.0, items: 8 },
-    ];
-
-    const total = rawCategories.reduce((acc, c) => acc + c.revenue, 0);
-
-    return rawCategories.map((c) => ({
-      ...c,
-      share: Number(((c.revenue / total) * 100).toFixed(1)),
-      color: CATEGORY_COLORS[c.name] || '#64748b',
+    if (!dashboard) return [];
+    return dashboard.outlets.map((row) => ({
+      outlet: row.outletName,
+      location: outlets.find((outlet) => outlet.id === row.outletId)?.town || '',
+      revenue: num(row.salesToday),
+      profit: num(row.profitToday),
+      margin: num(row.salesToday) === 0
+        ? 0
+        : Number(((num(row.profitToday) / num(row.salesToday)) * 100).toFixed(1)),
+      aov: row.receiptsToday > 0 ? num(row.salesToday) / row.receiptsToday : 0,
+      transactions: row.receiptsToday,
+      // Stage 2: nothing records credit yet, so it is zero rather than absent.
+      activeCredit: 0,
     }));
-  }, []);
+  }, [dashboard, outlets]);
 
-  // Chart 4: Payment Channels Data
+  /** Chart 3: takings by category. */
+  const categoryData = useMemo(() => {
+    const total = categoryRows.reduce((sum, row) => sum + num(row.revenue), 0);
+    return categoryRows.map((row) => ({
+      name: row.name,
+      revenue: num(row.revenue),
+      margin: num(row.revenue) === 0
+        ? 0
+        : Number(((num(row.profit) / num(row.revenue)) * 100).toFixed(1)),
+      items: Number(row.quantity),
+      share: total > 0 ? Number(((num(row.revenue) / total) * 100).toFixed(1)) : 0,
+      color: CATEGORY_COLORS[row.name] || '#64748b',
+    }));
+  }, [categoryRows]);
+
+  /** Chart 4: what customers actually paid with. */
   const paymentChannelData = useMemo(() => {
-    const channels = [
-      { name: 'Mobile Money', amount: 52040, percent: 48.0, color: PAYMENT_COLORS['Mobile Money'], badge: 'MTN & Telecel' },
-      { name: 'Cash', amount: 39030, percent: 36.0, color: PAYMENT_COLORS['Cash'], badge: 'Till Drawer' },
-      { name: 'Bank Card / POS', amount: 9760, percent: 9.0, color: PAYMENT_COLORS['Bank Card / POS'], badge: 'Terminal' },
-      { name: 'Installment Credit', amount: 7590, percent: 7.0, color: PAYMENT_COLORS['Installment Credit'], badge: 'Credit Plans' },
-    ];
-    return channels;
-  }, []);
+    const LABEL: Record<string, string> = {
+      cash: 'Cash', momo: 'Mobile Money', card: 'Bank Card / POS', transfer: 'Bank Transfer',
+    };
+    const total = paymentRows.reduce((sum, row) => sum + num(row.revenue), 0);
+    return paymentRows.map((row) => {
+      const name = LABEL[row.key] || row.name;
+      return {
+        name,
+        amount: num(row.revenue),
+        percent: total > 0 ? Number(((num(row.revenue) / total) * 100).toFixed(1)) : 0,
+        color: PAYMENT_COLORS[name] || '#64748b',
+        badge: `${Number(row.quantity)} payments`,
+      };
+    });
+  }, [paymentRows]);
 
-  // Chart 5: Installment Credit Aging
-  const installmentAgingData = useMemo(() => {
-    return [
-      { stage: 'Current (< 30 Days)', count: 8, balance: 11400, color: '#64748B' },
-      { stage: 'Due in 7 Days', count: 3, balance: 3900, color: '#94A3B8' },
-      { stage: 'Grace Window (1-7 Days Late)', count: 2, balance: 2100, color: '#F97316' },
-      { stage: 'Overdue (> 14 Days)', count: 1, balance: 800, color: '#DC2626' },
-    ];
-  }, []);
+  /**
+   * Chart 5: installment credit ageing.
+   *
+   * <p>Empty, and it should be. Installments are Stage 2 and nothing records
+   * one — the table that was here showed eight current plans and GH₵ 18,200
+   * outstanding for a facility the shop does not offer.
+   */
+  const installmentAgingData = useMemo(() => [] as Array<{
+    stage: string; count: number; balance: number; color: string;
+  }>, []);
 
-  // Chart 6: Top Movers Velocity
-  const topProductsData = useMemo(() => {
-    return [
-      { name: 'Nordic Brass Chandelier (6-Arm)', units: 6, revenue: 11700, margin: 46 },
-      { name: '15W COB Anti-Glare Downlight', units: 48, revenue: 8640, margin: 41 },
-      { name: 'Linear LED Pendant Batten 1200mm', units: 18, revenue: 6300, margin: 38 },
-      { name: '2.5mm Conduit Earth Cable (100m)', units: 14, revenue: 6020, margin: 28 },
-      { name: 'Smart Zigbee COB LED Strip (5m)', units: 12, revenue: 5400, margin: 44 },
-      { name: 'Magnetic Track Light 12W 48V', units: 16, revenue: 4480, margin: 39 },
-    ];
-  }, []);
+  /** Chart 6: best sellers by value. */
+  const topProductsData = useMemo(
+    () => topRows.map((row) => ({
+      name: row.name,
+      units: Number(row.quantity),
+      revenue: num(row.revenue),
+      margin: num(row.revenue) === 0
+        ? 0
+        : Number(((num(row.profit) / num(row.revenue)) * 100).toFixed(1)),
+    })),
+    [topRows],
+  );
 
   // Trigger AI Inference via server-side route
   const fetchAiInference = async (inquiryText?: string) => {

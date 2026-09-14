@@ -80,7 +80,16 @@ export interface DashboardView {
   combined: DashboardOutlet;
 }
 
-export type Grouping = 'product' | 'category' | 'cashier' | 'customer' | 'payment' | 'movement';
+export type Grouping =
+  | 'product' | 'category' | 'cashier' | 'customer' | 'customer_type' | 'payment' | 'movement';
+
+/** FR-RPT-04: one bucket of the dashboard chart. */
+export interface SeriesPoint {
+  bucket: string;
+  sales: number;
+  purchases: number;
+  receipts: number;
+}
 
 /** FR-RPT-03: outlet, date range, category, user and payment method. */
 export interface ReportFilters {
@@ -121,6 +130,15 @@ export const reportsApi = {
 
   exceptions: (log: 'discount' | 'void', filters: ReportFilters, limit = 200) =>
     request<ReportExceptionRow[]>(`/api/reports/exceptions${query(filters, { log, limit })}`),
+
+  /**
+   * FR-RPT-04: takings and purchases over time.
+   *
+   * Every bucket in the range comes back, including the quiet ones — a chart
+   * drawn only through the busy days is the wrong shape.
+   */
+  series: (bucket: 'DAY' | 'WEEK' | 'MONTH', filters: ReportFilters) =>
+    request<SeriesPoint[]>(`/api/reports/series${query(filters, { bucket })}`),
 
   /** FR-RPT-01 · FR-RPT-02: scoped by the server to the branches you are assigned to. */
   dashboard: () => request<DashboardView>('/api/reports/dashboard'),

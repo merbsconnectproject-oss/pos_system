@@ -28,11 +28,7 @@ import { ReportsView } from './components/ReportsView';
 import { AuthView } from './components/AuthView';
 import {
   OUTLETS,
-  INITIAL_AUDIT_LOGS,
   INITIAL_SETTINGS,
-  INITIAL_EXPENSES,
-  INITIAL_INSTALLMENT_PLANS,
-  INITIAL_RETURNS_EXCHANGES,
 } from './mockData';
 import {
   Outlet,
@@ -282,12 +278,18 @@ export default function App() {
   // FR-CASH: shifts are the server's — a seeded one would claim takings
   // that were never counted.
   const [shiftRecords, setShiftRecords] = useState<ShiftRecord[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(INITIAL_AUDIT_LOGS);
+  // BR-15: the log is loaded from the server. Seeding it meant a screen that
+  // showed invented entries until the fetch returned — and kept showing them
+  // if it failed.
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
 
   // Radiance Lighting & Accounting Modules state
-  const [expenses, setExpenses] = useState<Expense[]>(INITIAL_EXPENSES);
-  const [installmentPlans, setInstallmentPlans] = useState<CustomerInstallmentPlan[]>(INITIAL_INSTALLMENT_PLANS);
-  const [returnsExchanges, setReturnsExchanges] = useState<ReturnExchangeRecord[]>(INITIAL_RETURNS_EXCHANGES);
+  // Stage 2 modules. Nothing on the server records any of these yet, so they
+  // start empty rather than showing figures nobody entered — an expense total
+  // on an owner's analytics screen is a claim about money.
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [installmentPlans, setInstallmentPlans] = useState<CustomerInstallmentPlan[]>([]);
+  const [returnsExchanges, setReturnsExchanges] = useState<ReturnExchangeRecord[]>([]);
 
   // Settings, Users & RBAC state
   // FR-USER-01: staff are the server's. A seeded list invents colleagues
@@ -1086,6 +1088,30 @@ export default function App() {
   };
 
   /**
+   * FR-USER-01: create a staff account.
+   *
+   * <p>Its own path, not a list handed back for something to spot the
+   * difference in. The diffing version showed a success toast and saved
+   * nothing when it failed to notice the new row — which is exactly what it
+   * did — and a create is not a thing that should have to be *inferred*.
+   */
+  const handleCreateUser = async (account: UserAccount) => {
+    const branchIds = outlets.filter((outlet) => outlet.id !== 'all-outlets').map((outlet) => outlet.id);
+    const saved = await usersApi.create(account, branchIds);
+
+    const refreshed = await usersApi.list(true);
+    setUsers(refreshed);
+
+    // The screen is about to say "created". If the server's own list does not
+    // have them, that claim is false and the caller needs to know rather than
+    // the user finding out by looking.
+    if (!refreshed.some((user) => user.id === saved.id)) {
+      throw new Error(`${saved.fullName} was saved but is not in the staff list. Reload and check.`);
+    }
+    return saved;
+  };
+
+  /**
    * FR-USER-01 · FR-USER-04 · FR-USER-07: the staff screen hands back the whole
    * list, so the change is found by comparing it with what is held.
    *
@@ -1106,6 +1132,12 @@ export default function App() {
     const edited = next.filter((candidate) => {
       const current = held.get(candidate.id);
       if (!current) return false;
+      // A PIN typed into the form is always a change: the server never sends
+      // one back, so there is nothing to compare it against and an unsent PIN
+      // would be a form that saved everything except the field the manager
+      // opened it for.
+      if (candidate.pinCode) return true;
+
       return current.outletId !== candidate.outletId
         || current.fullName !== candidate.fullName
         || current.username !== candidate.username
@@ -1615,6 +1647,7 @@ export default function App() {
               currentUser={currentUser}
               users={users}
               onUpdateUsers={handleUpdateUsers}
+              onCreateUser={handleCreateUser}
               rolesPermissions={rolesPermissions}
               onUpdateRolesPermissions={setRolesPermissions}
               generalSettings={generalSettings}
