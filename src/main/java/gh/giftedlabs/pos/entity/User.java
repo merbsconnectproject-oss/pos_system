@@ -121,6 +121,14 @@ public class User {
         return id;
     }
 
+    /**
+     * Renaming is permitted — people marry, and a username on a payslip is not
+     * an identity. The id is what every other row references.
+     */
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
     public String getUsername() {
         return username;
     }
@@ -230,6 +238,11 @@ public class User {
 
     public Set<UUID> getOutletIds() {
         return outletIds;
+    }
+
+    /** FR-OUT-05: removing an assignment takes the branch's records with it. */
+    public void unassignOutlet(UUID outletId) {
+        outletIds.remove(outletId);
     }
 
     public void assignOutlet(UUID outletId) {

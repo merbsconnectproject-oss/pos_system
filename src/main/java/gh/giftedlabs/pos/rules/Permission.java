@@ -172,6 +172,25 @@ public enum Permission {
                 .findFirst();
     }
 
+    /**
+     * True for a code reserved for a later stage — {@link #STOCK_TRANSFER}
+     * (Stage 3) and {@link #CUSTOMER_CREDIT} (Stage 2).
+     *
+     * <p><strong>Decision, 2026-09-14:</strong> the catalogue keeps all 33.
+     * The PRD documents 31, and the two extras exist in {@code permissions.ts}.
+     * Removing them would mean amending the frozen contract and its vectors
+     * now, and putting them back for Stage 2 — while keeping them costs
+     * nothing, because no endpoint checks a code whose feature does not exist.
+     * They are flagged instead, so the permission matrix can show them as not
+     * yet active rather than as rights somebody has been given.
+     *
+     * <p>To reverse: delete the two constants, drop them from
+     * {@code permissions.ts}, and regenerate the contract vectors.
+     */
+    public boolean isFutureStage() {
+        return this == STOCK_TRANSFER || this == CUSTOMER_CREDIT;
+    }
+
     public String code() {
         return code;
     }
