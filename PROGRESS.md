@@ -1,6 +1,6 @@
 # Progress
 
-**Updated** 2026-09-14 · **Tests** 156 green · **DB** connected to `pos_system`, V1–V4 applied
+**Updated** 2026-09-14 · **Tests** 214 green · **DB** connected to `pos_system`, V1–V9 applied
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (189 items, dual checkbox).
@@ -11,27 +11,27 @@ Updated after every completed feature. Detail lives in
 
 | | Features | Done | In progress | Not started |
 |---|---:|---:|---:|---:|
-| Backend | 18 | 4 | 0 | 14 |
+| Backend | 18 | 8 | 1 | 9 |
 
 ```
 A ██████████  Auth & session     100%   FR-AUTH-05's shift branch waits on J to set the flag
 B ██████████  Outlets            100%   reads scoped by assignment; writes need settings.general
-C ████████░░  Product catalogue   80%   FR-PROD-07 and -10 wait on F and on SKU blocks
-D █████████░  Units & conversions  90%   FR-UOM-07 waits on F for something to check against
-E ░░░░░░░░░░  Pricing              0%
-F ░░░░░░░░░░  Inventory            0%
-G ░░░░░░░░░░  Point of sale        0%
-H ░░░░░░░░░░  Payments             0%
+C █████████░  Product catalogue   90%   FR-PROD-10 bulk import needs SKU blocks
+D █████████░  Units & conversions  90%   FR-UOM-07 lock-once-stock-exists still open
+E ███░░░░░░░  Pricing             30%   three prices and history land with C; overrides open
+F █████████░  Inventory           90%   FR-INV-06 approval gate waits on P's thresholds
+G █████████░  Point of sale       90%   discount ceiling waits on P; gates 3 and 4 pass
+H █████████░  Payments            90%   denomination shortcuts are frontend-only
 I ░░░░░░░░░░  Receipts & printing  0%
 J ░░░░░░░░░░  Shifts & cash        0%
-K ░░░░░░░░░░  Suppliers & receipt  0%
+K ████████░░  Suppliers & receipt  80%   purchase history per product still to query
 L ░░░░░░░░░░  Customers            0%
 M ░░░░░░░░░░  Users & permissions  0%
-N ░░░░░░░░░░  Audit                0%
+N █████████░  Audit               90%   every built action logs; read endpoint and view live
 O ░░░░░░░░░░  Reports & dashboard  0%
 P ░░░░░░░░░░  Settings             0%
 Q ██████████  Connectivity        n/a   local-first removed the offline queue
-R █████░░░░░  Cross-cutting       50%   auth hashing, rate limiting, config, audit log
+R ███████░░░  Cross-cutting       70%   hashing, rate limiting, audit, idempotency, row locks
 ```
 
 ---
@@ -91,19 +91,20 @@ normalised; the username/email split is not.
 
 ## Next up
 
-1. **F · Inventory** — `stock_level` and `inventory_movement`, with the
-   weighted-average cost of BR-4. Four items across C and D are waiting on
-   it: FR-PROD-07 (stock on search results), FR-UOM-07 (lock a conversion
-   factor once stock exists), cost history, and goods receipt. It is also
-   what makes `ProductView` able to carry the per-outlet maps the frontend's
-   `types.ts` expects.
-2. **E · Pricing** — per-outlet overrides on top of the price history that
-   C already records.
-3. **FR-PROD-10 · bulk import** — the endpoint reuses the frontend's
-   validation rules, but needs SKU blocks first: `generateSku` counts rows,
-   which is right for hand entry and wrong for two importers running at
-   once. Allocate a block the way BR-6 does for receipts.
-4. **M · Users & permissions** — blocked on the 31-vs-33 decision below.
+1. **J · Shifts & cash** — the last thing between here and a day's trading
+   that closes. Cash movements, opening float, blind count and variance
+   (BR-14). It also unblocks FR-AUTH-05: `SessionGuardFilter` reads an
+   `OPEN_SHIFT` flag that nothing ever sets to true, so the idle-lock branch
+   is unreachable until J sets it.
+2. **M · Users & permissions** — the only screen where staff are still
+   invented by the browser, and the one that makes the permission checks
+   everywhere else mean something. Blocked on the 31-vs-33 decision below.
+3. **L · Customers** — small, and the POS already attaches one to a sale.
+4. **P · Settings** — carries two gates other features are waiting on: the
+   adjustment approval threshold (FR-INV-06) and the discount ceiling
+   (FR-POS-10). Both are currently unenforced on either side.
+5. **O · Reports** — the dashboard computes its own figures from loaded
+   lists today, which is fine at one outlet and wrong at two.
 
 ---
 
