@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type FormEvent } from 'react';
+import { useCallback, useState, useEffect, useRef, type FormEvent } from 'react';
 import { AlertTriangle, ArrowLeft, Home, LockKeyhole, RotateCcw, ServerCrash, ShieldCheck, WifiOff } from 'lucide-react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
@@ -28,7 +28,6 @@ import { ReportsView } from './components/ReportsView';
 import { AuthView } from './components/AuthView';
 import {
   OUTLETS,
-  INITIAL_PRODUCTS,
   INITIAL_CUSTOMERS,
   INITIAL_SUPPLIERS,
   INITIAL_SALES,
@@ -135,33 +134,55 @@ export default function App() {
         return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
   }, []);
 
+  /**
+   * Everything the app needs before a dashboard can be truthful.
+   *
+   * Used by both ways in — resuming an existing session on load, and signing
+   * in — because they need exactly the same data. Only the mount path used to
+   * fetch, so signing in left the seeded lists in place and the dashboard
+   * showed mock figures until the next reload.
+   *
+   * The user is set last, on purpose: `!currentUser` is what gates the whole
+   * app, so setting it before the data arrives renders a dashboard against
+   * whatever state happens to be there.
+   */
+  const loadWorkspace = useCallback(async (session: AuthSession) => {
+    // Settled, not `all`: a catalogue that fails to load is a poorer screen,
+    // not a reason to throw away a valid session and send the user back to
+    // sign-in. Each result is applied on its own merits.
+    const [branches, catalogue] = await Promise.allSettled([outletsApi.list(), productsApi.list()]);
+
+    const outletList = branches.status === 'fulfilled' && branches.value.length > 0
+      ? branches.value
+      : OUTLETS;
+    if (branches.status === 'fulfilled' && branches.value.length > 0) setOutlets(branches.value);
+
+    // An empty catalogue is a legitimate answer — a new installation has none.
+    if (catalogue.status === 'fulfilled') setProducts(catalogue.value);
+
+    setCurrentOutletId(localOutletId(session, outletList));
+    setCurrentUser(accountFromSession(session, outletList));
+  }, []);
+
   useEffect(() => {
     let active = true;
-    // Branches are fetched with the session rather than after it: every screen
-    // reads `outlets`, and rendering one against the seeded list first would
-    // show the wrong branch for a frame and scope the dashboard to it.
-    Promise.all([authApi.current(), outletsApi.list(), productsApi.list()])
-      .then(([session, branches, catalogue]) => {
-        if (!active) return;
-        if (branches.length > 0) setOutlets(branches);
-        // Empty is a legitimate answer — a new installation has no catalogue
-        // yet — so the seeded list is replaced either way. Falling back to
-        // INITIAL_PRODUCTS here is what made a saved product appear to vanish.
-        setProducts(catalogue);
-        setCurrentUser(accountFromSession(session, branches));
-        setCurrentOutletId(localOutletId(session, branches));
-      })
+    authApi.current()
+      .then((session) => { if (active) return loadWorkspace(session); })
       .catch((failure) => {
+        // 401 is the ordinary answer for a browser that is not signed in.
         if (active && !(failure instanceof AuthApiError && failure.status === 401)) {
           setAppErrorReference(`AUTH-${Date.now().toString().slice(-6)}`);
         }
       })
       .finally(() => { if (active) setAuthLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [loadWorkspace]);
 
   // Core entities state
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  // Deliberately empty, not INITIAL_PRODUCTS: seeding state with mock data
+  // makes "not loaded yet" indistinguishable from "this is your catalogue",
+  // which is how a stale dashboard survived a sign-in unnoticed.
+  const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>(INITIAL_CUSTOMERS);
   const [suppliers, setSuppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
   const [sales, setSales] = useState<CompletedSale[]>(INITIAL_SALES);
@@ -904,10 +925,12 @@ export default function App() {
   };
 
   const handleAuthenticated = (session: AuthSession) => {
-    setCurrentOutletId(localOutletId(session, outlets));
-    setCurrentUser(accountFromSession(session, outlets));
-    setAuthLoading(false);
+    // Hold the "Starting secure session" screen until the workspace is loaded.
+    // Setting the user first would drop straight onto a dashboard built from
+    // whatever was in state, which is precisely the stale-until-refresh bug.
+    setAuthLoading(true);
     setActiveTab('dashboard');
+    void loadWorkspace(session).finally(() => setAuthLoading(false));
   };
 
   const handleLockSession = (reason: 'manual' | 'expired' = 'manual') => {
