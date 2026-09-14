@@ -53,12 +53,12 @@ non-deferred item in its section is complete, including its non-functional items
 | M · Users, roles & permissions | 12 | 10 done, 1 partial, 1 open | 10 done, 2 open |
 | N · Audit | 6 | 2 done, 2 partial, 2 open | 4 done, 1 partial, 1 open |
 | O · Reports & dashboard | 10 | 6 done, 2 partial, 1 open, 1 deferred | 9 open, 1 deferred |
-| P · Settings | 12 | 8 done, 4 partial | 12 open |
+| P · Settings | 12 | 8 done, 4 partial | 5 done, 2 partial, 4 open, 1 n/a |
 | Q · Connectivity & resilience | 10 | 2 partial, 7 open, 1 deferred | 9 open, 1 deferred |
 | R · Cross-cutting non-functional | 22 | 4 done, 3 partial, 15 open | 3 done, 3 partial, 16 open |
 
-**228 items · 88 complete · frontend 134 done · backend 106 done, 12 partial,
-10 not applicable · contract frozen and machine-checked (`npm run check`)**
+**228 items · 94 complete · frontend 134 done · backend 111 done, 14 partial,
+11 not applicable · contract frozen and machine-checked (`npm run check`)**
 
 > The table above is generated from the boxes below, so the two cannot drift.
 > Read it with one caveat: many items have no backend half — a scanner that
@@ -79,7 +79,8 @@ non-deferred item in its section is complete, including its non-functional items
 | 🟨 | E Pricing | the three prices and history; per-outlet overrides open |
 | ✅ | J Shifts & cash | open, cash movements, blind close, variance — release gate 9 passes |
 | ✅ | M Users, roles & permissions | accounts, role baselines, per-user grants — BR-16 holds on every path |
-| ⬜ | I Receipts · L Customers · O Reports · P Settings | not started |
+| ✅ | P Settings | the thresholds are configuration now, and the rules read them |
+| ⬜ | I Receipts · L Customers · O Reports | not started |
 | — | Q Connectivity | n/a — local-first removed the offline queue |
 
 **Release gates** — 1 ⬜ · 2 ⬜ (needs the printer) · **3 ✅** same payment twice records
@@ -88,13 +89,19 @@ once · **4 ✅** two terminals cannot sell the same last unit.
 **Measured, not assumed:** a five-line sale commits in **249 ms** against a real
 Postgres — NFR-2 allows 1000.
 
-**Still mock in the app:** customers, users, roles, settings, shift records, and the
-Stage 2 modules. Everything else reads and writes the API.
+**Still mock in the app:** customers, and the Stage 2 modules (expenses, accounting).
+Everything else reads and writes the API.
 
-**Waiting on a decision from you:** 31 vs 33 permission codes (blocks M), the thermal
-printer (blocks I and gate 2). Two rules are unenforced on *both* sides because the
-settings holding them do not exist yet — the adjustment approval threshold
-(FR-INV-06) and the discount ceiling (FR-POS-10); both land with P.
+**Waiting on a decision from you:** the thermal printer — it blocks I and release
+gate 2, and there is no way to choose it from here.
+
+The three rules that were unenforced for want of a setting are now enforced: the
+adjustment approval threshold (FR-INV-06), the discount ceiling (FR-POS-10) and the
+cash variance threshold (FR-CASH-06) all read the value the settings screen saves.
+
+The 31-vs-33 permission decision was taken rather than left open: all 33 are served,
+with `stock.transfer` and `customer.credit` flagged as not yet active. The reasoning
+and how to reverse it are on `Permission.isFutureStage()`.
 
 ---
 
@@ -410,20 +417,20 @@ held sales, which live only in the browser.
 ## P · Settings — `FR-SET`
 
 ### Functional
-- [x][ ] Business profile: legal name, trading name, contact details — FR-SET-01 · `K-02`
-- [~][ ] Logo upload and persistence — FR-SET-01
-- [x][ ] Per-outlet settings: name, address, phone, receipt footer, reorder defaults, receipt prefix — FR-SET-02 · `K-03` `K-04`
-- [x][ ] Accent colour from a preset palette or hex, with live preview; orange default; no blue — FR-SET-03 · `K-06`
-- [x][ ] Accent applied as a CSS custom property; semantic colours fixed and unaffected — FR-SET-04
-- [~][ ] Terminal settings: printer, paper width, test print, auto-print — FR-SET-05 · `K-07`
-- [x][ ] Operational thresholds: idle lock, adjustment approval, cash variance, discount ceilings — FR-SET-06 · `K-08`
-- [~][ ] Backup status, last successful backup, restore history — FR-SET-07 · `K-09`
+- [x][x] Business profile: legal name, trading name, contact details — FR-SET-01 · `K-02`
+- [~][~] Logo upload and persistence — FR-SET-01 *(the URL is stored and served; there is no upload endpoint, so the picture has to already live somewhere)*
+- [x][x] Per-outlet settings: name, address, phone, receipt footer, reorder defaults, receipt prefix — FR-SET-02 · `K-03` `K-04` *(the reorder default applies when a product first gets a level at that branch, and never overwrites one somebody chose)*
+- [x][x] Accent colour from a preset palette or hex, with live preview; orange default; no blue — FR-SET-03 · `K-06` *(validated as `#RRGGBB` by the schema and the request)*
+- [x][·] Accent applied as a CSS custom property; semantic colours fixed and unaffected — FR-SET-04 *(how a colour is applied is the browser's business; the server stores which colour)*
+- [~][~] Terminal settings: printer, paper width, test print, auto-print — FR-SET-05 · `K-07` *(paper width and auto-print are stored; the printer itself waits on the hardware — see I)*
+- [x][x] Operational thresholds: idle lock, adjustment approval, cash variance, discount ceilings — FR-SET-06 · `K-08` *(and **read by the rules**: FR-CASH-06, FR-INV-06, FR-POS-10 and FR-AUTH-05 each take their number from here)*
+- [~][ ] Backup status, last successful backup, restore history — FR-SET-07 · `K-09` *(nothing takes a backup yet, so there is no status to report — left open rather than shown as healthy)*
 - [~][ ] Data export of all business data on request — FR-SET-08 · `K-10`
 
 ### Non-functional
 - [x][ ] Changing the accent updates every accent surface, with no blue anywhere — release gate 11 *(621 literals migrated; asserted)*
 - [x][ ] The accent is a single token; no hard-coded accent hex in any component — NFR-15
-- [x][ ] Settings sections are absent without their permission — `L-09`
+- [x][x] Settings sections are absent without their permission — `L-09` *(and the server refuses the write regardless of what the screen draws)*
 
 ---
 
