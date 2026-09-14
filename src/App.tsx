@@ -30,8 +30,6 @@ import {
   OUTLETS,
   INITIAL_CUSTOMERS,
   INITIAL_AUDIT_LOGS,
-  INITIAL_USERS,
-  INITIAL_ROLES_PERMISSIONS,
   INITIAL_SETTINGS,
   INITIAL_EXPENSES,
   INITIAL_INSTALLMENT_PLANS,
@@ -68,6 +66,7 @@ import { stockApi, withStock, type MovementType } from './stockApi';
 import { suppliersApi, goodsReceiptApi } from './suppliersApi';
 import { salesApi, toCompletedSale, cartFromWire } from './salesApi';
 import { shiftsApi, toShiftInfo, toShiftRecord, type CashMovementKind } from './shiftsApi';
+import { usersApi, toRolePermissions } from './usersApi';
 import { terminalsApi } from './salesApi';
 
 /**
@@ -154,11 +153,15 @@ export default function App() {
     // allSettled so one failing list cannot cost the user their session — but
     // a rejection is reported rather than swallowed, because a silent empty
     // list looks exactly like "you have no sales yet".
-    const [branches, catalogue, movementHistory, supplierList, saleHistory, openShift, shiftHistory] =
+    const [branches, catalogue, movementHistory, supplierList, saleHistory, openShift, shiftHistory,
+           roleCatalogue] =
       await Promise.allSettled([
         outletsApi.list(), productsApi.list(), stockApi.movements({ limit: 200 }), suppliersApi.list(),
         salesApi.recent(undefined, undefined, 100), shiftsApi.current(), shiftsApi.recent(undefined, 50),
+        usersApi.catalogue(),
       ]);
+
+
 
     const outletList = branches.status === 'fulfilled' && branches.value.length > 0
       ? branches.value
@@ -204,16 +207,30 @@ export default function App() {
         wire, outletList.find((outlet) => outlet.id === wire.outletId)?.name || '')));
     }
 
+    if (roleCatalogue.status === 'fulfilled') {
+      setRolesPermissions(toRolePermissions(roleCatalogue.value.roles));
+    }
+
     const loaded: Record<string, PromiseSettledResult<unknown>> = {
       branches, catalogue, movements: movementHistory, suppliers: supplierList, sales: saleHistory,
-      shift: openShift, shiftHistory,
+      shift: openShift, shiftHistory, roles: roleCatalogue,
     };
     Object.entries(loaded).forEach(([name, result]) => {
       if (result.status === 'rejected') console.error(`[workspace] ${name} failed to load`, result.reason);
     });
 
+    // FR-USER: staff are only readable with user.manage, so a cashier gets a
+    // 403 here. Asked for on its own and allowed to fail — a cashier has no
+    // staff screen, and one refusal should not cost them the rest of the
+    // workspace.
+    const account = accountFromSession(session, outletList);
+    if (account.effectivePermissions?.includes('user.manage')) {
+      const staff = await usersApi.list(true).catch(() => []);
+      if (staff.length > 0) setUsers(staff);
+    }
+
     setCurrentOutletId(localOutletId(session, outletList));
-    setCurrentUser(accountFromSession(session, outletList));
+    setCurrentUser(account);
   }, []);
 
   useEffect(() => {
@@ -256,8 +273,12 @@ export default function App() {
   const [returnsExchanges, setReturnsExchanges] = useState<ReturnExchangeRecord[]>(INITIAL_RETURNS_EXCHANGES);
 
   // Settings, Users & RBAC state
-  const [users, setUsers] = useState<UserAccount[]>(INITIAL_USERS);
-  const [rolesPermissions, setRolesPermissions] = useState<RolePermissions[]>(INITIAL_ROLES_PERMISSIONS);
+  // FR-USER-01: staff are the server's. A seeded list invents colleagues
+  // who can be assigned to branches and never sign in.
+  const [users, setUsers] = useState<UserAccount[]>([]);
+  // `J-06`: the role baselines come from the same enum the server
+  // authorises with, so the matrix cannot describe rights it does not grant.
+  const [rolesPermissions, setRolesPermissions] = useState<RolePermissions[]>([]);
   const [generalSettings, setGeneralSettings] = useState<GeneralSettings>(INITIAL_SETTINGS);
 
   // Shift & Cash Drawer state (PRD BR-14)
@@ -986,6 +1007,40 @@ export default function App() {
     setSessionLockReason((current) => current ?? 'expired');
   }));
 
+  /**
+   * FR-USER-04: the staff screen reassigns people between branches.
+   *
+   * It hands back the whole list, so the change is found by diffing on the one
+   * field it edits — outlet assignment. Diffing a whole record would mean
+   * inferring intent from absence, which is how a dropped field silently
+   * clears something; one named field is a comparison, not a guess.
+   *
+   * The list is re-read afterwards rather than merged, because the server
+   * decides what the assignment actually became.
+   */
+  const handleUpdateUsers = (next: UserAccount[]) => {
+    const reassigned = next.filter((candidate) => {
+      const current = users.find((user) => user.id === candidate.id);
+      return current !== undefined && current.outletId !== candidate.outletId;
+    });
+    if (reassigned.length === 0) return;
+
+    const branchIds = outlets.filter((outlet) => outlet.id !== 'all-outlets').map((outlet) => outlet.id);
+
+    void Promise.all(reassigned.map((user) => usersApi.update(user.id, user, branchIds)))
+      .then(() => usersApi.list(true))
+      .then(setUsers)
+      .catch(reportUserFailure);
+  };
+
+  const reportUserFailure = (failure: unknown) => {
+    if (failure instanceof AuthApiError && failure.status !== 401 && failure.status !== 423) {
+      alert(failure.message);
+      return;
+    }
+    if (!(failure instanceof AuthApiError)) setAppErrorReference(`USR-${Date.now().toString().slice(-6)}`);
+  };
+
   const handleUpdateUserPassword = (userId: string, newPassword: string) => {
     setUsers((prev) =>
       prev.map((u) =>
@@ -1448,7 +1503,7 @@ export default function App() {
               onUpdateOutlet={handleUpdateOutlet}
               currentUser={currentUser}
               users={users}
-              onUpdateUsers={setUsers}
+              onUpdateUsers={handleUpdateUsers}
               rolesPermissions={rolesPermissions}
               onUpdateRolesPermissions={setRolesPermissions}
               generalSettings={generalSettings}
