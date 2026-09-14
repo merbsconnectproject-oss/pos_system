@@ -1,6 +1,6 @@
 # Progress
 
-**Updated** 2026-09-14 · **Tests** 307 green · **DB** connected to `pos_system`, V1–V13 applied
+**Updated** 2026-09-14 · **Tests** 330 green · **DB** connected to `pos_system`, V1–V14 applied
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (189 items, dual checkbox).
@@ -11,14 +11,14 @@ Updated after every completed feature. Detail lives in
 
 | | Features | Done | In progress | Not started |
 |---|---:|---:|---:|---:|
-| Backend | 18 | 14 | 3 | 1 |
+| Backend | 18 | 15 | 2 | 1 |
 
 ```
 A ██████████  Auth & session     100%   FR-AUTH-05 reachable since J; idle lock is a setting since P
 B ██████████  Outlets            100%   reads scoped by assignment; writes need settings.general
 C █████████░  Product catalogue   90%   FR-PROD-10 bulk import needs SKU blocks
 D █████████░  Units & conversions  90%   FR-UOM-07 lock-once-stock-exists still open
-E ███░░░░░░░  Pricing             30%   three prices and history land with C; overrides open
+E ██████████  Pricing            100%  branch overrides, customer levels; cost no longer leaks
 F ██████████  Inventory          100%   FR-INV-06 enforced against P's threshold
 G ██████████  Point of sale      100%   discount ceiling enforced; gates 3 and 4 pass
 H █████████░  Payments            90%   denomination shortcuts are frontend-only
