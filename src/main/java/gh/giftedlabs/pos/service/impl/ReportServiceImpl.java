@@ -187,6 +187,27 @@ public class ReportServiceImpl implements ReportService {
             // Payments, not sales: one sale split across cash and mobile money
             // is two rows here and one row everywhere else, which is the point
             // of a payment-method breakdown.
+            // FR-CUST-04: by the kind of customer, which is what an owner asks
+            // — "how much of this is trade?" — rather than by each person.
+            case CUSTOMER_TYPE -> saleRows("""
+                    select coalesce(c.type, 'walk-in') as key,
+                           coalesce(c.type, 'walk-in') as name,
+                           null as secondary,
+                           count(*) as quantity,
+                           sum(s.total) as revenue,
+                           coalesce(sum(li.cost), 0) as cost
+                      from sale s
+                      left join customer c on c.id = s.customer_id
+                      left join lateral (
+                           select sum(round(i.frozen_cost_price * i.quantity_base * 100)) as cost
+                             from sale_item i where i.sale_id = s.id
+                      ) li on true
+                     %s %s
+                     group by 1, 2
+                     order by revenue desc
+                     limit :limit
+                    """.formatted(SALE_SCOPE, COMPLETED), filter, mayViewProfit, limit);
+
             case PAYMENT -> paymentRows(filter, limit);
 
             case MOVEMENT -> movementRows(filter, limit);
@@ -232,6 +253,65 @@ public class ReportServiceImpl implements ReportService {
                  limit :limit
                 """;
         return lineRows(sql, filter, mayViewProfit, limit);
+    }
+
+    // --- FR-RPT-04 · the dashboard chart -----------------------------------
+
+    /**
+     * FR-RPT-04: takings and purchases per bucket.
+     *
+     * <p>Built from a generated series of dates rather than from the sales, so
+     * a day with no trade is a zero on the chart instead of a missing point.
+     * A line drawn only through the busy days is the wrong shape.
+     *
+     * <p>Purchases are goods received valued at what was paid — the other side
+     * of the same chart, and the reason an owner looks at it.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<ReportView.SeriesPoint> series(Bucket bucket, ReportFilter filter) {
+        String step = switch (bucket) {
+            case DAY -> "day";
+            case WEEK -> "week";
+            case MONTH -> "month";
+        };
+        String label = bucket == Bucket.MONTH ? "YYYY-MM" : "YYYY-MM-DD";
+
+        String sql = """
+                with bounds as (
+                    select date_trunc('%1$s', coalesce(cast(:from as timestamptz), now() - interval '30 days')) as lo,
+                           date_trunc('%1$s', coalesce(cast(:to   as timestamptz), now()))                      as hi
+                ),
+                buckets as (
+                    select generate_series(lo, hi, ('1 %1$s')::interval) as bucket from bounds
+                )
+                select to_char(b.bucket, '%2$s') as label,
+                       coalesce(sold.revenue, 0)   as sales,
+                       coalesce(sold.receipts, 0)  as receipts,
+                       coalesce(bought.value, 0)   as purchases
+                  from buckets b
+                  left join lateral (
+                       select sum(s.total) as revenue, count(*) as receipts
+                         from sale s
+                        where s.status = 'COMPLETED'
+                          and date_trunc('%1$s', s.created_at) = b.bucket
+                          and (cast(:outletId as uuid) is null or s.outlet_id = cast(:outletId as uuid))
+                  ) sold on true
+                  left join lateral (
+                       select sum(round(abs(m.quantity_delta) * coalesce(m.unit_cost, 0) * 100)) as value
+                         from inventory_movement m
+                        where m.type = 'RECEIPT'
+                          and date_trunc('%1$s', m.created_at) = b.bucket
+                          and (cast(:outletId as uuid) is null or m.outlet_id = cast(:outletId as uuid))
+                  ) bought on true
+                 order by b.bucket
+                """.formatted(step, label);
+
+        return jdbc.query(sql, parameters(filter), (row, index) -> new ReportView.SeriesPoint(
+                row.getString("label"),
+                major(row.getLong("sales")),
+                major(row.getLong("purchases")),
+                row.getLong("receipts")));
     }
 
     // --- FR-RPT-04 · stock -------------------------------------------------

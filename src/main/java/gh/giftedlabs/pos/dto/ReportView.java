@@ -79,6 +79,20 @@ public final class ReportView {
             String reason) {
     }
 
+    /**
+     * A day (or month) on a chart — FR-RPT-04.
+     *
+     * <p>Sales and purchases on the same bucket, because the dashboard chart
+     * draws them against each other and two separate series would have to be
+     * lined up by whoever read them.
+     */
+    public record SeriesPoint(
+            String bucket,
+            BigDecimal sales,
+            BigDecimal purchases,
+            long receipts) {
+    }
+
     /** FR-RPT-01 · FR-RPT-02: one card per outlet, plus the combined line. */
     public record DashboardOutlet(
             UUID outletId,

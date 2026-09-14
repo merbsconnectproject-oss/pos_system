@@ -24,7 +24,7 @@ public interface ReportService {
     ReportView.Summary summary(ReportFilter filter, boolean mayViewProfit);
 
     /** How a grouped report is grouped — FR-RPT-04. */
-    enum Grouping { PRODUCT, CATEGORY, CASHIER, CUSTOMER, PAYMENT, MOVEMENT }
+    enum Grouping { PRODUCT, CATEGORY, CASHIER, CUSTOMER, CUSTOMER_TYPE, PAYMENT, MOVEMENT }
 
     List<ReportView.Row> breakdown(Grouping grouping, ReportFilter filter, boolean mayViewProfit, int limit);
 
@@ -32,6 +32,17 @@ public interface ReportService {
     enum Ranking { BEST, SLOW }
 
     List<ReportView.Row> ranking(Ranking ranking, ReportFilter filter, boolean mayViewProfit, int limit);
+
+    /**
+     * FR-RPT-04: takings and purchases over time, for the dashboard chart.
+     *
+     * <p>Every bucket in the range is returned, including the ones with no
+     * trade. A chart that omits the quiet days draws a line that is not the
+     * shape of the business.
+     */
+    enum Bucket { DAY, WEEK, MONTH }
+
+    List<ReportView.SeriesPoint> series(Bucket bucket, ReportFilter filter);
 
     /** FR-RPT-04 stock on hand, inventory valuation, low stock. */
     enum StockView { ON_HAND, VALUATION, LOW }

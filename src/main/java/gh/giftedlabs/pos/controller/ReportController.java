@@ -92,6 +92,23 @@ public class ReportController {
                 mayViewProfit(authentication), Math.clamp(limit, 1, 200));
     }
 
+    /**
+     * FR-RPT-04: the dashboard chart's series.
+     *
+     * <p>Open to any signed-in user, like the dashboard it draws on: takings
+     * and purchases over time are what a manager's screen is for, and it
+     * carries no cost figure to guard.
+     */
+    @GetMapping("/series")
+    @PreAuthorize("isAuthenticated()")
+    public List<ReportView.SeriesPoint> series(@RequestParam(defaultValue = "DAY") String bucket,
+                                               @RequestParam(required = false) Instant from,
+                                               @RequestParam(required = false) Instant to,
+                                               @RequestParam(required = false) UUID outletId) {
+        return reports.series(parse(ReportService.Bucket.class, bucket, "bucket"),
+                ReportFilter.of(from, to, outletId));
+    }
+
     /** FR-RPT-04 stock on hand, inventory valuation, low stock. */
     @GetMapping("/stock")
     @PreAuthorize("hasAuthority('" + Permission.Codes.REPORT_VIEW + "')")

@@ -263,6 +263,95 @@ class ReportControllerTest {
     }
 
     @Nested
+    @DisplayName("the dashboard chart's series")
+    class Series {
+
+        @Test
+        @DisplayName("returns every bucket in the range, including the quiet days")
+        void quietDaysAreZeroNotMissing() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Charted " + run, "10.00");
+            sell(session, productId, "1", "40.00");
+
+            Instant to = Instant.now();
+            Instant from = to.minus(6, ChronoUnit.DAYS);
+
+            MvcResult result = mvc.perform(session.authorise(get("/api/reports/series")
+                            .param("bucket", "DAY")
+                            .param("from", from.toString()).param("to", to.toString())
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isOk()).andReturn();
+
+            var body = json.readTree(result.getResponse().getContentAsString());
+            // Seven days asked for, seven points back. A chart drawn only
+            // through the busy days is the wrong shape.
+            org.junit.jupiter.api.Assertions.assertEquals(7, body.size(), body.toString());
+
+            double sales = 0;
+            for (var point : body) sales += point.get("sales").asDouble();
+            org.junit.jupiter.api.Assertions.assertEquals(40.00, sales, 0.001, body.toString());
+        }
+
+        @Test
+        @DisplayName("counts goods received as purchases, against the takings")
+        void purchasesAreTheOtherSide() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            // 20 received at 10.00 is GH200.00 of purchases.
+            String productId = stockedProduct(session, "Delivered " + run, "10.00");
+            sell(session, productId, "1", "40.00");
+
+            MvcResult result = mvc.perform(session.authorise(get("/api/reports/series")
+                            .param("bucket", "DAY")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isOk()).andReturn();
+
+            double purchases = 0;
+            for (var point : json.readTree(result.getResponse().getContentAsString())) {
+                purchases += point.get("purchases").asDouble();
+            }
+            org.junit.jupiter.api.Assertions.assertEquals(200.00, purchases, 0.001);
+        }
+
+        @Test
+        @DisplayName("splits takings by the kind of customer — FR-CUST-04")
+        void byCustomerType() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Split " + run, "10.00");
+
+            Map<String, Object> customerBody = new LinkedHashMap<>();
+            customerBody.put("name", "Sparks " + run);
+            customerBody.put("phone", "059" + Math.abs(run.hashCode() % 1000000));
+            customerBody.put("type", "electrician");
+            MvcResult created = mvc.perform(session.authorise(post("/api/customers"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(customerBody)))
+                    .andExpect(status().isCreated()).andReturn();
+            String customerId = json.readTree(created.getResponse().getContentAsString()).get("id").asText();
+
+            Map<String, Object> attributed = saleBody(productId, "1", "40.00");
+            attributed.put("customerId", customerId);
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(attributed)))
+                    .andExpect(status().isCreated());
+
+            // And one walk-in, which is a row of its own, not a gap.
+            sell(session, productId, "1", "60.00");
+
+            MvcResult result = mvc.perform(session.authorise(get("/api/reports/breakdown")
+                            .param("by", "customer_type").param("outletId", outletId.toString())))
+                    .andExpect(status().isOk()).andReturn();
+
+            String body = result.getResponse().getContentAsString();
+            org.junit.jupiter.api.Assertions.assertTrue(body.contains("electrician"), body);
+            org.junit.jupiter.api.Assertions.assertTrue(body.contains("walk-in"), body);
+        }
+    }
+
+    @Nested
     @DisplayName("who sees cost — FR-RPT-05")
     class Profit {
 
