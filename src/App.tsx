@@ -68,6 +68,7 @@ import { DEFAULT_ACCENT, applyAccent } from './accent';
 import { authApi, AuthApiError, onSessionSignal, type AuthSession } from './authApi';
 import { outletsApi } from './outletsApi';
 import { auditApi } from './auditApi';
+import { productsApi } from './productsApi';
 
 /**
  * Outlets now come from the API, so a session's outlet id *is* the app's outlet
@@ -139,10 +140,14 @@ export default function App() {
     // Branches are fetched with the session rather than after it: every screen
     // reads `outlets`, and rendering one against the seeded list first would
     // show the wrong branch for a frame and scope the dashboard to it.
-    Promise.all([authApi.current(), outletsApi.list()])
-      .then(([session, branches]) => {
+    Promise.all([authApi.current(), outletsApi.list(), productsApi.list()])
+      .then(([session, branches, catalogue]) => {
         if (!active) return;
         if (branches.length > 0) setOutlets(branches);
+        // Empty is a legitimate answer — a new installation has no catalogue
+        // yet — so the seeded list is replaced either way. Falling back to
+        // INITIAL_PRODUCTS here is what made a saved product appear to vanish.
+        setProducts(catalogue);
         setCurrentUser(accountFromSession(session, branches));
         setCurrentOutletId(localOutletId(session, branches));
       })
@@ -696,13 +701,50 @@ export default function App() {
 
   // PRD BR-17: Toggle Product Active/Inactive (No destructive deletion)
   const handleToggleActive = (productId: string) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, active: !p.active } : p))
-    );
+    const current = products.find((p) => p.id === productId);
+    if (!current) return;
+    void productsApi.setActive(productId, !current.active)
+      .then((saved) => setProducts((prev) => prev.map((p) => (p.id === productId ? merged(p, saved) : p))))
+      .catch(reportProductFailure);
   };
 
+  /**
+   * FR-PROD-01: the catalogue is the server's.
+   *
+   * State follows the response, so a generated SKU or a trimmed name shows the
+   * stored value, and a rejection — duplicate SKU, duplicate barcode, no
+   * permission — leaves the list alone instead of showing a product that was
+   * never saved.
+   */
   const handleAddProduct = (newProd: Product) => {
-    setProducts((prev) => [newProd, ...prev]);
+    void productsApi.create(newProd)
+      .then((saved) => setProducts((prev) => [merged(newProd, saved), ...prev]))
+      .catch(reportProductFailure);
+  };
+
+  /**
+   * Carry the per-outlet figures across the round trip.
+   *
+   * Stock, cost and reorder level are F's and the API does not store them yet.
+   * Keeping whatever the form captured means the screen still shows what the
+   * user typed this session, while everything the server does own comes back
+   * from the server. They are lost on reload, which is honest — nothing has
+   * recorded them.
+   */
+  const merged = (local: Product, saved: Product): Product => ({
+    ...saved,
+    costPrice: local.costPrice,
+    stock: local.stock,
+    minStockAlert: local.minStockAlert,
+    salesCount: local.salesCount,
+  });
+
+  const reportProductFailure = (failure: unknown) => {
+    if (failure instanceof AuthApiError && failure.status !== 401 && failure.status !== 423) {
+      alert(failure.message);
+      return;
+    }
+    if (!(failure instanceof AuthApiError)) setAppErrorReference(`PRD-${Date.now().toString().slice(-6)}`);
   };
 
   const handleAddCustomer = (customer: Customer) => {
@@ -740,16 +782,13 @@ export default function App() {
   };
 
   const handleUpdateProduct = (updatedProduct: Product) => {
-    setProducts((prev) =>
-      prev.map((product) => (product.id === updatedProduct.id ? updatedProduct : product))
-    );
-    appendAuditLog({
-      actor: currentUser?.fullName || 'System',
-      action: 'PRODUCT_UPDATED',
-      entity: `${updatedProduct.name} (${updatedProduct.sku})`,
-      outletName: currentOutlet.name,
-      details: 'Product identity, pricing, units, barcode or stock settings were updated.',
-    });
+    // No appendAuditLog here any more: the server records PRODUCT_UPDATED with
+    // the before and after itself, and a second entry written by the browser
+    // would be an unverifiable duplicate of it.
+    void productsApi.update(updatedProduct.id, updatedProduct)
+      .then((saved) => setProducts((prev) =>
+        prev.map((product) => (product.id === saved.id ? merged(updatedProduct, saved) : product))))
+      .catch(reportProductFailure);
   };
 
   const handleStartShift = (openingFloat: number) => {
