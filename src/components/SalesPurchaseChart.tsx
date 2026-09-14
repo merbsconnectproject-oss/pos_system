@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ShoppingCart, TrendingUp, ArrowUpRight, BarChart3 } from 'lucide-react';
+import { ShoppingCart, TrendingUp, ArrowUpRight, ArrowDownRight, BarChart3 } from 'lucide-react';
 import { reportsApi, type SeriesPoint } from '../reportsApi';
 
 interface SalesPurchaseChartProps {
@@ -66,6 +66,18 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = ({ accentCo
     return { maxVal: top, yTicks: [top, step * 3, step * 2, step] };
   }, [points]);
 
+  const summary = useMemo(() => {
+    const sales = points.reduce((sum, point) => sum + Number(point.sales), 0);
+    const purchases = points.reduce((sum, point) => sum + Number(point.purchases), 0);
+    const midpoint = Math.floor(points.length / 2);
+    const previous = points.slice(0, midpoint).reduce((sum, point) => sum + Number(point.sales), 0);
+    const recent = points.slice(midpoint).reduce((sum, point) => sum + Number(point.sales), 0);
+    const change = previous > 0 ? ((recent - previous) / previous) * 100 : null;
+    return { sales, purchases, change };
+  }, [points]);
+
+  const formatCompactMoney = (value: number) => `GH₵ ${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+
   return (
     <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between h-full">
       {/* Chart Header */}
@@ -84,9 +96,11 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = ({ accentCo
           <div>
             <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
               <span>Sales &amp; Procurement Velocity</span>
-              <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
-                <ArrowUpRight className="w-3 h-3" /> +18.4%
-              </span>
+              {summary.change !== null && Number.isFinite(summary.change) && (
+                <span className={`text-[10px] ${summary.change >= 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'} font-bold px-2 py-0.5 rounded-full border flex items-center gap-1`}>
+                  {summary.change >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />} {summary.change >= 0 ? '+' : ''}{summary.change.toFixed(1)}%
+                </span>
+              )}
             </h3>
             <p className="text-[11px] text-slate-400 font-medium">
               Daily revenue generated vs inventory purchased (GH₵ in Thousands)
@@ -125,7 +139,7 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = ({ accentCo
             style={{ backgroundColor: accentColor || 'var(--chart-1, #c55200)' }}
           ></span>
           <span className="text-xs text-slate-500 font-medium">Total POS Sales</span>
-          <span className="text-xs font-black text-slate-900 ml-1 font-mono shrink-0">GH₵ 48.9K</span>
+          <span className="text-xs font-black text-slate-900 ml-1 font-mono shrink-0">{formatCompactMoney(summary.sales)}</span>
         </div>
         <div className="flex min-w-0 items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 shadow-2xs">
           <span
@@ -133,7 +147,7 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = ({ accentCo
             style={{ backgroundColor: 'var(--chart-2, #0f766e)' }}
           ></span>
           <span className="text-xs text-slate-500 font-medium">Goods Received (GRN)</span>
-          <span className="text-xs font-black text-slate-900 ml-1 font-mono shrink-0">GH₵ 24.1K</span>
+          <span className="text-xs font-black text-slate-900 ml-1 font-mono shrink-0">{formatCompactMoney(summary.purchases)}</span>
         </div>
       </div>
 
