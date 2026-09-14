@@ -30,7 +30,7 @@ M ██████████  Users & permissions 100%  BR-16 on every path 
 N █████████░  Audit               90%   every built action logs; read endpoint and view live
 O ░░░░░░░░░░  Reports & dashboard  0%   the dashboard still computes from loaded lists
 P ████████░░  Settings            80%   thresholds live and read by the rules; backup/export open
-Q ██████████  Connectivity        n/a   local-first removed the offline queue
+Q ████░░░░░░  Connectivity        40%   local-first removes the queue; power loss and the owner's push remain
 R ███████░░░  Cross-cutting       70%   hashing, rate limiting, audit, idempotency, row locks
 ```
 
@@ -106,11 +106,47 @@ normalised; the username/email split is not.
 
 | What | Needed from | Blocks |
 |---|---|---|
-| **Consolidator in scope, or separate quote?** | Client | Owner has no combined view until it ships. PRD §1.2 promises it. |
+| **Consolidator in scope, or separate quote?** | Client | Owner has no combined view until it ships. PRD §1.2 promises it. Config and profile are written; no push or ingest code. |
+| **One instance, or one per shop?** | You | The plan says one instance per shop on each counter PC. Everything built so far is a single database holding both outlets — one product list, one customer list, stock tagged per outlet. Two instances means those stop being shared unless something replicates them, which is not built and not quoted. See the note below. |
 | ~~**31 vs 33 permission codes**~~ | *Taken* | Kept all 33 with `stock.transfer` and `customer.credit` flagged `futureStage`. Removing them meant amending the frozen contract and its vectors now and restoring them later; keeping them costs nothing, since no endpoint checks a code whose feature does not exist. Reversal instructions are on `Permission.isFutureStage()`. |
 | **Acceptance criterion 4 is unsatisfiable** | You | One terminal per outlet + per-outlet stock = the two terminals can never contend. Reword to goods-receipt-vs-sale. |
 | **Stage 2 features expected live?** | Client | Installments, returns, expenses are in the frontend but out of Stage 1 |
 | **Thermal printer ordered?** | You | Acceptance criterion 2 cannot close without one |
+
+---
+
+## The topology question
+
+The PRD (§2.2) describes a **cloud-hosted single system, every record tagged to an
+outlet**. The implementation plan settled on **local-first — one instance per shop on
+the counter PC** — which is what makes the till immune to the internet.
+
+Everything built so far is the first shape: one database, `outlet_id` on every row,
+one product list, one customer list, users assigned to outlets, stock per outlet.
+That is deliberate and it is what the requirements ask for — AS-5 (one shared product
+list), AS-6 (shared prices with per-outlet override), FR-CUST-05 (customers shared
+across both outlets), FR-CUST-06 (history across both).
+
+Those requirements and "one instance per shop" cannot both hold without replication
+between the two shops. The only sync in the plan is the outbound snapshot to the
+consolidator, which is explicitly a summary and needs no replication.
+
+So one of two things is true, and it is the client's call:
+
+**A · One system of record, packaged.** The instance lives at the main shop (or in the
+cloud); the second counter runs the same packaged app pointing at it. Everything above
+stays true as built. The main shop never depends on the internet. The second shop does
+— which the PRD already accepts ("long outages stop that outlet", §2.2) and already
+prices as a risk ("full offline quotable separately", §Risks).
+
+**B · One instance per shop.** Matches the packaging plan exactly, and both shops
+trade through any outage. But the product list, the price list and the customer list
+become per-shop copies, and keeping them in step is bidirectional replication — real
+work, not currently quoted, and the source of every hard bug in this class of system.
+
+Recommended: **A**. It is what the requirements describe, it is what is built, and it
+puts the connectivity risk on the one shop the PRD already flagged rather than
+introducing a replication problem to avoid it.
 
 ---
 
