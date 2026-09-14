@@ -41,22 +41,22 @@ non-deferred item in its section is complete, including its non-functional items
 | B · Outlets | 7 | 6 done, 1 deferred | 6 done, 1 deferred |
 | C · Product catalogue | 14 | 8 done, 3 partial, 1 open, 2 deferred | 10 done, 2 deferred, 2 open |
 | D · Units & conversions | 7 | 6 done, 1 open | 6 done, 1 open |
-| E · Pricing | 8 | 4 done, 2 partial, 2 open | 0 |
-| F · Inventory | 12 | 9 done, 2 partial, 1 deferred | 0 |
-| G · Point of sale | 20 | 15 done, 4 partial, 1 deferred | 0 |
-| H · Payments | 9 | 6 done, 2 partial, 1 deferred | 0 |
+| E · Pricing | 8 | 4 done, 2 partial, 2 open | 3 done (via C), 5 open |
+| F · Inventory | 12 | 9 done, 2 partial, 1 deferred | 8 done, 2 partial, 2 deferred |
+| G · Point of sale | 20 | 15 done, 4 partial, 1 deferred | 8 done, 1 partial, 11 frontend-only |
+| H · Payments | 9 | 6 done, 2 partial, 1 deferred | 7 done, 1 frontend-only, 1 deferred |
 | I · Receipts & printing | 10 | 5 done, 4 partial, 1 deferred | 0 |
 | J · Shifts & cash | 9 | 8 done, 1 partial | 0 |
-| K · Suppliers & goods receipt | 10 | 5 done, 2 partial, 3 deferred | 0 |
+| K · Suppliers & goods receipt | 10 | 5 done, 2 partial, 3 deferred | 7 done, 3 deferred |
 | L · Customers | 7 | 5 done, 1 partial, 1 deferred | 0 |
 | M · Users, roles & permissions | 8 | 7 done, 1 partial | 0 |
-| N · Audit | 5 | 1 done, 2 partial, 2 backend-only | 0 |
+| N · Audit | 5 | 1 done, 2 partial, 2 backend-only | 4 done, 1 open |
 | O · Reports & dashboard | 7 | 4 done, 2 partial, 1 deferred | 0 |
 | P · Settings | 8 | 5 done, 3 partial | 0 |
 | Q · Connectivity & resilience | 8 | 0 done, 2 partial, 5 open, 1 deferred | 0 |
 | R · Cross-cutting non-functional | 18 | 6 done, 4 partial, 8 backend | 0 |
 
-**Frontend ≈ 95% of Stage 1 · Backend: A, B, C, D done · E–R not started · Contract frozen and machine-checked (`npm run check`)**
+**Frontend ≈ 95% of Stage 1 · Backend: A B C D F G H K done, N mostly · E J L M O P Q outstanding · Contract frozen and machine-checked (`npm run check`)**
 
 ---
 
@@ -163,22 +163,22 @@ non-deferred item in its section is complete, including its non-functional items
 ## F · Inventory — `FR-INV`
 
 ### Functional
-- [x][ ] Stock held per product per outlet; no global quantity — FR-INV-01 · BR-1
-- [x][ ] Movement types: RECEIPT, SALE, SALE_VOID, ADJUSTMENT_IN/OUT, DAMAGE, LOSS, OPENING — FR-INV-02
-- [x][ ] Every movement records outlet, product, delta, unit cost, reason, note, user, timestamp, source — FR-INV-03 · BR-2
-- [x][ ] Movement history filterable by product, outlet, type, user and date — FR-INV-04 · `E-03`
-- [x][ ] Manual adjustments require a reason code and `stock.adjust` — FR-INV-05 · `E-07`
-- [~][ ] Adjustments above the value threshold require `stock.approve_adjustment` — FR-INV-06 · `E-08` *(threshold configurable; approval gate not wired)*
-- [x][ ] Weighted average cost recalculated per outlet on every receipt — FR-INV-07 · BR-4
-- [x][ ] Low stock flagged at or below reorder level, per outlet — FR-INV-08 · `E-10`
-- [x][ ] Valuation at weighted average cost, per outlet and combined — FR-INV-09 · `E-11`
-- [x][ ] Exceptions view: oversells, large adjustments, write-offs — FR-INV-10 · `E-12`
+- [x][x] Stock held per product per outlet; no global quantity — FR-INV-01 · BR-1
+- [x][x] Movement types: RECEIPT, SALE, SALE_VOID, ADJUSTMENT_IN/OUT, DAMAGE, LOSS, OPENING — FR-INV-02
+- [x][x] Every movement records outlet, product, delta, unit cost, reason, note, user, timestamp, source — FR-INV-03 · BR-2
+- [x][x] Movement history filterable by product, outlet, type, user and date — FR-INV-04 · `E-03`
+- [x][x] Manual adjustments require a reason code and `stock.adjust` — FR-INV-05 · `E-07`
+- [~][ ] Adjustments above the value threshold require `stock.approve_adjustment` — FR-INV-06 · `E-08` *(threshold lives in settings, which is P; gate not wired either side)*
+- [x][x] Weighted average cost recalculated per outlet on every receipt — FR-INV-07 · BR-4
+- [x][x] Low stock flagged at or below reorder level, per outlet — FR-INV-08 · `E-10`
+- [x][~] Valuation at weighted average cost, per outlet and combined — FR-INV-09 · `E-11` *(levels carry the average; no valuation report endpoint — that is O)*
+- [x][x] Exceptions view: oversells, large adjustments, write-offs — FR-INV-10 · `E-12`
 - [~][-] Stock count: generate sheet, enter counts, review variance, approve, post as one batch — FR-INV-11 · `E-14` *(Stage 2; entry works, does not post)*
 - [-][-] Quarantine state for faulty goods — FR-INV-12 *(Stage 3)*
 
 ### Non-functional
-- [ ][ ] For any product at any outlet, quantity equals the sum of its movement deltas — FR-INV acceptance · BR-2
-- [ ][ ] Nightly reconciliation job proves it and reports drift — NFR-17
+- [ ][x] For any product at any outlet, quantity equals the sum of its movement deltas — FR-INV acceptance · BR-2 *(`InventoryService.drift`, asserted on every sale test)*
+- [ ][ ] Nightly reconciliation job proves it and reports drift — NFR-17 *(drift() exists; nothing schedules it)*
 - [x][ ] Cash movements are not stock movements, so the stock ledger holds only stock — BR-2
 
 ---
@@ -195,23 +195,23 @@ non-deferred item in its section is complete, including its non-functional items
 - [x][ ] Unrecognised barcode shows an inline strip, not a modal — FR-POS-07 · `C-19`
 - [x][ ] A product with more than one selling unit prompts for the unit — FR-POS-08 · `C-04`
 - [x][ ] Cart lines: quantity, unit change, price override, discount, remove — FR-POS-09 · `C-05`
-- [~][ ] Line and cart discounts capped by the user's `sale.discount_max` — FR-POS-10 · `C-06` *(ceilings configurable in K-08; not yet read by the POS)*
-- [x][ ] Price below floor triggers manager PIN; approver recorded on the sale — FR-POS-11 · BR-10 · `C-07` `C-08`
+- [~][ ] Line and cart discounts capped by the user's `sale.discount_max` — FR-POS-10 · `C-06` *(the ceiling lives in settings, which is P; unenforced either side)*
+- [x][x] Price below floor triggers manager PIN; approver recorded on the sale — FR-POS-11 · BR-10 · `C-07` `C-08` *(PIN checked by the server, not the browser)*
 - [x][ ] Customer attached by phone search or created inline — FR-POS-12 · `C-09` `C-10`
-- [x][ ] Selling beyond stock blocked unless `stock.oversell` — FR-POS-13 · BR-9 · `C-21`
+- [x][x] Selling beyond stock blocked unless `stock.oversell` — FR-POS-13 · BR-9 · `C-21`
 - [x][ ] Sales held with an optional label and resumed — FR-POS-14 · `C-22` `C-23`
 - [x][ ] Held sales do not reserve stock — FR-POS-15
 - [~][ ] Shortcuts: F2 payment, F3 hold, F4 search, F9 lock, Esc clear, arrows navigate, Enter add — FR-POS-16 *(function keys done; arrow navigation of results not wired)*
 - [~][ ] Touch targets at least 44 px — FR-POS-17 *(not audited)*
-- [x][ ] Past transactions searchable by receipt, date, customer, amount or item — FR-POS-18 · `C-25`
-- [x][ ] Void with a reason by `sale.void`; reversing movements written — FR-POS-19 · BR-3 · `C-27`
+- [x][x] Past transactions searchable by receipt, date, customer, amount or item — FR-POS-18 · `C-25`
+- [x][x] Void with a reason by `sale.void`; reversing movements written — FR-POS-19 · BR-3 · `C-27`
 - [-][-] Returns and refunds against an original receipt — FR-POS-20 · `C-35` `C-36` *(Stage 2; built ahead of scope)*
 
 ### Non-functional
 - [ ][ ] A five-line sale completes with scanner and keyboard only, no mouse — FR-POS acceptance · NFR-12
 - [ ][ ] Adding a scanned line renders in under 100 ms — NFR-1
-- [ ][ ] Sale completion including stock decrement and persistence under 1 s — NFR-2
-- [ ][ ] Two terminals cannot sell the same last unit — BR-8 · release gate 4
+- [ ][ ] Sale completion including stock decrement and persistence under 1 s — NFR-2 *(not measured)*
+- [ ][x] Two terminals cannot sell the same last unit — BR-8 · release gate 4 *(eight racing threads: one sale, seven refusals, level zero)*
 - [x][ ] No blocking browser dialog in the payment path — `L-08`
 
 ---
@@ -219,18 +219,18 @@ non-deferred item in its section is complete, including its non-functional items
 ## H · Payments — `FR-PAY`
 
 ### Functional
-- [x][ ] Cash, mobile money, card and bank transfer — FR-PAY-01 · `C-11`
+- [x][x] Cash, mobile money, card and bank transfer — FR-PAY-01 · `C-11`
 - [~][ ] Cash captures tendered and calculates change; denomination shortcuts offered — FR-PAY-02 · `C-12` *(tendered and change done; denomination buttons absent)*
-- [x][ ] MoMo, card and transfer capture a reference and require explicit confirmation — FR-PAY-03 · `C-13` `C-14`
-- [x][ ] Split payment across two or more methods with a live remaining balance — FR-PAY-04 · `C-15`
-- [x][ ] Sale cannot complete until payments equal the total exactly — FR-PAY-05
-- [~][ ] Overpayment permitted only for cash, where the excess is change — FR-PAY-06
-- [ ][ ] Every payment carries a UUID; resubmission rejected — FR-PAY-07 · BR-7
+- [x][x] MoMo, card and transfer capture a reference and require explicit confirmation — FR-PAY-03 · `C-13` `C-14`
+- [x][x] Split payment across two or more methods with a live remaining balance — FR-PAY-04 · `C-15`
+- [x][x] Sale cannot complete until payments equal the total exactly — FR-PAY-05
+- [~][x] Overpayment permitted only for cash, where the excess is change — FR-PAY-06
+- [ ][x] Every payment carries a UUID; resubmission rejected — FR-PAY-07 · BR-7 *(client-generated primary key)*
 - [x][ ] The payment modal is the only modal permitted to block scanner input — FR-PAY-08
 - [-][-] Refund to the original method, cash refunds permission-restricted — FR-PAY-09 *(Stage 2)*
 
 ### Non-functional
-- [ ][ ] The same payment submitted twice records exactly one payment and returns the original result — FR-PAY acceptance · release gate 3
+- [ ][x] The same payment submitted twice records exactly one payment and returns the original result — FR-PAY acceptance · release gate 3
 - [x][ ] Money comparison is exact, never within a tolerance — BR-11
 
 ---
@@ -279,19 +279,19 @@ non-deferred item in its section is complete, including its non-functional items
 ## K · Suppliers & goods receipt — `FR-SUP`
 
 ### Functional
-- [x][ ] Supplier records: name, contact, phone, email, address, terms, notes, active — FR-SUP-01 · `F-01`…`F-04`
-- [x][ ] Goods received into a specific outlet, with or without a prior order — FR-SUP-02 · `E-04`
-- [x][ ] Receipt lines capture product, quantity, purchase unit, unit cost and reference — FR-SUP-03
-- [x][ ] Confirming writes stock movements and recalculates weighted average cost — FR-SUP-04 · BR-4
-- [x][ ] The confirmation screen shows resulting stock and the new average cost before commit — FR-SUP-05 · `E-05`
-- [~][ ] A confirmed receipt cannot be edited; it is reversed by a correcting document — FR-SUP-06 *(stated in the UI; no reversal document)*
-- [~][ ] Purchase history per supplier and per product — FR-SUP-07 · `F-05` `F-06`
+- [x][x] Supplier records: name, contact, phone, email, address, terms, notes, active — FR-SUP-01 · `F-01`…`F-04`
+- [x][x] Goods received into a specific outlet, with or without a prior order — FR-SUP-02 · `E-04`
+- [x][x] Receipt lines capture product, quantity, purchase unit, unit cost and reference — FR-SUP-03
+- [x][x] Confirming writes stock movements and recalculates weighted average cost — FR-SUP-04 · BR-4
+- [x][x] The confirmation screen shows resulting stock and the new average cost before commit — FR-SUP-05 · `E-05`
+- [~][x] A confirmed receipt cannot be edited; it is reversed by a correcting document — FR-SUP-06 *(server refuses the edit and writes the reversal; no UI button yet)*
+- [~][x] Purchase history per supplier and per product — FR-SUP-07 · `F-05` `F-06` *(per supplier done; per product needs a query)*
 - [-][-] Purchase orders, partial and over/short delivery — FR-SUP-08 *(Stage 2)*
 - [-][-] Landed cost apportionment — FR-SUP-09 *(Stage 2)*
 - [-][-] Supplier invoices, payments and balances — FR-SUP-10 *(Stage 2)*
 
 ### Non-functional
-- [x][ ] Receiving 75 @ 42.00 then 50 @ 50.00 yields 125 @ 45.20 — BR-4 *(verified through the UI and asserted)*
+- [x][x] Receiving 75 @ 42.00 then 50 @ 50.00 yields 125 @ 45.20 — BR-4 *(asserted through two real deliveries)*
 
 ---
 
@@ -334,11 +334,11 @@ non-deferred item in its section is complete, including its non-functional items
 ## N · Audit — `FR-AUDIT`
 
 ### Functional
-- [~][ ] Entries capture actor, action, entity type and ID, before and after, outlet, terminal, IP, timestamp — FR-AUDIT-01 *(actor, action, entity, outlet, timestamp done; before/after, terminal and IP missing)*
-- [~][ ] All listed actions logged: sign-in, sale, void, discount override, price change, adjustment, receipt, shift, cash movement, user and permission change, settings, reprint, export — FR-AUDIT-02
-- [ ][ ] Append-only; no application path edits or deletes an entry, including for the Owner — FR-AUDIT-03 · BR-15
-- [x][ ] Filterable by actor, action, entity, outlet and date — FR-AUDIT-04 · `J-08` `J-09`
-- [ ][ ] Entries retained for the life of the system — FR-AUDIT-05
+- [~][x] Entries capture actor, action, entity type and ID, before and after, outlet, terminal, IP, timestamp — FR-AUDIT-01
+- [~][~] All listed actions logged: sign-in, sale, void, discount override, price change, adjustment, receipt, shift, cash movement, user and permission change, settings, reprint, export — FR-AUDIT-02 *(everything built so far logs; shift, cash, user and settings actions do not exist yet)*
+- [ ][x] Append-only; no application path edits or deletes an entry, including for the Owner — FR-AUDIT-03 · BR-15 *(database trigger; no write route exists)*
+- [x][x] Filterable by actor, action, entity, outlet and date — FR-AUDIT-04 · `J-08` `J-09`
+- [ ][x] Entries retained for the life of the system — FR-AUDIT-05 *(nothing prunes them; no delete path exists)*
 
 ### Non-functional
 - [x][ ] The log is visually marked read-only — `J-08`
