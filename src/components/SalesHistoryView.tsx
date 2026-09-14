@@ -6,6 +6,9 @@ import { exportToCsv } from '../utils/csvExport';
 import { InfoHint } from './InfoHint';
 import { ThermalReceiptSlip } from './ThermalReceiptSlip';
 import { ReceiptPrintModal } from './ReceiptPrintModal';
+import { generateReceiptPlainText } from './ThermalReceiptSlip';
+import { printReceipt } from '../printService';
+import { salesApi } from '../salesApi';
 
 interface SalesHistoryViewProps {
   sales: CompletedSale[];
@@ -81,27 +84,36 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
 
   const selectedSale = filteredSales.find((s) => s.id === selectedSaleId) || null;
 
-  // Fires the browser print dialog once the isolated receipt node has been rendered.
+  // The local ESC/POS service is preferred. Browser printing is retained only
+  // as an explicit recovery path when the service is unavailable.
   useEffect(() => {
     if (!printTarget) return;
     const clearTarget = () => setPrintTarget(null);
     window.addEventListener('afterprint', clearTarget);
     const timer = window.setTimeout(() => window.print(), 60);
-    return () => {
-      window.removeEventListener('afterprint', clearTarget);
-      window.clearTimeout(timer);
-    };
+    return () => { window.removeEventListener('afterprint', clearTarget); window.clearTimeout(timer); };
   }, [printTarget]);
 
   // Prints the currently selected receipt (or the one open in the preview modal).
-  const handlePrintReceipt = (sale?: CompletedSale, width?: '80mm' | '58mm') => {
+  const handlePrintReceipt = async (sale?: CompletedSale, width?: '80mm' | '58mm') => {
     const target = sale || viewingReceipt || selectedSale;
     if (!target) return;
     setSelectedSaleId(target.id);
     if (width) setPaperWidth(width);
     // Anything printed from the history log is by definition a reprint.
     setIsReprint(true);
-    setPrintTarget(target);
+    try {
+      await salesApi.reprint(target.id);
+      const result = await printReceipt({
+        receiptNumber: target.receiptNumber,
+        paperWidth: width || paperWidth,
+        isReprint: true,
+        payload: generateReceiptPlainText(target, true, width || paperWidth),
+      });
+      if (!result.ok) setPrintTarget(target);
+    } catch {
+      setPrintTarget(target);
+    }
   };
 
   const handleExportSalesCsv = () => {

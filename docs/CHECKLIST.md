@@ -289,7 +289,7 @@ held sales, which live only in the browser.
 
 ### Functional
 - [x][x] Cash, mobile money, card and bank transfer — FR-PAY-01 · `C-11`
-- [~][ ] Cash captures tendered and calculates change; denomination shortcuts offered — FR-PAY-02 · `C-12` *(tendered and change done; denomination buttons absent)*
+- [x][x] Cash captures tendered and calculates change; denomination shortcuts offered — FR-PAY-02 · `C-12` *(cash split rows provide common GH₵10/20/50/100/200 denomination shortcuts)*
 - [x][x] MoMo, card and transfer capture a reference and require explicit confirmation — FR-PAY-03 · `C-13` `C-14`
 - [x][x] Split payment across two or more methods with a live remaining balance — FR-PAY-04 · `C-15`
 - [x][x] Sale cannot complete until payments equal the total exactly — FR-PAY-05
@@ -312,7 +312,7 @@ held sales, which live only in the browser.
 - [x][ ] Supports 58 mm and 80 mm — FR-RCPT-03
 - [x][ ] Receipt content per PRD §9 — FR-RCPT-04
 - [x][ ] A print failure never blocks or reverses the sale; a retry is offered — FR-RCPT-05 · `C-18`
-- [x][ ] Reprints permitted, marked `REPRINT`, and logged — FR-RCPT-06 · `C-17`
+- [x][x] Reprints permitted, marked `REPRINT`, and logged — FR-RCPT-06 · `C-17` *(history reprints call the protected server endpoint, recording `RECEIPT_REPRINTED` with receipt, outlet, terminal and actor)*
 - [~][ ] Printing may be skipped per sale — FR-RCPT-07
 - [~][ ] Printer selection, paper width and test print per terminal — FR-RCPT-08 · `K-07` *(settings render; test print is not real)*
 - [x][ ] Receipt layout previewable at both widths — FR-RCPT-09 · `K-05`

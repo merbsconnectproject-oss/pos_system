@@ -179,6 +179,9 @@ export const salesApi = {
       method: 'POST', body: JSON.stringify({ reason }),
     }),
 
+  reprint: (saleId: string) =>
+    request<SaleWire>(`/api/sales/${encodeURIComponent(saleId)}/reprint`, { method: 'POST' }),
+
   recent: (outletId?: string, query?: string, limit = 100) => {
     const parameters = new URLSearchParams({ limit: String(limit) });
     if (outletId) parameters.set('outletId', outletId);
