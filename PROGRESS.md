@@ -1,6 +1,6 @@
 # Progress
 
-**Updated** 2026-09-14 · **Tests** 295 green · **DB** connected to `pos_system`, V1–V13 applied
+**Updated** 2026-09-14 · **Tests** 307 green · **DB** connected to `pos_system`, V1–V13 applied
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (189 items, dual checkbox).
@@ -11,7 +11,7 @@ Updated after every completed feature. Detail lives in
 
 | | Features | Done | In progress | Not started |
 |---|---:|---:|---:|---:|
-| Backend | 18 | 13 | 3 | 2 |
+| Backend | 18 | 14 | 3 | 1 |
 
 ```
 A ██████████  Auth & session     100%   FR-AUTH-05 reachable since J; idle lock is a setting since P
@@ -28,7 +28,7 @@ K ████████░░  Suppliers & receipt  80%   purchase history pe
 L ██████████  Customers          100%   shared directory, phone lookup, pricing and cross-outlet history
 M ██████████  Users & permissions 100%  BR-16 on every path that changes a privilege
 N █████████░  Audit               90%   every built action logs; read endpoint and view live
-O ░░░░░░░░░░  Reports & dashboard  0%   the dashboard still computes from loaded lists
+O ██████████  Reports & dashboard 100%  aggregated by the database; FR-RPT-05 withholds cost, not hides it
 P ████████░░  Settings            80%   thresholds live and read by the rules; backup/export open
 Q ████░░░░░░  Connectivity        40%   local-first removes the queue; power loss and the owner's push remain
 R ███████░░░  Cross-cutting       70%   hashing, rate limiting, audit, idempotency, row locks
