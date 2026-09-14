@@ -66,6 +66,7 @@ import { stockApi, withStock, type MovementType } from './stockApi';
 import { suppliersApi, goodsReceiptApi } from './suppliersApi';
 import { salesApi, toCompletedSale, cartFromWire } from './salesApi';
 import { shiftsApi, toShiftInfo, toShiftRecord, type CashMovementKind } from './shiftsApi';
+import { settingsApi } from './settingsApi';
 import { usersApi, toRolePermissions } from './usersApi';
 import { terminalsApi } from './salesApi';
 
@@ -154,11 +155,11 @@ export default function App() {
     // a rejection is reported rather than swallowed, because a silent empty
     // list looks exactly like "you have no sales yet".
     const [branches, catalogue, movementHistory, supplierList, saleHistory, openShift, shiftHistory,
-           roleCatalogue] =
+           roleCatalogue, settings] =
       await Promise.allSettled([
         outletsApi.list(), productsApi.list(), stockApi.movements({ limit: 200 }), suppliersApi.list(),
         salesApi.recent(undefined, undefined, 100), shiftsApi.current(), shiftsApi.recent(undefined, 50),
-        usersApi.catalogue(),
+        usersApi.catalogue(), settingsApi.load(),
       ]);
 
 
@@ -211,9 +212,18 @@ export default function App() {
       setRolesPermissions(toRolePermissions(roleCatalogue.value.roles));
     }
 
+    // FR-SET: the thresholds the server enforces, the accent this browser
+    // paints with and the receipt policy it prints. Loaded rather than seeded,
+    // because a screen showing a variance threshold the server does not use is
+    // telling the shop a rule is in force that is not.
+    if (settings.status === 'fulfilled') {
+      setGeneralSettings(settings.value);
+      setAccentColor(settings.value.accentColor);
+    }
+
     const loaded: Record<string, PromiseSettledResult<unknown>> = {
       branches, catalogue, movements: movementHistory, suppliers: supplierList, sales: saleHistory,
-      shift: openShift, shiftHistory, roles: roleCatalogue,
+      shift: openShift, shiftHistory, roles: roleCatalogue, settings,
     };
     Object.entries(loaded).forEach(([name, result]) => {
       if (result.status === 'rejected') console.error(`[workspace] ${name} failed to load`, result.reason);
@@ -1018,6 +1028,32 @@ export default function App() {
    * The list is re-read afterwards rather than merged, because the server
    * decides what the assignment actually became.
    */
+  /**
+   * FR-SET: settings are saved, not held in this tab.
+   *
+   * <p>The screen shows what the server accepted rather than what was typed —
+   * a threshold that displays as saved while the server enforces the old one
+   * is the failure this whole feature exists to prevent.
+   */
+  const handleUpdateGeneralSettings = (next: GeneralSettings) => {
+    const previous = generalSettings;
+    setGeneralSettings(next);
+    setAccentColor(next.accentColor);
+
+    void settingsApi.save(next)
+      .then((saved) => {
+        setGeneralSettings(saved);
+        setAccentColor(saved.accentColor);
+      })
+      .catch((failure) => {
+        // Put the screen back. Leaving the rejected values on it would be a
+        // screen that disagrees with the till.
+        setGeneralSettings(previous);
+        setAccentColor(previous.accentColor);
+        reportUserFailure(failure);
+      });
+  };
+
   const handleUpdateUsers = (next: UserAccount[]) => {
     const reassigned = next.filter((candidate) => {
       const current = users.find((user) => user.id === candidate.id);
@@ -1507,7 +1543,7 @@ export default function App() {
               rolesPermissions={rolesPermissions}
               onUpdateRolesPermissions={setRolesPermissions}
               generalSettings={generalSettings}
-              onUpdateGeneralSettings={setGeneralSettings}
+              onUpdateGeneralSettings={handleUpdateGeneralSettings}
               onAddAuditLog={(entry) =>
                 setAuditLogs((prev) => [
                   {
@@ -1527,7 +1563,7 @@ export default function App() {
               products={products}
               sales={sales}
               accentColor={accentColor}
-              onChangeAccent={setAccentColor}
+              onChangeAccent={(color) => handleUpdateGeneralSettings({ ...generalSettings, accentColor: color })}
             />
           )}
 
@@ -1673,6 +1709,9 @@ export default function App() {
       {/* Full POS Checkout Terminal (Screen C-01) */}
       <PosModal
         permissions={permissions}
+        discountCeilingPercent={
+          generalSettings.thresholds.discountCeilingByRole[currentUser.role] ?? 0
+        }
         onLockSession={() => handleLockSession('manual')}
         isOpen={posOpen}
         onClose={() => setPosOpen(false)}
@@ -1722,7 +1761,7 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         onOpen={() => setSettingsOpen(true)}
         accentColor={accentColor}
-        onChangeAccent={setAccentColor}
+        onChangeAccent={(color) => handleUpdateGeneralSettings({ ...generalSettings, accentColor: color })}
         outlets={outlets}
         onOpenFullSettings={() => setActiveTab('settings')}
       />

@@ -1665,21 +1665,30 @@ export const INITIAL_SHIFT_RECORDS: ShiftRecord[] = [
   },
 ];
 
+/**
+ * What the screen shows before `GET /api/settings` answers — FR-SET.
+ *
+ * Deliberately empty where a value would be a claim. A seeded company name
+ * prints on a receipt as though somebody had entered it, and a seeded
+ * threshold tells the shop a rule is set to a number the server never saw.
+ * The thresholds here match the server's own defaults so the gap before the
+ * first response is not a different system.
+ */
 export const INITIAL_SETTINGS: GeneralSettings = {
-  companyName: 'Radiance Lighting & Commercial Hardware Group',
-  taxRegistrationNumber: 'GH-TIN-99482104-X',
+  companyName: '',
+  taxRegistrationNumber: '',
   taxEnabled: false,
   taxRatePercent: 0,
   currencySymbol: 'GH₵',
   currencyCode: 'GHS',
-  cashRounding: '0.10',
-  managerPin: '1234',
+  cashRounding: 'exact',
+  managerPin: '',
   enforceFloorPricePin: true,
   enforceVoidPin: true,
   enforceBlindShiftCount: true,
   receiptPrinterWidth: '80mm',
-  receiptHeaderMessage: 'Radiance Lighting, Inco Hardware & Apex Electricals - Quality Assured Luminaires & Power Systems',
-  receiptFooterPolicy: 'Goods once sold in good condition are returnable or exchangeable within 7 days with valid receipt.',
+  receiptHeaderMessage: '',
+  receiptFooterPolicy: '',
   autoPrintReceipt: true,
   showCashierOnReceipt: true,
   accentColor: DEFAULT_ACCENT,

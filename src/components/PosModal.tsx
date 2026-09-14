@@ -77,6 +77,12 @@ interface PosModalProps {
    */
   onSaleCompleted: (sale: CompletedSale) => Promise<CompletedSale | null>;
   permissions: PermissionSet;
+  /**
+   * FR-POS-10: the largest discount this cashier may give unapproved, as a
+   * percentage. The server enforces it too and is the authority; this is so
+   * the cashier is told before the customer is, not after.
+   */
+  discountCeilingPercent: number;
   onLockSession?: () => void;
 }
 
@@ -91,6 +97,7 @@ export const PosModal: React.FC<PosModalProps> = ({
   onAddCustomer,
   onSaleCompleted,
   permissions,
+  discountCeilingPercent,
   onLockSession,
 }) => {
   const canOversell = permissions.has('stock.oversell');
@@ -381,13 +388,21 @@ export const PosModal: React.FC<PosModalProps> = ({
     });
   };
 
-  /** FR-POS-10: a per-line discount, capped by the role's discount ceiling. */
+  /**
+   * FR-POS-10: a per-line discount, capped by the role's discount ceiling.
+   *
+   * <p>The cap is a percentage of the line, so it is worked out against this
+   * line's gross rather than applied as a flat amount — the same cedi off a
+   * bulb and off a distribution board are not the same concession. The server
+   * refuses anything past it regardless of what this does.
+   */
   const handleLineDiscount = (productId: string, unitName: string, amount: number) => {
     setCart((prev) =>
       prev.map((item) => {
         if (item.product.id !== productId || item.selectedUnit !== unitName) return item;
         const gross = roundMoney(item.quantity * item.unitPrice);
-        const capped = Math.min(Math.max(0, roundMoney(amount)), gross);
+        const ceiling = roundMoney((gross * discountCeilingPercent) / 100);
+        const capped = Math.min(Math.max(0, roundMoney(amount)), ceiling, gross);
         return { ...item, discount: capped, lineTotal: lineTotal(item.quantity, item.unitPrice, capped) };
       }),
     );
@@ -438,7 +453,7 @@ export const PosModal: React.FC<PosModalProps> = ({
     );
   };
 
-  const handleFloorPinSuccess = (approverName: string) => {
+  const handleFloorPinSuccess = (approverName: string, approverId: string) => {
     if (!floorOverrideTarget) return;
     const { productId, requestedPrice } = floorOverrideTarget;
 
@@ -451,6 +466,7 @@ export const PosModal: React.FC<PosModalProps> = ({
             lineTotal: lineTotal(item.quantity, requestedPrice),
             floorPriceApproved: true,
             floorPriceApprover: approverName,
+            floorPriceApproverId: approverId,
           };
         }
         return item;
@@ -555,7 +571,8 @@ export const PosModal: React.FC<PosModalProps> = ({
   };
 
   const handleApplyDiscount = () => {
-    const nextDiscount = Math.min(25, Math.max(0, Number(discountDraft) || 0));
+    // FR-POS-10: the configured ceiling for this role, not a literal.
+    const nextDiscount = Math.min(discountCeilingPercent, Math.max(0, Number(discountDraft) || 0));
     setCartDiscountPercent(nextDiscount);
     setDiscountModalOpen(false);
   };
@@ -1887,7 +1904,11 @@ export const PosModal: React.FC<PosModalProps> = ({
           <div className="bg-white rounded-2xl w-full max-w-md border border-slate-300 shadow-2xl p-6 space-y-5 animate-modal-card">
             <div>
               <h3 className="text-lg font-black text-slate-900">Apply cart discount</h3>
-              <p className="text-xs text-slate-500 mt-1">Maximum permitted discount for this demo role is 25%.</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {discountCeilingPercent > 0
+                  ? `You may give up to ${discountCeilingPercent}% without approval.`
+                  : 'Your role may not give a discount without approval.'}
+              </p>
             </div>
             <div>
               <label className="text-xs font-bold text-slate-700 block mb-2">Discount percent</label>

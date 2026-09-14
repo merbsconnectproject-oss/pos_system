@@ -158,7 +158,10 @@ export const salesApi = {
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         discount: toPesewas(item.discount || 0),
-        floorApprovedBy: item.floorPriceApprover || undefined,
+        // BR-10 · FR-POS-10: ids, not names. The server checks that the person
+        // named actually holds the right to approve this.
+        floorApprovedBy: item.floorPriceApproverId || undefined,
+        discountApprovedBy: item.discountApproverId || undefined,
       })),
       payments: draft.payments.map((payment) => ({
         id: crypto.randomUUID(),

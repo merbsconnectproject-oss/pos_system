@@ -86,6 +86,15 @@ export interface CartItem {
   lineTotal: number;
   floorPriceApproved?: boolean;
   floorPriceApprover?: string;
+  /**
+   * BR-10: the approver's id, which is what the server verifies. The name
+   * above is for the line on screen; sending it as the approver would name a
+   * person the server cannot look up.
+   */
+  floorPriceApproverId?: string;
+  /** FR-POS-10: who approved a discount past the seller's ceiling. */
+  discountApprover?: string;
+  discountApproverId?: string;
 }
 
 export type PaymentMethod = 'cash' | 'momo' | 'card' | 'transfer';

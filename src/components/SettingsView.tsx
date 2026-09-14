@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { settingsApi } from '../settingsApi';
 import { InfoHint } from './InfoHint';
 import {
   Users,
@@ -142,8 +143,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [currencySymbol, setCurrencySymbol] = useState(generalSettings.currencySymbol);
   const [cashRounding, setCashRounding] = useState(generalSettings.cashRounding);
 
-  // Security & PIN State
-  const [managerPin, setManagerPin] = useState(generalSettings.managerPin);
+  // Security & PIN State.
+  //
+  // FR-USER-01: the PIN here is the signed-in user's own, not a shared master
+  // code. A single number everybody knows makes every approval it authorises
+  // anonymous, which is the one thing an approval exists not to be.
+  const [ownPin, setOwnPin] = useState('');
+  const [pinPassword, setPinPassword] = useState('');
+  const [pinSaving, setPinSaving] = useState(false);
   const [showPin, setShowPin] = useState(false);
   const [enforceFloorPin, setEnforceFloorPin] = useState(generalSettings.enforceFloorPricePin);
   const [enforceVoidPin, setEnforceVoidPin] = useState(generalSettings.enforceVoidPin);
@@ -237,15 +244,46 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     showToast('General store settings saved successfully.');
   };
 
-  // Handle saving security settings
-  const handleSaveSecurity = () => {
-    if (!/^\d{4}$/.test(managerPin)) {
-      alert('Manager PIN must be exactly 4 numeric digits.');
+  /**
+   * FR-AUTH-02: set your own approval PIN.
+   *
+   * Separate from saving the policies below, because they are different acts:
+   * one changes a credential that belongs to this person, the other changes a
+   * rule that applies to everybody.
+   */
+  const handleSetOwnPin = async () => {
+    if (!/^\d{4,6}$/.test(ownPin)) {
+      alert('A PIN is 4 to 6 digits.');
       return;
     }
+    if (!pinPassword) {
+      alert('Enter your password to confirm it is you.');
+      return;
+    }
+    setPinSaving(true);
+    try {
+      await settingsApi.setOwnPin(pinPassword, ownPin);
+      setOwnPin('');
+      setPinPassword('');
+      onAddAuditLog({
+        actor: currentUser.fullName,
+        action: 'UPDATE_APPROVAL_PIN',
+        entity: 'Security & PIN',
+        outletName: currentOutlet.name,
+        details: 'Set their own approval PIN',
+      });
+      showToast('Your approval PIN is set.');
+    } catch (failure) {
+      alert(failure instanceof Error ? failure.message : 'That PIN could not be set.');
+    } finally {
+      setPinSaving(false);
+    }
+  };
+
+  // Handle saving security settings
+  const handleSaveSecurity = () => {
     const updated: GeneralSettings = {
       ...generalSettings,
-      managerPin,
       enforceFloorPricePin: enforceFloorPin,
       enforceVoidPin: enforceVoidPin,
       enforceBlindShiftCount: enforceBlindShift,
@@ -256,9 +294,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       action: 'UPDATE_SECURITY_POLICIES',
       entity: 'Security & PIN',
       outletName: currentOutlet.name,
-      details: `Updated Master Manager PIN & security policies (Floor PIN: ${enforceFloorPin}, Void PIN: ${enforceVoidPin}, Blind Shift: ${enforceBlindShift})`,
+      details: `Updated security policies (Floor approval: ${enforceFloorPin}, Void approval: ${enforceVoidPin}, Blind shift count: ${enforceBlindShift})`,
     });
-    showToast('Security and Manager PIN policies updated successfully.');
+    showToast('Security policies updated successfully.');
   };
 
   // Handle saving printer & receipt settings
@@ -1600,27 +1638,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </button>
               </div>
 
-              {/* Master PIN Configuration */}
+              {/* FR-AUTH-02: your own approval PIN, not a shared one */}
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-300 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <Lock className="w-4 h-4 text-accent-500" />
-                      Master Manager Authorization PIN
-                    </div>
-                    <div className="text-[11px] text-slate-500">
-                      Required for cashiers to execute floor price overrides and sale voids.
-                    </div>
+                <div className="space-y-0.5">
+                  <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Lock className="w-4 h-4 text-accent-500" />
+                    Your approval PIN
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    Typed at the counter when you authorise a floor-price override or a void.
+                    It is yours alone — the approval is recorded against your name, so a PIN
+                    the whole shop knows would record nothing.
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 max-w-sm">
-                  <div className="relative flex-1">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="relative w-40">
                     <input
                       type={showPin ? 'text' : 'password'}
-                      maxLength={4}
-                      value={managerPin}
-                      onChange={(e) => setManagerPin(e.target.value.replace(/\D/g, ''))}
+                      maxLength={6}
+                      inputMode="numeric"
+                      placeholder="••••"
+                      value={ownPin}
+                      onChange={(e) => setOwnPin(e.target.value.replace(/\D/g, ''))}
                       className="w-full px-4 py-2.5 text-center tracking-[0.5em] font-mono text-lg font-black bg-white border border-slate-300 rounded-xl focus:outline-accent-500"
                     />
                     <button
@@ -1631,7 +1671,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  <span className="text-xs text-slate-400 font-medium">4 digits</span>
+
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    placeholder="Your password"
+                    value={pinPassword}
+                    onChange={(e) => setPinPassword(e.target.value)}
+                    className="flex-1 min-w-[12rem] px-4 py-2.5 text-xs bg-white border border-slate-300 rounded-xl focus:outline-accent-500"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => void handleSetOwnPin()}
+                    disabled={pinSaving}
+                    className="bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    {pinSaving ? 'Setting…' : 'Set my PIN'}
+                  </button>
+                </div>
+
+                <div className="text-[11px] text-slate-400">
+                  4 to 6 digits. Your password is asked for so an unattended screen cannot be
+                  used to set one.
                 </div>
               </div>
 
