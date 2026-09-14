@@ -8,6 +8,7 @@ import gh.giftedlabs.pos.exception.OutletNotPermittedException;
 import gh.giftedlabs.pos.exception.CatalogueConflictException;
 import gh.giftedlabs.pos.exception.CatalogueListException;
 import gh.giftedlabs.pos.exception.IncorrectPinException;
+import gh.giftedlabs.pos.exception.InsufficientStockException;
 import gh.giftedlabs.pos.exception.ProductNotFoundException;
 import gh.giftedlabs.pos.exception.InvalidResetTokenException;
 import gh.giftedlabs.pos.exception.SessionAuthenticationException;
@@ -101,6 +102,16 @@ public class ApiExceptionHandler {
     public ResponseEntity<ApiError> onCatalogueList(CatalogueListException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiError(ex.getCode(), ex.getMessage(), ex.getDetails()));
+    }
+
+    /** BR-9: not enough stock, and the caller may not oversell. */
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<ApiError> onInsufficientStock(InsufficientStockException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError("INSUFFICIENT_STOCK", ex.getMessage(),
+                        Map.of("productId", String.valueOf(ex.getProductId()),
+                                "available", ex.getAvailable(),
+                                "requested", ex.getRequested())));
     }
 
     @ExceptionHandler(ProductNotFoundException.class)

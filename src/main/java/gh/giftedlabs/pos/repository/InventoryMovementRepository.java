@@ -1,0 +1,46 @@
+package gh.giftedlabs.pos.repository;
+
+import gh.giftedlabs.pos.entity.InventoryMovement;
+import gh.giftedlabs.pos.rules.MovementType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.time.Instant;
+import java.util.UUID;
+
+/** The stock ledger — BR-2, FR-INV-04. */
+public interface InventoryMovementRepository extends JpaRepository<InventoryMovement, UUID> {
+
+    /**
+     * FR-INV-04: filterable by product, outlet, type, user and date.
+     *
+     * <p>Every filter is optional and null means "any", so one query serves the
+     * movements screen, a product's history and the exceptions view.
+     */
+    @Query("""
+           select m from InventoryMovement m
+            where (:productId is null or m.productId = :productId)
+              and (:outletId  is null or m.outletId  = :outletId)
+              and (:type      is null or m.type      = :type)
+              and (:actorId   is null or m.actorId   = :actorId)
+              and (:from      is null or m.createdAt >= :from)
+              and (:to        is null or m.createdAt <= :to)
+              and (:exceptionsOnly = false or m.exception = true)
+            order by m.createdAt desc
+           """)
+    Page<InventoryMovement> search(@Param("productId") UUID productId,
+                                   @Param("outletId") UUID outletId,
+                                   @Param("type") MovementType type,
+                                   @Param("actorId") UUID actorId,
+                                   @Param("from") Instant from,
+                                   @Param("to") Instant to,
+                                   @Param("exceptionsOnly") boolean exceptionsOnly,
+                                   Pageable pageable);
+
+    /** BR-7: has this source document already moved this product? */
+    boolean existsBySourceTypeAndSourceIdAndProductIdAndType(
+            String sourceType, UUID sourceId, UUID productId, MovementType type);
+}

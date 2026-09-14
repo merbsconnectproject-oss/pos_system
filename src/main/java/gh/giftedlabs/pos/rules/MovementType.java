@@ -1,0 +1,53 @@
+package gh.giftedlabs.pos.rules;
+
+/**
+ * Why stock moved — FR-INV-02.
+ *
+ * <p>An enum rather than a table for the same reason {@link Permission} is: the
+ * set is decided by what the code does with each case, and a row an operator
+ * could add would name a movement nothing knows how to handle.
+ */
+public enum MovementType {
+
+    /** The count a product starts with when it is first set up at an outlet. */
+    OPENING(true),
+
+    /** Goods in from a supplier. The only type that moves weighted average cost — BR-4. */
+    RECEIPT(true),
+
+    SALE(false),
+
+    /** BR-3: a void writes the reversal; the original sale is never deleted. */
+    SALE_VOID(true),
+
+    ADJUSTMENT_IN(true),
+    ADJUSTMENT_OUT(false),
+    DAMAGE(false),
+    LOSS(false);
+
+    private final boolean increases;
+
+    MovementType(boolean increases) {
+        this.increases = increases;
+    }
+
+    /** Which way this type moves stock. The sign is the type's, not the caller's. */
+    public boolean increases() {
+        return increases;
+    }
+
+    /**
+     * BR-4: only a receipt changes the average cost.
+     *
+     * <p>A sale leaves it alone — selling does not make the remaining stock
+     * cheaper or dearer — and an adjustment corrects a count, not a valuation.
+     */
+    public boolean affectsAverageCost() {
+        return this == RECEIPT || this == OPENING;
+    }
+
+    /** FR-INV-05: these require a reason code and cannot be entered blind. */
+    public boolean requiresReason() {
+        return this == ADJUSTMENT_IN || this == ADJUSTMENT_OUT || this == DAMAGE || this == LOSS;
+    }
+}
