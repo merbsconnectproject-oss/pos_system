@@ -1130,7 +1130,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 <label className="text-xs font-bold text-slate-700">SKU<input required value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono uppercase text-slate-800 focus:outline-accent-500" /></label>
                 <label className="text-xs font-bold text-slate-700">Primary barcode<input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono text-slate-800 focus:outline-accent-500" /></label>
                 <label className="text-xs font-bold text-slate-700">Category<select required value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as Product['category'] | '' })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500"><option value="" disabled>Select category</option>{setupValues.categories.map((category) => <option key={category.id}>{category.name}</option>)}</select></label>
-                <label className="text-xs font-bold text-slate-700">Brand<input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" /></label>
+                <label className="text-xs font-bold text-slate-700">Brand<input list="known-brands" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" />
+                  {/* Still free text — a new brand is created by naming it — but
+                      the existing ones are offered, so "FOCUS" and "Focus
+                      Lighting" do not quietly become two brands. */}
+                  <datalist id="known-brands">{setupValues.brands.map((brand) => <option key={brand.id} value={brand.name} />)}</datalist></label>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 space-y-4">
                 <h4 className="text-sm font-black text-slate-900 flex items-center gap-2"><Archive className="w-4 h-4 text-accent-500" /> Units and conversions</h4>
@@ -1152,7 +1156,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 {canViewCost && <div className="inline-flex rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-bold text-emerald-700">Live margin: {Number(form.retailPrice) > 0 ? (((Number(form.retailPrice) - Number(form.cost || 0)) / Number(form.retailPrice)) * 100).toFixed(1) : '0.0'}%</div>}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <label className="text-xs font-bold text-slate-700">Stock<input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" /></label>
+                <label className="text-xs font-bold text-slate-700">Stock<input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" />
+                  {/* Opening stock and cost are per outlet and nothing stores
+                      them yet. Saying so beats accepting a number and dropping
+                      it, which is what this form did. */}
+                  <span className="mt-1 block text-[10px] font-semibold text-amber-700">Held for this session only — stock is recorded by Goods Receipt</span></label>
                 <label className="text-xs font-bold text-slate-700">Reorder level<input type="number" value={form.minAlert} onChange={(e) => setForm({ ...form, minAlert: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" /></label>
                 <label className="text-xs font-bold text-slate-700">Image URL<input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" /></label>
               </div>
