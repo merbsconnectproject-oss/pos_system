@@ -198,10 +198,10 @@ export function AuthView({ companyName, accentColor, onAuthenticated }: AuthView
                   <span className="text-xs font-bold text-slate-700">Username or email</span>
                   <div className="relative"><User className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" /><input className={fieldClass} value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" required /></div>
                 </label>
-                <label className="block space-y-1.5">
-                  <span className="flex justify-between text-xs font-bold text-slate-700">Password<button type="button" onClick={() => { setError(null); setResetEmail(identifier.includes('@') ? identifier : ''); setScreen('forgot-password'); }} className="font-bold text-slate-500 underline">Forgot password?</button></span>
-                  <div className="relative"><Lock className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" /><input className={`${fieldClass} pr-10`} type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required /><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((value) => !value)} className="absolute right-3 top-2.5 text-slate-400">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div>
-                </label>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs font-bold text-slate-700"><label htmlFor="sign-in-password">Password</label><button type="button" onClick={() => { setError(null); setResetEmail(identifier.includes('@') ? identifier : ''); setScreen('forgot-password'); }} className="font-bold text-slate-500 underline">Forgot password?</button></div>
+                  <div className="relative"><Lock className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" /><input id="sign-in-password" className={`${fieldClass} pr-10`} type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required /><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onPointerDown={(e) => e.preventDefault()} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowPassword((value) => !value); }} className="absolute right-3 top-2.5 text-slate-400">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div>
+                </div>
                 <button disabled={busy} className={submitClass} style={{ backgroundColor: accentColor }}>{busy ? 'Signing in…' : 'Sign in to terminal'}<ArrowRight className="h-4 w-4" /></button>
               </form>
             </section>

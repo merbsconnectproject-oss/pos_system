@@ -1154,6 +1154,7 @@ export default function App() {
       // would be a form that saved everything except the field the manager
       // opened it for.
       if (candidate.pinCode) return true;
+      if (candidate.tempPassword && candidate.tempPassword !== current.tempPassword) return true;
 
       return current.outletId !== candidate.outletId
         || current.fullName !== candidate.fullName
@@ -1179,12 +1180,27 @@ export default function App() {
         await usersApi.create(account, branchIds);
       }
       for (const account of edited) {
-        await usersApi.update(account.id, account, branchIds);
+        if (account.tempPassword && account.tempPassword !== held.get(account.id)?.tempPassword) {
+          // FR-AUTH-08: administrator resets use the dedicated server endpoint;
+          // a normal profile update does not carry a temporary password.
+          await authApi.administratorReset(account.id, account.tempPassword);
+        } else {
+          await usersApi.update(account.id, account, branchIds);
+        }
       }
       for (const account of activeFlips) {
         await usersApi.setActive(account.id, account.active);
       }
-      setUsers(await usersApi.list(true));
+      const refreshed = await usersApi.list(true);
+      setUsers(refreshed.map((user) => {
+        const local = next.find((candidate) => candidate.id === user.id);
+        return local ? {
+          ...user,
+          tempPassword: local.tempPassword,
+          mustChangePasswordOnNextLogin: local.mustChangePasswordOnNextLogin,
+          passwordResetAt: local.passwordResetAt,
+        } : user;
+      }));
     } catch (failure) {
       // The list is reloaded either way, so the screen shows what the server
       // holds rather than the edit that did not land.

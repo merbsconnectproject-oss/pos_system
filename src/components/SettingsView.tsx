@@ -640,12 +640,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   // Confirm and persist password reset workflow
-  const handleConfirmPasswordReset = (e?: React.FormEvent) => {
+  const handleConfirmPasswordReset = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!targetUserForPasswordReset) return;
 
-    if (tempPasswordInput.trim().length < 6) {
-      alert('Temporary password must contain at least 6 characters.');
+    if (tempPasswordInput.trim().length < 8) {
+      alert('Temporary password must contain at least 8 characters.');
       return;
     }
 
@@ -669,7 +669,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       return u;
     });
 
-    onUpdateUsers(updated);
+    try {
+      await onUpdateUsers(updated);
+    } catch (failure) {
+      alert(failure instanceof Error ? failure.message : 'The password reset could not be saved.');
+      return;
+    }
 
     if (editingUser && editingUser.id === targetUserForPasswordReset.id) {
       setEditingUser({
@@ -3356,7 +3361,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => handleConfirmPasswordReset()}
+                disabled={userSaving}
+                onClick={() => void handleConfirmPasswordReset()}
                 className="px-5 py-2.5 text-sm font-bold bg-accent-500 hover:bg-accent-600 text-white rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-2"
               >
                 <KeyRound className="w-4 h-4" />
