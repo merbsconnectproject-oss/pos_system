@@ -32,6 +32,8 @@ import {
   Lightbulb,
   AlertTriangle,
   Clock,
+  List,
+  LayoutGrid,
 } from 'lucide-react';
 import {
   Product,
@@ -109,6 +111,7 @@ export const PosModal: React.FC<PosModalProps> = ({
   const canDiscount = permissions.has('sale.discount');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [catalogueView, setCatalogueView] = useState<'list' | 'grid'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -1068,8 +1071,9 @@ export const PosModal: React.FC<PosModalProps> = ({
                 )}
               </div>
 
-              {/* Category Pills */}
-              <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
+            {/* Category Pills */}
+              <div className="flex items-center justify-between gap-2 w-full">
+                <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
                 {categories.map((cat) => (
                   <button
                     key={cat}
@@ -1083,11 +1087,16 @@ export const PosModal: React.FC<PosModalProps> = ({
                     {cat}
                   </button>
                 ))}
+                </div>
+                <div className="flex shrink-0 rounded-lg border border-slate-300 bg-white p-0.5" role="group" aria-label="Catalogue view">
+                  <button type="button" aria-pressed={catalogueView === 'list'} onClick={() => setCatalogueView('list')} className={`rounded-md p-1.5 ${catalogueView === 'list' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`} title="List view"><List className="h-4 w-4" /></button>
+                  <button type="button" aria-pressed={catalogueView === 'grid'} onClick={() => setCatalogueView('grid')} className={`rounded-md p-1.5 ${catalogueView === 'grid' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`} title="Grid view"><LayoutGrid className="h-4 w-4" /></button>
+                </div>
               </div>
             </div>
 
-            {/* Product Cards Grid */}
-            <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 pr-1 auto-rows-fr">
+            {/* Product catalogue: list is the default for fast, legible terminal scanning. */}
+            <div className={`flex-1 overflow-y-auto pr-1 ${catalogueView === 'list' ? 'space-y-2' : 'grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-fr'}`}>
               {filteredProducts.map((p) => {
                 const stockOnHand = p.stock[outletId] || 0;
                 const minAlert = p.minStockAlert[outletId] || 10;
@@ -1100,12 +1109,12 @@ export const PosModal: React.FC<PosModalProps> = ({
                   <div
                     key={p.id}
                     onClick={() => handleAddToCart(p)}
-                    className={`bg-white rounded-xl border border-slate-200 p-3 flex flex-col justify-between cursor-pointer transition-all hover:shadow-sm hover:border-slate-300 group min-h-[252px] ${
+                    className={`bg-white rounded-xl border border-slate-200 p-3 flex cursor-pointer transition-all hover:shadow-sm hover:border-slate-300 group ${catalogueView === 'list' ? 'flex-row items-center gap-4 min-h-0' : 'flex-col justify-between min-h-[252px]'} ${
                       isOutOfStock ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''
                     }`}
                   >
-                    <div className="space-y-3">
-                      <div className="relative aspect-[4/3] rounded overflow-hidden bg-[#F1F5F9] border border-slate-200">
+                    <div className={`space-y-3 ${catalogueView === 'list' ? 'flex min-w-0 flex-1 items-center gap-4 space-y-0' : ''}`}>
+                      <div className={`relative rounded overflow-hidden bg-[#F1F5F9] border border-slate-200 ${catalogueView === 'list' ? 'h-16 w-20 shrink-0' : 'aspect-[4/3]'}`}>
                         <div className="absolute inset-0 flex items-center justify-center text-slate-400">
                           <FallbackIcon className="w-6 h-6 stroke-[1.75]" />
                         </div>
@@ -1132,7 +1141,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                         </span>
                       </div>
 
-                      <h4 className="font-medium text-slate-700 text-xs line-clamp-2 leading-snug min-h-[2rem]">
+                      <h4 className={`${catalogueView === 'list' ? 'text-base font-black text-slate-900 min-h-0' : 'text-xs font-medium text-slate-700 min-h-[2rem]'} line-clamp-2 leading-snug`}>
                         {p.name}
                       </h4>
                       <div className="text-[10px] text-slate-400 font-mono">
@@ -1140,7 +1149,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-end justify-between gap-3">
+                    <div className={`${catalogueView === 'list' ? 'mt-0 pt-0 border-0' : 'mt-4 pt-3 border-t border-slate-100'} flex items-end justify-between gap-3`}>
                       <div>
                         <div className="text-sm font-bold text-slate-900">
                           GH₵ {p.retailPrice.toFixed(2)}

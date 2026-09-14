@@ -173,6 +173,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const [importMapping, setImportMapping] = useState<ColumnMapping>({});
   const [importFileName, setImportFileName] = useState('');
   const [importResult, setImportResult] = useState<{ created: number; updated: number; skipped: number } | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importCommitting, setImportCommitting] = useState(false);
   const [bulkPercent, setBulkPercent] = useState(5);
   // FR-PROD-05 · FR-UOM-01: the lists are the server's. They were local state
   // seeded from hard-coded arrays, so every add, rename and retire died on
@@ -451,6 +453,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
 
   const commitImport = async () => {
     if (!importValidation) return;
+    setImportError(null);
+    setImportCommitting(true);
     const created = rowsToProducts(
       importValidation.valid.filter((row) => !row.isUpdate),
       stockKeyFor({ outletId: currentOutlet.id } as Product, currentOutlet),
@@ -466,7 +470,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       setImportResult({ created: result.created, updated: result.updated, skipped: importValidation.invalid.length });
       setImportStep('result');
     } catch (failure) {
-      setSetupError(failure instanceof Error ? failure.message : 'The import could not be committed.');
+      setImportError(failure instanceof Error ? failure.message : 'The import could not be committed.');
+    } finally {
+      setImportCommitting(false);
     }
   };
 
@@ -487,6 +493,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
     setImportMapping({});
     setImportFileName('');
     setImportResult(null);
+    setImportError(null);
     setImportStep('upload');
   };
 
@@ -724,10 +731,15 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 <button onClick={() => setImportStep('validation')} className="rounded-lg border border-slate-300 px-4 py-2.5 text-xs font-bold text-slate-700">
                   Back
                 </button>
-                <button onClick={commitImport} className="rounded-lg bg-emerald-700 px-4 py-2.5 text-xs font-black text-white">
-                  Commit import
+                <button type="button" disabled={importCommitting} onClick={() => void commitImport()} className="rounded-lg bg-emerald-700 px-4 py-2.5 text-xs font-black text-white disabled:cursor-wait disabled:opacity-60">
+                  {importCommitting ? 'Committing…' : 'Commit import'}
                 </button>
               </div>
+              {importError && (
+                <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">
+                  Import was not saved: {importError}. Correct the rows or try again.
+                </div>
+              )}
             </div>
           )}
 
