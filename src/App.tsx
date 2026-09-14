@@ -33,7 +33,6 @@ import {
   INITIAL_USERS,
   INITIAL_ROLES_PERMISSIONS,
   INITIAL_SETTINGS,
-  INITIAL_SHIFT_RECORDS,
   INITIAL_EXPENSES,
   INITIAL_INSTALLMENT_PLANS,
   INITIAL_RETURNS_EXCHANGES,
@@ -68,6 +67,8 @@ import { productsApi } from './productsApi';
 import { stockApi, withStock, type MovementType } from './stockApi';
 import { suppliersApi, goodsReceiptApi } from './suppliersApi';
 import { salesApi, toCompletedSale, cartFromWire } from './salesApi';
+import { shiftsApi, toShiftInfo, toShiftRecord, type CashMovementKind } from './shiftsApi';
+import { terminalsApi } from './salesApi';
 
 /**
  * Outlets now come from the API, so a session's outlet id *is* the app's outlet
@@ -153,10 +154,11 @@ export default function App() {
     // allSettled so one failing list cannot cost the user their session — but
     // a rejection is reported rather than swallowed, because a silent empty
     // list looks exactly like "you have no sales yet".
-    const [branches, catalogue, movementHistory, supplierList, saleHistory] = await Promise.allSettled([
-      outletsApi.list(), productsApi.list(), stockApi.movements({ limit: 200 }), suppliersApi.list(),
-      salesApi.recent(undefined, undefined, 100),
-    ]);
+    const [branches, catalogue, movementHistory, supplierList, saleHistory, openShift, shiftHistory] =
+      await Promise.allSettled([
+        outletsApi.list(), productsApi.list(), stockApi.movements({ limit: 200 }), suppliersApi.list(),
+        salesApi.recent(undefined, undefined, 100), shiftsApi.current(), shiftsApi.recent(undefined, 50),
+      ]);
 
     const outletList = branches.status === 'fulfilled' && branches.value.length > 0
       ? branches.value
@@ -188,8 +190,23 @@ export default function App() {
       )));
     }
 
+    // FR-CASH-01: whether a shift is open is the server's answer, not a
+    // seeded one. A till that believes it has a shift when the server disagrees
+    // sells into nothing.
+    if (openShift.status === 'fulfilled') {
+      setShiftInfo(openShift.value
+        ? toShiftInfo(openShift.value)
+        : { id: '', outletId: '', terminalId: '', isOpen: false, openedAt: '',
+            cashier: '', openingFloat: 0, expectedCash: 0 });
+    }
+    if (shiftHistory.status === 'fulfilled') {
+      setShiftRecords(shiftHistory.value.map((wire) => toShiftRecord(
+        wire, outletList.find((outlet) => outlet.id === wire.outletId)?.name || '')));
+    }
+
     const loaded: Record<string, PromiseSettledResult<unknown>> = {
       branches, catalogue, movements: movementHistory, suppliers: supplierList, sales: saleHistory,
+      shift: openShift, shiftHistory,
     };
     Object.entries(loaded).forEach(([name, result]) => {
       if (result.status === 'rejected') console.error(`[workspace] ${name} failed to load`, result.reason);
@@ -228,7 +245,9 @@ export default function App() {
   // stale figure passes for a record of what happened.
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
-  const [shiftRecords, setShiftRecords] = useState<ShiftRecord[]>(INITIAL_SHIFT_RECORDS);
+  // FR-CASH: shifts are the server's — a seeded one would claim takings
+  // that were never counted.
+  const [shiftRecords, setShiftRecords] = useState<ShiftRecord[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(INITIAL_AUDIT_LOGS);
 
   // Radiance Lighting & Accounting Modules state
@@ -242,15 +261,23 @@ export default function App() {
   const [generalSettings, setGeneralSettings] = useState<GeneralSettings>(INITIAL_SETTINGS);
 
   // Shift & Cash Drawer state (PRD BR-14)
+  /**
+   * Closed until the server says otherwise — FR-CASH-01.
+   *
+   * It used to start open with a float and an expectation nobody had counted,
+   * which meant the till believed it could sell before anyone opened a drawer.
+   * The server now refuses that (FR-POS-02), so an invented shift would only
+   * produce a confusing failure at the payment screen.
+   */
   const [shiftInfo, setShiftInfo] = useState<ShiftInfo>({
-    id: 'shift-demo-001',
-    outletId: currentOutletId,
-    terminalId: '01',
-    isOpen: true,
-    openedAt: '08:00 AM',
-    cashier: 'Kwame A. (Admin)',
-    openingFloat: 200,
-    expectedCash: 650,
+    id: '',
+    outletId: '',
+    terminalId: '',
+    isOpen: false,
+    openedAt: '',
+    cashier: '',
+    openingFloat: 0,
+    expectedCash: 0,
   });
 
   // Modals state
@@ -793,106 +820,63 @@ export default function App() {
       .catch(reportProductFailure);
   };
 
+  /**
+   * FR-CASH-01 · BR-13: open a shift on the server.
+   *
+   * The till is asked for rather than assumed — BR-6 numbers receipts from the
+   * terminal's own block, and "01" was a placeholder that would have been wrong
+   * at any outlet with two counters.
+   */
   const handleStartShift = (openingFloat: number) => {
-    const shiftId = `shift-${Date.now()}`;
-    const cashier = currentUser?.fullName || 'Cashier';
-    const openedAt = new Date().toLocaleString('en-GB');
-    setShiftInfo({
-      id: shiftId,
-      outletId: currentOutlet.id,
-      terminalId: '01',
-      isOpen: true,
-      openedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      cashier,
-      openingFloat,
-      expectedCash: openingFloat,
-    });
-    // H-01: the shift joins the history the moment it opens.
-    setShiftRecords((prev) => [
-      {
-        id: shiftId,
-        outletId: currentOutlet.id,
-        outletName: currentOutlet.name,
-        terminalId: '01',
-        cashier,
-        openingFloat,
-        openedAt,
-        salesTotal: 0,
-        takingsByMethod: {},
-        expectedCash: openingFloat,
-        status: 'open',
-      },
-      ...prev,
-    ]);
-
-    const auditEntry: AuditLogEntry = {
-      id: `aud-${Date.now()}`,
-      timestamp: new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      actor: 'Kwame A.',
-      action: 'SHIFT_OPEN',
-      entity: `Shift Terminal #01`,
-      outletName: currentOutlet.name,
-      details: `Opened drawer with opening float of GH₵ ${openingFloat.toFixed(2)}`,
-    };
-    setAuditLogs((prev) => [auditEntry, ...prev]);
+    void terminalsApi.atOutlet(currentOutlet.id)
+      .then((tills) => {
+        if (tills.length === 0) throw new Error('No till is configured for this branch');
+        return shiftsApi.open(tills[0].id, openingFloat);
+      })
+      .then((wire) => {
+        setShiftInfo(toShiftInfo(wire));
+        setShiftRecords((prev) => [toShiftRecord(wire, currentOutlet.name), ...prev]);
+      })
+      .catch(reportShiftFailure);
   };
 
+  /**
+   * FR-CASH-04/05: close on a blind count.
+   *
+   * Only the count is sent. What was expected and the variance come back from
+   * the server, which is what keeps the close blind — the figure is not in the
+   * browser to be read before submitting.
+   *
+   * FR-CASH-06: past the threshold the server refuses without a note, and the
+   * shift stays open so the cashier can add one.
+   */
   const handleCloseShift = (countedCash: number, note?: string) => {
-    const variance = roundMoney(countedCash - shiftInfo.expectedCash);
-    setShiftInfo((prev) => ({
-      ...prev,
-      isOpen: false,
-      countedCash,
-      variance,
-      varianceNote: note,
-    }));
-
-    // FR-CASH-07: non-cash takings are recorded by method for reconciliation.
-    const shiftSales = sales.filter(
-      (sale) => sale.status === 'COMPLETED' && sale.outletId === shiftInfo.outletId,
-    );
-    const takingsByMethod = shiftSales.reduce<Partial<Record<PaymentMethod, number>>>((acc, sale) => {
-      sale.payments.forEach((payment) => {
-        acc[payment.method] = roundMoney((acc[payment.method] || 0) + payment.amount);
-      });
-      return acc;
-    }, {});
-
-    // FR-CASH-09: a closed shift is never reopened; this record is final.
-    setShiftRecords((prev) =>
-      prev.map((record) =>
-        record.id === shiftInfo.id
-          ? {
-              ...record,
-              status: 'closed',
-              closedAt: new Date().toLocaleString('en-GB'),
-              salesTotal: roundMoney(shiftSales.reduce((sum, sale) => sum + sale.total, 0)),
-              takingsByMethod,
-              expectedCash: shiftInfo.expectedCash,
-              countedCash,
-              variance,
-              varianceNote: note,
-            }
-          : record,
-      ),
-    );
-
-    const auditEntry: AuditLogEntry = {
-      id: `aud-${Date.now()}`,
-      timestamp: new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      actor: 'Kwame A.',
-      action: 'SHIFT_CLOSE',
-      entity: `Shift Terminal #01`,
-      outletName: currentOutlet.name,
-      details: `Blind count submitted: GH₵ ${countedCash.toFixed(2)}. Variance: ${variance >= 0 ? '+' : ''}GH₵ ${variance.toFixed(2)}. ${note || ''}`,
-    };
-    setAuditLogs((prev) => [auditEntry, ...prev]);
-
+    if (!shiftInfo.id) return;
+    void shiftsApi.close(shiftInfo.id, countedCash, note)
+      .then((wire) => {
+        setShiftInfo(toShiftInfo(wire));
+        setShiftRecords((prev) => prev.map((record) =>
+          record.id === wire.id ? toShiftRecord(wire, currentOutlet.name) : record));
+      })
+      .catch(reportShiftFailure);
   };
 
-  // ==========================================
-  // AUTH SESSION
-  // ==========================================
+  /** FR-CASH-03: a pay-in or pay-out, each with a reason. */
+  const handleCashMovement = (type: CashMovementKind, amount: number, reason: string, note?: string) => {
+    if (!shiftInfo.id) return;
+    void shiftsApi.recordCash(shiftInfo.id, type, amount, reason, note)
+      .then((wire) => setShiftInfo(toShiftInfo(wire)))
+      .catch(reportShiftFailure);
+  };
+
+  const reportShiftFailure = (failure: unknown) => {
+    if (failure instanceof AuthApiError && failure.status !== 401 && failure.status !== 423) {
+      alert(failure.message);
+      return;
+    }
+    if (!(failure instanceof AuthApiError)) setAppErrorReference(`SHF-${Date.now().toString().slice(-6)}`);
+  };
+
   const appendAuditLog = (entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) => {
     const stamped: AuditLogEntry = {
       ...entry,
