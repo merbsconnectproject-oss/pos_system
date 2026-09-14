@@ -25,6 +25,13 @@ export interface UserWire {
   createdAt: string;
 }
 
+/** Accept labels from older seeded data, but only send the canonical backend roles. */
+const normalizeRole = (value: string): UserRole => {
+  if (value === 'branch_manager') return 'manager';
+  if (value === 'super_admin') return 'owner';
+  return (['owner', 'manager', 'cashier', 'storekeeper'].includes(value) ? value : 'cashier') as UserRole;
+};
+
 export const toUserAccount = (wire: UserWire): UserAccount => ({
   id: wire.id,
   fullName: wire.fullName,
@@ -33,7 +40,7 @@ export const toUserAccount = (wire: UserWire): UserAccount => ({
   phone: wire.phone || '',
   // The app models one role; the server allows several. The first is the one
   // the UI labels by, and `effectivePermissions` is what actually decides.
-  role: (wire.roles[0] || 'cashier') as UserRole,
+  role: normalizeRole(wire.roles[0] || 'cashier'),
   // 'all-outlets' is the app's word for someone who works across branches.
   outletId: wire.outletIds.length === 1 ? wire.outletIds[0] : 'all-outlets',
   active: wire.active,
@@ -65,7 +72,7 @@ const fromAccount = (account: Partial<UserAccount>, allOutletIds: string[]): Use
   phone: account.phone || undefined,
   password: account.password || undefined,
   pin: account.pinCode || undefined,
-  roles: [account.role || 'cashier'],
+  roles: [normalizeRole(account.role || 'cashier')],
   outletIds: account.outletId === 'all-outlets' || !account.outletId
     ? allOutletIds
     : [account.outletId],

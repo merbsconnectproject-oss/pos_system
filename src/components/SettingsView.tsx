@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { settingsApi } from '../settingsApi';
+import { backupsApi, formatAge, formatBytes, type BackupStatusWire } from '../backupsApi';
 import { InfoHint } from './InfoHint';
 import {
   Users,
@@ -34,6 +35,11 @@ import {
   PlayCircle,
   Copy,
   Sparkles,
+  Clock,
+  CloudUpload,
+  HardDrive,
+  RefreshCw,
+  Type,
 } from 'lucide-react';
 import {
   Outlet,
@@ -56,6 +62,7 @@ import {
 } from '../permissions';
 import { exportToCsv } from '../utils/csvExport';
 import { ACCENT_PRESETS, DEFAULT_ACCENT, isBlue } from '../accent';
+import { FONT_CHOICES } from '../typography';
 
 interface SettingsViewProps {
   currentOutlet: Outlet;
@@ -82,6 +89,9 @@ interface SettingsViewProps {
   onUpdateRolesPermissions: (roles: RolePermissions[]) => void;
   generalSettings: GeneralSettings;
   onUpdateGeneralSettings: (settings: GeneralSettings) => void;
+  onUpdateAppearance: (
+    settings: Pick<GeneralSettings, 'accentColor' | 'fontFamily' | 'fontScalePercent'>,
+  ) => void;
   onAddAuditLog: (entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) => void;
   products: Product[];
   sales: CompletedSale[];
@@ -117,7 +127,7 @@ const SETTINGS_TABS: {
   { key: 'thresholds', label: 'Thresholds', hint: 'Idle lock, approval & variance limits', icon: SlidersHorizontal, requires: 'settings.general' },
   { key: 'printers', label: 'Hardware & Receipts', hint: '80mm / 58mm thermal templates', icon: Printer, requires: 'settings.terminal' },
   { key: 'appearance', label: 'Theme', hint: 'Accent colour & visual palette', icon: Palette, requires: 'settings.appearance' },
-  { key: 'backup', label: 'Backup', hint: 'JSON archive & accounting CSV exports', icon: Database, requires: 'settings.general' },
+  { key: 'backup', label: 'Backup', hint: 'Backup status, restores & accounting exports', icon: Database, requires: 'settings.general' },
 ];
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -133,6 +143,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateRolesPermissions,
   generalSettings,
   onUpdateGeneralSettings,
+  onUpdateAppearance,
   onAddAuditLog,
   products,
   sales,
@@ -148,6 +159,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     () => SETTINGS_TABS.find((item) => permissions.has(item.requires))?.key || 'appearance',
   );
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // FR-SET-07 · NFR-6: the server's backups, which are the ones that survive
+  // this machine. Loaded when the tab opens rather than on mount — an owner on
+  // the theme tab has no use for it, and it shells out to pg_dump history.
+  const [backupStatus, setBackupStatus] = useState<BackupStatusWire | null>(null);
+  const [backupError, setBackupError] = useState<string | null>(null);
+  const [backupBusy, setBackupBusy] = useState(false);
 
   // General Store Settings State
   const [companyName, setCompanyName] = useState(generalSettings.companyName);
@@ -592,7 +610,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   // Generate secure readable temporary password
   const generateSecureTempPassword = () => {
-    const prefixes = ['Dreams', 'Apex', 'Inco', 'Kumasi', 'SafeVault', 'VoltSafe', 'Terminal'];
+    const prefixes = ['Radiance', 'Apex', 'Inco', 'Kumasi', 'SafeVault', 'VoltSafe', 'Terminal'];
     const symbols = ['#', '!', '$', '@', '&'];
     const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
     const symbol = symbols[Math.floor(Math.random() * symbols.length)];
@@ -710,7 +728,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   // Next-login interactive simulation handlers
   const handleOpenSimulateLoginPrompt = (u: UserAccount) => {
     setSimulatedUserForLoginPrompt(u);
-    setSimCurrentPass(u.tempPassword || 'Dreams#2026');
+    setSimCurrentPass(u.tempPassword || 'ChangeMe#2026');
     setSimNewPass('');
     setSimConfirmPass('');
     setSimShowPass(false);
@@ -930,10 +948,57 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     return matchSearch && matchOutlet;
   });
 
+  // FR-SET-07: the status the screen asks for on every open. A stale "healthy"
+  // is worse than no light at all, so it is re-read rather than cached.
+  const loadBackupStatus = React.useCallback(async () => {
+    try {
+      setBackupStatus(await backupsApi.status(20));
+      setBackupError(null);
+    } catch (failure) {
+      // Shown, not swallowed. "Cannot read the backup status" is itself
+      // something an owner needs to know about the backups.
+      setBackupError(failure instanceof Error ? failure.message : 'Could not read the backup status');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'backup' && permissions.has('settings.general')) void loadBackupStatus();
+  }, [activeTab, permissions, loadBackupStatus]);
+
+  /**
+   * NFR-6: take one now.
+   *
+   * The reason this button exists is the minute before something risky — a
+   * stocktake, a price change across the catalogue — when waiting for the next
+   * scheduled run is the wrong answer.
+   */
+  const handleBackupNow = async () => {
+    setBackupBusy(true);
+    try {
+      const run = await backupsApi.runNow();
+      await loadBackupStatus();
+      // The server records a failed attempt and returns it rather than throwing,
+      // so a 200 is not the same as a backup. The screen says which happened.
+      if (run.outcome === 'SUCCEEDED') {
+        showToast(
+          run.storedOffsite
+            ? 'Backup taken and sent off-site.'
+            : 'Backup taken on this machine. It has not left the disk.',
+        );
+      } else {
+        showToast(`Backup failed: ${run.error || 'no reason given'}`);
+      }
+    } catch (failure) {
+      showToast(failure instanceof Error ? failure.message : 'Could not take a backup');
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
   // Export full JSON database
   const handleExportFullBackup = () => {
     const backupData = {
-      system: 'DreamsPOS',
+      system: 'POS System',
       version: '2.6',
       exportedAt: new Date().toISOString(),
       activeOutlet: currentOutlet,
@@ -951,7 +1016,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     downloadAnchor.setAttribute('href', dataStr);
     downloadAnchor.setAttribute(
       'download',
-      `dreamspos_full_backup_${new Date().toISOString().slice(0, 10)}.json`
+      `pos_system_data_snapshot_${new Date().toISOString().slice(0, 10)}.json`
     );
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
@@ -964,7 +1029,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       outletName: currentOutlet.name,
       details: 'Generated complete system JSON backup archive with products, sales, and configuration',
     });
-    showToast('Full system backup archive exported.');
+    showToast('Data snapshot exported.');
   };
 
   const swatches = ACCENT_PRESETS.map((preset) => ({
@@ -2097,11 +2162,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div>
                   <h2 className="text-base font-bold text-slate-900">Visual Personalization &amp; Themes</h2>
                   <p className="text-xs text-slate-500">
-                    Customize your system accent color tokens and active visual branding across the workspace.
+                    Customize the accent, typeface and text size across the workspace.
                   </p>
                 </div>
                 <button
-                  onClick={() => onChangeAccent(DEFAULT_ACCENT)}
+                  onClick={() => onUpdateAppearance({
+                    accentColor: DEFAULT_ACCENT,
+                    fontFamily: 'JAKARTA',
+                    fontScalePercent: 100,
+                  })}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 border border-slate-300 transition-colors cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
@@ -2171,6 +2240,71 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               </div>
 
+              <div className="space-y-4 border-t border-slate-200 pt-5">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                  <Type className="h-4 w-4 text-accent-500" />
+                  Typography
+                </div>
+
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                  {FONT_CHOICES.map((font) => (
+                    <button
+                      key={font.key}
+                      type="button"
+                      onClick={() => onUpdateAppearance({
+                        accentColor: generalSettings.accentColor,
+                        fontFamily: font.key,
+                        fontScalePercent: generalSettings.fontScalePercent,
+                      })}
+                      className={`rounded-xl border p-3 text-left transition-colors ${
+                        generalSettings.fontFamily === font.key
+                          ? 'border-accent-500 bg-accent-50'
+                          : 'border-slate-300 hover:bg-slate-50'
+                      }`}
+                      style={{ fontFamily: font.stack }}
+                    >
+                      <span className="block text-sm font-bold text-slate-900">{font.label}</span>
+                      <span className="mt-1 block text-[10px] text-slate-500">{font.description}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="max-w-xl rounded-xl border border-slate-300 bg-slate-50 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-4">
+                    <span className="text-xs font-bold text-slate-800">
+                      Text size
+                    </span>
+                    <span className="rounded-md bg-white px-2 py-1 text-xs font-black text-slate-700 shadow-2xs">
+                      {generalSettings.fontScalePercent}%
+                    </span>
+                  </div>
+                  <div id="font-scale" className="grid grid-cols-5 gap-2" role="group" aria-label="Text size">
+                    {[90, 100, 110, 120, 130].map((scale) => (
+                      <button
+                        key={scale}
+                        type="button"
+                        onClick={() => onUpdateAppearance({
+                          accentColor: generalSettings.accentColor,
+                          fontFamily: generalSettings.fontFamily,
+                          fontScalePercent: scale,
+                        })}
+                        className={`rounded-lg border px-2 py-2 text-xs font-bold transition-colors ${
+                          generalSettings.fontScalePercent === scale
+                            ? 'border-accent-500 bg-accent-50 text-accent-700'
+                            : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-100'
+                        }`}
+                        aria-pressed={generalSettings.fontScalePercent === scale}
+                      >
+                        {scale}%
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs text-slate-600">
+                    Aa · Product names, prices, buttons and reports update immediately.
+                  </p>
+                </div>
+              </div>
+
               {/* Live Preview Panel */}
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-300 space-y-3">
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -2210,8 +2344,183 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   Data Backup &amp; External Accounting Integration
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Safeguard complete business data archives and synchronize transactions with your accounting software.
+                  Automatic database backups, and exports for your accounting software.
                 </p>
+              </div>
+
+              {/*
+                FR-SET-07 · NFR-6 · NFR-7: the server's backups.
+
+                Above the exports because the two are not the same thing and the
+                difference matters. An export is a file an accountant asked for;
+                this is what the shop's history is recovered from when the
+                counter PC's disk dies.
+              */}
+              <div
+                className={`p-4 rounded-xl border space-y-3 ${
+                  backupStatus?.healthy
+                    ? 'bg-emerald-50/50 border-emerald-200'
+                    : 'bg-amber-50/60 border-amber-300'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                      {backupStatus?.healthy ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-amber-600" />
+                      )}
+                      Database Backup
+                      <InfoHint text="The copy the shop is recovered from if this machine is lost. Kept on a schedule by the server, not by this browser." />
+                    </div>
+                    <p className="text-[11px] text-slate-600 max-w-xl">
+                      {backupError
+                        ? backupError
+                        : backupStatus
+                          ? backupStatus.summary
+                          : 'Reading the backup status…'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => void loadBackupStatus()}
+                      title="Re-read the status"
+                      className="p-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
+                    </button>
+                    <button
+                      onClick={() => void handleBackupNow()}
+                      disabled={backupBusy}
+                      className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-black disabled:opacity-60 disabled:cursor-wait text-white px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      <Database className="w-4 h-4" />
+                      <span>{backupBusy ? 'Backing up…' : 'Back Up Now'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {backupStatus && (
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px] pt-1 border-t border-slate-200/70">
+                      <div className="pt-2">
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> At risk right now:
+                        </span>
+                        {/* NFR-7 asks for fifteen minutes. This is the live
+                            answer, not the configured target. */}
+                        <span
+                          className={`font-bold ${
+                            (backupStatus.recoveryPointMinutes ?? Infinity) > backupStatus.intervalMinutes * 2
+                              ? 'text-amber-700'
+                              : 'text-slate-800'
+                          }`}
+                        >
+                          {backupStatus.lastSuccess
+                            ? formatAge(backupStatus.recoveryPointMinutes)
+                            : 'no backup yet'}
+                        </span>
+                      </div>
+                      <div className="pt-2">
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <CloudUpload className="w-3 h-3" /> Off-site copy:
+                        </span>
+                        <span
+                          className={`font-bold ${
+                            backupStatus.lastOffsiteSuccess ? 'text-emerald-700' : 'text-amber-700'
+                          }`}
+                        >
+                          {backupStatus.offsiteConfigured
+                            ? formatAge(
+                                backupStatus.lastOffsiteSuccess?.finishedAt
+                                  ? Math.floor(
+                                      (Date.now() - Date.parse(backupStatus.lastOffsiteSuccess.finishedAt)) / 60000,
+                                    )
+                                  : null,
+                              )
+                            : 'not set up'}
+                        </span>
+                      </div>
+                      <div className="pt-2">
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <RefreshCw className="w-3 h-3" /> Runs every:
+                        </span>
+                        <span className="font-bold text-slate-800">
+                          {backupStatus.enabled ? `${backupStatus.intervalMinutes} min` : 'switched off'}
+                        </span>
+                      </div>
+                      <div className="pt-2">
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <HardDrive className="w-3 h-3" /> Kept for:
+                        </span>
+                        <span className="font-bold text-slate-800">{backupStatus.retentionDays} days</span>
+                      </div>
+                    </div>
+
+                    {/* FR-SET-07 asks for restore history too, and a RESTORE row
+                        is in here with the rest — putting one back is part of
+                        this database's history, not something separate. */}
+                    {backupStatus.history.length > 0 && (
+                      <div className="pt-1">
+                        <div className="text-[11px] font-bold text-slate-700 mb-1.5">Recent runs</div>
+                        <div className="max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-white">
+                          <table className="w-full text-[11px]">
+                            <thead className="bg-slate-50 text-slate-500 sticky top-0">
+                              <tr>
+                                <th className="text-left font-semibold px-2.5 py-1.5">When</th>
+                                <th className="text-left font-semibold px-2.5 py-1.5">Kind</th>
+                                <th className="text-left font-semibold px-2.5 py-1.5">Result</th>
+                                <th className="text-left font-semibold px-2.5 py-1.5">Where</th>
+                                <th className="text-right font-semibold px-2.5 py-1.5">Size</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {backupStatus.history.map((run) => (
+                                <tr key={run.id} className="border-t border-slate-100">
+                                  <td className="px-2.5 py-1.5 text-slate-700 whitespace-nowrap">
+                                    {new Date(run.startedAt).toLocaleString()}
+                                  </td>
+                                  <td className="px-2.5 py-1.5 text-slate-600">
+                                    {run.kind === 'SCHEDULED' ? 'Automatic' : run.kind === 'MANUAL' ? 'By hand' : 'Restore'}
+                                  </td>
+                                  <td className="px-2.5 py-1.5">
+                                    <span
+                                      className={`font-bold ${
+                                        run.outcome === 'SUCCEEDED'
+                                          ? 'text-emerald-700'
+                                          : run.outcome === 'FAILED'
+                                            ? 'text-rose-700'
+                                            : 'text-slate-500'
+                                      }`}
+                                    >
+                                      {run.outcome === 'SUCCEEDED' ? 'Worked' : run.outcome === 'FAILED' ? 'Failed' : 'Running'}
+                                    </span>
+                                    {/* The reason, in full. "The backup failed"
+                                        on its own is a line nobody can act on. */}
+                                    {run.error && (
+                                      <span className="block text-rose-600/90 leading-tight">{run.error}</span>
+                                    )}
+                                  </td>
+                                  <td className="px-2.5 py-1.5 text-slate-600">
+                                    {run.outcome !== 'SUCCEEDED'
+                                      ? '—'
+                                      : run.storedOffsite
+                                        ? 'Off-site'
+                                        : 'This machine only'}
+                                  </td>
+                                  <td className="px-2.5 py-1.5 text-right text-slate-600 whitespace-nowrap">
+                                    {formatBytes(run.sizeBytes)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2219,11 +2528,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-300 space-y-3 flex flex-col justify-between">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                      <Database className="w-4 h-4 text-accent-500" />
-                      Full System Snapshot (JSON)
+                      <FileText className="w-4 h-4 text-accent-500" />
+                      Data Snapshot (JSON)
                     </div>
+                    {/*
+                      Called a snapshot rather than a backup, because that is
+                      what it is: a file built from what this browser currently
+                      holds. It cannot contain what was never loaded, and it
+                      lands on the same disk as the database — neither of which
+                      is true of the backup above.
+                    */}
                     <p className="text-[11px] text-slate-500">
-                      Creates a portable JSON archive with all products, inventory, sales, user accounts, and configuration.
+                      A portable JSON file of the records loaded on this screen — products, sales and configuration.
+                      For recovering the shop, use the database backup above.
                     </p>
                   </div>
                   <button
@@ -2306,15 +2623,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px] text-slate-600">
                   <div>
                     <span className="text-slate-400 block">Version:</span>
-                    <span className="font-bold text-slate-800">DreamsPOS v2.6 Certified</span>
+                    <span className="font-bold text-slate-800">POS System v2.6</span>
                   </div>
                   <div>
                     <span className="text-slate-400 block">Active Store Outlets:</span>
                     <span className="font-bold text-slate-800">{outlets.length} Branches</span>
                   </div>
+                  {/*
+                    Was a hardcoded "IndexedDB Synced", which was a green light
+                    for something this build does not do. A health panel that
+                    invents a reassurance is worse than a shorter one, so it now
+                    shows a fact the server answered for.
+                  */}
                   <div>
-                    <span className="text-slate-400 block">Offline Cache:</span>
-                    <span className="font-bold text-emerald-600">IndexedDB Synced</span>
+                    <span className="text-slate-400 block">Last Good Backup:</span>
+                    <span
+                      className={`font-bold ${
+                        backupStatus?.lastSuccess ? 'text-emerald-600' : 'text-amber-600'
+                      }`}
+                    >
+                      {backupStatus?.lastSuccess ? formatAge(backupStatus.recoveryPointMinutes) : 'none yet'}
+                    </span>
                   </div>
                   <div>
                     <span className="text-slate-400 block">Catalog SKUs:</span>
@@ -2716,9 +3045,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   >
                     <option value="" disabled>Select role</option>
                     <option value="cashier">POS Cashier</option>
-                    <option value="branch_manager">Branch Manager</option>
+                    <option value="manager">Branch Manager</option>
                     <option value="storekeeper">Storekeeper / Inventory</option>
-                    <option value="super_admin">Super Administrator</option>
+                    <option value="owner">Super Administrator</option>
                   </select>
                 </div>
 
