@@ -110,7 +110,7 @@ non-deferred item in its section is complete, including its non-functional items
 - [x][x] Multiple barcodes per product — FR-PROD-03 · `D-06`
 - [x][x] Each barcode bound to one selling unit, so a carton scan adds a carton — FR-PROD-04 *(a code naming an unsold unit is refused)*
 - [ ][x] Barcode unique system-wide — FR-PROD-03
-- [x][x] Categories and brands managed as lists — FR-PROD-05 · `D-09` `D-10`
+- [x][x] Categories and brands managed as lists — FR-PROD-05 · `D-09` `D-10` *(add, rename, retire; units of measure too — FR-UOM-01)*
 - [x][x] Search matches name, SKU, barcode, brand, category; partial and out-of-order terms — FR-PROD-06
 - [x][ ] Search results show stock at the active outlet — FR-PROD-07 *(blocked on F: stock is per outlet)*
 - [x][x] Products deactivated, never deleted — FR-PROD-08 · BR-17 · `D-19`
