@@ -50,14 +50,14 @@ non-deferred item in its section is complete, including its non-functional items
 | J · Shifts & cash | 12 | 9 done, 1 partial, 2 open | 10 done, 2 partial |
 | K · Suppliers & goods receipt | 11 | 6 done, 2 partial, 3 deferred | 8 done, 3 deferred |
 | L · Customers | 8 | 6 done, 1 partial, 1 deferred | 7 open, 1 deferred |
-| M · Users, roles & permissions | 12 | 10 done, 1 partial, 1 open | 12 open |
+| M · Users, roles & permissions | 12 | 10 done, 1 partial, 1 open | 10 done, 2 open |
 | N · Audit | 6 | 2 done, 2 partial, 2 open | 4 done, 1 partial, 1 open |
 | O · Reports & dashboard | 10 | 6 done, 2 partial, 1 open, 1 deferred | 9 open, 1 deferred |
 | P · Settings | 12 | 8 done, 4 partial | 12 open |
 | Q · Connectivity & resilience | 10 | 2 partial, 7 open, 1 deferred | 9 open, 1 deferred |
 | R · Cross-cutting non-functional | 22 | 4 done, 3 partial, 15 open | 3 done, 3 partial, 16 open |
 
-**228 items · 80 complete · frontend 134 done · backend 96 done, 12 partial,
+**228 items · 88 complete · frontend 134 done · backend 106 done, 12 partial,
 10 not applicable · contract frozen and machine-checked (`npm run check`)**
 
 > The table above is generated from the boxes below, so the two cannot drift.
@@ -78,7 +78,8 @@ non-deferred item in its section is complete, including its non-functional items
 | 🟨 | N Audit | writes and reads; some actions do not exist yet to log |
 | 🟨 | E Pricing | the three prices and history; per-outlet overrides open |
 | ✅ | J Shifts & cash | open, cash movements, blind close, variance — release gate 9 passes |
-| ⬜ | I Receipts · L Customers · M Users · O Reports · P Settings | not started |
+| ✅ | M Users, roles & permissions | accounts, role baselines, per-user grants — BR-16 holds on every path |
+| ⬜ | I Receipts · L Customers · O Reports · P Settings | not started |
 | — | Q Connectivity | n/a — local-first removed the offline queue |
 
 **Release gates** — 1 ⬜ · 2 ⬜ (needs the printer) · **3 ✅** same payment twice records
@@ -357,18 +358,18 @@ held sales, which live only in the browser.
 ## M · Users, roles & permissions — `FR-USER`
 
 ### Functional
-- [x][ ] Every person has an individual account; no shared logins — FR-USER-01 · `J-01` `J-03`
-- [x][ ] Four seeded roles: Owner, Manager, Cashier, Storekeeper — FR-USER-02 · `J-05`
-- [~][ ] Permissions granted individually and varied per user, not only per role — FR-USER-03 · `J-07` *(overrides in the contract and resolver; no per-user UI yet)*
-- [x][ ] Permission matrix over all 31 PRD codes, grouped by area — `J-06`
-- [x][ ] Users assigned to one or more outlets — FR-USER-04
-- [x][ ] No user can modify their own permissions — FR-USER-05 · BR-16
-- [x][ ] Controls the user lacks permission for are absent, not disabled — FR-USER-06 · `L-09`
-- [x][ ] Users deactivated, never deleted — FR-USER-07 · `J-11`
-- [x][ ] Every permission change written to the audit log — FR-USER-08
+- [x][x] Every person has an individual account; no shared logins — FR-USER-01 · `J-01` `J-03`
+- [x][x] Four seeded roles: Owner, Manager, Cashier, Storekeeper — FR-USER-02 · `J-05` *(the `Role` enum the server authorises with, so the matrix cannot describe rights it does not grant)*
+- [~][x] Permissions granted individually and varied per user, not only per role — FR-USER-03 · `J-07` *(granted, withheld or cleared back to the role — three states. The API is complete; the per-user matrix screen is still to build)*
+- [x][x] Permission matrix over all 31 PRD codes, grouped by area — `J-06` *(33 served, the two Stage 2/3 codes flagged `futureStage` — decision recorded on `Permission`)*
+- [x][x] Users assigned to one or more outlets — FR-USER-04
+- [x][x] No user can modify their own permissions — FR-USER-05 · BR-16 *(nor their own roles, nor deactivate themselves; editing their own name is still allowed)*
+- [x][x] Controls the user lacks permission for are absent, not disabled — FR-USER-06 · `L-09` *(the server refuses regardless of what the screen draws)*
+- [x][x] Users deactivated, never deleted — FR-USER-07 · `J-11`
+- [x][x] Every permission change written to the audit log — FR-USER-08 *(naming the code: "supplier.manage: false → true")*
 
 ### Non-functional
-- [ ][ ] Server-side authorisation on every endpoint; the UI is never the only control — NFR-9
+- [ ][x] Server-side authorisation on every endpoint; the UI is never the only control — NFR-9 *(verified: granting one cashier `supplier.manage` turns their 403 into a 201)*
 - [x][ ] A cashier account shows no cost price, no profit and no reports anywhere — release gate 7 *(asserted)*
 - [x][ ] Navigation authorisation has one source of truth shared by shell and sidebar — `L-09`
 
