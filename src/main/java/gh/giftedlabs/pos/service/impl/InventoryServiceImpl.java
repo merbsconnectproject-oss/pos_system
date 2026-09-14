@@ -4,17 +4,22 @@ import gh.giftedlabs.pos.dto.MovementRequest;
 import gh.giftedlabs.pos.dto.StockView;
 import gh.giftedlabs.pos.entity.InventoryMovement;
 import gh.giftedlabs.pos.entity.StockLevel;
+import gh.giftedlabs.pos.exception.ApprovalRequiredException;
 import gh.giftedlabs.pos.exception.InsufficientStockException;
 import gh.giftedlabs.pos.exception.ProductNotFoundException;
 import gh.giftedlabs.pos.repository.InventoryMovementRepository;
+import gh.giftedlabs.pos.repository.OutletRepository;
 import gh.giftedlabs.pos.repository.ProductRepository;
 import gh.giftedlabs.pos.repository.StockLevelRepository;
 import gh.giftedlabs.pos.rules.Costing;
 import gh.giftedlabs.pos.rules.Money;
 import gh.giftedlabs.pos.rules.MovementType;
+import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.rules.Quantity;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.AuditService;
+import gh.giftedlabs.pos.service.SettingsService;
+import gh.giftedlabs.pos.service.UserService;
 import gh.giftedlabs.pos.service.InventoryService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,14 +45,22 @@ public class InventoryServiceImpl implements InventoryService {
     private final StockLevelRepository levels;
     private final InventoryMovementRepository movements;
     private final ProductRepository products;
+    private final OutletRepository outlets;
+    private final SettingsService settings;
+    private final UserService staff;
     private final AuditService audit;
     private final Clock clock;
 
     public InventoryServiceImpl(StockLevelRepository levels, InventoryMovementRepository movements,
-                                ProductRepository products, AuditService audit, Clock clock) {
+                                ProductRepository products, OutletRepository outlets,
+                                SettingsService settings, UserService staff,
+                                AuditService audit, Clock clock) {
         this.levels = levels;
         this.movements = movements;
         this.products = products;
+        this.outlets = outlets;
+        this.settings = settings;
+        this.staff = staff;
         this.audit = audit;
         this.clock = clock;
     }
@@ -78,7 +91,7 @@ public class InventoryServiceImpl implements InventoryService {
         // BR-8: lock before reading the quantity, or two terminals both see the
         // last unit and both sell it.
         StockLevel level = levels.lockByProductAndOutlet(request.productId(), request.outletId())
-                .orElseGet(() -> levels.save(new StockLevel(request.productId(), request.outletId())));
+                .orElseGet(() -> levels.save(newLevel(request.productId(), request.outletId())));
 
         BigDecimal resulting = level.getQuantity().add(delta);
 
@@ -100,6 +113,13 @@ public class InventoryServiceImpl implements InventoryService {
                     Money.ofMajor(request.unitCost())).toMajor();
         }
 
+        // FR-INV-06 · FR-SET-06: past the configured value, a correction needs
+        // an approver. Checked after the level is locked because the value is
+        // worked out from the cost this outlet actually carries, and before
+        // anything is written so a refused adjustment leaves no trace of stock
+        // having moved.
+        requireApprovalIfLarge(request, magnitude, level, actor);
+
         movements.save(new InventoryMovement(
                 request.productId(), request.outletId(), request.type(), delta,
                 request.unitCost(), request.reason(), request.note(),
@@ -116,6 +136,31 @@ public class InventoryServiceImpl implements InventoryService {
                 request.outletId(), null, clientIp);
 
         return view(level);
+    }
+
+    /**
+     * FR-INV-06: an adjustment worth more than the threshold needs approval.
+     *
+     * <p>Valued at what this branch paid — the weighted average — because the
+     * question the threshold asks is how much the business is writing off, and
+     * retail would inflate that by the margin it never earned.
+     *
+     * <p>Someone who holds {@code stock.approve_adjustment} approves their own:
+     * requiring a second person there would mean the only people allowed to
+     * approve are the only people who cannot act.
+     */
+    private void requireApprovalIfLarge(MovementRequest request, BigDecimal magnitude,
+                                        StockLevel level, PosPrincipal actor) {
+        if (!request.type().isAdjustment()) return;
+
+        long threshold = settings.adjustmentApprovalThreshold();
+        BigDecimal value = magnitude.multiply(level.getAverageCost());
+        if (value.movePointRight(2).compareTo(BigDecimal.valueOf(threshold)) <= 0) return;
+
+        if (staff.holdsPermission(actor.userId(), Permission.STOCK_APPROVE_ADJUSTMENT)) return;
+        if (staff.holdsPermission(request.approvedBy(), Permission.STOCK_APPROVE_ADJUSTMENT)) return;
+
+        throw ApprovalRequiredException.adjustment(value, threshold);
     }
 
     @Override
@@ -175,7 +220,24 @@ public class InventoryServiceImpl implements InventoryService {
 
     private StockLevel level(UUID productId, UUID outletId) {
         return levels.findByProductIdAndOutletId(productId, outletId)
-                .orElseGet(() -> levels.save(new StockLevel(productId, outletId)));
+                .orElseGet(() -> levels.save(newLevel(productId, outletId)));
+    }
+
+    /**
+     * FR-SET-02: a product new to this branch starts at the branch's default
+     * reorder level.
+     *
+     * <p>Applied when the row is created and not afterwards. Raising the branch
+     * default is a decision about products nobody has set a level for yet; it
+     * is not an instruction to overwrite the levels somebody chose by hand.
+     */
+    private StockLevel newLevel(UUID productId, UUID outletId) {
+        StockLevel level = new StockLevel(productId, outletId);
+        outlets.findById(outletId)
+                .map(outlet -> outlet.getDefaultReorderLevel())
+                .filter(value -> value != null && value.signum() > 0)
+                .ifPresent(level::setReorderLevel);
+        return level;
     }
 
     private StockView view(StockLevel level) {

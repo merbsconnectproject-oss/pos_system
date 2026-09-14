@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -67,6 +68,15 @@ public class Outlet {
     private String logoUrl;
 
     /** BR-17: deactivation, never deletion — historical documents reference this row. */
+    /**
+     * FR-SET-02: what a product's reorder level starts at in this branch.
+     *
+     * <p>Per branch rather than per business: a showroom that turns over a
+     * pallet a week and a store that sells two a month cannot share a number.
+     */
+    @Column(name = "default_reorder_level", nullable = false)
+    private BigDecimal defaultReorderLevel = BigDecimal.ZERO;
+
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
@@ -164,6 +174,14 @@ public class Outlet {
 
     public void setManagerName(String managerName) {
         this.managerName = managerName;
+    }
+
+    public BigDecimal getDefaultReorderLevel() {
+        return defaultReorderLevel;
+    }
+
+    public void setDefaultReorderLevel(BigDecimal defaultReorderLevel) {
+        this.defaultReorderLevel = defaultReorderLevel == null ? BigDecimal.ZERO : defaultReorderLevel;
     }
 
     public boolean isActive() {

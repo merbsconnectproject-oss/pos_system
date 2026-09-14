@@ -110,6 +110,22 @@ public class AuthController {
      * by itself: the approver's id travels on the sale line or the void that
      * needed it, and that write is authorised again on its own terms.
      */
+    /**
+     * FR-AUTH-02: set your own approval PIN — the settings security tab.
+     *
+     * <p>Your own, and nobody else's: an approval recorded against a PIN that
+     * an administrator typed for you says only that somebody who had been told
+     * the number approved it.
+     */
+    @PostMapping("/pin")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> setOwnPin(@Valid @RequestBody PinChange body,
+                                          @AuthenticationPrincipal PosPrincipal actor,
+                                          HttpServletRequest request) {
+        authentication.changeOwnPin(actor.userId(), body.currentPassword(), body.pin(), clientIp(request));
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/approve")
     @PreAuthorize("isAuthenticated()")
     public ApprovalResult approve(@Valid @RequestBody ApprovalRequest body,
@@ -123,6 +139,11 @@ public class AuthController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN,
                         "That PIN cannot authorise this. Ask a manager who holds it."));
     }
+
+    public record PinChange(
+            @NotBlank(message = "Enter your password") String currentPassword,
+            @NotBlank @jakarta.validation.constraints.Pattern(regexp = "\\d{4,6}",
+                    message = "A PIN is 4 to 6 digits") String pin) {}
 
     public record ApprovalRequest(
             @NotBlank @jakarta.validation.constraints.Pattern(regexp = "\\d{4,6}") String pin,

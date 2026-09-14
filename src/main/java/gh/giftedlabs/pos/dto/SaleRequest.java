@@ -48,7 +48,10 @@ public record SaleRequest(
             @PositiveOrZero Long discount,
 
             /** BR-10: required when unitPrice is below the product's floor. */
-            UUID floorApprovedBy) {
+            UUID floorApprovedBy,
+
+            /** FR-POS-10: required when the discount passes the seller's ceiling. */
+            UUID discountApprovedBy) {
     }
 
     public record PaymentLine(

@@ -41,6 +41,30 @@ public class SaleException extends RuntimeException {
                 Map.of("product", productName, "price", price, "floor", floor));
     }
 
+    /**
+     * BR-10: an approver was named who is not allowed to approve this.
+     *
+     * <p>Separate from {@link #belowFloor} because it is a different mistake:
+     * the price is not the problem, the person is. Telling the cashier "needs
+     * approval" when they have just had it approved sends them round again.
+     */
+    public static SaleException approverNotPermitted(String productName) {
+        return new SaleException("APPROVER_NOT_PERMITTED",
+                "The person who approved %s is not allowed to authorise that.".formatted(productName),
+                Map.of("product", productName));
+    }
+
+    /** FR-POS-10: past the discount this role may give without approval. */
+    public static SaleException discountAboveCeiling(String productName, java.math.BigDecimal percent,
+                                                     java.math.BigDecimal ceiling) {
+        return new SaleException("DISCOUNT_ABOVE_CEILING",
+                "%s%% off %s is past the %s%% this role may give. Ask a manager to approve it."
+                        .formatted(percent.setScale(1, java.math.RoundingMode.HALF_UP).toPlainString(),
+                                productName,
+                                ceiling.setScale(1, java.math.RoundingMode.HALF_UP).toPlainString()),
+                Map.of("product", productName, "percent", percent, "ceiling", ceiling));
+    }
+
     /** BR-6: the terminal has used every number it was given. */
     public static SaleException receiptBlockExhausted(String terminalCode) {
         return new SaleException("RECEIPT_BLOCK_EXHAUSTED",

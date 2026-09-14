@@ -66,4 +66,21 @@ public interface AuthenticationService {
 
     /** FR-AUTH-04: verify the signed-in shift owner's own PIN for unlock. */
     boolean verifyOwnPin(UUID userId, String pin);
+
+    /**
+     * FR-AUTH-02 · FR-USER-01: set your own approval PIN.
+     *
+     * <p>Self-service on purpose. An approval PIN identifies the approver, so
+     * one that somebody else chose — or that everybody shares — makes the
+     * approvals it authorises anonymous, which is the one thing they exist not
+     * to be.
+     *
+     * <p>The current password is required. Without it, an unattended session is
+     * enough for a passer-by to mint themselves an approval credential that
+     * outlives the session they borrowed.
+     *
+     * @throws gh.giftedlabs.pos.exception.AuthenticationFailedException if the
+     *         password does not match
+     */
+    void changeOwnPin(UUID userId, String currentPassword, String newPin, String clientIp);
 }

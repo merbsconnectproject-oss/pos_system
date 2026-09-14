@@ -33,5 +33,27 @@ public record MovementRequest(
 
         /** BR-7: the document this came from, and the idempotency key with it. */
         @Size(max = 40) String sourceType,
-        UUID sourceId) {
+        UUID sourceId,
+
+        /**
+         * FR-INV-06: who approved this, when its value passes the threshold.
+         *
+         * <p>Null on everything below the threshold, which is most movements.
+         * The person named must hold {@code stock.approve_adjustment} — it is
+         * verified, because an id in a request body is the client's claim.
+         */
+        UUID approvedBy) {
+
+    /**
+     * For movements the system writes itself — a sale, a receipt, a void.
+     *
+     * <p>None of them can need approval: they are the consequence of a document
+     * that was already authorised, and {@link MovementType#isAdjustment()} does
+     * not hold for any of them.
+     */
+    public MovementRequest(UUID productId, UUID outletId, MovementType type, BigDecimal quantity,
+                           BigDecimal unitCost, String reason, String note,
+                           String sourceType, UUID sourceId) {
+        this(productId, outletId, type, quantity, unitCost, reason, note, sourceType, sourceId, null);
+    }
 }

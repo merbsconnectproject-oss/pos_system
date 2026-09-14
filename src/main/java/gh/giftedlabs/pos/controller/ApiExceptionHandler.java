@@ -8,6 +8,7 @@ import gh.giftedlabs.pos.exception.OutletNotPermittedException;
 import gh.giftedlabs.pos.exception.CatalogueConflictException;
 import gh.giftedlabs.pos.exception.CatalogueListException;
 import gh.giftedlabs.pos.exception.IncorrectPinException;
+import gh.giftedlabs.pos.exception.ApprovalRequiredException;
 import gh.giftedlabs.pos.exception.InsufficientStockException;
 import gh.giftedlabs.pos.exception.ProductNotFoundException;
 import gh.giftedlabs.pos.exception.SaleException;
@@ -139,6 +140,18 @@ public class ApiExceptionHandler {
                         Map.of("productId", String.valueOf(ex.getProductId()),
                                 "available", ex.getAvailable(),
                                 "requested", ex.getRequested())));
+    }
+
+    /**
+     * FR-INV-06: needs an approver, which is not the same as being forbidden.
+     *
+     * <p>403 with its own code so the client opens the approval prompt instead
+     * of telling the storekeeper they lack a permission they do in fact hold.
+     */
+    @ExceptionHandler(ApprovalRequiredException.class)
+    public ResponseEntity<ApiError> onApprovalRequired(ApprovalRequiredException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiError("APPROVAL_REQUIRED", ex.getMessage(), ex.getDetails()));
     }
 
     @ExceptionHandler(ProductNotFoundException.class)

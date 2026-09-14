@@ -22,6 +22,7 @@ public record OutletView(
         String managerName,
         String receiptFooter,
         String logoUrl,
+        java.math.BigDecimal defaultReorderLevel,
         boolean active,
         Instant createdAt) {
 
@@ -37,6 +38,7 @@ public record OutletView(
                 outlet.getManagerName(),
                 outlet.getReceiptFooter(),
                 outlet.getLogoUrl(),
+                outlet.getDefaultReorderLevel(),
                 outlet.isActive(),
                 outlet.getCreatedAt());
     }

@@ -5,6 +5,7 @@ import gh.giftedlabs.pos.entity.User;
 import gh.giftedlabs.pos.repository.UserRepository;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.AuditService;
+import gh.giftedlabs.pos.service.SettingsService;
 import gh.giftedlabs.pos.service.ShiftService;
 import gh.giftedlabs.pos.service.impl.SessionServiceImpl;
 import jakarta.servlet.FilterChain;
@@ -50,6 +51,15 @@ class SessionGuardFilterTest {
                     @Override public ShiftService getObject(Object... args) { return shiftService; }
                     @Override public ShiftService getIfAvailable() { return shiftService; }
                     @Override public ShiftService getIfUnique() { return shiftService; }
+                },
+                // FR-SET-06: the idle lock is a setting now. None is configured
+                // in this unit test, so the filter falls back to PosProperties
+                // — which is the behaviour worth having on this path anyway.
+                new org.springframework.beans.factory.ObjectProvider<>() {
+                    @Override public SettingsService getObject() { return null; }
+                    @Override public SettingsService getObject(Object... args) { return null; }
+                    @Override public SettingsService getIfAvailable() { return null; }
+                    @Override public SettingsService getIfUnique() { return null; }
                 });
         request = new MockHttpServletRequest("GET", "/api/products"); response = new MockHttpServletResponse();
         chain = mock(FilterChain.class); userId = UUID.randomUUID();

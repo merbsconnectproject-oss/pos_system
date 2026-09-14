@@ -2,9 +2,12 @@ package gh.giftedlabs.pos.service;
 
 import gh.giftedlabs.pos.dto.UserRequest;
 import gh.giftedlabs.pos.dto.UserView;
+import gh.giftedlabs.pos.rules.Permission;
+import gh.giftedlabs.pos.rules.Role;
 import gh.giftedlabs.pos.security.PosPrincipal;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /** Staff accounts, roles and individual permissions — FR-USER, BR-16. */
@@ -29,6 +32,22 @@ public interface UserService {
 
     /** FR-USER-07 · BR-17. */
     UserView setActive(UUID id, boolean active, PosPrincipal actor, String clientIp);
+
+    /**
+     * Does this person hold this right, right now?
+     *
+     * <p>Asked whenever one user is named as another's approver. An approver id
+     * arrives from the browser, and the browser is not allowed to decide who is
+     * a manager — an unverified id would make BR-10 a matter of which value the
+     * client put in the field.
+     *
+     * <p>False for someone deactivated: FR-USER-07 deactivates rather than
+     * deletes, so their id still resolves and must stop approving anything.
+     */
+    boolean holdsPermission(UUID userId, Permission permission);
+
+    /** FR-POS-10: the roles a person holds, for working out their ceiling. */
+    Set<Role> rolesOf(UUID userId);
 
     /** `J-06`: what the permission matrix is drawn from. */
     List<PermissionInfo> permissionCatalogue();

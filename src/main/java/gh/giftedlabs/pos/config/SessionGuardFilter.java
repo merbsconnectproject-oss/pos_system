@@ -5,6 +5,7 @@ import gh.giftedlabs.pos.dto.ApiError;
 import gh.giftedlabs.pos.repository.UserRepository;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.AuditService;
+import gh.giftedlabs.pos.service.SettingsService;
 import gh.giftedlabs.pos.service.ShiftService;
 import gh.giftedlabs.pos.service.impl.SessionServiceImpl;
 import jakarta.servlet.FilterChain;
@@ -31,11 +32,13 @@ public class SessionGuardFilter extends OncePerRequestFilter {
     private final ObjectMapper json;
     private final Clock clock;
     private final ObjectProvider<ShiftService> shifts;
+    private final ObjectProvider<SettingsService> settings;
 
     public SessionGuardFilter(UserRepository users, PosProperties properties, AuditService audit,
-                              ObjectMapper json, Clock clock, ObjectProvider<ShiftService> shifts) {
+                              ObjectMapper json, Clock clock, ObjectProvider<ShiftService> shifts,
+                              ObjectProvider<SettingsService> settings) {
         this.users = users; this.properties = properties; this.audit = audit; this.json = json;
-        this.clock = clock; this.shifts = shifts;
+        this.clock = clock; this.shifts = shifts; this.settings = settings;
     }
 
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -55,7 +58,7 @@ public class SessionGuardFilter extends OncePerRequestFilter {
         Instant now = clock.instant();
         Instant last = (Instant) session.getAttribute(SessionServiceImpl.LAST_ACTIVITY);
         boolean locked = Boolean.TRUE.equals(session.getAttribute(SessionServiceImpl.LOCKED));
-        if (!locked && last != null && last.plus(properties.auth().idleTimeout()).isBefore(now)) {
+        if (!locked && last != null && last.plus(idleTimeout()).isBefore(now)) {
             // FR-AUTH-05: with a shift open the terminal locks rather than signs
             // out, because signing out would abandon the drawer mid-count.
             //
@@ -83,6 +86,23 @@ public class SessionGuardFilter extends OncePerRequestFilter {
         }
         if (!locked) session.setAttribute(SessionServiceImpl.LAST_ACTIVITY, now);
         chain.doFilter(request, response);
+    }
+
+    /**
+     * FR-SET-06: the shop's idle lock, falling back to the configured default.
+     *
+     * <p>The fallback matters on the path this runs on. If settings cannot be
+     * read the request should still be judged by some timeout rather than be
+     * treated as fresh, which is what an exception here would amount to.
+     */
+    private java.time.Duration idleTimeout() {
+        SettingsService service = settings.getIfAvailable();
+        if (service == null) return properties.auth().idleTimeout();
+        try {
+            return service.idleTimeout();
+        } catch (RuntimeException unavailable) {
+            return properties.auth().idleTimeout();
+        }
     }
 
     private boolean hasOpenShift(java.util.UUID cashierId) {

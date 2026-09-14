@@ -194,6 +194,26 @@ public class UserServiceImpl implements UserService {
         return UserView.of(user);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public boolean holdsPermission(UUID userId, Permission permission) {
+        if (userId == null) return false;
+        return users.findById(userId)
+                .filter(User::isActive)
+                .map(user -> user.resolvePermissions().contains(permission))
+                .orElse(false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<Role> rolesOf(UUID userId) {
+        if (userId == null) return Set.of();
+        return users.findById(userId)
+                .filter(User::isActive)
+                .map(user -> Set.copyOf(user.getRoles()))
+                .orElse(Set.of());
+    }
+
     /** FR-USER-02 · `J-06`: the catalogue the permission matrix is drawn from. */
     @Override
     public List<PermissionInfo> permissionCatalogue() {

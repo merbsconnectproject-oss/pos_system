@@ -12,7 +12,9 @@ import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.AuditService;
 import gh.giftedlabs.pos.service.InventoryService;
 import gh.giftedlabs.pos.service.SaleService;
+import gh.giftedlabs.pos.service.SettingsService;
 import gh.giftedlabs.pos.service.ShiftService;
+import gh.giftedlabs.pos.service.UserService;
 import gh.giftedlabs.pos.exception.ShiftException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -45,14 +47,19 @@ public class SaleServiceImpl implements SaleService {
     private final StockLevelRepository levels;
     private final InventoryService inventory;
     private final ShiftService shiftsService;
+    private final SettingsService settings;
+    private final UserService staff;
     private final AuditService audit;
     private final Clock clock;
 
     public SaleServiceImpl(SaleRepository sales, ProductRepository products, TerminalRepository terminals,
                            OutletRepository outlets, UserRepository users, StockLevelRepository levels,
                            InventoryService inventory, ShiftService shiftsService,
+                           SettingsService settings, UserService staff,
                            AuditService audit, Clock clock) {
         this.shiftsService = shiftsService;
+        this.settings = settings;
+        this.staff = staff;
         this.sales = sales;
         this.products = products;
         this.terminals = terminals;
@@ -198,9 +205,17 @@ public class SaleServiceImpl implements SaleService {
             Product product = products.findById(line.productId())
                     .orElseThrow(() -> new ProductNotFoundException(line.productId()));
 
-            // BR-10: below the floor needs an approver, recorded on the line.
-            if (line.unitPrice().compareTo(product.getFloorPrice()) < 0 && line.floorApprovedBy() == null) {
-                throw SaleException.belowFloor(product.getName(), line.unitPrice(), product.getFloorPrice());
+            // BR-10: below the floor needs an approver, recorded on the line —
+            // and the approver is checked, not taken on the client's word. An
+            // id arrives in the request body, so an unverified one would let
+            // the browser name anybody, the cashier themselves included.
+            if (line.unitPrice().compareTo(product.getFloorPrice()) < 0) {
+                if (line.floorApprovedBy() == null) {
+                    throw SaleException.belowFloor(product.getName(), line.unitPrice(), product.getFloorPrice());
+                }
+                if (!staff.holdsPermission(line.floorApprovedBy(), Permission.SALE_APPROVE_BELOW_FLOOR)) {
+                    throw SaleException.approverNotPermitted(product.getName());
+                }
             }
 
             Quantity quantity = Quantity.of(line.quantity());
@@ -211,6 +226,9 @@ public class SaleServiceImpl implements SaleService {
             // rounded lines rather than a rounded sum.
             Money gross = Money.lineTotal(quantity, line.unitPrice(), BigDecimal.ZERO);
             long net = Math.max(0L, gross.pesewas() - discount);
+
+            requireDiscountAllowed(product.getName(), discount, gross.pesewas(),
+                    line.discountApprovedBy(), actor);
 
             // BR-5: the weighted average at this outlet, right now, frozen.
             BigDecimal costAtSale = levels
@@ -223,6 +241,36 @@ public class SaleServiceImpl implements SaleService {
                     gross.pesewas(), net, costAtSale, line.floorApprovedBy()));
         }
         return priced;
+    }
+
+    /**
+     * FR-POS-10 · FR-SET-06: a discount past the role's ceiling needs approval.
+     *
+     * <p>The ceiling is a percentage of the line, not an amount: the same cedi
+     * off a bulb and off a distribution board are not the same concession. The
+     * approver is measured by their own ceiling rather than by a permission,
+     * so a manager capped at 25% cannot wave through 60% — and the message says
+     * what the cap is rather than only that it was passed.
+     */
+    private void requireDiscountAllowed(String productName, long discount, long gross,
+                                        UUID approvedBy, PosPrincipal actor) {
+        if (discount <= 0) return;
+
+        BigDecimal percent = gross <= 0
+                // Anything off a line worth nothing is the whole line.
+                ? new BigDecimal("100")
+                : BigDecimal.valueOf(discount).multiply(new BigDecimal("100"))
+                        .divide(BigDecimal.valueOf(gross), 4, java.math.RoundingMode.HALF_UP);
+
+        BigDecimal allowed = settings.discountCeiling(staff.rolesOf(actor.userId()));
+        if (percent.compareTo(allowed) <= 0) return;
+
+        BigDecimal approverCeiling = approvedBy == null
+                ? BigDecimal.ZERO
+                : settings.discountCeiling(staff.rolesOf(approvedBy));
+        if (percent.compareTo(approverCeiling) <= 0) return;
+
+        throw SaleException.discountAboveCeiling(productName, percent, allowed.max(approverCeiling));
     }
 
     /**

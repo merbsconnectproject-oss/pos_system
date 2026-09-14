@@ -33,5 +33,9 @@ public record OutletRequest(
         @Size(max = 40) String phone,
         @Size(max = 120) String managerName,
         @Size(max = 400) String receiptFooter,
-        @Size(max = 500) String logoUrl) {
+        @Size(max = 500) String logoUrl,
+
+        /** FR-SET-02: what a product new to this branch starts its reorder level at. */
+        @jakarta.validation.constraints.PositiveOrZero(message = "A reorder level cannot be negative")
+        java.math.BigDecimal defaultReorderLevel) {
 }

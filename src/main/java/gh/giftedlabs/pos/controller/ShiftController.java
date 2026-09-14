@@ -4,6 +4,7 @@ import gh.giftedlabs.pos.dto.ShiftView;
 import gh.giftedlabs.pos.rules.CashMovementType;
 import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.security.PosPrincipal;
+import gh.giftedlabs.pos.service.SettingsService;
 import gh.giftedlabs.pos.service.ShiftService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -32,18 +33,12 @@ import java.util.UUID;
 @RequestMapping("/api/shifts")
 public class ShiftController {
 
-    /**
-     * FR-CASH-06's threshold, until P makes it a setting.
-     *
-     * <p>GH₵ 5.00. Named here rather than buried as a literal so the day it
-     * becomes configurable there is one place to change.
-     */
-    private static final long VARIANCE_THRESHOLD_PESEWAS = 500L;
-
     private final ShiftService shifts;
+    private final SettingsService settings;
 
-    public ShiftController(ShiftService shifts) {
+    public ShiftController(ShiftService shifts, SettingsService settings) {
         this.shifts = shifts;
+        this.settings = settings;
     }
 
     /** The caller's own open shift, if they have one. */
@@ -88,8 +83,11 @@ public class ShiftController {
     @PreAuthorize("hasAuthority('" + Permission.Codes.SHIFT_CLOSE + "')")
     public ShiftView close(@PathVariable UUID id, @Valid @RequestBody CloseShift body,
                            @AuthenticationPrincipal PosPrincipal actor, HttpServletRequest request) {
+        // FR-CASH-06 · FR-SET-06: the threshold is the shop's, not a constant
+        // in here. It is read at close time so a manager who raises it while a
+        // shift is running does not have to wait for a release.
         return shifts.close(id, body.countedCash(), body.note(),
-                VARIANCE_THRESHOLD_PESEWAS, actor, clientIp(request));
+                settings.cashVarianceThreshold(), actor, clientIp(request));
     }
 
     /** FR-CASH-03. */

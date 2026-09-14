@@ -17,6 +17,7 @@ import gh.giftedlabs.pos.service.LoginAttemptService;
 import gh.giftedlabs.pos.service.SaleService;
 import gh.giftedlabs.pos.service.ShiftService;
 import jakarta.servlet.http.Cookie;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -42,6 +43,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -393,6 +395,30 @@ class SaleControllerTest {
         }
 
         @Test
+        @DisplayName("an approver who may not approve is refused — BR-10")
+        void namedApproverIsVerified() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Unapproved " + run, "pcs", "60.00", "20");
+
+            // A cashier holds sale.discount but not sale.approve_below_floor.
+            // The id arrives in the request body, so taking it on trust would
+            // let the browser name anyone — including the seller themselves.
+            String clerkName = "clerk-" + run.toLowerCase();
+            User clerk = new User(clerkName, "Test Clerk", passwords.encode(PASSWORD));
+            clerk.assignRole(Role.CASHIER);
+            clerk.assignOutlet(outletId);
+            UUID clerkId = users.save(clerk).getId();
+
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(sale(
+                                    line(productId, "pcs", "1", "40.00", null, clerkId.toString()),
+                                    cash(4000L)))))
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.code").value("APPROVER_NOT_PERMITTED"));
+        }
+
+        @Test
         @DisplayName("is allowed with one, and the approver is recorded — BR-10")
         void allowedWithApproverRecorded() throws Exception {
             Session session = signIn();
@@ -405,6 +431,104 @@ class SaleControllerTest {
                                     cash(4000L)))))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.items[0].belowFloor").value(true));
+        }
+    }
+
+    @Nested
+    @DisplayName("discounts")
+    class Discounts {
+
+        /**
+         * The ceilings are one global settings row, so anything moved here is
+         * put back. The other test classes share it.
+         */
+        @AfterEach
+        void restoreCeilings() throws Exception {
+            saveCeilings(signIn(), Map.of("owner", 100, "manager", 25, "cashier", 10, "storekeeper", 0));
+        }
+
+        @Test
+        @DisplayName("past the role's ceiling it is refused — FR-POS-10, FR-SET-06")
+        void aboveTheCeilingIsRefused() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Discounted " + run, "pcs", "100.00", "20");
+
+            // The owner may now give 5%. This line asks for 50.
+            saveCeilings(session, Map.of("owner", 5, "manager", 25, "cashier", 10, "storekeeper", 0));
+
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(sale(
+                                    line(productId, "pcs", "1", "1", "100.00", 5_000L, null),
+                                    cash(5000L)))))
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.code").value("DISCOUNT_ABOVE_CEILING"));
+        }
+
+        @Test
+        @DisplayName("within it, it goes through untouched — FR-POS-10")
+        void withinTheCeilingIsAllowed() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Modest " + run, "pcs", "100.00", "20");
+
+            saveCeilings(session, Map.of("owner", 50, "manager", 25, "cashier", 10, "storekeeper", 0));
+
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(sale(
+                                    line(productId, "pcs", "1", "1", "100.00", 5_000L, null),
+                                    cash(5000L)))))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.discountTotal").value(5000));
+        }
+
+        @Test
+        @DisplayName("an approver whose own ceiling covers it lets it through — FR-POS-10")
+        void anApproverWithHeadroomAllowsIt() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Approved discount " + run, "pcs", "100.00", "20");
+
+            String managerName = "manager-" + run.toLowerCase();
+            User manager = new User(managerName, "Test Manager", passwords.encode(PASSWORD));
+            manager.assignRole(Role.MANAGER);
+            manager.assignOutlet(outletId);
+            UUID managerId = users.save(manager).getId();
+
+            // The seller may give 5%; the manager may give 20. The line asks 20.
+            saveCeilings(session, Map.of("owner", 5, "manager", 20, "cashier", 10, "storekeeper", 0));
+
+            Map<String, Object> item = line(productId, "pcs", "1", "1", "100.00", 2_000L, null);
+            item.put("discountApprovedBy", managerId.toString());
+
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(sale(item, cash(8000L)))))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.discountTotal").value(2000));
+        }
+
+        @Test
+        @DisplayName("an approver without the headroom does not — FR-POS-10")
+        void anApproverWithoutHeadroomDoesNot() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Overreach " + run, "pcs", "100.00", "20");
+
+            String managerName = "manager2-" + run.toLowerCase();
+            User manager = new User(managerName, "Test Manager Two", passwords.encode(PASSWORD));
+            manager.assignRole(Role.MANAGER);
+            manager.assignOutlet(outletId);
+            UUID managerId = users.save(manager).getId();
+
+            saveCeilings(session, Map.of("owner", 5, "manager", 20, "cashier", 10, "storekeeper", 0));
+
+            Map<String, Object> item = line(productId, "pcs", "1", "1", "100.00", 6_000L, null);
+            item.put("discountApprovedBy", managerId.toString());
+
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(sale(item, cash(4000L)))))
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.code").value("DISCOUNT_ABOVE_CEILING"));
         }
     }
 
@@ -610,7 +734,7 @@ class SaleControllerTest {
     private SaleRequest saleRequest(UUID productId, String unit, String quantity, String price, long paid) {
         return new SaleRequest(UUID.randomUUID(), outletId, terminalId, null, null, null,
                 List.of(new SaleRequest.Line(productId, unit, BigDecimal.ONE, new BigDecimal(quantity),
-                        new BigDecimal(price), 0L, null)),
+                        new BigDecimal(price), 0L, null, null)),
                 List.of(new SaleRequest.PaymentLine(UUID.randomUUID(), PaymentMethod.cash, paid, null, null)));
     }
 
@@ -634,6 +758,29 @@ class SaleControllerTest {
         if (discount != null) item.put("discount", discount);
         if (approver != null) item.put("floorApprovedBy", approver);
         return item;
+    }
+
+    /** FR-POS-10: move the ceilings, leaving every other setting alone. */
+    private void saveCeilings(Session session, Map<String, Object> byRole) throws Exception {
+        MvcResult current = mvc.perform(session.authorise(get("/api/settings")))
+                .andExpect(status().isOk()).andReturn();
+        Map<String, Object> view = json.readValue(current.getResponse().getContentAsString(), Map.class);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> thresholds = new LinkedHashMap<>((Map<String, Object>) view.get("thresholds"));
+        thresholds.put("discountCeilingByRole", byRole);
+
+        Map<String, Object> body = new LinkedHashMap<>(view);
+        body.remove("updatedAt");
+        body.put("thresholds", thresholds);
+        // Nobody has named the business yet in a fresh database, and the form
+        // requires one — this test is about ceilings, not about the profile.
+        if (body.get("companyName") == null) body.put("companyName", "Sales Test Co");
+
+        mvc.perform(session.authorise(put("/api/settings"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(body)))
+                .andExpect(status().isOk());
     }
 
     private Map<String, Object> cash(long amount) {

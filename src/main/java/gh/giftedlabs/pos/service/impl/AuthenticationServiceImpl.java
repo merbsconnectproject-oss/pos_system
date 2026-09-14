@@ -219,6 +219,37 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     @Override
+    @Transactional
+    public void changeOwnPin(UUID userId, String currentPassword, String newPin, String clientIp) {
+        User user = users.findById(userId)
+                .filter(User::isActive)
+                .orElseThrow(AuthenticationServiceImpl::wrongPassword);
+
+        // Throttled like a sign-in, because that is what it is: a password
+        // check, and an unthrottled one is an oracle.
+        String throttleKey = "pin-change:" + userId;
+        if (!loginAttempts.check(throttleKey).allowed()) throw wrongPassword();
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            loginAttempts.recordFailure(throttleKey);
+            throw wrongPassword();
+        }
+        loginAttempts.recordSuccess(throttleKey);
+
+        boolean had = user.hasPin();
+        user.setPinHash(pinEncoder.encode(newPin));
+
+        // The PIN itself is never in the entry — only that there is now one.
+        audit.record(userId, had ? "AUTH_PIN_CHANGED" : "AUTH_PIN_SET", "user", userId,
+                null, java.util.Map.of("pinSet", true), user.getOutletIds().stream().findFirst().orElse(null),
+                null, clientIp);
+    }
+
+    private static AuthenticationFailedException wrongPassword() {
+        return new AuthenticationFailedException(AuthenticationFailedException.Reason.BAD_CREDENTIALS,
+                "That password is not right");
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public boolean verifyOwnPin(UUID userId, String pin) {
         String throttleKey = "unlock:" + userId;

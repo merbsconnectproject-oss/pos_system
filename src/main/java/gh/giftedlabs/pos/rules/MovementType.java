@@ -37,6 +37,17 @@ public enum MovementType {
     }
 
     /**
+     * FR-INV-06: is this a hand-entered correction rather than a document?
+     *
+     * <p>Receipts and sales carry their own paperwork and their own approvals.
+     * These four are somebody typing a number into a box, which is why they are
+     * the ones a value threshold guards.
+     */
+    public boolean isAdjustment() {
+        return this == ADJUSTMENT_IN || this == ADJUSTMENT_OUT || this == DAMAGE || this == LOSS;
+    }
+
+    /**
      * BR-4: only a receipt changes the average cost.
      *
      * <p>A sale leaves it alone — selling does not make the remaining stock

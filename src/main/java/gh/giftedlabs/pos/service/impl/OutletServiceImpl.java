@@ -147,6 +147,11 @@ public class OutletServiceImpl implements OutletService {
         outlet.setManagerName(trimmed(request.managerName()));
         outlet.setReceiptFooter(trimmed(request.receiptFooter()));
         outlet.setLogoUrl(trimmed(request.logoUrl()));
+        // FR-SET-02: absent means leave it alone, not set it to nothing — this
+        // form is sent by screens that never show the field.
+        if (request.defaultReorderLevel() != null) {
+            outlet.setDefaultReorderLevel(request.defaultReorderLevel());
+        }
     }
 
     private String trimmed(String value) {
