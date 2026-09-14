@@ -13,7 +13,9 @@ interface GoodsReceiptModalProps {
     qtyReceived: number,
     unitCost: number,
     newWeightedAvgCost: number,
-    movement: StockMovement
+    movement: StockMovement,
+    /** FR-SUP-02: a receipt belongs to a supplier, not just to a note about one. */
+    supplierId: string,
   ) => void;
 }
 
@@ -77,7 +79,7 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
       user: 'Storekeeper (Yaw)',
     };
 
-    onConfirmReceipt(product.id, qtyReceivedNum, activeUnitCost, Number(weightedAvgCost.toFixed(2)), movement);
+    onConfirmReceipt(product.id, qtyReceivedNum, activeUnitCost, Number(weightedAvgCost.toFixed(2)), movement, selectedSupplierId);
     onClose();
   };
 

@@ -29,7 +29,6 @@ import { AuthView } from './components/AuthView';
 import {
   OUTLETS,
   INITIAL_CUSTOMERS,
-  INITIAL_SUPPLIERS,
   INITIAL_SALES,
   INITIAL_AUDIT_LOGS,
   INITIAL_USERS,
@@ -68,6 +67,7 @@ import { outletsApi } from './outletsApi';
 import { auditApi } from './auditApi';
 import { productsApi } from './productsApi';
 import { stockApi, withStock, type MovementType } from './stockApi';
+import { suppliersApi, goodsReceiptApi } from './suppliersApi';
 
 /**
  * Outlets now come from the API, so a session's outlet id *is* the app's outlet
@@ -150,8 +150,8 @@ export default function App() {
     // Settled, not `all`: a catalogue that fails to load is a poorer screen,
     // not a reason to throw away a valid session and send the user back to
     // sign-in. Each result is applied on its own merits.
-    const [branches, catalogue, movementHistory] = await Promise.allSettled([
-      outletsApi.list(), productsApi.list(), stockApi.movements({ limit: 200 }),
+    const [branches, catalogue, movementHistory, supplierList] = await Promise.allSettled([
+      outletsApi.list(), productsApi.list(), stockApi.movements({ limit: 200 }), suppliersApi.list(),
     ]);
 
     const outletList = branches.status === 'fulfilled' && branches.value.length > 0
@@ -167,6 +167,7 @@ export default function App() {
       setProducts(withStock(catalogue.value, levels));
     }
     if (movementHistory.status === 'fulfilled') setMovements(movementHistory.value);
+    if (supplierList.status === 'fulfilled') setSuppliers(supplierList.value);
 
     setCurrentOutletId(localOutletId(session, outletList));
     setCurrentUser(accountFromSession(session, outletList));
@@ -192,7 +193,8 @@ export default function App() {
   // which is how a stale dashboard survived a sign-in unnoticed.
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>(INITIAL_CUSTOMERS);
-  const [suppliers, setSuppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
+  // FR-SUP-01: the directory is the server's.
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [sales, setSales] = useState<CompletedSale[]>(INITIAL_SALES);
   // The ledger is the server's — BR-2. Seeding it with fiction is how a
   // stale figure passes for a record of what happened.
@@ -616,70 +618,88 @@ export default function App() {
 
   // PRD BR-4: Goods Receipt with Weighted Average Cost handler
   /** Posts every line of a goods receipt as one document (FR-SUP-04). */
+  /**
+   * FR-SUP-02…05: the multi-line receiving screen posts one document.
+   *
+   * All lines land together or none do — the server writes them in one
+   * transaction, so a delivery cannot half-arrive. The resulting quantities and
+   * averages come back per line and replace the screen's preview, which was
+   * computed from whatever stock the browser held.
+   */
   const handleCommitReceipt = (
-    lines: { productId: string; quantityBase: number; unitCost: number; newAvgCost: number; movement: StockMovement }[],
+    lines: { productId: string; purchaseUnit: string; conversionFactor: number; quantity: number; unitCost: number }[],
     reference: string,
+    supplierId: string,
   ) => {
-    setProducts((prev) =>
-      prev.map((product) => {
-        const line = lines.find((item) => item.productId === product.id);
-        if (!line) return product;
-        const outletKey = line.movement.outletId;
-        return {
-          ...product,
-          stock: { ...product.stock, [outletKey]: (product.stock[outletKey] || 0) + line.quantityBase },
-          costPrice: { ...product.costPrice, [outletKey]: line.newAvgCost },
-        };
-      }),
-    );
-    setMovements((prev) => [...lines.map((line) => line.movement), ...prev]);
-    setAuditLogs((prev) => [
-      {
-        id: `aud-${Date.now()}`,
-        timestamp: new Date().toLocaleString('en-GB'),
-        actor: currentUser?.fullName || 'Storekeeper',
-        action: 'GOODS_RECEIPT',
-        entity: reference,
-        outletName: currentOutlet.name,
-        details: `Posted ${lines.length} line${lines.length === 1 ? '' : 's'}; weighted average cost recalculated per line (BR-4).`,
-      },
-      ...prev,
-    ]);
+    void goodsReceiptApi.receive(currentOutlet.id, supplierId, reference, lines)
+      .then((result) => {
+        setProducts((prev) => prev.map((product) => {
+          const line = result.lines.find((item) => item.productId === product.id);
+          if (!line) return product;
+          return {
+            ...product,
+            stock: { ...product.stock, [currentOutlet.id]: line.resultingQuantity },
+            costPrice: { ...product.costPrice, [currentOutlet.id]: line.resultingAverageCost },
+          };
+        }));
+      })
+      .then(refreshMovements)
+      .then(refreshSuppliers)
+      .catch(reportStockFailure);
   };
 
   /**
-   * FR-SUP-04 · BR-4: a goods receipt is a stock movement, and the server
-   * recalculates the weighted average from it.
+   * FR-SUP-04 · BR-4: a delivery is a document, and confirming it moves stock
+   * and the weighted average cost together.
    *
-   * The modal's own weighted-average figure is no longer trusted — it was
-   * computed from whatever stock the browser held, which is exactly the number
-   * that could be stale. The level that comes back is the one the ledger says.
+   * The modal's own average is discarded — it was computed from whatever stock
+   * the browser held, which is exactly the number that can be stale. The line
+   * that comes back carries what the ledger settled on.
+   *
+   * The modal receives in base units, so the purchase unit is the product's own
+   * and the factor is 1. FR-UOM-05's "3 drums of 100 m" conversion is in the
+   * API and tested there; the screen has no purchase-unit picker yet.
    */
   const handleConfirmReceipt = (
     productId: string,
     qtyReceived: number,
     unitCost: number,
     _newWeightedAvgCost: number,
-    movement: StockMovement
+    movement: StockMovement,
+    supplierId: string,
   ) => {
-    void stockApi.record({
+    const product = products.find((p) => p.id === productId);
+    void goodsReceiptApi.receive(currentOutlet.id, supplierId, movement.referenceNumber || '', [{
       productId,
-      outletId: currentOutlet.id,
-      type: 'RECEIPT',
+      purchaseUnit: product?.baseUnit || 'pcs',
+      conversionFactor: 1,
       quantity: qtyReceived,
       unitCost,
-      note: movement.referenceNumber,
-      sourceType: 'GRN',
-      // BR-7: the reference is the idempotency key, so a double-click books the
-      // goods in once.
-      sourceId: movement.id,
-    })
-      .then((level) => applyLevel(productId, level))
+    }])
+      .then((result) => {
+        const line = result.lines[0];
+        if (line) {
+          applyLevel(productId, {
+            outletId: currentOutlet.id,
+            quantity: line.resultingQuantity,
+            averageCost: line.resultingAverageCost,
+            reorderLevel: product?.minStockAlert[currentOutlet.id] ?? 0,
+          });
+        }
+      })
       .then(refreshMovements)
+      // FR-SUP-07: totalSupplied is summed from receipts, so booking one in
+      // changes it. Without this the directory keeps the figure it was last
+      // sent and a delivery looks like it bought nothing.
+      .then(refreshSuppliers)
       .catch(reportStockFailure);
   };
 
-  // PRD FR-STK-07: Stock Adjustment handler
+  const refreshSuppliers = () =>
+    suppliersApi.list()
+      .then(setSuppliers)
+      .catch(() => { /* the directory keeps what it has */ });
+
   /**
    * FR-INV-05: a physical count becomes an adjustment in whichever direction
    * closes the gap.
@@ -800,20 +820,15 @@ export default function App() {
   };
 
   const handleAddSupplier = (supplier: Supplier) => {
-    setSuppliers((prev) => [supplier, ...prev]);
+    void suppliersApi.create(supplier)
+      .then((saved) => setSuppliers((prev) => [...prev, saved]))
+      .catch(reportStockFailure);
   };
 
   const handleUpdateSupplier = (updatedSupplier: Supplier) => {
-    setSuppliers((prev) =>
-      prev.map((supplier) => (supplier.id === updatedSupplier.id ? updatedSupplier : supplier))
-    );
-    appendAuditLog({
-      actor: currentUser?.fullName || 'System',
-      action: 'SUPPLIER_UPDATED',
-      entity: `${updatedSupplier.name} (${updatedSupplier.phone})`,
-      outletName: currentOutlet.name,
-      details: 'Supplier profile, payment terms or outlet assignment was updated.',
-    });
+    void suppliersApi.update(updatedSupplier.id, updatedSupplier)
+      .then((saved) => setSuppliers((prev) => prev.map((s) => (s.id === saved.id ? saved : s))))
+      .catch(reportStockFailure);
   };
 
   const handleUpdateProduct = (updatedProduct: Product) => {

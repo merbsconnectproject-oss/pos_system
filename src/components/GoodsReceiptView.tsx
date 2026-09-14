@@ -30,9 +30,15 @@ interface GoodsReceiptViewProps {
   suppliers: Supplier[];
   currentOutlet: Outlet;
   cashierName: string;
+  /**
+   * FR-SUP-02/03: a receipt belongs to a supplier and records the unit the
+   * goods arrived in. The base-unit conversion is the server's to redo, so the
+   * document says what was delivered rather than what this screen computed.
+   */
   onCommitReceipt: (
-    lines: { productId: string; quantityBase: number; unitCost: number; newAvgCost: number; movement: StockMovement }[],
+    lines: { productId: string; purchaseUnit: string; conversionFactor: number; quantity: number; unitCost: number }[],
     reference: string,
+    supplierId: string,
   ) => void;
 }
 
@@ -93,26 +99,13 @@ export const GoodsReceiptView: React.FC<GoodsReceiptViewProps> = ({
     onCommitReceipt(
       preview.map((row) => ({
         productId: row.product.id,
-        quantityBase: row.quantityBase,
+        purchaseUnit: row.line.unitName || row.product.baseUnit,
+        conversionFactor: row.line.conversionFactor,
+        quantity: row.line.quantity,
         unitCost: row.line.unitCost,
-        newAvgCost: row.newAvg,
-        movement: {
-          id: `mov-${Date.now()}-${row.product.id}`,
-          timestamp,
-          outletId: outletKey,
-          productId: row.product.id,
-          productName: row.product.name,
-          type: 'RECEIPT',
-          quantity: row.quantityBase,
-          previousStock: row.onHand,
-          newStock: row.resultingStock,
-          unitCost: row.line.conversionFactor > 0 ? row.line.unitCost / row.line.conversionFactor : row.line.unitCost,
-          referenceNumber: ref,
-          reason: `Goods received from ${supplierName}`,
-          user: cashierName,
-        },
       })),
       ref,
+      supplierId,
     );
     setPosted(ref);
     setConfirming(false);
