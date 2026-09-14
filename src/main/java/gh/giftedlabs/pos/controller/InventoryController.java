@@ -14,6 +14,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -71,21 +73,21 @@ public class InventoryController {
 
     @GetMapping("/outlet/{outletId}")
     @PreAuthorize("hasAuthority('" + Permission.Codes.STOCK_VIEW + "')")
-    public List<StockView> atOutlet(@PathVariable UUID outletId) {
-        return inventory.atOutlet(outletId);
+    public List<StockView> atOutlet(@PathVariable UUID outletId, Authentication authentication) {
+        return costFiltered(inventory.atOutlet(outletId), authentication);
     }
 
     @GetMapping("/product/{productId}")
     @PreAuthorize("hasAuthority('" + Permission.Codes.STOCK_VIEW + "')")
-    public List<StockView> acrossOutlets(@PathVariable UUID productId) {
-        return inventory.acrossOutlets(productId);
+    public List<StockView> acrossOutlets(@PathVariable UUID productId, Authentication authentication) {
+        return costFiltered(inventory.acrossOutlets(productId), authentication);
     }
 
     /** FR-INV-08: the dashboard's reorder list. */
     @GetMapping("/outlet/{outletId}/low")
     @PreAuthorize("hasAuthority('" + Permission.Codes.STOCK_VIEW + "')")
-    public List<StockView> low(@PathVariable UUID outletId) {
-        return inventory.lowAt(outletId);
+    public List<StockView> low(@PathVariable UUID outletId, Authentication authentication) {
+        return costFiltered(inventory.lowAt(outletId), authentication);
     }
 
     /**
@@ -147,5 +149,20 @@ public class InventoryController {
     private String clientIp(HttpServletRequest request) {
         String forwarded = request.getHeader("X-Forwarded-For");
         return forwarded == null || forwarded.isBlank() ? request.getRemoteAddr() : forwarded.split(",")[0].trim();
+    }
+
+    /**
+     * FR-PRICE-07: cost is for {@code price.view_cost} and nobody else.
+     *
+     * <p>Stripped here rather than hidden by the screen. A cashier could see
+     * every cost in the shop by opening the network tab, which made the
+     * permission a label on a button instead of a rule.
+     */
+    private List<StockView> costFiltered(List<StockView> rows, Authentication authentication) {
+        boolean mayViewCost = authentication != null && authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(Permission.Codes.PRICE_VIEW_COST::equals);
+
+        return mayViewCost ? rows : rows.stream().map(StockView::withoutCost).toList();
     }
 }

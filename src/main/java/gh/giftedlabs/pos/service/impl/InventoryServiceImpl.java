@@ -167,15 +167,32 @@ public class InventoryServiceImpl implements InventoryService {
     @Transactional(readOnly = true)
     public StockView at(UUID productId, UUID outletId) {
         return levels.findByProductIdAndOutletId(productId, outletId)
-                .map(this::view)
+                .map(this::view).map(this::withReplacementCost)
                 .orElseGet(() -> StockView.empty(productId, outletId));
     }
 
     /** FR-INV-01: every outlet's figure for one product, never a global total. */
+    /**
+     * FR-PRICE-08: one product, so the replacement cost is worth a query.
+     *
+     * <p>Not done for a whole catalogue — that would be a query per row on the
+     * path the counter uses to search.
+     */
+    private StockView withReplacementCost(StockView view) {
+        // Bound, never written into the query as a literal: an enum spelled
+        // into JPQL compiles and then fails at runtime against Postgres.
+        List<BigDecimal> latest = movements.latestReceiptCost(view.productId(), view.outletId(),
+                MovementType.RECEIPT, org.springframework.data.domain.PageRequest.of(0, 1));
+        return latest.isEmpty() ? view
+                : new StockView(view.productId(), view.outletId(), view.quantity(),
+                        view.averageCost(), latest.getFirst(), view.reorderLevel(), view.low());
+    }
+
     @Override
     @Transactional(readOnly = true)
     public List<StockView> acrossOutlets(UUID productId) {
-        return levels.findAllByProductId(productId).stream().map(this::view).toList();
+        return levels.findAllByProductId(productId).stream()
+                .map(this::view).map(this::withReplacementCost).toList();
     }
 
     @Override
@@ -242,6 +259,6 @@ public class InventoryServiceImpl implements InventoryService {
 
     private StockView view(StockLevel level) {
         return new StockView(level.getProductId(), level.getOutletId(), level.getQuantity(),
-                level.getAverageCost(), level.getReorderLevel(), level.isLow());
+                level.getAverageCost(), null, level.getReorderLevel(), level.isLow());
     }
 }

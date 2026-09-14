@@ -8,7 +8,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /** The stock ledger — BR-2, FR-INV-04. */
@@ -43,4 +45,23 @@ public interface InventoryMovementRepository extends JpaRepository<InventoryMove
     /** BR-7: has this source document already moved this product? */
     boolean existsBySourceTypeAndSourceIdAndProductIdAndType(
             String sourceType, UUID sourceId, UUID productId, MovementType type);
+
+    /**
+     * FR-PRICE-08: what the last delivery of this product cost at this branch.
+     *
+     * <p>The replacement cost, as opposed to the weighted average of what is on
+     * the shelf. Only receipts carry a unit cost worth reading — an adjustment
+     * corrects a count, not a valuation (BR-4).
+     */
+    @Query("""
+           select m.unitCost from InventoryMovement m
+            where m.productId = :productId and m.outletId = :outletId
+              and m.type = :receipt
+              and m.unitCost is not null
+            order by m.createdAt desc
+           """)
+    List<BigDecimal> latestReceiptCost(@Param("productId") UUID productId,
+                                       @Param("outletId") UUID outletId,
+                                       @Param("receipt") MovementType receipt,
+                                       Pageable page);
 }

@@ -1,9 +1,13 @@
 package gh.giftedlabs.pos.controller;
 
+import gh.giftedlabs.pos.dto.OutletPriceRequest;
+import gh.giftedlabs.pos.dto.OutletPriceView;
+import gh.giftedlabs.pos.dto.PriceHistoryView;
 import gh.giftedlabs.pos.dto.ProductRequest;
 import gh.giftedlabs.pos.dto.ProductView;
 import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.security.PosPrincipal;
+import gh.giftedlabs.pos.service.PricingService;
 import gh.giftedlabs.pos.service.ProductService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -33,8 +37,10 @@ public class ProductController {
     private static final int MAX_PAGE = 200;
 
     private final ProductService products;
+    private final PricingService pricing;
 
-    public ProductController(ProductService products) {
+    public ProductController(ProductService products, PricingService pricing) {
+        this.pricing = pricing;
         this.products = products;
     }
 
@@ -94,5 +100,53 @@ public class ProductController {
     private String clientIp(HttpServletRequest request) {
         String forwarded = request.getHeader("X-Forwarded-For");
         return forwarded == null || forwarded.isBlank() ? request.getRemoteAddr() : forwarded.split(",")[0].trim();
+    }
+
+    // --- FR-PRICE-03 · FR-PRICE-06 -----------------------------------------
+
+    /** FR-PRICE-03: every branch that charges something different. */
+    @GetMapping("/{id}/prices")
+    @PreAuthorize("isAuthenticated()")
+    public List<OutletPriceView> outletPrices(@PathVariable UUID id) {
+        return pricing.overridesFor(id);
+    }
+
+    /**
+     * FR-PRICE-03: set what this branch charges.
+     *
+     * <p>Needs {@code price.edit}, the same right as changing the shared price,
+     * because a branch override changes what a customer pays just as surely.
+     */
+    @PutMapping("/{id}/prices/{outletId}")
+    @PreAuthorize("hasAuthority('" + Permission.Codes.PRICE_EDIT + "')")
+    public OutletPriceView setOutletPrice(@PathVariable UUID id, @PathVariable UUID outletId,
+                                          @Valid @RequestBody OutletPriceRequest body,
+                                          @AuthenticationPrincipal PosPrincipal actor,
+                                          HttpServletRequest request) {
+        return pricing.setOverride(id, outletId, body, actor, clientIp(request));
+    }
+
+    /** Back to the shared price. */
+    @DeleteMapping("/{id}/prices/{outletId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('" + Permission.Codes.PRICE_EDIT + "')")
+    public void clearOutletPrice(@PathVariable UUID id, @PathVariable UUID outletId,
+                                 @AuthenticationPrincipal PosPrincipal actor,
+                                 HttpServletRequest request) {
+        pricing.clearOverride(id, outletId, actor, clientIp(request));
+    }
+
+    /**
+     * FR-PRICE-06: what this product has been priced at, and by whom.
+     *
+     * <p>Open to anyone who may change a price or read a report. Knowing what
+     * the shop used to charge is not a cost figure — FR-PRICE-07 guards cost,
+     * and this is the selling price, which every customer has already seen.
+     */
+    @GetMapping("/{id}/price-history")
+    @PreAuthorize("hasAnyAuthority('" + Permission.Codes.PRICE_EDIT + "','"
+            + Permission.Codes.REPORT_VIEW + "')")
+    public List<PriceHistoryView> priceHistory(@PathVariable UUID id) {
+        return pricing.history(id);
     }
 }

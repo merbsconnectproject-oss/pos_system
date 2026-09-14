@@ -12,6 +12,7 @@ import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.AuditService;
 import gh.giftedlabs.pos.service.InventoryService;
 import gh.giftedlabs.pos.service.SaleService;
+import gh.giftedlabs.pos.service.PricingService;
 import gh.giftedlabs.pos.service.SettingsService;
 import gh.giftedlabs.pos.service.ShiftService;
 import gh.giftedlabs.pos.service.UserService;
@@ -49,6 +50,7 @@ public class SaleServiceImpl implements SaleService {
     private final InventoryService inventory;
     private final ShiftService shiftsService;
     private final SettingsService settings;
+    private final PricingService pricing;
     private final UserService staff;
     private final AuditService audit;
     private final Clock clock;
@@ -57,10 +59,11 @@ public class SaleServiceImpl implements SaleService {
                            OutletRepository outlets, UserRepository users, CustomerRepository customers,
                            StockLevelRepository levels,
                            InventoryService inventory, ShiftService shiftsService,
-                           SettingsService settings, UserService staff,
+                           SettingsService settings, PricingService pricing, UserService staff,
                            AuditService audit, Clock clock) {
         this.shiftsService = shiftsService;
         this.settings = settings;
+        this.pricing = pricing;
         this.staff = staff;
         this.sales = sales;
         this.products = products;
@@ -97,7 +100,10 @@ public class SaleServiceImpl implements SaleService {
         Terminal terminal = terminalFor(request, actor);
         String receiptNumber = nextReceiptNumber(terminal, request.outletId());
 
-        List<PricedLine> priced = priceLines(request, actor);
+        // FR-PRICE-05: resolved before pricing, because a customer's agreed
+        // rate is part of what the lines are allowed to be.
+        Customer customer = resolveCustomer(request);
+        List<PricedLine> priced = priceLines(request, actor, customer);
 
         long subtotal = priced.stream().mapToLong(line -> line.gross).sum();
         long discountTotal = priced.stream().mapToLong(line -> line.discount).sum();
@@ -108,7 +114,7 @@ public class SaleServiceImpl implements SaleService {
 
         Sale sale = new Sale(request.id(), receiptNumber, request.outletId(), terminal.getId(),
                 actor.userId(), subtotal, discountTotal, total, changeDue, clock.instant());
-        attachCustomer(sale, request);
+        attachCustomer(sale, request, customer);
         sale.assignShift(shiftId);
 
         priced.forEach(line -> sale.addItem(line.toItem()));
@@ -210,13 +216,8 @@ public class SaleServiceImpl implements SaleService {
      * deactivates the people a shop has stopped dealing with, and a sale that
      * quietly becomes a walk-in is a sale nobody can explain later.
      */
-    private void attachCustomer(Sale sale, SaleRequest request) {
-        if (request.customerId() == null) {
-            // FR-CUST-01: a walk-in may still leave a name for the receipt.
-            sale.setCustomer(null, blankToNull(request.customerName()),
-                    blankToNull(request.customerPhone()));
-            return;
-        }
+    private Customer resolveCustomer(SaleRequest request) {
+        if (request.customerId() == null) return null;
 
         Customer customer = customers.findById(request.customerId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -225,7 +226,16 @@ public class SaleServiceImpl implements SaleService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "%s is no longer an active customer".formatted(customer.getName()));
         }
+        return customer;
+    }
 
+    private void attachCustomer(Sale sale, SaleRequest request, Customer customer) {
+        if (customer == null) {
+            // FR-CUST-01: a walk-in may still leave a name for the receipt.
+            sale.setCustomer(null, blankToNull(request.customerName()),
+                    blankToNull(request.customerPhone()));
+            return;
+        }
         sale.setCustomer(customer.getId(), customer.getName(), customer.getPhone());
     }
 
@@ -239,20 +249,25 @@ public class SaleServiceImpl implements SaleService {
      * can freeze it. Accepting a line total from the browser would mean the
      * receipt says whatever the browser said.
      */
-    private List<PricedLine> priceLines(SaleRequest request, PosPrincipal actor) {
+    private List<PricedLine> priceLines(SaleRequest request, PosPrincipal actor, Customer customer) {
         List<PricedLine> priced = new ArrayList<>();
 
         for (SaleRequest.Line line : request.items()) {
             Product product = products.findById(line.productId())
                     .orElseThrow(() -> new ProductNotFoundException(line.productId()));
 
+            // FR-PRICE-03 · BR-10: the floor is this branch's, not the
+            // product's. A branch that lowered its floor lowered the price its
+            // cashiers may reach without asking anybody.
+            BigDecimal floor = pricing.effective(product.getId(), request.outletId()).floor();
+
             // BR-10: below the floor needs an approver, recorded on the line —
             // and the approver is checked, not taken on the client's word. An
             // id arrives in the request body, so an unverified one would let
             // the browser name anybody, the cashier themselves included.
-            if (line.unitPrice().compareTo(product.getFloorPrice()) < 0) {
+            if (line.unitPrice().compareTo(floor) < 0) {
                 if (line.floorApprovedBy() == null) {
-                    throw SaleException.belowFloor(product.getName(), line.unitPrice(), product.getFloorPrice());
+                    throw SaleException.belowFloor(product.getName(), line.unitPrice(), floor);
                 }
                 if (!staff.holdsPermission(line.floorApprovedBy(), Permission.SALE_APPROVE_BELOW_FLOOR)) {
                     throw SaleException.approverNotPermitted(product.getName());
@@ -269,7 +284,7 @@ public class SaleServiceImpl implements SaleService {
             long net = Math.max(0L, gross.pesewas() - discount);
 
             requireDiscountAllowed(product.getName(), discount, gross.pesewas(),
-                    line.discountApprovedBy(), actor);
+                    line.discountApprovedBy(), actor, customer);
 
             // BR-5: the weighted average at this outlet, right now, frozen.
             BigDecimal costAtSale = levels
@@ -294,7 +309,7 @@ public class SaleServiceImpl implements SaleService {
      * what the cap is rather than only that it was passed.
      */
     private void requireDiscountAllowed(String productName, long discount, long gross,
-                                        UUID approvedBy, PosPrincipal actor) {
+                                        UUID approvedBy, PosPrincipal actor, Customer customer) {
         if (discount <= 0) return;
 
         BigDecimal percent = gross <= 0
@@ -303,7 +318,12 @@ public class SaleServiceImpl implements SaleService {
                 : BigDecimal.valueOf(discount).multiply(new BigDecimal("100"))
                         .divide(BigDecimal.valueOf(gross), 4, java.math.RoundingMode.HALF_UP);
 
-        BigDecimal allowed = settings.discountCeiling(staff.rolesOf(actor.userId()));
+        // FR-PRICE-05: the rate this customer was promised is not the cashier
+        // giving money away — it is the business honouring a deal it made. A
+        // ceiling that refused it would make the agreed rate unusable by the
+        // people serving the customer it was agreed with.
+        BigDecimal agreed = customer == null ? BigDecimal.ZERO : customer.getDiscountRate();
+        BigDecimal allowed = settings.discountCeiling(staff.rolesOf(actor.userId())).max(agreed);
         if (percent.compareTo(allowed) <= 0) return;
 
         BigDecimal approverCeiling = approvedBy == null

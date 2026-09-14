@@ -54,11 +54,17 @@ public class SaleException extends RuntimeException {
                 Map.of("product", productName));
     }
 
-    /** FR-POS-10: past the discount this role may give without approval. */
+    /**
+     * FR-POS-10 · FR-PRICE-05: past the discount allowed here without approval.
+     *
+     * <p>"Allowed here" rather than "this role may give", because the cap is
+     * the larger of the seller's role ceiling and the customer's agreed rate —
+     * naming the role would be wrong whenever the deal is what raised it.
+     */
     public static SaleException discountAboveCeiling(String productName, java.math.BigDecimal percent,
                                                      java.math.BigDecimal ceiling) {
         return new SaleException("DISCOUNT_ABOVE_CEILING",
-                "%s%% off %s is past the %s%% this role may give. Ask a manager to approve it."
+                "%s%% off %s is past the %s%% allowed here. Ask a manager to approve it."
                         .formatted(percent.setScale(1, java.math.RoundingMode.HALF_UP).toPlainString(),
                                 productName,
                                 ceiling.setScale(1, java.math.RoundingMode.HALF_UP).toPlainString()),
