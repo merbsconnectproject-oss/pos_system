@@ -468,6 +468,45 @@ class SaleControllerTest {
     }
 
     @Nested
+    @DisplayName("speed")
+    class Speed {
+
+        @Test
+        @DisplayName("a five-line sale commits in well under a second — NFR-2")
+        void completesUnderOneSecond() throws Exception {
+            Session session = signIn();
+
+            List<Map<String, Object>> lines = new ArrayList<>();
+            for (int i = 0; i < 5; i++) {
+                String productId = stockedProduct(session, "Timed " + run + "-" + i, "pcs", "10.00", "100");
+                lines.add(line(productId, "pcs", "2", "10.00"));
+            }
+
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("id", UUID.randomUUID().toString());
+            body.put("outletId", outletId.toString());
+            body.put("terminalId", terminalId.toString());
+            body.put("items", lines);
+            body.put("payments", List.of(cash(10000L)));
+            String payload = json.writeValueAsString(body);
+
+            // Everything a sale does is inside this: the receipt number under a
+            // row lock, five priced lines, five stock decrements each taking
+            // their own lock, and the payment — one transaction, measured
+            // against a real Postgres rather than an in-memory stand-in.
+            long startedAt = System.nanoTime();
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON).content(payload))
+                    .andExpect(status().isCreated());
+            long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000;
+
+            assertTrue(elapsedMs < 1000,
+                    "a five-line sale took %d ms; NFR-2 allows 1000".formatted(elapsedMs));
+            System.out.println("[NFR-2] five-line sale committed in " + elapsedMs + " ms");
+        }
+    }
+
+    @Nested
     @DisplayName("sales history")
     class History {
 
