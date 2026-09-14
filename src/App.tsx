@@ -29,7 +29,6 @@ import { AuthView } from './components/AuthView';
 import {
   OUTLETS,
   INITIAL_CUSTOMERS,
-  INITIAL_SALES,
   INITIAL_AUDIT_LOGS,
   INITIAL_USERS,
   INITIAL_ROLES_PERMISSIONS,
@@ -68,6 +67,7 @@ import { auditApi } from './auditApi';
 import { productsApi } from './productsApi';
 import { stockApi, withStock, type MovementType } from './stockApi';
 import { suppliersApi, goodsReceiptApi } from './suppliersApi';
+import { salesApi, toCompletedSale, cartFromWire } from './salesApi';
 
 /**
  * Outlets now come from the API, so a session's outlet id *is* the app's outlet
@@ -150,8 +150,12 @@ export default function App() {
     // Settled, not `all`: a catalogue that fails to load is a poorer screen,
     // not a reason to throw away a valid session and send the user back to
     // sign-in. Each result is applied on its own merits.
-    const [branches, catalogue, movementHistory, supplierList] = await Promise.allSettled([
+    // allSettled so one failing list cannot cost the user their session — but
+    // a rejection is reported rather than swallowed, because a silent empty
+    // list looks exactly like "you have no sales yet".
+    const [branches, catalogue, movementHistory, supplierList, saleHistory] = await Promise.allSettled([
       outletsApi.list(), productsApi.list(), stockApi.movements({ limit: 200 }), suppliersApi.list(),
+      salesApi.recent(undefined, undefined, 100),
     ]);
 
     const outletList = branches.status === 'fulfilled' && branches.value.length > 0
@@ -168,6 +172,28 @@ export default function App() {
     }
     if (movementHistory.status === 'fulfilled') setMovements(movementHistory.value);
     if (supplierList.status === 'fulfilled') setSuppliers(supplierList.value);
+
+    // FR-POS-18: past transactions come back from the server. Without this the
+    // history is empty until someone sells something in this browser session,
+    // which is not what "past" means.
+    if (saleHistory.status === 'fulfilled') {
+      // The catalogue is needed to rebuild each sale's lines, so this reads the
+      // list that was just loaded rather than component state, which React has
+      // not committed yet.
+      const loadedCatalogue = catalogue.status === 'fulfilled' ? catalogue.value : [];
+      setSales(saleHistory.value.map((wire) => toCompletedSale(
+        wire,
+        cartFromWire(wire, loadedCatalogue),
+        outletList.find((outlet) => outlet.id === wire.outletId)?.name || '',
+      )));
+    }
+
+    const loaded: Record<string, PromiseSettledResult<unknown>> = {
+      branches, catalogue, movements: movementHistory, suppliers: supplierList, sales: saleHistory,
+    };
+    Object.entries(loaded).forEach(([name, result]) => {
+      if (result.status === 'rejected') console.error(`[workspace] ${name} failed to load`, result.reason);
+    });
 
     setCurrentOutletId(localOutletId(session, outletList));
     setCurrentUser(accountFromSession(session, outletList));
@@ -195,7 +221,9 @@ export default function App() {
   const [customers, setCustomers] = useState<Customer[]>(INITIAL_CUSTOMERS);
   // FR-SUP-01: the directory is the server's.
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [sales, setSales] = useState<CompletedSale[]>(INITIAL_SALES);
+  // FR-POS-18: past transactions are the server's — BR-3 makes them
+  // immutable records, and a seeded list is not a record of anything.
+  const [sales, setSales] = useState<CompletedSale[]>([]);
   // The ledger is the server's — BR-2. Seeding it with fiction is how a
   // stale figure passes for a record of what happened.
   const [movements, setMovements] = useState<StockMovement[]>([]);
@@ -371,149 +399,73 @@ export default function App() {
   }, [currentUser, sessionLockReason, currentOutlet.name, generalSettings.thresholds.idleLockMinutes]);
 
   // PRD BR-1 & BR-2: Sale Completed handler
-  const handleSaleCompleted = (sale: CompletedSale) => {
-    setSales((prev) => [sale, ...prev]);
+  /**
+   * FR-POS · FR-PAY · BR-6/BR-7: complete the sale on the server.
+   *
+   * Returns the committed sale so the till can print the receipt number the
+   * database issued. Nothing is decremented locally any more — the server moves
+   * the stock through the ledger, and the levels come back from it, so the
+   * screen cannot drift from what was actually sold.
+   *
+   * Resolves to null when the sale was refused. The cart stays intact: a
+   * cashier who priced below the floor or tendered short should be able to fix
+   * it, not ring the whole basket up again.
+   */
+  const handleSaleCompleted = async (sale: CompletedSale): Promise<CompletedSale | null> => {
+    try {
+      const committed = await salesApi.complete({
+        // BR-7: the id the till generated. Submitting it twice records one sale.
+        id: sale.id,
+        outletId: currentOutlet.id,
+        customerId: sale.customerId,
+        customerName: sale.customerName,
+        customerPhone: sale.customerPhone,
+        cart: sale.items,
+        payments: sale.payments,
+      });
 
-    // 1. Decrement stock for the specific outlet (BR-1)
-    setProducts((prev) =>
-      prev.map((p) => {
-        const soldItems = sale.items.filter((it) => it.product.id === p.id);
-        if (soldItems.length > 0) {
-          const totalDeduction = soldItems.reduce((acc, it) => acc + (it.quantity * it.conversionFactor), 0);
-          const currentStock = p.stock[sale.outletId] || 0;
-          return {
-            ...p,
-            stock: {
-              ...p.stock,
-              [sale.outletId]: Math.max(0, Number((currentStock - totalDeduction).toFixed(3))),
-            },
-            salesCount: p.salesCount + soldItems.length,
-          };
-        }
-        return p;
-      })
-    );
+      const stored = toCompletedSale(committed, sale.items, currentOutlet.name);
+      setSales((prev) => [stored, ...prev]);
 
-    // 2. Create immutable movement rows (BR-2)
-    const newMovements: StockMovement[] = sale.items.map((it) => {
-      const prevStock = it.product.stock[sale.outletId] || 0;
-      const baseQty = it.quantity * it.conversionFactor;
-      return {
-        id: `mvt-${Date.now()}-${it.product.id}`,
-        timestamp: sale.createdAt,
-        outletId: sale.outletId,
-        productId: it.product.id,
-        productName: it.product.name,
-        type: 'SALE',
-        quantity: -baseQty,
-        previousStock: prevStock,
-        newStock: Math.max(0, Number((prevStock - baseQty).toFixed(3))),
-        referenceNumber: sale.receiptNumber,
-        reason: `POS sale to ${sale.customerName}`,
-        user: sale.cashierName,
-      };
-    });
-    setMovements((prev) => [...newMovements, ...prev]);
+      // The stock the ledger settled on, not an arithmetic guess.
+      const levels = await stockApi.atOutlet(currentOutlet.id).catch(() => []);
+      if (levels.length > 0) setProducts((prev) => withStock(prev, levels));
+      void refreshMovements();
 
-    // 3. Update customer stats
-    if (sale.customerId) {
-      setCustomers((prev) =>
-        prev.map((c) =>
-          c.id === sale.customerId
-            ? {
-                ...c,
-                totalPurchased: c.totalPurchased + sale.total,
-                salesCount: c.salesCount + 1,
-              }
-            : c
-        )
-      );
+      return stored;
+    } catch (failure) {
+      reportStockFailure(failure);
+      return null;
     }
-
-    // 4. Update expected cash in drawer if cash was tendered
-    const cashPaid = sale.payments
-      .filter((p) => p.method === 'cash')
-      .reduce((sum, p) => sum + p.amount, 0);
-
-    if (cashPaid > 0) {
-      setShiftInfo((prev) => ({
-        ...prev,
-        expectedCash: prev.expectedCash + cashPaid,
-      }));
-    }
-
-    // 5. Append audit log
-    const auditEntry: AuditLogEntry = {
-      id: `aud-${Date.now()}`,
-      timestamp: sale.createdAt,
-      actor: sale.cashierName,
-      action: 'SALE_COMPLETED',
-      entity: `Receipt ${sale.receiptNumber}`,
-      outletName: sale.outletName,
-      details: `Completed sale of GH₵ ${sale.total.toFixed(2)} to ${sale.customerName} via ${sale.payments.map((p) => p.provider || p.method).join(', ')}`,
-    };
-    setAuditLogs((prev) => [auditEntry, ...prev]);
   };
 
   // PRD BR-3: Void Sale handler
+  /**
+   * BR-3 · FR-POS-19: void on the server, which writes the reversing movements.
+   *
+   * The stock comes back through the ledger rather than by arithmetic here, and
+   * the sale keeps its record — the customer may still be holding its receipt.
+   * The approver's identity was established by the server when the manager
+   * entered their PIN; the void itself is authorised again by `sale.void`.
+   */
   const handleVoidSale = (
     saleId: string,
     reason: string,
     approver: string,
-    reversingMovements: StockMovement[]
+    _reversingMovements: StockMovement[]
   ) => {
-    const sale = sales.find((s) => s.id === saleId);
-    if (!sale) return;
+    void salesApi.voidSale(saleId, reason)
+      .then(async (voided) => {
+        setSales((prev) => prev.map((existing) => existing.id === saleId
+          ? { ...existing, status: 'VOIDED' as const, voidReason: voided.voidReason || reason,
+              voidedBy: voided.voidedBy || approver, voidedAt: voided.voidedAt || undefined }
+          : existing));
 
-    // 1. Mark sale as VOIDED
-    setSales((prev) =>
-      prev.map((s) => (s.id === saleId ? { ...s, status: 'VOIDED' as const } : s))
-    );
-
-    // 2. Return stock to the outlet
-    setProducts((prev) =>
-      prev.map((p) => {
-        const matchingMovement = reversingMovements.find((m) => m.productId === p.id);
-        if (matchingMovement) {
-          const currentStock = p.stock[sale.outletId] || 0;
-          return {
-            ...p,
-            stock: {
-              ...p.stock,
-              [sale.outletId]: Number((currentStock + matchingMovement.quantity).toFixed(3)),
-            },
-          };
-        }
-        return p;
+        const levels = await stockApi.atOutlet(currentOutlet.id).catch(() => []);
+        if (levels.length > 0) setProducts((prev) => withStock(prev, levels));
+        void refreshMovements();
       })
-    );
-
-    // 3. Append reversing movements (BR-3)
-    setMovements((prev) => [...reversingMovements, ...prev]);
-
-    // 4. Adjust cash drawer if cash sale
-    const cashPortion = sale.payments
-      .filter((p) => p.method === 'cash')
-      .reduce((sum, p) => sum + p.amount, 0);
-
-    if (cashPortion > 0) {
-      setShiftInfo((prev) => ({
-        ...prev,
-        expectedCash: Math.max(0, prev.expectedCash - cashPortion),
-      }));
-    }
-
-    // 5. Audit Log entry
-    const auditEntry: AuditLogEntry = {
-      id: `aud-${Date.now()}`,
-      timestamp: new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      actor: approver,
-      action: 'SALE_VOID',
-      entity: `Receipt ${sale.receiptNumber}`,
-      outletName: sale.outletName,
-      details: `Voided sale. Reason: ${reason}`,
-    };
-    setAuditLogs((prev) => [auditEntry, ...prev]);
+      .catch(reportStockFailure);
   };
 
   // Radiance Lighting: Accounting & Expense Handlers

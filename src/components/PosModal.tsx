@@ -67,7 +67,15 @@ interface PosModalProps {
   shiftInfo: ShiftInfo;
   onOpenShift: () => void;
   onAddCustomer: (customer: Customer) => void;
-  onSaleCompleted: (sale: CompletedSale) => void;
+  /**
+   * BR-6: the server issues the receipt number, so this returns the committed
+   * sale rather than accepting one. The number is printed and handed over — it
+   * has to be the one the database recorded, not one this screen guessed.
+   *
+   * Resolves to null when the sale was refused; the cart is kept so the cashier
+   * can fix it rather than losing what they rang up.
+   */
+  onSaleCompleted: (sale: CompletedSale) => Promise<CompletedSale | null>;
   permissions: PermissionSet;
   onLockSession?: () => void;
 }
@@ -145,6 +153,7 @@ export const PosModal: React.FC<PosModalProps> = ({
   const [printFailed, setPrintFailed] = useState(false);
   // C-21: an insufficient-stock strip, not a modal — it must not block the counter.
   const [unknownBarcode, setUnknownBarcode] = useState<string | null>(null);
+  const [committing, setCommitting] = useState(false);
   const [receiptBlock, setReceiptBlock] = useState(() =>
     createBlock(currentOutlet.receiptPrefix, shiftInfo.terminalId || '01', 4312),
   );
@@ -655,14 +664,12 @@ export const PosModal: React.FC<PosModalProps> = ({
       });
     }
 
-    // BR-6: gapless, per terminal, drawn from this terminal's pre-allocated block.
-    const issued = issueReceiptNumber(receiptBlock);
-    const receiptNumber = issued.receiptNumber;
-    setReceiptBlock(issued.block);
-
+    // BR-6 is the server's: it holds the terminal's block under a row lock, so
+    // two tills cannot issue the same number. What is built here is the request;
+    // the receipt number on it is a placeholder until the server answers.
     const sale: CompletedSale = {
-      id: `sale-${Date.now()}`,
-      receiptNumber,
+      id: crypto.randomUUID(),
+      receiptNumber: '',
       outletId,
       outletName: currentOutlet.name,
       terminalId: '01',
@@ -681,30 +688,38 @@ export const PosModal: React.FC<PosModalProps> = ({
       status: 'COMPLETED',
     };
 
-    // FR-RCPT-01: the sale is committed before any print is attempted.
-    onSaleCompleted(sale);
-    setCompletedSale(sale);
-    setReceiptPrintStatus('ready');
-    setReceiptReprint(false);
-    setPrintFailed(false);
+    // FR-RCPT-01: the sale is committed before any print is attempted — and
+    // now genuinely so, because nothing is shown until the server has it.
+    setCommitting(true);
+    void onSaleCompleted(sale).then((committed) => {
+      setCommitting(false);
+      // Refused: the cart is left exactly as it was so the cashier can correct
+      // the price or the payment instead of ringing it all up again.
+      if (!committed) return;
 
-    // FR-RCPT-05: a print failure surfaces a retry; it never reverses the sale.
-    void printReceipt({
-      receiptNumber: sale.receiptNumber,
-      paperWidth: '80mm',
-      payload: sale.receiptNumber,
-    }).then((result) => {
-      if (!result.ok) setPrintFailed(true);
+      setCompletedSale(committed);
+      setReceiptPrintStatus('ready');
+      setReceiptReprint(false);
+      setPrintFailed(false);
+
+      // FR-RCPT-05: a print failure surfaces a retry; it never reverses the sale.
+      void printReceipt({
+        receiptNumber: committed.receiptNumber,
+        paperWidth: '80mm',
+        payload: committed.receiptNumber,
+      }).then((result) => {
+        if (!result.ok) setPrintFailed(true);
+      });
+      setPaymentModalOpen(false);
+      setCart([]);
+      setSelectedCustomer(null);
+      setCashTendered('');
+      setMomoReference('');
+      setMomoVerified(false);
+      setCardReference('');
+      setTransferReference('');
+      setExternalPaymentVerified(false);
     });
-    setPaymentModalOpen(false);
-    setCart([]);
-    setSelectedCustomer(null);
-    setCashTendered('');
-    setMomoReference('');
-    setMomoVerified(false);
-    setCardReference('');
-    setTransferReference('');
-    setExternalPaymentVerified(false);
   };
 
   const filteredProducts = products.filter((p) => {
@@ -2318,6 +2333,7 @@ export const PosModal: React.FC<PosModalProps> = ({
         onClose={() => setFloorOverrideTarget(null)}
         title="Manager Approval: Floor Price Override"
         description="Cashier entered a price below the minimum floor price threshold. Manager authorization PIN required to proceed."
+        permission="sale.approve_below_floor"
         onSuccess={handleFloorPinSuccess}
       />
     </div>

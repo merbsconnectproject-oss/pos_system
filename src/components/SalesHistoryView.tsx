@@ -543,6 +543,7 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
         onClose={() => setPinModalOpen(false)}
         title="Manager Authorization: Void Sale"
         description="Sale voiding is an irreversible auditing action. Reversing inventory movements will be generated automatically."
+        permission="sale.void"
         onSuccess={handlePinSuccess}
       />
     </div>

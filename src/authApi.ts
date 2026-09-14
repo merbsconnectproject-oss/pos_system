@@ -34,6 +34,17 @@ export const authApi = {
   unlock: (pin: string) => request<void>('/api/auth/unlock', { method: 'POST', body: JSON.stringify({ pin }) }),
   signOut: () => request<void>('/api/auth/sign-out', { method: 'POST' })
     .finally(forgetCsrf),
+
+  /**
+   * FR-AUTH-02 · BR-10: a manager authorising something at the counter.
+   *
+   * Checked by the server. A screen that validates its own override has no
+   * override — it has a formality, and the answer is in the page source.
+   */
+  approve: (pin: string, permission: PermissionCode, outletId?: string) =>
+    request<{ approved: boolean; approverId: string; approverName: string }>('/api/auth/approve', {
+      method: 'POST', body: JSON.stringify({ pin, permission, outletId }),
+    }),
   requestPasswordReset: (email: string) => request<void>('/api/auth/password-reset/request', {
     method: 'POST', body: JSON.stringify({ email }),
   }),

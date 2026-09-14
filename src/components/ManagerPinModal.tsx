@@ -1,12 +1,22 @@
 import React, { useState } from 'react';
 import { ShieldCheck, X, AlertTriangle } from 'lucide-react';
+import { authApi, AuthApiError } from '../authApi';
+import type { PermissionCode } from '../permissions';
 
 interface ManagerPinModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
   description: string;
-  onSuccess: (approverName: string) => void;
+  /**
+   * BR-10 · FR-AUTH-02: what the PIN is being asked to authorise.
+   *
+   * Named explicitly because a PIN is identity, not authority — the same
+   * manager may approve a void and not a below-floor price, and the server
+   * checks the holder against this code.
+   */
+  permission: PermissionCode;
+  onSuccess: (approverName: string, approverId: string) => void;
 }
 
 export const ManagerPinModal: React.FC<ManagerPinModalProps> = ({
@@ -14,23 +24,36 @@ export const ManagerPinModal: React.FC<ManagerPinModalProps> = ({
   onClose,
   title,
   description,
+  permission,
   onSuccess,
 }) => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
 
   if (!isOpen) return null;
 
+  /**
+   * The server decides. This used to compare the PIN against '1234' in the
+   * browser and print the answer in the error message, which is not an
+   * override — the page source was the key.
+   */
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Default Manager PIN is 1234
-    if (pin === '1234') {
-      onSuccess('Yaw Boakye (Manager)');
-      setPin('');
-      setError(null);
-    } else {
-      setError('Invalid Manager PIN. Please try again (Hint: 1234)');
-    }
+    setChecking(true);
+    setError(null);
+
+    void authApi.approve(pin, permission)
+      .then((result) => {
+        onSuccess(result.approverName, result.approverId);
+        setPin('');
+      })
+      .catch((failure) => {
+        setError(failure instanceof AuthApiError
+          ? failure.message
+          : 'That PIN could not be checked. Try again.');
+      })
+      .finally(() => setChecking(false));
   };
 
   return (
