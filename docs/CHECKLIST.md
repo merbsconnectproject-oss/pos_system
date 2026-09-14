@@ -27,6 +27,7 @@ Each line carries **two boxes**: the first is the frontend, the second is the ba
 | `[ ]` | Not started |
 | `[-]` | Deferred to Stage 2 or 3, not in this release |
 | `[!]` | Blocked |
+| `[·]` | **Not applicable** — this half does not exist. A scanner that tells a scan from typing has no server side; a row lock has no screen. Distinct from `[ ]`, which means outstanding work. |
 
 An item is **complete only when both boxes are `[x]`**. A feature is complete when every
 non-deferred item in its section is complete, including its non-functional items.
@@ -43,7 +44,7 @@ non-deferred item in its section is complete, including its non-functional items
 | D · Units & conversions | 8 | 7 done, 1 open | 6 done, 2 open |
 | E · Pricing | 10 | 6 done, 2 partial, 2 open | 4 done, 1 partial, 5 open |
 | F · Inventory | 15 | 10 done, 2 partial, 2 open, 1 deferred | 9 done, 1 partial, 3 open, 2 deferred |
-| G · Point of sale | 25 | 17 done, 3 partial, 4 open, 1 deferred | 5 done, 19 open, 1 deferred |
+| G · Point of sale | 25 | 17 done, 3 partial, 4 open, 1 deferred | 10 done, 1 partial, 3 open, 1 deferred, 10 n/a |
 | H · Payments | 11 | 6 done, 2 partial, 2 open, 1 deferred | 7 done, 3 open, 1 deferred |
 | I · Receipts & printing | 13 | 7 done, 3 partial, 2 open, 1 deferred | 12 open, 1 deferred |
 | J · Shifts & cash | 12 | 9 done, 1 partial, 2 open | 12 open |
@@ -56,8 +57,8 @@ non-deferred item in its section is complete, including its non-functional items
 | Q · Connectivity & resilience | 10 | 2 partial, 7 open, 1 deferred | 9 open, 1 deferred |
 | R · Cross-cutting non-functional | 22 | 4 done, 3 partial, 15 open | 3 done, 3 partial, 16 open |
 
-**228 items · 60 complete (both boxes) · frontend 134 done · backend 79 done,
-10 partial · contract frozen and machine-checked (`npm run check`)**
+**228 items · 70 complete · frontend 134 done · backend 84 done, 11 partial, 10 not applicable · contract frozen and
+machine-checked (`npm run check`)**
 
 > The table above is generated from the boxes below, so the two cannot drift.
 > Read it with one caveat: many items have no backend half — a scanner that
@@ -72,7 +73,8 @@ non-deferred item in its section is complete, including its non-functional items
 | | Feature | State |
 |---|---|---|
 | ✅ | A Auth · B Outlets · C Catalogue · D Units | done |
-| ✅ | F Inventory · G Point of sale · H Payments · K Suppliers | done |
+| ✅ | F Inventory · H Payments · K Suppliers | done |
+| ✅ | G Point of sale | selling, payments, receipt numbers, voids — 10 of its 14 server-side items; the other four wait on J, P and L |
 | 🟨 | N Audit | writes and reads; some actions do not exist yet to log |
 | 🟨 | E Pricing | the three prices and history; per-outlet overrides open |
 | ⬜ | I Receipts · J Shifts · L Customers · M Users · O Reports · P Settings | not started |
@@ -80,6 +82,9 @@ non-deferred item in its section is complete, including its non-functional items
 
 **Release gates** — 1 ⬜ · 2 ⬜ (needs the printer) · **3 ✅** same payment twice records
 once · **4 ✅** two terminals cannot sell the same last unit.
+
+**Measured, not assumed:** a five-line sale commits in **249 ms** against a real
+Postgres — NFR-2 allows 1000.
 
 **Still mock in the app:** customers, users, roles, settings, shift records, and the
 Stage 2 modules. Everything else reads and writes the API.
@@ -216,34 +221,40 @@ settings holding them do not exist yet — the adjustment approval threshold
 
 ## G · Point of sale — `FR-POS`
 
+Ten of these are the till's own behaviour and have no server half — they are
+marked `[·]`, which means "there is nothing here to build", not "not done yet".
+Of the fourteen that do have one, **ten are done**; the four outstanding are
+FR-POS-02 and FR-POS-10 (waiting on J and P), FR-POS-12 (waiting on L) and
+held sales, which live only in the browser.
+
 ### Functional
-- [x][ ] Runs full screen without the application sidebar — FR-POS-01 · `C-01`
-- [x][ ] A shift must be open before selling; otherwise prompt to open one — FR-POS-02 · `C-30`
-- [x][ ] Scanner input captured globally, whatever has focus — FR-POS-03
-- [x][ ] Scan distinguished from typing by inter-keystroke timing and a terminating Enter — FR-POS-04
-- [x][ ] Scanning a product already in the cart increments and flashes that line — FR-POS-05
-- [x][ ] Rapid consecutive scans queued; none dropped — FR-POS-06
-- [x][ ] Unrecognised barcode shows an inline strip, not a modal — FR-POS-07 · `C-19`
-- [x][ ] A product with more than one selling unit prompts for the unit — FR-POS-08 · `C-04`
-- [x][ ] Cart lines: quantity, unit change, price override, discount, remove — FR-POS-09 · `C-05`
-- [~][ ] Line and cart discounts capped by the user's `sale.discount_max` — FR-POS-10 · `C-06` *(the ceiling lives in settings, which is P; unenforced either side)*
-- [x][x] Price below floor triggers manager PIN; approver recorded on the sale — FR-POS-11 · BR-10 · `C-07` `C-08` *(PIN checked by the server, not the browser)*
-- [x][ ] Customer attached by phone search or created inline — FR-POS-12 · `C-09` `C-10`
+- [x][·] Runs full screen without the application sidebar — FR-POS-01 · `C-01`
+- [x][ ] A shift must be open before selling; otherwise prompt to open one — FR-POS-02 · `C-30` *(the till asks, the server does not. A sale with no open shift is accepted today — needs J)*
+- [x][·] Scanner input captured globally, whatever has focus — FR-POS-03
+- [x][·] Scan distinguished from typing by inter-keystroke timing and a terminating Enter — FR-POS-04
+- [x][·] Scanning a product already in the cart increments and flashes that line — FR-POS-05
+- [x][·] Rapid consecutive scans queued; none dropped — FR-POS-06
+- [x][x] Unrecognised barcode shows an inline strip, not a modal — FR-POS-07 · `C-19` *(`GET /api/products/barcode/{code}` 404s for an unknown code; the till resolves against its cached catalogue so scanning stays instant — FR-SYNC-01)*
+- [x][x] A product with more than one selling unit prompts for the unit — FR-POS-08 · `C-04` *(units and factors come from the catalogue)*
+- [x][x] Cart lines: quantity, unit change, price override, discount, remove — FR-POS-09 · `C-05` *(the sale stores the unit, factor, price and discount it was rung up with)*
+- [~][ ] Line and cart discounts capped by the user's `sale.discount_max` — FR-POS-10 · `C-06` *(the ceiling lives in settings, which is P; unenforced on either side)*
+- [x][x] Price below floor triggers manager PIN; approver recorded on the sale — FR-POS-11 · BR-10 · `C-07` `C-08` *(PIN checked by the server; approver stored on the line that needed it)*
+- [x][~] Customer attached by phone search or created inline — FR-POS-12 · `C-09` `C-10` *(a sale stores the customer it was made to; there is no customer directory to search — needs L)*
 - [x][x] Selling beyond stock blocked unless `stock.oversell` — FR-POS-13 · BR-9 · `C-21`
-- [x][ ] Sales held with an optional label and resumed — FR-POS-14 · `C-22` `C-23`
-- [x][ ] Held sales do not reserve stock — FR-POS-15
-- [~][ ] Shortcuts: F2 payment, F3 hold, F4 search, F9 lock, Esc clear, arrows navigate, Enter add — FR-POS-16 *(function keys done; arrow navigation of results not wired)*
-- [~][ ] Touch targets at least 44 px — FR-POS-17 *(not audited)*
-- [x][x] Past transactions searchable by receipt, date, customer, amount or item — FR-POS-18 · `C-25`
+- [x][ ] Sales held with an optional label and resumed — FR-POS-14 · `C-22` `C-23` *(held in the browser, so a refresh loses them and another till cannot resume one)*
+- [x][x] Held sales do not reserve stock — FR-POS-15 *(nothing moves until the sale commits; holding is not a server event at all)*
+- [~][·] Shortcuts: F2 payment, F3 hold, F4 search, F9 lock, Esc clear, arrows navigate, Enter add — FR-POS-16 *(function keys done; arrow navigation of results not wired)*
+- [~][·] Touch targets at least 44 px — FR-POS-17 *(not audited)*
+- [x][x] Past transactions searchable by receipt, date, customer, amount or item — FR-POS-18 · `C-25` *(receipt, customer and phone server-side; date and amount filter in the browser)*
 - [x][x] Void with a reason by `sale.void`; reversing movements written — FR-POS-19 · BR-3 · `C-27`
 - [-][-] Returns and refunds against an original receipt — FR-POS-20 · `C-35` `C-36` *(Stage 2; built ahead of scope)*
 
 ### Non-functional
-- [ ][ ] A five-line sale completes with scanner and keyboard only, no mouse — FR-POS acceptance · NFR-12
-- [ ][ ] Adding a scanned line renders in under 100 ms — NFR-1
-- [ ][ ] Sale completion including stock decrement and persistence under 1 s — NFR-2 *(not measured)*
-- [ ][x] Two terminals cannot sell the same last unit — BR-8 · release gate 4 *(eight racing threads: one sale, seven refusals, level zero)*
-- [x][ ] No blocking browser dialog in the payment path — `L-08`
+- [ ][·] A five-line sale completes with scanner and keyboard only, no mouse — FR-POS acceptance · NFR-12 *(not audited)*
+- [ ][·] Adding a scanned line renders in under 100 ms — NFR-1
+- [ ][x] Sale completion including stock decrement and persistence under 1 s — NFR-2 *(measured: a five-line sale commits in 249 ms against a real Postgres — receipt number, five priced lines, five locked decrements and the payment, in one transaction)*
+- [ ][x] Two terminals cannot sell the same last unit — BR-8 · release gate 4 *(eight racing threads: one sale, seven refusals, level zero, ledger agrees)*
+- [x][·] No blocking browser dialog in the payment path — `L-08`
 
 ---
 
