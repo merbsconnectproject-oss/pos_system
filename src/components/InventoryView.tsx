@@ -15,6 +15,7 @@ import {
   Truck,
 } from 'lucide-react';
 import { InfoHint } from './InfoHint';
+import { TablePagination } from './TablePagination';
 import { Outlet, Product, StockMovement } from '../types';
 import type { PermissionSet } from '../permissions';
 
@@ -58,6 +59,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [transferProduct, setTransferProduct] = useState('');
   const [transferQuantity, setTransferQuantity] = useState('');
   const [transferMessage, setTransferMessage] = useState('');
+  const [stockPage, setStockPage] = useState(1);
+  const [stockPageSize, setStockPageSize] = useState(25);
   const realOutlets = outlets.filter((outlet) => outlet.id !== 'all-outlets');
 
   useEffect(() => {
@@ -148,7 +151,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {rows.map((row) => (
+            {rows.slice((stockPage - 1) * stockPageSize, stockPage * stockPageSize).map((row) => (
               <tr key={`${row.product.id}-${row.key}`} className="hover:bg-slate-50">
                 <td className="py-3 px-4">
                   <button onClick={() => setSelectedProduct(row.product)} className="font-bold text-slate-800 text-left hover:text-accent-600">
@@ -193,6 +196,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           </tbody>
         </table>
       </div>
+      <TablePagination page={stockPage} pageSize={stockPageSize} total={rows.length} onPageChange={setStockPage} onPageSizeChange={setStockPageSize} />
     </div>
   );
 
