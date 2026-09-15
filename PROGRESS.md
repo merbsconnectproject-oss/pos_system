@@ -1,9 +1,9 @@
 # Progress
 
-**Updated** 2026-09-14 · **Tests** 388 green · **DB** connected to `pos_system`, V1–V19 applied
+**Updated** 2026-09-15 · **Tests** 468 green · **DB** connected to `pos_system`, V1–V23 applied
 
 Updated after every completed feature. Detail lives in
-`../pos-system/docs/CHECKLIST.md` (247 items, dual checkbox).
+`../pos-system/docs/CHECKLIST.md` (258 items, dual checkbox).
 
 ---
 
@@ -11,7 +11,7 @@ Updated after every completed feature. Detail lives in
 
 | | Features | Done | In progress | Not started |
 |---|---:|---:|---:|---:|
-| Backend | 19 | 18 | 0 | 1 |
+| Backend | 20 | 19 | 1 | 0 |
 
 ```
 A ██████████  Auth & session     100%   FR-AUTH-05 reachable since J; idle lock is a setting since P
@@ -22,20 +22,21 @@ E ██████████  Pricing            100%  branch overrides, cus
 F ██████████  Inventory          100%   FR-INV-06 enforced against P's threshold
 G ██████████  Point of sale      100%   discount ceiling enforced; gates 3 and 4 pass
 H █████████░  Payments            90%   denomination shortcuts are frontend-only
-I ░░░░░░░░░░  Receipts & printing  0%   blocked on the thermal printer
+I █████████░  Receipts & printing 90%   layout, ESC/POS, both widths, audited reprints, preview; the Windows print service needs the hardware
 J ██████████  Shifts & cash      100%   blind close, BR-13 by index, BR-14 computed; gate 9 passes
-K ████████░░  Suppliers & receipt  80%   purchase history per product still to query
+K ██████████  Suppliers & receipt  100%  supplier directory, outlet-scoped goods receipts, weighted-average costing, reversals, and supplier/product purchase history are API-backed and wired in the frontend
 L ██████████  Customers          100%   shared directory, phone lookup, pricing and cross-outlet history
-M ██████████  Users & permissions 100%  BR-16 on every path that changes a privilege
+M ██████████  Users & permissions 100%  what a role grants is editable and persisted, and takes effect mid-session
 N █████████░  Audit               90%   every built action logs; read endpoint and view live
-O ██████████  Reports & dashboard 100%  aggregated by the database; FR-RPT-05 withholds cost, not hides it
+O ██████████  Reports & dashboard 100%  every sales surface is net of returns
 P ██████████  Settings           100%  thresholds read by the rules; backups every 15 min, off-site, tested restore
-Q ████░░░░░░  Connectivity        40%   local-first removes the queue; power loss and the owner's push remain
+Q ██████████  Connectivity       100%  both channels built, screens wired; power loss (NFR-5) still untested
 R ███████░░░  Cross-cutting       70%   hashing, rate limiting, audit, idempotency, row locks
 S ██████████  Expenses & credit  100%  expenses, P&L and installment plans persist; 3 new permission codes
+T ██████████  Returns & swaps    100%  wired end to end; net of returns now reaches the takings and the P&L
 ```
 
-388 tests, all green.
+468 tests, all green (3 live R2 checks run on demand).
 
 ---
 
@@ -100,7 +101,7 @@ work: a backup nobody can see the state of is indistinguishable from no backup.
 | Requirement | Status | Where |
 |---|---|---|
 | FR-SET-03 appearance typography | ✅ | Theme persists a 90–130% text scale and five allowlisted, offline-safe font stacks; V16 constrains both values |
-| NFR-6 automated off-site backup | ✅ | `BackupServiceImpl` — `pg_dump -Fc` every 15 min; `OffsiteStore` uploads S3-compatible, so Cloudflare R2 as budgeted |
+| NFR-6 automated off-site backup | ✅ | `BackupServiceImpl` — `pg_dump -Fc` every 15 min; `OffsiteStore` uploads S3-compatible, verifies the stored object with HEAD/size acknowledgement, and supports downloads for recovery |
 | NFR-6 30-day retention | ✅ | two tiers: every copy for 2 days, then one a day to 30. 2,880 fifteen-minute files a month buy no extra safety |
 | NFR-6 documented **and tested** restore | ✅ | `restore.sh` documents it; `BackupRestoreTest` dumps a real database, destroys it, and puts it back with the script's own arguments |
 | NFR-7 recovery point 15 minutes | ✅ | the interval *is* the recovery point; the screen reports the live one, not the target |
@@ -249,6 +250,240 @@ read.
 
 ---
 
+## T · Returns and exchanges — done
+
+Built 2026-09-15 on request. `ReturnsExchangesView` had no backend at all and
+`sale.refund` authorised nothing; both are now real.
+
+| What | Where |
+|---|---|
+| `sale_return` + items + per-outlet numbering | `V20__returns_and_exchanges.sql` |
+| Restock / damaged write-off / supplier RMA | `ReturnDisposition`, each owning its movements |
+| `CUSTOMER_RETURN`, `SUPPLIER_RETURN` | new `MovementType`s — adding them made the compiler reject an exhaustive switch, which is why the enum exists |
+| Returns, exchanges, what-may-come-back | `ReturnController` behind `sale.refund` |
+
+**Three rules carry it, all about refusing to recompute something already decided.**
+The refund is at the price the customer *paid*, taken from the original line with
+its discount — refunding a 20%-off purchase at today's ticket price loses the
+difference on every return, with no report that would show it. The cost is the
+cost frozen on that line (BR-5), so a return does not restate the margin of a sale
+made months ago. And what has already come back is the cap, read from the returns
+themselves, so nothing can be returned twice.
+
+**An exchange is a return and an ordinary sale**, in one transaction. The
+replacement goes through `SaleService` exactly as anything else does — its own
+receipt number, its own movements, its own frozen cost. A second, half-featured
+way to sell would have drifted from the real one within a month.
+
+**A cash refund writes a drawer payout** (BR-13, BR-14). Without it the till is
+short at close by exactly the refunds given, and a cashier is asked to explain a
+variance they did not cause.
+
+**Two defects found while building.** The return number had no outlet prefix, so
+both shops would have produced `R000001` and collided the moment their returns met
+in the owner's database — which is precisely what the sync channel does. And a
+named approver was trusted from the request body; it is now verified against
+`sale.refund`, because an id in a body is the client's claim.
+
+---
+
+## I · Receipts and printing — 90%
+
+| Requirement | Status |
+|---|---|
+| FR-RCPT-02 ESC/POS, no browser dialogue | ✅ `EscPos` — init, code page 437, feed past the blade, partial cut |
+| FR-RCPT-03 58mm and 80mm | ✅ 32 and 48 columns; the narrow roll gives the item name its own line rather than truncating it |
+| FR-RCPT-04 content per PRD §9 | ✅ `ReceiptLayout`, rendered from the sale **as stored** |
+| FR-RCPT-06 reprints marked and logged | ✅ band above the receipt details; `RECEIPT_REPRINTED` audited before the render |
+| FR-RCPT-09 previewable at both widths | ✅ through the same layout the printer uses, so a preview cannot drift from the output |
+| **The Windows print service** | ❌ **needs the printer.** The seam exists on both sides — `printService.ts` posts to `localhost:9100`, and the server hands it base64 ESC/POS |
+
+**The layout is asserted character by character without hardware** — 10 tests on
+column width, right-aligned money, two decimals, trimmed quantities, the REPRINT
+band's position, long names wrapping rather than being dropped. That is the only
+way to test a receipt before the roll exists, and it is also where the fiddly part
+lives.
+
+**Rendered server-side on purpose.** A receipt assembled in the browser states
+what the till believed rather than what was stored, and a reprint assembled that
+way could differ from the original — the one thing a reprint must never do. The
+test asserts the two are identical but for the band.
+
+---
+
+## What the last session found and fixed
+
+Three defects, all found by the client testing rather than by the suite.
+
+**Returns had no frontend.** The backend was built and tested, and I reported the
+feature done — but `handleAddReturnRecord` still pushed into React state and
+nothing loaded returns on sign-in, so they vanished on refresh. The same bug
+class the expenses had. Now wired: posted to the server, listed on sign-in, and
+the screen re-reads stock and the ledger rather than predicting them.
+
+**Every return failed with "tell a manager".** The returns screen invented a
+customer id of the form `cust-1757…`, which is not a UUID, so the body could not
+be read at all — the request never reached the returns code, which is why no row
+was ever written. Worse, there was **no handler for an unreadable body**: it fell
+through to the catch-all and produced a 500 telling a cashier to fetch a manager,
+for what is a 400. Any malformed value anywhere in the API did this. Now a 400
+that names the field.
+
+*(A trap worth recording: the first two attempts at that handler compiled and
+silently never matched. Spring 7 here uses **Jackson 3 — `tools.jackson`** — and
+the Jackson 2 `com.fasterxml` exception classes type-check perfectly against
+nothing.)*
+
+**Returns did not reach the takings.** `sale_return` appeared nowhere in
+`ReportServiceImpl`, so a shop could sell GH₵200, refund GH₵80, and every sales
+figure still read GH₵200. The summary now carries `refundTotal`, `refundCount`
+and `netRevenue`, and the P&L is built on the net figure.
+
+Gross is kept beside net deliberately — takings of 10,000 with 3,000 returned is
+a different month from takings of 7,000 with none.
+
+**The cost side is the subtle half.** A restocked return reverses its cost: the
+goods were not sold after all. A written-off one does not — the shop still paid
+for stock it no longer has. Reversing both would quietly hide write-off losses
+inside the margin. Both are tested.
+
+---
+
+## Q · Connectivity — both channels built
+
+R2 verified live against `s3://pos-system/` — write, read, list, and an absent key
+coming back empty rather than throwing, which is the ordinary first-run state.
+
+| | |
+|---|---|
+| Config down | `ConfigurationChannel` — outlet, business profile, thresholds, staff (hashes included, so a shop authenticates its own people offline) and the catalogue it carries |
+| Transactions up | `SyncServiceImpl` — incremental batches keyed on `synced_at`, zero-padded so lexical order is chronological order |
+| Ingest | `json_populate_record` rebuilds each row; UUID keys make a repeat a no-op |
+| Foundations | `V22` — `product_outlet`, `product.origin`, the missing `synced_at` on `product_outlet_price`, `sync_batch`, `sync_sequence`, `sync_watermark` |
+
+**Rows are serialised by Postgres and rebuilt by Postgres.** Hand-mapping fifteen
+tables in both directions would be thirty places for a column added later to be
+forgotten, and the failure would be silent — a field that simply stopped
+arriving.
+
+**Four defects the round-trip test found**, none of which a unit test would have:
+
+- **The audit log cannot be stamped.** Its trigger refuses every UPDATE, which is
+  the point of BR-15 — a log somebody can write to is not a log. Weakening the
+  trigger for one column would trade a real guarantee for convenience, so the
+  position is kept beside it in `sync_watermark` instead.
+- **`sync_batch` was unique on the object key alone.** One instance that both
+  sells and receives writes a batch and later reads it back; those are two facts
+  about the same object, and keying on the object made the second silently do
+  nothing — so every batch was ingested again on every run.
+- **The stored payload's timestamp format was inherited.** The injected Jackson 2
+  mapper has no time module, and this is a file read back later by another
+  instance, so the format is now pinned as an ISO string rather than left to
+  whatever the HTTP mapper happens to be configured with.
+- **A push writes an audit row, so the next push carries it.** Not a bug — the
+  owner should see that a shop is syncing — but it means the backlog converges to
+  one rather than zero, and the test says so rather than asserting a zero that
+  would never arrive.
+
+**Nothing here is on the selling path.** Every route is something a person
+presses; if the bucket is unreachable the till does not notice.
+
+---
+
+## FR-USER-02 — role permissions are editable now
+
+Reported by the client: assigning permissions to a role reset, and had no effect.
+Both were true, for two different reasons.
+
+**The Save button called `setState`.** `onUpdateRolesPermissions={setRolesPermissions}`
+— nothing reached the server, and the editor re-seeded from its unchanged props,
+which is the reset. **And underneath there was nowhere to save to**: role
+baselines were the `Role` enum, fixed at compile time.
+
+That was a decision recorded in this file, and the client was right to push back
+on it. An owner who is away should be able to let a senior cashier approve
+something without waiting for a release.
+
+**`role_permission` is now the runtime authority**, seeded at startup from the
+enum. The enum keeps the job it is good at — defining which permissions *exist*,
+a vocabulary the code switches on — and supplies the defaults and the reset. The
+original worry was "a second source of truth free to drift"; the answer is that
+there is one authority at runtime and the defaults live in exactly one place.
+Seeding happens in Java rather than in the migration for that reason: a hundred
+INSERTs in SQL would have been the drift.
+
+It is a **replace, not a merge** — taking a right away has to be as possible as
+giving one — and it takes effect **mid-session**, because the guard filter
+re-resolves per request. Both are tested with two live sessions.
+
+Still missing: there is no per-user permission editor anywhere in the UI.
+`usersApi.setPermission` and its endpoint both exist and are tested, and nothing
+calls them.
+
+---
+
+## FR-RCPT — one renderer for every slip
+
+Asked for after the client noticed the documents did not match.
+
+A return now prints through **the same layout as the sale it reverses** — same
+shop block, same rules, same right-aligned money — titled `CREDIT NOTE` or
+`EXCHANGE NOTE` so a customer holding two slips can tell them apart. An exchange
+names the receipt for the replacement goods, so the pair can be put together.
+
+**Every printed amount now carries a currency.** It is the currency *code*, not
+the symbol: code page 437 cannot render GH₵ and it would come out as two pieces
+of rubbish, while a bare `310.00` is the other failure. The screen keeps the
+symbol; the roll gets `GHS`.
+
+---
+
+## Two features that had never worked
+
+Both were built without tests. Writing the tests was what found them — neither
+had ever succeeded once, on any machine.
+
+**Holding a sale failed with a 500 every time.**
+`cart_json` is `jsonb`; the entity mapped it as a plain `String` with
+`columnDefinition = "jsonb"`, which only matters if Hibernate generates the
+schema. Flyway owns DDL here, so it did nothing, the driver sent a `varchar`
+into a `jsonb` column, and Postgres refused. `@JdbcTypeCode(SqlTypes.JSON)`
+fixes it; the column stays queryable, because "which parked carts contain this
+product" is a question somebody will ask.
+
+**Creating a till failed with a 500 every time.**
+The audit log writes in its own transaction (`REQUIRES_NEW`, so a failure cannot
+take the record of the attempt down with it) — so it could not see a terminal
+the outer transaction had not committed, and the foreign key refused every
+insert. The audit now names the terminal as `entity_id` and leaves `terminal_id`
+null: a till being created is not yet a till anything was done *at*. This one
+also meant **no second till could be added to a branch**, and BR-6 receipt
+blocks are allocated at till creation.
+
+I had previously reported held sales as working, on the strength of the whole
+stack existing. It did exist; it just never ran.
+
+---
+
+## CI — two repositories, not one
+
+`pos-api` and `pos-system` are separate repositories. A workflow at the project
+root would have been tracked by neither and never run, so each has its own:
+
+- `pos-api` — the suite against real PostgreSQL through Testcontainers. **No
+  remote yet**, so nothing triggers it.
+- `pos-system` — typecheck, contract assertions, build, and a **staleness check**
+  that regenerates the vectors and fails if the committed file differs. Without
+  it somebody changes a rule, forgets to regenerate, and the backend discovers it
+  later in a different repository.
+- `verify.sh` at the root runs both. Tracked by neither, because it spans them.
+
+`gen:vectors` wrote to both repositories, which is right side by side and wrong
+in CI where only one is checked out. It now writes the sibling copy only when it
+is actually there.
+
+---
+
 ## Next up
 
 1. **I · Receipts & printing** — blocked on the printer, not on us. Next in
@@ -264,47 +499,31 @@ read.
 
 | What | Needed from | Blocks |
 |---|---|---|
-| **Consolidator in scope, or separate quote?** | Client | Owner has no combined view until it ships. PRD §1.2 promises it. Config and profile are written; no push or ingest code. |
-| **One instance, or one per shop?** | You | The plan says one instance per shop on each counter PC. Everything built so far is a single database holding both outlets — one product list, one customer list, stock tagged per outlet. Two instances means those stop being shared unless something replicates them, which is not built and not quoted. See the note below. |
-| ~~**31 vs 33 permission codes**~~ | *Taken* | Kept all 33 with `stock.transfer` and `customer.credit` flagged `futureStage`. Removing them meant amending the frozen contract and its vectors now and restoring them later; keeping them costs nothing, since no endpoint checks a code whose feature does not exist. Reversal instructions are on `Permission.isFutureStage()`. |
+| ~~**Consolidator in scope, or separate quote?**~~ | *Taken* | **Replaced by R2.** The hosted consolidator API is dropped; the owner runs the same application and pulls transaction batches from a bucket. Nothing to host, and the `pos.consolidator.*` config it would have used was never built. Still to build: the publish/pull on both channels. |
+| ~~**One instance, or one per shop?**~~ | *Taken* | **One per shop**, with the owner running the same application and Cloudflare R2 as a one-way postbox between them. Settled by three facts about the client: the two shops sell largely different ranges, the overlap is small but real, and the second outlet's internet cannot be relied on to sell. Written up in `../pos-system/docs/ARCHITECTURE-topology-and-sync.md`. |
+| ~~**31 vs 33 permission codes**~~ | *Taken* | Now **36**. The three added with the accounting module are all enforced. `customer.credit` stopped being a placeholder when installment plans got endpoints; `stock.transfer` is the last code flagged `futureStage`. `PermissionEnforcementTest` fails if any code is grantable with nothing behind it. |
 | **Acceptance criterion 4 is unsatisfiable** | You | One terminal per outlet + per-outlet stock = the two terminals can never contend. Reword to goods-receipt-vs-sale. |
-| **Stage 2 features expected live?** | Client | Installments, returns, expenses are in the frontend but out of Stage 1 |
+| **Returns / swaps expected live?** | Client | **Expenses and installment plans shipped 2026-09-14** and are no longer in question. Returns and exchanges are the last of the Stage 2 trio: `ReturnsExchangesView` has no backend and `sale.refund` authorises nothing. The owner has asked to see swaps in the combined view, which cannot happen until they are built. |
 | **Thermal printer ordered?** | You | Acceptance criterion 2 cannot close without one |
 
 ---
 
-## The topology question
+## The topology question — settled 2026-09-15
 
-The PRD (§2.2) describes a **cloud-hosted single system, every record tagged to an
-outlet**. The implementation plan settled on **local-first — one instance per shop on
-the counter PC** — which is what makes the till immune to the internet.
+**One instance per shop.** The owner runs the same application, holding both outlets; Cloudflare R2
+carries configuration down and transactions up. Every channel is one-way, so nothing in the design
+needs conflict resolution.
 
-Everything built so far is the first shape: one database, `outlet_id` on every row,
-one product list, one customer list, users assigned to outlets, stock per outlet.
-That is deliberate and it is what the requirements ask for — AS-5 (one shared product
-list), AS-6 (shared prices with per-outlet override), FR-CUST-05 (customers shared
-across both outlets), FR-CUST-06 (history across both).
+What settled it: the two shops sell largely different ranges (so there is no shared catalogue to keep
+in step), the electrical shop carries a few hardware lines (so the overlap is real and those products
+keep one shared id), and the second outlet's connection cannot be relied on to make a sale.
 
-Those requirements and "one instance per shop" cannot both hold without replication
-between the two shops. The only sync in the plan is the outbound snapshot to the
-consolidator, which is explicitly a summary and needs no replication.
+This amends PRD assumptions AS-5 and AS-6, which described one shared product list and shared prices.
+Neither describes this client. The full record, including what each channel carries and why the
+alternatives were rejected, is in `../pos-system/docs/ARCHITECTURE-topology-and-sync.md`.
 
-So one of two things is true, and it is the client's call:
-
-**A · One system of record, packaged.** The instance lives at the main shop (or in the
-cloud); the second counter runs the same packaged app pointing at it. Everything above
-stays true as built. The main shop never depends on the internet. The second shop does
-— which the PRD already accepts ("long outages stop that outlet", §2.2) and already
-prices as a risk ("full offline quotable separately", §Risks).
-
-**B · One instance per shop.** Matches the packaging plan exactly, and both shops
-trade through any outage. But the product list, the price list and the customer list
-become per-shop copies, and keeping them in step is bidirectional replication — real
-work, not currently quoted, and the source of every hard bug in this class of system.
-
-Recommended: **A**. It is what the requirements describe, it is what is built, and it
-puts the connectivity risk on the one shop the PRD already flagged rather than
-introducing a replication problem to avoid it.
+Two things it leaves open: whether stock physically moves between the shops (`stock.transfer` is
+unbuilt), and swaps/returns, which the owner wants to see and which have no backend.
 
 ---
 
