@@ -81,7 +81,7 @@ export const CustomerOverviewChart: React.FC<CustomerOverviewChartProps> = ({
   const inner = segments[1]?.pct ?? 0;
 
   return (
-    <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between h-full">
+    <div className="min-w-0 max-w-full overflow-hidden bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between h-full">
       {/* Header */}
       <div className="flex flex-col gap-3 pb-3 border-b border-slate-200 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
@@ -120,7 +120,7 @@ export const CustomerOverviewChart: React.FC<CustomerOverviewChartProps> = ({
       </div>
 
       {/* Donut and metrics */}
-      <div className="flex flex-col 2xl:flex-row items-center justify-between py-4 gap-5 min-w-0">
+      <div className="flex min-w-0 flex-col 2xl:flex-row items-center justify-between py-4 gap-5">
         {/* Dual Ring Donut */}
         <div className="relative w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center shrink-0">
           <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">

@@ -79,10 +79,10 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = ({ accentCo
   const formatCompactMoney = (value: number) => `GH₵ ${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 
   return (
-    <div className="bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between h-full">
+    <div className="min-w-0 max-w-full overflow-hidden bg-white rounded-2xl p-5 border border-slate-300 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between h-full">
       {/* Chart Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <div
             className="w-10 h-10 rounded-xl flex items-center justify-center border shadow-2xs"
             style={{
@@ -93,9 +93,9 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = ({ accentCo
           >
             <BarChart3 className="w-5 h-5 stroke-[2.5]" />
           </div>
-          <div>
-            <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
-              <span>Sales &amp; Procurement Velocity</span>
+          <div className="min-w-0">
+            <h3 className="min-w-0 font-black text-slate-800 text-base flex flex-wrap items-center gap-2">
+              <span className="break-words">Sales &amp; Procurement Velocity</span>
               {summary.change !== null && Number.isFinite(summary.change) && (
                 <span className={`text-[10px] ${summary.change >= 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'} font-bold px-2 py-0.5 rounded-full border flex items-center gap-1`}>
                   {summary.change >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />} {summary.change >= 0 ? '+' : ''}{summary.change.toFixed(1)}%
@@ -109,7 +109,7 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = ({ accentCo
         </div>
 
         {/* Time Filters */}
-        <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl self-start sm:self-auto border border-slate-300">
+        <div className="flex max-w-full flex-wrap items-center gap-1 bg-slate-100/80 p-1 rounded-xl self-start sm:self-auto border border-slate-300">
           {ranges.map((range) => (
             <button
               key={range}
@@ -152,7 +152,7 @@ export const SalesPurchaseChart: React.FC<SalesPurchaseChartProps> = ({ accentCo
       </div>
 
       {/* Stacked Bar Chart Graphic */}
-      <div className="relative pt-4 pb-2 flex-1 min-h-[220px]">
+      <div className="relative min-w-0 max-w-full pt-4 pb-2 flex-1 min-h-[220px]">
         {/* Y Axis Grid Lines */}
         <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-7">
           {yTicks.map((tick) => (

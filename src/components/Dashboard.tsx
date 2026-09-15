@@ -827,13 +827,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 min-w-0">
           <SalesPurchaseChart
             accentColor={accentColor}
             outletId={dashboardScope === 'all' ? null : dashboardScope}
           />
         </div>
-        <div>
+        <div className="min-w-0">
           <CustomerOverviewChart
             accentColor={accentColor}
             outletId={dashboardScope === 'all' ? null : dashboardScope}
