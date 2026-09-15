@@ -5,6 +5,10 @@
 # cookie problem, no token refresh endpoint.
 
 server:
+  # The counter is local-first and the browser is on this same machine. Bind
+  # only to loopback so an untrusted device on the shop LAN cannot reach the
+  # session/API surface directly.
+  address: ${POS_BIND_ADDRESS:127.0.0.1}
   servlet:
     session:
       # FR-AUTH-05: idle expiry. With an open shift the POS locks rather than

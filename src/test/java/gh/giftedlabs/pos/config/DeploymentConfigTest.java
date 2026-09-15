@@ -7,6 +7,7 @@ import org.springframework.mock.env.MockEnvironment;
 
 import java.time.Duration;
 import java.util.Map;
+import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -138,6 +139,20 @@ class DeploymentConfigTest {
         @DisplayName("fully configured, it pushes")
         void pushesWhenConfigured() {
             assertTrue(consolidator(true, "https://owner.example.com", "a-key").canPush());
+        }
+    }
+
+    @Nested
+    @DisplayName("Counter network boundary")
+    class CounterNetworkBoundary {
+        @Test
+        @DisplayName("the local-first counter binds to loopback by default")
+        void bindsOnlyToLoopback() throws Exception {
+            String config;
+            try (var stream = getClass().getResourceAsStream("/application-counter.yml")) {
+                config = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            assertTrue(config.contains("address: ${POS_BIND_ADDRESS:127.0.0.1}"));
         }
     }
 }
