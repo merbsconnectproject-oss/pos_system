@@ -4,6 +4,7 @@ import { CompletedSale, Customer, Outlet } from '../types';
 import { InfoHint } from './InfoHint';
 import { customersApi } from '../customersApi';
 import { toCompletedSale } from '../salesApi';
+import { TablePagination } from './TablePagination';
 
 type CustomerMode = 'list' | 'purchases' | 'types' | 'credit';
 
@@ -33,6 +34,8 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: '',
@@ -215,7 +218,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filtered.map((customer) => (
+                  {filtered.slice((page - 1) * pageSize, page * pageSize).map((customer) => (
                     <tr key={customer.id} className="hover:bg-slate-50">
                       <td className="py-3 px-4">
                         <button onClick={() => setSelectedCustomer(customer)} className="font-bold text-slate-900 hover:text-accent-600">{customer.name}</button>
@@ -255,6 +258,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                 </tbody>
               </table>
             </div>
+            <TablePagination page={page} pageSize={pageSize} total={filtered.length} onPageChange={setPage} onPageSizeChange={setPageSize} />
           </div>
         </>
       )}

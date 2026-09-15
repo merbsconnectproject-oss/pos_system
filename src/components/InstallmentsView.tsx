@@ -23,6 +23,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { InfoHint } from './InfoHint';
+import { TablePagination } from './TablePagination';
 import {
   CustomerInstallmentPlan,
   InstallmentScheduleItem,
@@ -79,6 +80,8 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
   // Payment Recording Modal State
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [activePlanForPayment, setActivePlanForPayment] = useState<CustomerInstallmentPlan | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [selectedInstallmentNum, setSelectedInstallmentNum] = useState<string>('');
   const [paymentAmount, setPaymentAmount] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>('');
@@ -481,7 +484,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
             No customer installment plans match your search or filter criteria.
           </div>
         ) : (
-          filteredPlans.map((plan) => {
+          filteredPlans.slice((page - 1) * pageSize, page * pageSize).map((plan) => {
             const isExpanded = expandedPlanId === plan.id;
             const progressPct =
               plan.totalAmount > 0
@@ -750,6 +753,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
             );
           })
         )}
+        <TablePagination page={page} pageSize={pageSize} total={filteredPlans.length} onPageChange={setPage} onPageSizeChange={setPageSize} />
       </div>
 
       {/* 5. MODAL: RECORD INSTALLMENT PAYMENT */}

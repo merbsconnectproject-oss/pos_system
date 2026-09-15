@@ -37,13 +37,21 @@ import {
   StockMovement,
 } from '../types';
 import { exportToCsv } from '../utils/csvExport';
+import { TablePagination } from './TablePagination';
 
 interface ReturnsExchangesViewProps {
   records: ReturnExchangeRecord[];
+  /**
+   * Resolves once the server has the credit note, rejects when it refuses.
+   *
+   * The swap items travel separately because the replacement goods are rung up
+   * as an ordinary sale on the server, not folded into the return.
+   */
   onAddRecord: (
     record: ReturnExchangeRecord,
-    stockAdjustments: Array<{ productId: string; quantityDelta: number; reason: string }>
-  ) => void;
+    stockAdjustments: Array<{ productId: string; quantityDelta: number; reason: string }>,
+    swapItems?: Array<{ productId: string; quantity: number; unitPrice: number }>,
+  ) => Promise<void> | void;
   sales: CompletedSale[];
   products: Product[];
   currentOutlet: Outlet;
@@ -76,6 +84,11 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
 
   // New Return/Swap Modal State
   const [modalOpen, setModalOpen] = useState(false);
+  // The server can refuse — more than was sold, a voided receipt, no permission.
+  // Both of these exist so it is refused visibly rather than the return quietly
+  // not being there next time somebody looks.
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedSaleId, setSelectedSaleId] = useState<string>('');
   const [customReceiptNumber, setCustomReceiptNumber] = useState('');
   const [customerName, setCustomerName] = useState('');
@@ -111,6 +124,8 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
 
   // Printable Voucher Modal
   const [selectedVoucher, setSelectedVoucher] = useState<ReturnExchangeRecord | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   // Prepopulate return items when sale changes
   const handleSelectSale = (saleId: string) => {
@@ -173,7 +188,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
   };
 
   // Submit Return or Swap
-  const handleSubmitReturnOrSwap = (e: React.FormEvent) => {
+  const handleSubmitReturnOrSwap = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!outletId || returnItems.length === 0 || returnItems.some((item) => !item.productId || !item.reason || !item.disposition || item.quantity <= 0 || item.unitPrice <= 0)) return;
     if (netDifference !== 0 && !settlementMethod) return;
@@ -214,7 +229,11 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
       id: `ret-${Date.now()}`,
       referenceNumber: refNumber,
       type: isExchange ? 'EXCHANGE_SWAP' : 'RETURN_REFUND',
-      originalReceiptNumber: customReceiptNumber || 'RAD-01-OFFLINE',
+      originalReceiptNumber: customReceiptNumber || '',
+      // The server processes a return against the sale, not against a typed
+      // receipt number: the price paid and the frozen cost both live on the
+      // original line, and neither can be recovered from a string.
+      originalSaleId: selectedSaleId || undefined,
       customerId: `cust-${Date.now()}`,
       customerName: customerName.trim() || 'Walk-in Customer',
       customerPhone: customerPhone.trim() || 'N/A',
@@ -257,7 +276,25 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
       });
     }
 
-    onAddRecord(newRecord, stockAdjustments);
+    // Awaited, and the form only closes once the server has it. Closing on the
+    // same tick is how a refused return used to vanish silently, taking
+    // everything the counter had typed with it.
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onAddRecord(newRecord, stockAdjustments,
+        swapItems.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        })));
+    } catch (failure) {
+      setSaveError(failure instanceof Error ? failure.message : 'The return could not be saved.');
+      return;
+    } finally {
+      setSaving(false);
+    }
+
     setModalOpen(false);
     setSelectedVoucher(newRecord);
   };
@@ -473,7 +510,7 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredRecords.map((record) => (
+                filteredRecords.slice((page - 1) * pageSize, page * pageSize).map((record) => (
                   <tr key={record.id} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-3 px-4 font-mono">
                       <div className="font-bold text-slate-900">{record.referenceNumber}</div>
@@ -1001,6 +1038,14 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
               </div>
 
               {/* Action Buttons */}
+              {/* Why it was refused — more than was sold, a voided receipt, no
+                  permission. Silence here is what made a return look saved. */}
+              {saveError && (
+                <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800">
+                  {saveError}
+                </div>
+              )}
+
               <div className="pt-3 flex flex-col sm:flex-row items-center justify-end gap-3 shrink-0 border-t border-slate-200">
                 <button
                   type="button"
@@ -1011,14 +1056,16 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="w-full sm:w-auto px-6 py-2.5 text-sm font-black text-white rounded-lg shadow-xs transition-all cursor-pointer hover:opacity-95"
+                  disabled={saving}
+                  className="w-full sm:w-auto px-6 py-2.5 text-sm font-black text-white rounded-lg shadow-xs transition-all cursor-pointer hover:opacity-95 disabled:opacity-60 disabled:cursor-wait"
                   style={{ backgroundColor: accentColor || 'var(--accent, #c55200)' }}
                 >
-                  Confirm &amp; Execute Inventory Restock
+                  {saving ? 'Saving…' : 'Confirm & Execute Inventory Restock'}
                 </button>
               </div>
             </form>
           </div>
+          <TablePagination page={page} pageSize={pageSize} total={filteredRecords.length} onPageChange={setPage} onPageSizeChange={setPageSize} />
         </div>
       )}
 

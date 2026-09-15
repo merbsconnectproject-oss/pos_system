@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Layers, Search, Filter, ArrowDownRight, ArrowUpRight, AlertCircle, FileText } from 'lucide-react';
 import { StockMovement, Outlet } from '../types';
 import { InfoHint } from './InfoHint';
+import { TablePagination } from './TablePagination';
 
 interface StockMovementsViewProps {
   movements: StockMovement[];
@@ -16,6 +17,8 @@ export const StockMovementsView: React.FC<StockMovementsViewProps> = ({
 }) => {
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const filtered = movements.filter((m) => {
     const matchesOutlet =
@@ -27,6 +30,7 @@ export const StockMovementsView: React.FC<StockMovementsViewProps> = ({
       (m.reason && m.reason.toLowerCase().includes(searchTerm.toLowerCase()));
     return matchesOutlet && matchesType && matchesSearch;
   });
+  const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const getTypeBadge = (type: StockMovement['type']) => {
     switch (type) {
@@ -145,7 +149,7 @@ export const StockMovementsView: React.FC<StockMovementsViewProps> = ({
                   </td>
                 </tr>
               ) : (
-                filtered.map((m) => (
+                visible.map((m) => (
                   <tr key={m.id} className="hover:bg-slate-50 transition-colors">
                     <td className="py-3 px-4 font-mono text-slate-600 whitespace-nowrap">{m.timestamp}</td>
                     <td className="py-3 px-4 font-semibold text-slate-700">
@@ -176,6 +180,7 @@ export const StockMovementsView: React.FC<StockMovementsViewProps> = ({
           </table>
         </div>
       </div>
+      <TablePagination page={page} pageSize={pageSize} total={filtered.length} onPageChange={setPage} onPageSizeChange={setPageSize} />
     </div>
   );
 };

@@ -6,9 +6,10 @@ import { exportToCsv } from '../utils/csvExport';
 import { InfoHint } from './InfoHint';
 import { ThermalReceiptSlip } from './ThermalReceiptSlip';
 import { ReceiptPrintModal } from './ReceiptPrintModal';
-import { generateReceiptPlainText } from './ThermalReceiptSlip';
+import { receiptsApi } from '../receiptsApi';
 import { printReceipt } from '../printService';
 import { salesApi } from '../salesApi';
+import { TablePagination } from './TablePagination';
 
 interface SalesHistoryViewProps {
   sales: CompletedSale[];
@@ -39,6 +40,8 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
   const [voidReasonCode, setVoidReasonCode] = useState<'CASHIER_ERROR' | 'CUSTOMER_RETURN' | 'DEFECTIVE_PRODUCT' | 'DUPLICATE_ENTRY'>('CASHIER_ERROR');
   const [voidNote, setVoidNote] = useState('');
   const [pinModalOpen, setPinModalOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const outletSales = sales.filter((s) => currentOutlet.id === 'all-outlets' || s.outletId === currentOutlet.id);
   const completedSales = outletSales.filter((s) => s.status === 'COMPLETED');
@@ -69,6 +72,7 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
       (s.customerPhone && s.customerPhone.includes(searchTerm));
     return matchesStatus && matchesDate && matchesPayment && matchesCashier && matchesMin && matchesMax && matchesSearch;
   });
+  const visibleSales = filteredSales.slice((page - 1) * pageSize, page * pageSize);
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -103,12 +107,16 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
     // Anything printed from the history log is by definition a reprint.
     setIsReprint(true);
     try {
-      await salesApi.reprint(target.id);
+      // One call: the server audits the reprint (BR-15) and renders it in the
+      // same step, so a copy that printed can always be accounted for. The text
+      // is no longer rebuilt here — the reprint has to be the same document as
+      // the original, which only holds if one renderer produces both.
+      const receipt = await receiptsApi.reprint(target.id, width || paperWidth);
       const result = await printReceipt({
-        receiptNumber: target.receiptNumber,
-        paperWidth: width || paperWidth,
+        receiptNumber: receipt.receiptNumber,
+        paperWidth: receipt.width,
         isReprint: true,
-        payload: generateReceiptPlainText(target, true, width || paperWidth),
+        payload: receipt.escPos,
       });
       if (!result.ok) setPrintTarget(target);
     } catch {
@@ -432,7 +440,7 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
                   </td>
                 </tr>
               )}
-              {filteredSales.map((sale) => (
+              {visibleSales.map((sale) => (
                 <tr
                   key={sale.id}
                   onClick={() => setSelectedSaleId(sale.id)}
@@ -520,6 +528,8 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
           </table>
         </div>
       </div>
+
+      <TablePagination page={page} pageSize={pageSize} total={filteredSales.length} onPageChange={setPage} onPageSizeChange={setPageSize} />
 
       {/* Dedicated Print-Friendly Receipt Modal (PRD §9) */}
       {viewingReceipt && (

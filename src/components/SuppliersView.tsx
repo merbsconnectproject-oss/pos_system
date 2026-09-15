@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Building, CalendarClock, FileText, Mail, Package, Phone, Plus, Search, Truck, Wallet, X } from 'lucide-react';
 import { Outlet, Product, StockMovement, Supplier } from '../types';
 import { InfoHint } from './InfoHint';
+import { TablePagination } from './TablePagination';
 
 type SupplierMode = 'list' | 'receipts' | 'purchase-orders' | 'balances';
 
@@ -32,6 +33,8 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [storeFilter, setStoreFilter] = useState(currentOutlet.id === 'all-outlets' ? 'all' : currentOutlet.id);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const realOutlets = outlets.filter((outlet) => outlet.id !== 'all-outlets');
@@ -166,7 +169,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filtered.map((supplier) => (
+                  {filtered.slice((page - 1) * pageSize, page * pageSize).map((supplier) => (
                     <tr key={supplier.id} className="hover:bg-slate-50">
                       <td className="py-3 px-4">
                         <button onClick={() => setSelectedSupplier(supplier)} className="font-bold text-slate-900 hover:text-accent-600 text-left">{supplier.name}</button>
@@ -200,6 +203,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
                 </tbody>
               </table>
             </div>
+            <TablePagination page={page} pageSize={pageSize} total={filtered.length} onPageChange={setPage} onPageSizeChange={setPageSize} />
           </div>
         </>
       )}

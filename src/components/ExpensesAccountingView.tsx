@@ -22,15 +22,33 @@ import {
   Building,
   Sparkles,
   PieChart,
+  AlertTriangle,
 } from 'lucide-react';
 import { Expense, ExpenseCategory, Outlet, CompletedSale, OutletId } from '../types';
 import { exportToCsv } from '../utils/csvExport';
 import { reportsApi, type ProfitAndLossWire } from '../reportsApi';
+import { TablePagination } from './TablePagination';
 
 interface ExpensesAccountingViewProps {
   expenses: Expense[];
-  onAddExpense: (expense: Expense) => void;
-  onDeleteExpense: (expenseId: string) => void;
+  /**
+   * Resolves once the server has it, rejects when it refuses.
+   *
+   * Promise-returning on purpose: a void callback cannot tell this screen whether
+   * the expense was actually recorded, which is how an entry came to vanish on
+   * the next refresh.
+   */
+  onAddExpense: (expense: Expense) => Promise<void> | void;
+  onDeleteExpense: (expenseId: string) => Promise<void> | void;
+  /**
+   * `report.view_pl` — FR-RPT-05.
+   *
+   * Recording what the branch spends and seeing the business's net position are
+   * two different disclosures: net profit is the whole cost base, rent and
+   * salaries included. Without this the screen is the expense ledger and no
+   * statement, rather than a statement with numbers blanked out.
+   */
+  mayViewProfitAndLoss?: boolean;
   currentOutlet: Outlet;
   outlets: Outlet[];
   sales: CompletedSale[];
@@ -58,6 +76,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
   outlets,
   sales = [],
   accentColor,
+  mayViewProfitAndLoss = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
@@ -74,6 +93,8 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
   const [serverPnl, setServerPnl] = useState<ProfitAndLossWire | null>(null);
   const [pnlLoading, setPnlLoading] = useState(false);
   const [pnlError, setPnlError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   // Form State
   const [formCategory, setFormCategory] = useState<ExpenseCategory | ''>('');
@@ -138,6 +159,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
     amount: item.amount,
     percentage: totalOperatingExpenses > 0 ? (item.amount / totalOperatingExpenses) * 100 : 0,
   }));
+  const visibleExpenses = filteredExpenses.slice((page - 1) * pageSize, page * pageSize);
 
   /**
    * Records the expense, and only clears the form once the server has it.
@@ -150,6 +172,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
   const handleSubmitExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formCategory || !formOutletId || !formPaymentMethod || !formDate || !formTitle.trim() || !formAmount || parseFloat(formAmount) <= 0) return;
+    if (saving) return;
 
     const matchedOutlet = outlets.find((o) => o.id === formOutletId);
     const outletName = matchedOutlet ? matchedOutlet.name : 'Radiance Lighting';
@@ -171,7 +194,19 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
       status: 'PAID',
     };
 
-    onAddExpense(newExpense);
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onAddExpense(newExpense);
+    } catch (failure) {
+      // The form stays open with everything still in it, so the correction is a
+      // fix rather than a re-type.
+      setSaveError(failure instanceof Error ? failure.message : 'The expense could not be saved.');
+      return;
+    } finally {
+      setSaving(false);
+    }
+
     setModalOpen(false);
 
     // Reset Form
@@ -185,6 +220,16 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
     setFormPaymentMethod('');
     setFormRef('');
     setFormTaxDeductible(false);
+  };
+
+  /** Removing one can also be refused, and that has to be visible too. */
+  const handleRemoveExpense = async (expenseId: string) => {
+    setSaveError(null);
+    try {
+      await onDeleteExpense(expenseId);
+    } catch (failure) {
+      setSaveError(failure instanceof Error ? failure.message : 'The expense could not be removed.');
+    }
   };
 
   // Export CSV
@@ -240,13 +285,16 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={() => setStatementPrintModalOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 shadow-2xs transition-all cursor-pointer"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>P&amp;L Statement</span>
-          </button>
+          {/* L-09: absent without the right, not disabled. */}
+          {mayViewProfitAndLoss && (
+            <button
+              onClick={() => setStatementPrintModalOpen(true)}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 shadow-2xs transition-all cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>P&amp;L Statement</span>
+            </button>
+          )}
 
           <button
             onClick={handleExportExpensesCsv}
@@ -461,7 +509,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                     </td>
                   </tr>
                 ) : (
-                  filteredExpenses.map((exp) => (
+                  visibleExpenses.map((exp) => (
                     <tr key={exp.id} className="hover:bg-slate-50/70 transition-colors">
                       <td className="py-2.5 px-3 font-mono whitespace-nowrap">
                         <div className="font-bold text-slate-900">{exp.date}</div>
@@ -507,6 +555,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
               </tbody>
             </table>
           </div>
+          <TablePagination page={page} pageSize={pageSize} total={filteredExpenses.length} onPageChange={setPage} onPageSizeChange={setPageSize} />
         </div>
       </div>
 
@@ -693,6 +742,15 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                 />
               </div>
 
+              {/* Why the entry was refused, in the server's own words. Silence
+                  here is what made an expense look saved and then be gone. */}
+              {saveError && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{saveError}</span>
+                </div>
+              )}
+
               <div className="pt-3 flex flex-col sm:flex-row items-center justify-end gap-3 border-t border-slate-200">
                 <button
                   type="button"
@@ -703,10 +761,11 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="w-full sm:w-auto px-6 py-2.5 text-sm font-black text-white rounded-lg shadow-xs transition-all cursor-pointer hover:opacity-95"
+                  disabled={saving}
+                  className="w-full sm:w-auto px-6 py-2.5 text-sm font-black text-white rounded-lg shadow-xs transition-all cursor-pointer hover:opacity-95 disabled:opacity-60 disabled:cursor-wait"
                   style={{ backgroundColor: accentColor || 'var(--accent, #c55200)' }}
                 >
-                  Save Expense Entry
+                  {saving ? 'Saving…' : 'Save Expense Entry'}
                 </button>
               </div>
             </form>
@@ -714,8 +773,8 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
         </div>
       )}
 
-      {/* 5. MODAL: PRINTABLE P&L STATEMENT */}
-      {statementPrintModalOpen && (
+      {/* 5. MODAL: PRINTABLE P&L STATEMENT — report.view_pl only */}
+      {statementPrintModalOpen && mayViewProfitAndLoss && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-xs animate-modal-backdrop">
           <div className="bg-white w-full max-w-3xl rounded-xl shadow-2xl border border-slate-300 overflow-hidden animate-modal-card p-6 sm:p-8 space-y-6 flex flex-col max-h-[92vh]">
             <div className="border-b border-slate-300 pb-4 text-center space-y-1.5 shrink-0">

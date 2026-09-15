@@ -43,6 +43,7 @@ import {
 } from '../productImport';
 import { exportToCsv } from '../utils/csvExport';
 import { ProductBarcodeModal, ProductBarcodeSvg } from './ProductBarcodeModal';
+import { TablePagination } from './TablePagination';
 
 type ProductMode = 'list' | 'import' | 'setup' | 'bulk-price';
 type ImportStep = 'upload' | 'mapping' | 'validation' | 'preview' | 'result';
@@ -235,6 +236,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       return terms.every((term) => haystack.includes(term));
     });
   }, [brandFilter, categoryFilter, currentOutlet, products, searchTerm, stockFilter, storeFilter]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const visibleProducts = filteredProducts.slice((page - 1) * pageSize, page * pageSize);
 
   const toggleSelectProduct = (id: string) => {
     setSelectedProductIds((prev) =>
@@ -883,7 +887,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredProducts.map((product) => {
+              {visibleProducts.map((product) => {
                 const key = stockKeyFor(product, currentOutlet);
                 const stock = product.stock[key] || 0;
                 const reorder = product.minStockAlert[key] || 0;
@@ -945,6 +949,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             </tbody>
           </table>
         </div>
+        <TablePagination page={page} pageSize={pageSize} total={filteredProducts.length} onPageChange={setPage} onPageSizeChange={setPageSize} />
         {products.length === 0 && (
           <div className="py-16 text-center">
             <Package className="w-12 h-12 mx-auto text-slate-300" />
