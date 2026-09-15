@@ -53,6 +53,7 @@ import {
 import { canAccessTab, resolvePermissions } from './permissions';
 import { roundMoney } from './money';
 import { DEFAULT_ACCENT, applyAccent } from './accent';
+import { applyTypography } from './typography';
 import { authApi, AuthApiError, onSessionSignal, type AuthSession } from './authApi';
 import { outletsApi } from './outletsApi';
 import { auditApi } from './auditApi';
@@ -64,7 +65,10 @@ import { salesApi, toCompletedSale, cartFromWire } from './salesApi';
 import { shiftsApi, toShiftInfo, toShiftRecord, type CashMovementKind } from './shiftsApi';
 import { customersApi } from './customersApi';
 import { settingsApi } from './settingsApi';
-import { usersApi, toRolePermissions } from './usersApi';
+import { expensesApi } from './expensesApi';
+import { installmentsApi } from './installmentsApi';
+import { returnsApi } from './returnsApi';
+import { rolesApi, usersApi, toRolePermissions } from './usersApi';
 import { terminalsApi } from './salesApi';
 
 /**
@@ -239,6 +243,26 @@ export default function App() {
       if (staff.length > 0) setUsers(staff);
     }
 
+    // The accounting module. Both are behind their own permission, so they are
+    // asked for separately and allowed to fail — a cashier holds neither, and
+    // one 403 should not cost them the rest of the workspace.
+    const held = account.effectivePermissions ?? [];
+    const scope = localOutletId(session, outletList);
+
+    if (held.includes('expense.view')) {
+      const book = await expensesApi.list(scope).catch(() => null);
+      if (book) setExpenses(book.expenses);
+    }
+    if (held.includes('customer.credit')) {
+      const credit = await installmentsApi.list(scope).catch(() => null);
+      if (credit) setInstallmentPlans(credit.plans);
+    }
+    if (held.includes('sale.refund')) {
+      const outletName = outletList.find((outlet) => outlet.id === scope)?.name || '';
+      const credits = await returnsApi.list(scope, outletName).catch(() => null);
+      if (credits) setReturnsExchanges(credits);
+    }
+
     setCurrentOutletId(localOutletId(session, outletList));
     setCurrentUser(account);
   }, []);
@@ -400,6 +424,10 @@ export default function App() {
   }, [accentColor]);
 
   useEffect(() => {
+    applyTypography(generalSettings.fontFamily, generalSettings.fontScalePercent);
+  }, [generalSettings.fontFamily, generalSettings.fontScalePercent]);
+
+  useEffect(() => {
     const handleUnhandledError = () => {
       setAppErrorReference(`ERR-${Date.now().toString().slice(-6)}`);
       setActiveTab('server-error');
@@ -535,104 +563,110 @@ export default function App() {
       .catch(reportStockFailure);
   };
 
-  // Radiance Lighting: Accounting & Expense Handlers
-  const handleAddExpense = (newExpense: Expense) => {
-    setExpenses((prev) => [newExpense, ...prev]);
-    const auditEntry: AuditLogEntry = {
-      id: `aud-${Date.now()}`,
-      timestamp: new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      actor: newExpense.recordedBy,
-      action: 'EXPENSE_RECORDED',
-      entity: newExpense.referenceNumber || newExpense.title,
-      outletName: newExpense.outletName,
-      details: `Logged operational expense: ${newExpense.title} (${newExpense.category}) - GH₵ ${newExpense.amount.toFixed(2)}`,
-    };
-    setAuditLogs((prev) => [auditEntry, ...prev]);
+  /**
+   * Records an expense on the server — the accounting module's whole point.
+   *
+   * <p>This used to push onto React state and write its own audit line, so the
+   * cost existed until the next refresh and the P&L beside it was a statement
+   * about a browser. The server now owns both, and the audit entry is written by
+   * the endpoint (BR-15) rather than invented here — a log the client composes
+   * records what the client believed, not what happened.
+   *
+   * <p>Rejects rather than swallowing: a screen that showed a saved expense the
+   * server refused is the failure this replaces.
+   */
+  const handleAddExpense = async (newExpense: Expense) => {
+    const saved = await expensesApi.record(newExpense);
+    setExpenses((prev) => [saved, ...prev]);
   };
 
-  const handleDeleteExpense = (expenseId: string) => {
+  const handleDeleteExpense = async (expenseId: string) => {
+    // Voided on the server, not deleted: a P&L somebody filed has to keep
+    // reproducing. It leaves the figures either way.
+    await expensesApi.remove(expenseId);
     setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
   };
 
-  // Radiance Lighting: Customer Installment Plans Handlers
-  const handleAddInstallmentPlan = (newPlan: CustomerInstallmentPlan) => {
-    setInstallmentPlans((prev) => [newPlan, ...prev]);
-    const auditEntry: AuditLogEntry = {
-      id: `aud-${Date.now()}`,
-      timestamp: new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      actor: 'Ama Serwaa',
-      action: 'INSTALLMENT_CREATED',
-      entity: newPlan.planNumber,
-      outletName: newPlan.outletName,
-      details: `Created customer installment plan for ${newPlan.customerName}. Total: GH₵ ${newPlan.totalAmount.toFixed(2)}, Down: GH₵ ${newPlan.downPayment.toFixed(2)}`,
-    };
-    setAuditLogs((prev) => [auditEntry, ...prev]);
+  /**
+   * Agrees a plan on the server.
+   *
+   * <p>The plan number and the schedule come back from the server rather than
+   * being made up here: the number has to be unique across both counters, and the
+   * installment split has to sum to the balance to the pesewa (BR-11). Two
+   * implementations of that rounding would eventually disagree, and the one that
+   * matters is the one holding the debt.
+   */
+  const handleAddInstallmentPlan = async (newPlan: CustomerInstallmentPlan) => {
+    const saved = await installmentsApi.create(newPlan);
+    setInstallmentPlans((prev) => [saved, ...prev]);
   };
 
-  const handleUpdateInstallmentPlan = (updatedPlan: CustomerInstallmentPlan) => {
-    setInstallmentPlans((prev) =>
-      prev.map((p) => (p.id === updatedPlan.id ? updatedPlan : p))
+  /**
+   * Takes a payment against a plan.
+   *
+   * <p>The screen hands over a whole edited plan, so the payment is the
+   * difference between what it says has been paid and what the server has. The
+   * server decides which installments it settles — oldest first — because
+   * crediting a later one while an earlier stays open makes "overdue" meaningless.
+   */
+  const handleUpdateInstallmentPlan = async (updatedPlan: CustomerInstallmentPlan) => {
+    const known = installmentPlans.find((plan) => plan.id === updatedPlan.id);
+    const paidNow = updatedPlan.schedule.reduce((sum, item) => sum + (item.paidAmount || 0), 0);
+    const paidBefore = known
+      ? known.schedule.reduce((sum, item) => sum + (item.paidAmount || 0), 0)
+      : 0;
+    const received = Number((paidNow - paidBefore).toFixed(2));
+
+    if (received <= 0) {
+      // Nothing was collected — a note or a status edit. There is no endpoint for
+      // those yet, so the plan is re-read rather than the screen keeping a
+      // version the server never saw.
+      const fresh = await installmentsApi.list(currentOutletId).catch(() => null);
+      if (fresh) setInstallmentPlans(fresh.plans);
+      return;
+    }
+
+    const paidItem = updatedPlan.schedule.find((item) => item.paidDate);
+    const saved = await installmentsApi.pay(
+      updatedPlan.id,
+      received,
+      paidItem?.paidDate || new Date().toISOString().slice(0, 10),
+      paidItem?.paymentMethod || 'cash',
+      paidItem?.reference,
     );
+    setInstallmentPlans((prev) => prev.map((plan) => (plan.id === saved.id ? saved : plan)));
   };
 
-  // Radiance Lighting: Goods Return and Swap (Exchange) Handler
-  const handleAddReturnRecord = (
+  /**
+   * Goods coming back — a credit note against a sale.
+   *
+   * <p>Posted to the server, which writes the stock movements, the audit entry
+   * and the drawer payout itself. The previous version did all three in the
+   * browser: the return existed until the next refresh, the stock it "restored"
+   * was never recorded, and the audit line described something the server had
+   * never been told about.
+   *
+   * <p>The stock adjustments the screen calculates are now ignored on purpose.
+   * The server derives them from the disposition of each line — a restock puts
+   * it back, a write-off takes it back and writes it off — and deriving them
+   * twice is how the two answers drift apart.
+   */
+  const handleAddReturnRecord = async (
     record: ReturnExchangeRecord,
-    stockAdjustments: Array<{ productId: string; quantityDelta: number; reason: string }>
+    _stockAdjustments: Array<{ productId: string; quantityDelta: number; reason: string }>,
+    swapItems: Array<{ productId: string; quantity: number; unitPrice: number }> = [],
   ) => {
-    setReturnsExchanges((prev) => [record, ...prev]);
+    const saved = await returnsApi.process(
+      record, swapItems, shiftInfo.terminalId || null, currentOutlet?.name || '');
+    setReturnsExchanges((prev) => [saved, ...prev]);
 
-    // Adjust physical inventory in products
-    setProducts((prev) =>
-      prev.map((p) => {
-        const adj = stockAdjustments.find((a) => a.productId === p.id);
-        if (adj) {
-          const currentStock = p.stock[record.outletId] || 0;
-          return {
-            ...p,
-            stock: {
-              ...p.stock,
-              [record.outletId]: Math.max(0, Number((currentStock + adj.quantityDelta).toFixed(3))),
-            },
-          };
-        }
-        return p;
-      })
-    );
-
-    // Append Stock Movements (CUSTOMER_RETURN & EXCHANGE_SWAP)
-    const newMovements: StockMovement[] = stockAdjustments.map((adj) => {
-      const prod = products.find((p) => p.id === adj.productId);
-      const prevStock = prod?.stock[record.outletId] || 0;
-      const updatedStock = Math.max(0, Number((prevStock + adj.quantityDelta).toFixed(3)));
-      return {
-        id: `mov-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-        productId: adj.productId,
-        productName: prod ? prod.name : 'Fixture Item',
-        outletId: record.outletId,
-        type: adj.quantityDelta > 0 ? ('CUSTOMER_RETURN' as const) : ('EXCHANGE_SWAP' as const),
-        quantity: Math.abs(adj.quantityDelta),
-        previousStock: prevStock,
-        newStock: updatedStock,
-        referenceNumber: record.referenceNumber,
-        timestamp: record.timestamp,
-        user: record.cashierName,
-        reason: adj.reason,
-      };
-    });
-    setMovements((prev) => [...newMovements, ...prev]);
-
-    // Audit log
-    const auditEntry: AuditLogEntry = {
-      id: `aud-${Date.now()}`,
-      timestamp: new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      actor: record.cashierName,
-      action: record.type === 'EXCHANGE_SWAP' ? 'EXCHANGE_SWAP' : 'RETURN_REFUND',
-      entity: record.referenceNumber,
-      outletName: record.outletName,
-      details: `${record.type === 'EXCHANGE_SWAP' ? 'Merchandise Swap' : 'Goods Return'} for ${record.customerName} on receipt ${record.originalReceiptNumber}. Net: GH₵ ${record.netDifference.toFixed(2)}`,
-    };
-    setAuditLogs((prev) => [auditEntry, ...prev]);
+    // Re-read what the server actually did to stock, rather than predicting it.
+    const [levels, ledger] = await Promise.all([
+      stockApi.atOutlet(currentOutletId).catch(() => []),
+      stockApi.movements({ limit: 200 }).catch(() => []),
+    ]);
+    if (levels.length > 0) setProducts((prev) => withStock(prev, levels));
+    if (ledger.length > 0) setMovements(ledger);
   };
 
   // PRD BR-4: Goods Receipt with Weighted Average Cost handler
@@ -874,6 +908,12 @@ export default function App() {
       .catch(reportStockFailure);
   };
 
+  const handleSetSupplierActive = (supplier: Supplier, active: boolean) => {
+    void suppliersApi.setActive(supplier.id, active)
+      .then((saved) => setSuppliers((prev) => prev.map((item) => item.id === saved.id ? saved : item)))
+      .catch(reportStockFailure);
+  };
+
   const handleUpdateProduct = (updatedProduct: Product) => {
     // No appendAuditLog here any more: the server records PRODUCT_UPDATED with
     // the before and after itself, and a second entry written by the browser
@@ -1104,6 +1144,26 @@ export default function App() {
       });
   };
 
+  const handleUpdateAppearance = (
+    next: Pick<GeneralSettings, 'accentColor' | 'fontFamily' | 'fontScalePercent'>,
+  ) => {
+    const previous = generalSettings;
+    const optimistic = { ...generalSettings, ...next };
+    setGeneralSettings(optimistic);
+    setAccentColor(optimistic.accentColor);
+
+    void settingsApi.saveAppearance(next)
+      .then((saved) => {
+        setGeneralSettings(saved);
+        setAccentColor(saved.accentColor);
+      })
+      .catch((failure) => {
+        setGeneralSettings(previous);
+        setAccentColor(previous.accentColor);
+        reportUserFailure(failure);
+      });
+  };
+
   /**
    * FR-USER-01: create a staff account.
    *
@@ -1138,6 +1198,40 @@ export default function App() {
    * the first version of this: a created user got a toast, an id made from a
    * timestamp, and no row on the server.
    */
+  /**
+   * FR-USER-02: what each role may do, saved on the server.
+   *
+   * <p>This was `setRolesPermissions` — a plain setState. The matrix looked
+   * editable, the Save button did nothing that outlived the component, and the
+   * screen reset the moment it re-read its props. Nobody's session ever changed.
+   *
+   * <p>Each role is sent separately because the endpoint replaces one role at a
+   * time, and the list is re-read afterwards so the screen shows what the server
+   * accepted rather than what was clicked.
+   */
+  const handleUpdateRolesPermissions = async (next: RolePermissions[]) => {
+    const held = new Map(rolesPermissions.map((row) => [row.role, row.permissions]));
+    const changed = next.filter((row) => {
+      const before = held.get(row.role);
+      if (!before) return true;
+      return before.length !== row.permissions.length
+        || [...row.permissions].sort().join() !== [...before].sort().join();
+    });
+    if (changed.length === 0) return;
+
+    for (const row of changed) {
+      await rolesApi.replace(row.role, row.permissions);
+    }
+
+    const catalogue = await usersApi.catalogue();
+    setRolesPermissions(toRolePermissions(catalogue.roles));
+
+    // A widened role changes what this session may do too, and the server now
+    // re-resolves on every request — so the screen has to catch up with it.
+    const session = await authApi.current().catch(() => null);
+    if (session) setCurrentUser(accountFromSession(session, outlets));
+  };
+
   const handleUpdateUsers = async (next: UserAccount[]) => {
     const branchIds = outlets.filter((outlet) => outlet.id !== 'all-outlets').map((outlet) => outlet.id);
     const held = new Map(users.map((user) => [user.id, user]));
@@ -1629,6 +1723,7 @@ export default function App() {
               outlets={outlets}
               onAddSupplier={handleAddSupplier}
               onUpdateSupplier={handleUpdateSupplier}
+              onSetSupplierActive={handleSetSupplierActive}
               onReceiveStock={() => setGoodsReceiptModalOpen(true)}
             />
           )}
@@ -1646,6 +1741,10 @@ export default function App() {
               currentOutlet={currentOutlet}
               outlets={outlets}
               accentColor={accentColor}
+              // FR-RPT-05: the ledger and the net position are two different
+              // disclosures, and the server enforces the same split on
+              // /api/reports/profit-and-loss.
+              mayViewProfitAndLoss={permissions.has('report.view_pl')}
             />
           )}
 
@@ -1690,9 +1789,10 @@ export default function App() {
               onUpdateUsers={handleUpdateUsers}
               onCreateUser={handleCreateUser}
               rolesPermissions={rolesPermissions}
-              onUpdateRolesPermissions={setRolesPermissions}
+              onUpdateRolesPermissions={handleUpdateRolesPermissions}
               generalSettings={generalSettings}
               onUpdateGeneralSettings={handleUpdateGeneralSettings}
+              onUpdateAppearance={handleUpdateAppearance}
               onAddAuditLog={(entry) =>
                 setAuditLogs((prev) => [
                   {
@@ -1712,7 +1812,11 @@ export default function App() {
               products={products}
               sales={sales}
               accentColor={accentColor}
-              onChangeAccent={(color) => handleUpdateGeneralSettings({ ...generalSettings, accentColor: color })}
+              onChangeAccent={(color) => handleUpdateAppearance({
+                accentColor: color,
+                fontFamily: generalSettings.fontFamily,
+                fontScalePercent: generalSettings.fontScalePercent,
+              })}
             />
           )}
 
@@ -1910,7 +2014,11 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         onOpen={() => setSettingsOpen(true)}
         accentColor={accentColor}
-        onChangeAccent={(color) => handleUpdateGeneralSettings({ ...generalSettings, accentColor: color })}
+        onChangeAccent={(color) => handleUpdateAppearance({
+          accentColor: color,
+          fontFamily: generalSettings.fontFamily,
+          fontScalePercent: generalSettings.fontScalePercent,
+        })}
         outlets={outlets}
         onOpenFullSettings={() => setActiveTab('settings')}
       />

@@ -185,6 +185,8 @@ export interface Supplier {
   totalSupplied: number;
   outletId?: OutletId; // 'all-outlets' for a supplier serving every branch
   categorySupplied?: string;
+  /** BR-17: deactivated suppliers remain visible in history. */
+  active?: boolean;
 }
 
 export interface ShiftInfo {
@@ -333,6 +335,8 @@ export interface GeneralSettings {
   autoPrintReceipt: boolean;
   showCashierOnReceipt: boolean;
   accentColor: string;
+  fontFamily: 'JAKARTA' | 'SYSTEM' | 'ARIAL' | 'VERDANA' | 'GEORGIA';
+  fontScalePercent: number;
   thresholds: OperationalThresholds;
 }
 

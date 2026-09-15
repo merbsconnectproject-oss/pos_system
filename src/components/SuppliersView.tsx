@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Building, CalendarClock, FileText, Mail, Package, Phone, Plus, Search, Truck, Wallet, X } from 'lucide-react';
 import { Outlet, Product, StockMovement, Supplier } from '../types';
 import { InfoHint } from './InfoHint';
 import { TablePagination } from './TablePagination';
+import { goodsReceiptApi, suppliersApi, type ReceiptResult } from '../suppliersApi';
 
 type SupplierMode = 'list' | 'receipts' | 'purchase-orders' | 'balances';
 
@@ -14,6 +15,7 @@ interface SuppliersViewProps {
   outlets?: Outlet[];
   onAddSupplier: (supplier: Supplier) => void;
   onUpdateSupplier?: (supplier: Supplier) => void;
+  onSetSupplierActive?: (supplier: Supplier, active: boolean) => void;
   onReceiveStock: (supplierId: string) => void;
 }
 
@@ -27,6 +29,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
   outlets = [currentOutlet],
   onAddSupplier,
   onUpdateSupplier,
+  onSetSupplierActive,
   onReceiveStock,
 }) => {
   const [activeMode, setActiveMode] = useState<SupplierMode>('list');
@@ -37,6 +40,10 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
   const [pageSize, setPageSize] = useState(25);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [supplierHistory, setSupplierHistory] = useState<ReceiptResult[]>([]);
+  const [receiptHistory, setReceiptHistory] = useState<ReceiptResult[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const realOutlets = outlets.filter((outlet) => outlet.id !== 'all-outlets');
   const defaultOutlet = currentOutlet.id === 'all-outlets' ? realOutlets[0]?.id || 'inco-hardware' : currentOutlet.id;
   const [form, setForm] = useState({
@@ -110,13 +117,46 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
     setModalOpen(false);
   };
 
+  useEffect(() => {
+    if (!selectedSupplier) {
+      setSupplierHistory([]);
+      return;
+    }
+    let cancelled = false;
+    setHistoryLoading(true);
+    setHistoryError(null);
+    suppliersApi.history(selectedSupplier.id)
+      .then((history) => { if (!cancelled) setSupplierHistory(history); })
+      .catch(() => { if (!cancelled) setHistoryError('Could not load this supplier\'s purchase history.'); })
+      .finally(() => { if (!cancelled) setHistoryLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedSupplier]);
+
+  useEffect(() => {
+    if (activeMode !== 'receipts') return;
+    let cancelled = false;
+    setHistoryLoading(true);
+    setHistoryError(null);
+    const outletIds = currentOutlet.id === 'all-outlets'
+      ? realOutlets.map((outlet) => outlet.id)
+      : [currentOutlet.id];
+    Promise.all(outletIds.map((outletId) => goodsReceiptApi.atOutlet(outletId)))
+      .then((histories) => {
+        if (!cancelled) setReceiptHistory(histories.flat().sort((a, b) =>
+          (b.confirmedAt || '').localeCompare(a.confirmedAt || '')));
+      })
+      .catch(() => { if (!cancelled) setHistoryError('Could not load receipt history.'); })
+      .finally(() => { if (!cancelled) setHistoryLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeMode, currentOutlet.id, realOutlets.map((outlet) => outlet.id).join(',')]);
+
   const supplierProducts = (supplier: Supplier) =>
     products.filter((product) => {
+      const recorded = supplierHistory.some((receipt) => receipt.lines.some((line) => line.productId === product.id));
+      if (recorded) return true;
       const line = supplier.categorySupplied?.toLowerCase() || '';
       return line && (line.includes(product.category.toLowerCase().split(' ')[0]) || product.category.toLowerCase().includes(line.split(' ')[0]));
     });
-
-  const receiptRows = movements.filter((movement) => movement.type === 'RECEIPT');
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
@@ -163,7 +203,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
                     <th className="py-3 px-4">Supplier</th>
                     <th className="py-3 px-4">Contact</th>
                     <th className="py-3 px-4">Terms</th>
-                    <th className="py-3 px-4">Last Receipt</th>
+                    <th className="py-3 px-4">Purchase History</th>
                     <th className="py-3 px-4 text-right">Total Purchased</th>
                     <th className="py-3 px-4 text-center">Actions</th>
                   </tr>
@@ -180,13 +220,14 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
                         <div className="font-mono text-[10px]">{supplier.phone}</div>
                       </td>
                       <td className="py-3 px-4"><span className="rounded-full bg-slate-100 text-slate-700 px-2 py-0.5 text-[10px] font-bold">{supplier.paymentTerms}</span></td>
-                      <td className="py-3 px-4 text-slate-500">{receiptRows[0]?.timestamp || 'No receipts yet'}</td>
+                      <td className="py-3 px-4 text-slate-500">{supplier.totalSupplied > 0 ? 'Recorded receipts available' : 'No receipts yet'}</td>
                       <td className="py-3 px-4 text-right font-black text-slate-900">{formatMoney(supplier.totalSupplied)}</td>
                       <td className="py-3 px-4">
                         <div className="flex items-center justify-center gap-1.5">
                           <button onClick={() => setSelectedSupplier(supplier)} className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold hover:bg-slate-200">View</button>
                           <button onClick={() => startEdit(supplier)} className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold hover:bg-slate-200">Edit</button>
                           <button onClick={() => onReceiveStock(supplier.id)} className="px-2 py-1 rounded-lg bg-accent-500 text-white font-bold hover:bg-accent-600">Receive</button>
+                          {onSetSupplierActive && <button onClick={() => onSetSupplierActive(supplier, !supplier.active)} className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold hover:bg-slate-200">{supplier.active ? 'Retire' : 'Restore'}</button>}
                         </div>
                       </td>
                     </tr>
@@ -217,20 +258,19 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
               <p className="text-xs text-slate-500">Read-only goods receipt records and movement references.</p>
             </div>
           </div>
-          <div className="divide-y divide-slate-100">
-            {receiptRows.map((movement) => (
-              <div key={movement.id} className="p-4 grid grid-cols-1 md:grid-cols-[1fr_140px_120px_160px] gap-3 items-center">
-                <div>
-                  <div className="font-bold text-slate-900">{movement.productName}</div>
-                  <div className="text-xs text-slate-500">{movement.reason}</div>
-                </div>
-                <span className="font-mono text-xs text-slate-600">{movement.referenceNumber}</span>
-                <span className="font-black text-slate-900">+{movement.quantity}</span>
-                <span className="text-xs text-slate-500">{movement.timestamp}</span>
+          {historyError && <div className="m-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">{historyError}</div>}
+          {historyLoading && <div className="py-14 text-center text-sm text-slate-500">Loading recorded receipts…</div>}
+          {!historyLoading && <div className="divide-y divide-slate-100">
+            {receiptHistory.map((receipt) => (
+              <div key={receipt.id} className="p-4 grid grid-cols-1 md:grid-cols-[1fr_140px_120px_160px] gap-3 items-center">
+                <div><div className="font-bold text-slate-900">{receipt.supplierName}</div><div className="text-xs text-slate-500">{receipt.lines.length} line{receipt.lines.length === 1 ? '' : 's'}{receipt.reference ? ` · ${receipt.reference}` : ''}{receipt.reversed ? ' · Reversed' : ''}</div></div>
+                <span className="font-mono text-xs text-slate-600">{receipt.lines.map((line) => line.productName).join(', ')}</span>
+                <span className="font-black text-slate-900">{formatMoney(Number(receipt.total))}</span>
+                <span className="text-xs text-slate-500">{receipt.confirmedAt ? new Date(receipt.confirmedAt).toLocaleString() : 'Unconfirmed'}</span>
               </div>
             ))}
-            {receiptRows.length === 0 && <div className="py-14 text-center text-sm text-slate-500">No goods receipts posted yet.</div>}
-          </div>
+            {receiptHistory.length === 0 && <div className="py-14 text-center text-sm text-slate-500">No goods receipts posted yet.</div>}
+          </div>}
         </div>
       )}
 
@@ -252,8 +292,8 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
             <div key={supplier.id} className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
               <Wallet className="w-5 h-5 text-accent-600" />
               <h3 className="mt-3 text-sm font-black text-slate-900">{supplier.name}</h3>
-              <div className="mt-1 text-2xl font-black text-slate-900">{formatMoney(supplier.totalSupplied * 0.18)}</div>
-              <p className="text-xs text-slate-500 mt-1">Estimated outstanding balance pending supplier invoice model.</p>
+              <div className="mt-1 text-2xl font-black text-slate-900">{formatMoney(supplier.totalSupplied)}</div>
+              <p className="text-xs text-slate-500 mt-1">Total recorded purchases. Supplier balances require the deferred invoice/payment model.</p>
             </div>
           ))}
         </div>
@@ -294,6 +334,13 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
                   ))}
                   {supplierProducts(selectedSupplier).length === 0 && <div className="py-8 text-center text-sm text-slate-500">No linked products yet.</div>}
                 </div>
+              </section>
+              <section className="rounded-xl border border-slate-200 overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-200"><h3 className="text-sm font-black text-slate-900">Purchase history</h3></div>
+                {historyError && <div className="p-4 text-xs font-semibold text-rose-700">{historyError}</div>}
+                {historyLoading && <div className="p-4 text-sm text-slate-500">Loading receipts…</div>}
+                {!historyLoading && supplierHistory.length === 0 && <div className="p-4 text-sm text-slate-500">No recorded purchases for this supplier.</div>}
+                {!historyLoading && supplierHistory.map((receipt) => <div key={receipt.id} className="px-4 py-3 border-t border-slate-100"><div className="flex items-center justify-between gap-3"><span className="font-bold text-slate-800">{receipt.reference || 'Goods receipt'}</span><span className="font-black text-slate-900">{formatMoney(Number(receipt.total))}</span></div><div className="mt-1 text-xs text-slate-500">{receipt.confirmedAt ? new Date(receipt.confirmedAt).toLocaleString() : 'Unconfirmed'} · {receipt.lines.map((line) => `${line.productName} (${line.quantity} ${line.purchaseUnit})`).join(', ')}{receipt.reversed ? ' · Reversed' : ''}</div></div>)}
               </section>
             </div>
           </div>

@@ -36,6 +36,7 @@ export const toSupplier = (wire: SupplierWire): Supplier => ({
   totalSupplied: wire.totalSupplied,
   outletId: wire.outletId || 'all-outlets',
   categorySupplied: wire.categorySupplied || undefined,
+  active: wire.active,
 });
 
 const fromSupplier = (supplier: Partial<Supplier>) => ({
