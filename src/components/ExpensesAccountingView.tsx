@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   DollarSign,
   TrendingUp,
@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { Expense, ExpenseCategory, Outlet, CompletedSale, OutletId } from '../types';
 import { exportToCsv } from '../utils/csvExport';
+import { reportsApi, type ProfitAndLossWire } from '../reportsApi';
 
 interface ExpensesAccountingViewProps {
   expenses: Expense[];
@@ -65,7 +66,14 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
     currentOutlet?.id === 'all-outlets' ? 'all' : (currentOutlet?.id || 'all')
   );
   const [modalOpen, setModalOpen] = useState(false);
+  // The server can refuse. Both of these exist so it is refused visibly rather
+  // than the entry quietly not being there next time somebody looks.
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [statementPrintModalOpen, setStatementPrintModalOpen] = useState(false);
+  const [serverPnl, setServerPnl] = useState<ProfitAndLossWire | null>(null);
+  const [pnlLoading, setPnlLoading] = useState(false);
+  const [pnlError, setPnlError] = useState<string | null>(null);
 
   // Form State
   const [formCategory, setFormCategory] = useState<ExpenseCategory | ''>('');
@@ -96,63 +104,50 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
     });
   }, [expenses, outletFilter, categoryFilter, searchTerm]);
 
-  // Financial Calculations
-  const relevantSales = useMemo(() => {
-    return sales.filter((s) => {
-      if (s.status === 'VOIDED') return false;
-      if (outletFilter !== 'all' && s.outletId !== outletFilter) return false;
-      return true;
-    });
-  }, [sales, outletFilter]);
+  const pnlFilters = useMemo(() => {
+    const to = new Date();
+    const from = new Date(to);
+    if (dateRangeFilter === 'today') from.setHours(0, 0, 0, 0);
+    if (dateRangeFilter === 'month') from.setDate(1);
+    if (dateRangeFilter === 'quarter') from.setMonth(from.getMonth() - 3);
+    return { from: dateRangeFilter === 'all' ? null : from, to, outletId: outletFilter === 'all' ? null : outletFilter };
+  }, [dateRangeFilter, outletFilter]);
 
-  // Total Gross Revenue
-  const totalRevenue = useMemo(() => {
-    return relevantSales.reduce((sum, s) => sum + s.total, 0);
-  }, [relevantSales]);
+  useEffect(() => {
+    if (!mayViewProfitAndLoss) { setServerPnl(null); return; }
+    let active = true;
+    setPnlLoading(true);
+    setPnlError(null);
+    reportsApi.profitAndLoss(pnlFilters)
+      .then((result) => { if (active) setServerPnl(result); })
+      .catch((failure) => { if (active) setPnlError(failure instanceof Error ? failure.message : 'The P&L could not be loaded.'); })
+      .finally(() => { if (active) setPnlLoading(false); });
+    return () => { active = false; };
+  }, [mayViewProfitAndLoss, pnlFilters]);
 
-  // Cost of Goods Sold (COGS)
-  const totalCogs = useMemo(() => {
-    return relevantSales.reduce((acc, sale) => {
-      const saleCogs = sale.items.reduce((itemSum, item) => {
-        const itemCost =
-          item.frozenCostPrice ||
-          (item.product.costPrice && item.product.costPrice[sale.outletId]) ||
-          0;
-        return itemSum + itemCost * item.quantity;
-      }, 0);
-      return acc + saleCogs;
-    }, 0);
-  }, [relevantSales]);
+  // All P&L figures come from the database report; the browser only formats them.
+  const totalRevenue = serverPnl?.revenue ?? 0;
+  const totalCogs = serverPnl?.costOfSales ?? 0;
+  const grossProfit = serverPnl?.grossProfit ?? 0;
+  const grossMarginPct = serverPnl?.grossMarginPercent ?? 0;
+  const totalOperatingExpenses = serverPnl?.operatingExpenses ?? 0;
+  const netProfit = serverPnl?.netProfit ?? 0;
+  const netMarginPct = serverPnl?.netMarginPercent ?? 0;
+  const categoryBreakdown = (serverPnl?.expensesByCategory ?? []).map((item) => ({
+    category: item.label || item.category,
+    amount: item.amount,
+    percentage: totalOperatingExpenses > 0 ? (item.amount / totalOperatingExpenses) * 100 : 0,
+  }));
 
-  const grossProfit = totalRevenue - totalCogs;
-  const grossMarginPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
-
-  // Total Operating Expenses
-  const totalOperatingExpenses = useMemo(() => {
-    return filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-  }, [filteredExpenses]);
-
-  // Net Profit / Loss
-  const netProfit = grossProfit - totalOperatingExpenses;
-  const netMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
-
-  // Category breakdown
-  const categoryBreakdown = useMemo(() => {
-    const map: Record<string, number> = {};
-    filteredExpenses.forEach((e) => {
-      map[e.category] = (map[e.category] || 0) + e.amount;
-    });
-    return Object.entries(map)
-      .map(([category, amount]) => ({
-        category,
-        amount,
-        percentage: totalOperatingExpenses > 0 ? (amount / totalOperatingExpenses) * 100 : 0,
-      }))
-      .sort((a, b) => b.amount - a.amount);
-  }, [filteredExpenses, totalOperatingExpenses]);
-
-  // Handle Create Expense
-  const handleSubmitExpense = (e: React.FormEvent) => {
+  /**
+   * Records the expense, and only clears the form once the server has it.
+   *
+   * The previous version closed the modal on the same tick as the call and reset
+   * the fields regardless, so a refusal lost both the expense and everything the
+   * user had typed — and told them nothing. The cost of getting this wrong is a
+   * shop that thinks it recorded the rent.
+   */
+  const handleSubmitExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formCategory || !formOutletId || !formPaymentMethod || !formDate || !formTitle.trim() || !formAmount || parseFloat(formAmount) <= 0) return;
 
@@ -273,6 +268,16 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
       </div>
 
       {/* 2. EXECUTIVE P&L FINANCIAL CARDS (Solid Darker Shade) */}
+      {mayViewProfitAndLoss && pnlLoading && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs font-bold text-sky-800">
+          Loading the server-calculated P&amp;L…
+        </div>
+      )}
+      {mayViewProfitAndLoss && pnlError && (
+        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-800">
+          Server P&amp;L unavailable: {pnlError}
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Gross Revenue */}
         <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm flex flex-col justify-between">
@@ -287,7 +292,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
             </div>
           </div>
           <div className="mt-4 pt-3 border-t border-slate-800 text-xs text-slate-400 font-medium">
-            From {relevantSales.length} completed transactions
+            From {serverPnl?.saleCount ?? 0} completed transactions
           </div>
         </div>
 
@@ -325,7 +330,8 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
           </div>
         </div>
 
-        {/* Net Profit / Margin */}
+        {/* Net Profit / Margin — report.view_pl only */}
+        {mayViewProfitAndLoss && (
         <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between text-slate-400 mb-2">
@@ -341,6 +347,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
             Net Margin: <strong className={netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{netMarginPct.toFixed(1)}%</strong> of Revenue
           </div>
         </div>
+        )}
       </div>
 
       {/* 3. SEARCH & FILTERS TOOLBAR */}
@@ -487,7 +494,7 @@ export const ExpensesAccountingView: React.FC<ExpensesAccountingViewProps> = ({
                       </td>
                       <td className="py-2.5 px-3 text-center">
                         <button
-                          onClick={() => onDeleteExpense(exp.id)}
+                          onClick={() => void handleRemoveExpense(exp.id)}
                           className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                           title="Delete Expense Entry"
                         >

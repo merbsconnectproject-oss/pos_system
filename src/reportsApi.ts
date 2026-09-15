@@ -80,6 +80,21 @@ export interface DashboardView {
   combined: DashboardOutlet;
 }
 
+export interface ProfitAndLossWire {
+  from: string;
+  to: string;
+  saleCount: number;
+  revenue: number;
+  costOfSales: number;
+  grossProfit: number;
+  grossMarginPercent: number;
+  operatingExpenses: number;
+  pendingExpenses: number;
+  expensesByCategory: { category: string; label: string; amount: number }[];
+  netProfit: number;
+  netMarginPercent: number;
+}
+
 export type Grouping =
   | 'product' | 'category' | 'cashier' | 'customer' | 'customer_type' | 'payment' | 'movement';
 
@@ -142,4 +157,7 @@ export const reportsApi = {
 
   /** FR-RPT-01 · FR-RPT-02: scoped by the server to the branches you are assigned to. */
   dashboard: () => request<DashboardView>('/api/reports/dashboard'),
+
+  profitAndLoss: (filters: ReportFilters) =>
+    request<ProfitAndLossWire>(`/api/reports/profit-and-loss${query(filters)}`),
 };

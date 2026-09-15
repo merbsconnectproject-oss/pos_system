@@ -53,6 +53,7 @@ import { createBlock, issueReceiptNumber, remainingInBlock } from '../receiptSeq
 import { printReceipt } from '../printService';
 import { formatQuantity, lineTotal, moneyEquals, roundMoney, roundQuantity, sumMoney } from '../money';
 import { ManagerPinModal } from './ManagerPinModal';
+import { heldSalesApi, type HeldSaleWire } from '../heldSalesApi';
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: 'Cash',
@@ -119,7 +120,7 @@ export const PosModal: React.FC<PosModalProps> = ({
   const [customerSearchPhone, setCustomerSearchPhone] = useState('');
   const [cartDiscountPercent, setCartDiscountPercent] = useState<number>(0);
   const [discountDraft, setDiscountDraft] = useState('0');
-  const [heldCarts, setHeldCarts] = useState<Array<{ label: string; items: CartItem[]; customer: Customer | null; total: number; heldAt: string }>>([]);
+  const [heldCarts, setHeldCarts] = useState<Array<{ id: string; label: string; items: CartItem[]; customer: Customer | null; total: number; heldAt: string }>>([]);
   const [holdLabel, setHoldLabel] = useState('');
   const [holdModalOpen, setHoldModalOpen] = useState(false);
   const [heldDrawerOpen, setHeldDrawerOpen] = useState(false);
@@ -132,6 +133,38 @@ export const PosModal: React.FC<PosModalProps> = ({
   const [newCustomerPhone, setNewCustomerPhone] = useState('');
   const [newCustomerType, setNewCustomerType] = useState<Customer['customerType'] | ''>('');
   const [inlineNotice, setInlineNotice] = useState<{ type: 'warning' | 'error' | 'success'; title: string; message: string } | null>(null);
+
+  const cartFromHeld = (held: HeldSaleWire): CartItem[] => held.lines.map((line) => {
+    const known = products.find((product) => product.id === line.productId);
+    const product = known ?? {
+      id: line.productId, name: line.productName, sku: line.sku, category: 'Hardware & Tools' as Product['category'],
+      brand: '', description: '', barcodes: [], baseUnit: line.selectedUnit as Product['baseUnit'],
+      sellingUnits: [], retailPrice: line.unitPrice, tradePrice: line.unitPrice, floorPrice: line.unitPrice,
+      costPrice: {}, stock: {}, minStockAlert: {}, imageUrl: '', salesCount: 0, active: false,
+    };
+    return {
+      product, selectedUnit: line.selectedUnit, conversionFactor: line.conversionFactor,
+      quantity: line.quantity, unitPrice: line.unitPrice, discount: line.discount,
+      lineTotal: line.lineTotal, frozenCostPrice: line.frozenCostPrice,
+    };
+  });
+
+  useEffect(() => {
+    if (!isOpen || currentOutlet.id === 'all-outlets') return;
+    let active = true;
+    heldSalesApi.list(currentOutlet.id).then((rows) => {
+      if (!active) return;
+      setHeldCarts(rows.map((held) => ({
+        id: held.id, label: held.label, items: cartFromHeld(held),
+        customer: held.customerId ? customers.find((customer) => customer.id === held.customerId) || {
+          id: held.customerId, name: held.customerName || 'Customer', phone: held.customerPhone || '',
+          email: '', address: '', customerType: 'retail', totalPurchased: 0, salesCount: 0, discountRate: 0, active: true,
+        } : null,
+        total: held.total / 100, heldAt: new Date(held.heldAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      })));
+    }).catch(() => { /* the POS remains usable; the server will retry on reopen */ });
+    return () => { active = false; };
+  }, [isOpen, currentOutlet.id, products, customers]);
 
   // Payment modal states
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -506,19 +539,19 @@ export const PosModal: React.FC<PosModalProps> = ({
     }
   };
 
-  const handleHoldCart = () => {
+  const handleHoldCart = async () => {
     if (cart.length === 0) return;
     const label = holdLabel.trim() || `Held #${heldCarts.length + 1} (${selectedCustomer?.name || 'Walk-in'})`;
-    setHeldCarts([
-      ...heldCarts,
-      {
-        label,
-        items: [...cart],
-        customer: selectedCustomer,
-        total,
-        heldAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-    ]);
+    try {
+      const saved = await heldSalesApi.hold(currentOutlet.id, shiftInfo.terminalId, label, selectedCustomer, total, cart);
+      setHeldCarts((previous) => [{
+        id: saved.id, label: saved.label, items: cartFromHeld(saved), customer: selectedCustomer,
+        total: saved.total / 100, heldAt: new Date(saved.heldAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      }, ...previous]);
+    } catch (failure) {
+      setInlineNotice({ type: 'error', title: 'Could not hold sale', message: failure instanceof Error ? failure.message : 'The server could not save this held sale.' });
+      return;
+    }
     setCart([]);
     setSelectedCustomer(null);
     setHoldLabel('');
@@ -530,8 +563,12 @@ export const PosModal: React.FC<PosModalProps> = ({
     });
   };
 
-  const handleResumeCart = (index: number) => {
+  const handleResumeCart = async (index: number) => {
     const selected = heldCarts[index];
+    try { await heldSalesApi.remove(selected.id); } catch (failure) {
+      setInlineNotice({ type: 'error', title: 'Could not resume sale', message: failure instanceof Error ? failure.message : 'The server could not release this held sale.' });
+      return;
+    }
     setCart(selected.items);
     setSelectedCustomer(selected.customer);
     setHeldCarts(heldCarts.filter((_, i) => i !== index));
@@ -2186,7 +2223,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setHeldCarts((prev) => prev.filter((_, i) => i !== idx))}
+                      onClick={() => void heldSalesApi.remove(held.id).then(() => setHeldCarts((prev) => prev.filter((item) => item.id !== held.id))).catch((failure) => setInlineNotice({ type: 'error', title: 'Could not delete held sale', message: failure instanceof Error ? failure.message : 'The server refused the delete.' }))}
                       className="py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50"
                     >
                       Delete
