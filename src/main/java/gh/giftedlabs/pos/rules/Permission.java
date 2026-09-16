@@ -19,10 +19,13 @@ import java.util.stream.Stream;
  * Spring Security's {@code @PreAuthorize} matches. Those annotations need
  * compile-time constants, so the literals are mirrored in {@link Codes}.
  *
- * <p><strong>33 codes, not 31.</strong> PRD §6 documents 31. The frontend's
- * {@code permissions.ts} carries two more — {@link #STOCK_TRANSFER} (Stage 3)
- * and {@link #CUSTOMER_CREDIT} (Stage 2) — so they are seeded here too and
- * later stages need no migration.
+ * <p><strong>37 codes.</strong> PRD §6 documents 31; {@code permissions.ts}
+ * carried two more ({@link #STOCK_TRANSFER}, {@link #CUSTOMER_CREDIT}), and
+ * three arrived with the accounting module — {@link #EXPENSE_VIEW},
+ * {@link #EXPENSE_MANAGE} and {@link #REPORT_VIEW_PL} — and {@link #SYNC_PUSH}
+ * arrived with the transaction channel. The expenses screen was
+ * previously gated on {@code cash.movement}, which meant anyone allowed to bank
+ * the day's takings could also read the rent and the payroll.
  *
  * <p><strong>Open decision, week 1.</strong> This mirrors the frontend exactly,
  * which means Owner currently holds both deferred codes. Nothing can act on
@@ -69,13 +72,26 @@ public enum Permission {
 
     // --- Customers and suppliers -------------------------------------------
     CUSTOMER_MANAGE(Codes.CUSTOMER_MANAGE, Group.PARTIES, "Create and edit customers"),
-    /** Stage 2 — no endpoint behind this yet. */
-    CUSTOMER_CREDIT(Codes.CUSTOMER_CREDIT, Group.PARTIES, "Sell on credit (Stage 2)"),
+    /** Installment plans — {@code InstallmentController} authorises against this. */
+    CUSTOMER_CREDIT(Codes.CUSTOMER_CREDIT, Group.PARTIES, "Sell on credit and run installment plans"),
     SUPPLIER_MANAGE(Codes.SUPPLIER_MANAGE, Group.PARTIES, "Create and edit suppliers"),
+
+    // --- Expenses and accounting -------------------------------------------
+    EXPENSE_VIEW(Codes.EXPENSE_VIEW, Group.EXPENSES, "See recorded operating expenses"),
+    EXPENSE_MANAGE(Codes.EXPENSE_MANAGE, Group.EXPENSES, "Record, amend and delete expenses"),
 
     // --- Reporting ---------------------------------------------------------
     REPORT_VIEW(Codes.REPORT_VIEW, Group.REPORTING, "See reports"),
     REPORT_VIEW_PROFIT(Codes.REPORT_VIEW_PROFIT, Group.REPORTING, "See profit and COGS figures"),
+    /**
+     * The P&L — operating expenses and net profit, not only gross.
+     *
+     * <p>Separate from {@link #REPORT_VIEW_PROFIT} because the two disclose
+     * different things. Gross profit is about what the shop buys and sells; net
+     * profit is the owner's whole cost base — the rent, the salaries, what the
+     * business actually keeps.
+     */
+    REPORT_VIEW_PL(Codes.REPORT_VIEW_PL, Group.REPORTING, "See the profit and loss statement"),
 
     // --- Administration ----------------------------------------------------
     USER_MANAGE(Codes.USER_MANAGE, Group.ADMIN, "Create users and set permissions"),
@@ -83,7 +99,23 @@ public enum Permission {
     OUTLET_VIEW_ALL(Codes.OUTLET_VIEW_ALL, Group.ADMIN, "See every outlet, combined"),
     SETTINGS_GENERAL(Codes.SETTINGS_GENERAL, Group.ADMIN, "Change business settings"),
     SETTINGS_APPEARANCE(Codes.SETTINGS_APPEARANCE, Group.ADMIN, "Change the accent colour and appearance"),
-    SETTINGS_TERMINAL(Codes.SETTINGS_TERMINAL, Group.ADMIN, "Configure this terminal and its printer");
+    SETTINGS_TERMINAL(Codes.SETTINGS_TERMINAL, Group.ADMIN, "Configure this terminal and its printer"),
+
+    /**
+     * Sending the day's trading up to head office, and nothing else.
+     *
+     * <p>Separate from {@link #SETTINGS_GENERAL} because the two are not the same
+     * risk. Pushing is one-way, additive and audited: the worst a cashier can do
+     * with it is send the same day twice, which the far end ignores. Pulling
+     * configuration rewrites this counter's users and can move its outlet id, and
+     * that stays with whoever administers the shop.
+     *
+     * <p>Granted to cashiers by default so somebody closing up can send the day
+     * without an owner present. The scheduled push already runs every fifteen
+     * minutes; this is for the person who wants to see it leave before they lock
+     * the door.
+     */
+    SYNC_PUSH(Codes.SYNC_PUSH, Group.ADMIN, "Send this shop's trading to head office");
 
     /** PRD §6 groupings, used to lay out the permissions screen. */
     public enum Group {
@@ -93,6 +125,7 @@ public enum Permission {
         STOCK("Stock"),
         CASH("Cash & shifts"),
         PARTIES("Customers & suppliers"),
+        EXPENSES("Expenses & accounting"),
         REPORTING("Reporting"),
         ADMIN("Administration");
 
@@ -139,14 +172,18 @@ public enum Permission {
         public static final String CUSTOMER_MANAGE = "customer.manage";
         public static final String CUSTOMER_CREDIT = "customer.credit";
         public static final String SUPPLIER_MANAGE = "supplier.manage";
+        public static final String EXPENSE_VIEW = "expense.view";
+        public static final String EXPENSE_MANAGE = "expense.manage";
         public static final String REPORT_VIEW = "report.view";
         public static final String REPORT_VIEW_PROFIT = "report.view_profit";
+        public static final String REPORT_VIEW_PL = "report.view_pl";
         public static final String USER_MANAGE = "user.manage";
         public static final String AUDIT_VIEW = "audit.view";
         public static final String OUTLET_VIEW_ALL = "outlet.view_all";
         public static final String SETTINGS_GENERAL = "settings.general";
         public static final String SETTINGS_APPEARANCE = "settings.appearance";
         public static final String SETTINGS_TERMINAL = "settings.terminal";
+        public static final String SYNC_PUSH = "sync.push";
 
         private Codes() {
         }
@@ -174,7 +211,7 @@ public enum Permission {
 
     /**
      * True for a code reserved for a later stage — {@link #STOCK_TRANSFER}
-     * (Stage 3) and {@link #CUSTOMER_CREDIT} (Stage 2).
+     * (Stage 3) is the last of them.
      *
      * <p><strong>Decision, 2026-09-14:</strong> the catalogue keeps all 33.
      * The PRD documents 31, and the two extras exist in {@code permissions.ts}.
@@ -188,7 +225,10 @@ public enum Permission {
      * {@code permissions.ts}, and regenerate the contract vectors.
      */
     public boolean isFutureStage() {
-        return this == STOCK_TRANSFER || this == CUSTOMER_CREDIT;
+        // CUSTOMER_CREDIT stopped being one when installment plans got
+        // endpoints: InstallmentController authorises against it, so it is now
+        // a right somebody can be given and have it mean something.
+        return this == STOCK_TRANSFER;
     }
 
     public String code() {

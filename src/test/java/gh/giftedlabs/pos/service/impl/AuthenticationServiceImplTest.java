@@ -11,6 +11,7 @@ import gh.giftedlabs.pos.repository.OutletRepository;
 import gh.giftedlabs.pos.repository.UserRepository;
 import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.rules.Role;
+import gh.giftedlabs.pos.support.ShippedRoleGrants;
 import gh.giftedlabs.pos.service.LoginAttemptService;
 import gh.giftedlabs.pos.service.AuditService;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,7 +78,7 @@ class AuthenticationServiceImplTest {
 
         service = new AuthenticationServiceImpl(
                 users, outlets, passwordEncoder, pinEncoder, loginAttempts, audit,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                new ShippedRoleGrants(), Clock.fixed(NOW, ZoneOffset.UTC));
 
         inco = outlet("INC", "Inco Hardware");
         radiance = outlet("RAD", "Radiance Lighting");

@@ -2,6 +2,7 @@ package gh.giftedlabs.pos.service.impl;
 
 import gh.giftedlabs.pos.dto.SettingsRequest;
 import gh.giftedlabs.pos.dto.SettingsView;
+import gh.giftedlabs.pos.dto.AppearanceSettingsRequest;
 import gh.giftedlabs.pos.entity.BusinessSettings;
 import gh.giftedlabs.pos.entity.RoleDiscountCeiling;
 import gh.giftedlabs.pos.repository.BusinessSettingsRepository;
@@ -85,6 +86,8 @@ public class SettingsServiceImpl implements SettingsService {
         // FR-SET-03: stored upper-case so two spellings of one colour do not
         // read as a change in the audit log.
         row.setAccentColor(request.accentColor().toUpperCase(Locale.ROOT));
+        row.setFontFamily(BusinessSettings.FontFamily.valueOf(request.fontFamily()));
+        row.setFontScalePercent(request.fontScalePercent());
 
         SettingsRequest.Thresholds wanted = request.thresholds();
         row.setIdleLockMinutes(wanted.idleLockMinutes());
@@ -106,6 +109,25 @@ public class SettingsServiceImpl implements SettingsService {
                 before, fields(row, after), actor.outletId(), null, clientIp);
 
         return SettingsView.of(row, after);
+    }
+
+    /** FR-SET-03: appearance has its own permission and cannot mutate general settings. */
+    @Override
+    @Transactional
+    public SettingsView updateAppearance(AppearanceSettingsRequest request, PosPrincipal actor, String clientIp) {
+        BusinessSettings row = row();
+        Map<String, BigDecimal> ceilingsByRole = ceilingMap();
+        Map<String, Object> before = fields(row, ceilingsByRole);
+
+        row.setAccentColor(request.accentColor().toUpperCase(Locale.ROOT));
+        row.setFontFamily(BusinessSettings.FontFamily.valueOf(request.fontFamily()));
+        row.setFontScalePercent(request.fontScalePercent());
+        row.touch(actor.userId(), clock.instant());
+        settings.saveAndFlush(row);
+
+        audit.record(actor.userId(), "SETTINGS_CHANGED", "settings", null,
+                before, fields(row, ceilingsByRole), actor.outletId(), null, clientIp);
+        return SettingsView.of(row, ceilingsByRole);
     }
 
     @Override
@@ -200,6 +222,8 @@ public class SettingsServiceImpl implements SettingsService {
         state.put("autoPrintReceipt", row.isAutoPrintReceipt());
         state.put("showCashierOnReceipt", row.isShowCashierOnReceipt());
         state.put("accentColor", row.getAccentColor());
+        state.put("fontFamily", row.getFontFamily().name());
+        state.put("fontScalePercent", row.getFontScalePercent());
         state.put("idleLockMinutes", row.getIdleLockMinutes());
         state.put("adjustmentApprovalPesewas", row.getAdjustmentApprovalPesewas());
         state.put("cashVariancePesewas", row.getCashVariancePesewas());

@@ -19,13 +19,15 @@ import java.util.Map;
  * @param auth         FR-AUTH-05, FR-AUTH-06 — all configurable, per K-08
  * @param consolidator the owner's view: pushing it (counter) or serving it
  * @param web          CORS, only relevant when a separate frontend origin exists
+ * @param backup       NFR-6, NFR-7 — the nightly copy, and where it goes
  */
 @ConfigurationProperties(prefix = "pos")
 public record PosProperties(
         @DefaultValue Deployment deployment,
         @DefaultValue Auth auth,
         @DefaultValue Consolidator consolidator,
-        @DefaultValue Web web) {
+        @DefaultValue Web web,
+        @DefaultValue Backup backup) {
 
     public enum Mode {
         /** A shop's counter PC. The system of record. */
@@ -58,6 +60,58 @@ public record PosProperties(
             @DefaultValue("http://localhost:8080/reset-password") String resetBaseUrl,
             @DefaultValue("") String resendApiKey,
             @DefaultValue("Radiance POS <onboarding@resend.dev>") String resendFrom) {
+    }
+
+    /**
+     * NFR-6 · NFR-7: the backup.
+     *
+     * <p>{@code interval} defaults to fifteen minutes because NFR-7 asks for a
+     * recovery point of fifteen minutes, and a nightly dump has a recovery
+     * point of a day. At this size — a shop's database is a few megabytes — a
+     * full dump that often costs nothing, so the simple thing is also the one
+     * that meets the requirement.
+     *
+     * @param directory  where copies are kept on this machine
+     * @param retention  how long a daily copy is kept — NFR-6 asks for 30 days
+     * @param keepAll    how long *every* copy is kept before thinning to one a
+     *                   day. Two days covers a mistake noticed the next morning
+     * @param offsite    S3-compatible; Cloudflare R2 is what the plan budgets for
+     */
+    public record Backup(
+            @DefaultValue("true") boolean enabled,
+            @DefaultValue("PT15M") Duration interval,
+            @DefaultValue("backups") String directory,
+            @DefaultValue("P30D") Duration retention,
+            @DefaultValue("P2D") Duration keepAll,
+            /** Empty means "whatever is on PATH", which is right when Postgres is bundled. */
+            @DefaultValue("pg_dump") String pgDump,
+            @DefaultValue("PT5M") Duration timeout,
+            @DefaultValue Offsite offsite) {
+
+        /** A backup on the same disk as the database does not survive the disk. */
+        public boolean hasOffsite() {
+            return offsite != null && offsite.isConfigured();
+        }
+    }
+
+    /**
+     * NFR-6: off-site, which is the word that matters.
+     *
+     * <p>R2 speaks the S3 API, so one client reaches Cloudflare, Backblaze or
+     * AWS. Until a bucket and key exist this is simply off, and the status
+     * screen says the copies are local only rather than calling them safe.
+     */
+    public record Offsite(
+            @DefaultValue("") String endpoint,
+            @DefaultValue("") String bucket,
+            @DefaultValue("") String accessKeyId,
+            @DefaultValue("") String secretAccessKey,
+            @DefaultValue("auto") String region,
+            @DefaultValue("") String prefix) {
+
+        public boolean isConfigured() {
+            return !bucket.isBlank() && !accessKeyId.isBlank() && !secretAccessKey.isBlank();
+        }
     }
 
     public record Consolidator(

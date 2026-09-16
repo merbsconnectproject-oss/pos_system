@@ -1,6 +1,7 @@
 package gh.giftedlabs.pos.exception;
 
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * A sale that cannot be completed as submitted — FR-POS, FR-PAY.
@@ -30,6 +31,20 @@ public class SaleException extends RuntimeException {
         return new SaleException("OVERPAYMENT_NOT_CASH",
                 "Only cash may be overpaid. %s was tendered against %s.".formatted(major(paid), major(total)),
                 Map.of("total", total, "paid", paid));
+    }
+
+    /** FR-PAY-03: non-cash tenders must carry the cashier's confirmation reference. */
+    public static SaleException paymentReferenceRequired(String method) {
+        return new SaleException("PAYMENT_REFERENCE_REQUIRED",
+                "A %s payment needs the reference confirming that funds were received.".formatted(method),
+                Map.of("method", method));
+    }
+
+    /** FR-PAY-07: payment identifiers are client keys and must be unique in a request. */
+    public static SaleException duplicatePayment(UUID paymentId) {
+        return new SaleException("DUPLICATE_PAYMENT",
+                "Payment %s was submitted more than once.".formatted(paymentId),
+                Map.of("paymentId", paymentId));
     }
 
     /** BR-10: below the floor price without an approver. */
@@ -77,6 +92,61 @@ public class SaleException extends RuntimeException {
                 "Terminal %s has used its whole receipt block. Issue a new one before selling."
                         .formatted(terminalCode),
                 Map.of("terminal", terminalCode));
+    }
+
+    // --- returns ------------------------------------------------------------
+
+    /** Nothing can come back twice. The ledger of previous returns is the cap. */
+    public static SaleException tooMuchReturned(String productName, java.math.BigDecimal wanted,
+                                                java.math.BigDecimal returnable) {
+        return new SaleException("RETURN_EXCEEDS_SOLD",
+                returnable.signum() == 0
+                        ? "%s has already been returned in full.".formatted(productName)
+                        : "Only %s of %s can still be returned; %s was asked for."
+                                .formatted(returnable.toPlainString(), productName, wanted.toPlainString()),
+                java.util.Map.of("product", productName,
+                        "wanted", wanted.toPlainString(),
+                        "returnable", returnable.toPlainString()));
+    }
+
+    /**
+     * BR-3: a voided sale has already been reversed in full.
+     *
+     * <p>Returning against one would write the reversal twice and the stock
+     * would end up higher than it ever was.
+     */
+    public static SaleException cannotReturnVoidedSale(String receiptNumber) {
+        return new SaleException("SALE_VOIDED",
+                "Receipt %s was voided, so its stock and takings were already reversed."
+                        .formatted(receiptNumber),
+                java.util.Map.of("receipt", receiptNumber));
+    }
+
+    /** A line that is not on the receipt being returned against. */
+    public static SaleException lineNotOnSale(String receiptNumber) {
+        return new SaleException("LINE_NOT_ON_SALE",
+                "One of those items is not on receipt %s.".formatted(receiptNumber),
+                java.util.Map.of("receipt", receiptNumber));
+    }
+
+    /** An exchange has to say what is being taken instead. */
+    public static SaleException exchangeNeedsReplacement() {
+        return new SaleException("EXCHANGE_NEEDS_REPLACEMENT",
+                "An exchange needs the replacement items. Use a refund if nothing is going back out.",
+                java.util.Map.of());
+    }
+
+    /** A refund of money has to say how the money went back. */
+    public static SaleException refundNeedsMethod() {
+        return new SaleException("REFUND_NEEDS_METHOD",
+                "Say how the refund was given — cash, card, mobile money or transfer.",
+                java.util.Map.of());
+    }
+
+    /** FR-USER-03: the named approver does not hold sale.refund. */
+    public static SaleException approverCannotRefund() {
+        return new SaleException("APPROVER_CANNOT_REFUND",
+                "That person cannot authorise refunds.", java.util.Map.of());
     }
 
     public static SaleException noTerminal(String outletName) {

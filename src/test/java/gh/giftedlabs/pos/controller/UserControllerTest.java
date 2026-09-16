@@ -457,17 +457,33 @@ class UserControllerTest {
     class Catalogue {
 
         @Test
-        @DisplayName("carries all 33 codes and flags the two reserved for later stages")
+        @DisplayName("carries all 37 codes and flags the one reserved for a later stage")
         void carriesEveryCode() throws Exception {
             Session session = signIn(ownerName);
 
             mvc.perform(session.authorise(get("/api/users/catalogue")))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.permissions.length()").value(33))
+                    // 33 became 36 with the accounting module — expense.view,
+                    // expense.manage and report.view_pl — and 37 with sync.push,
+                    // which splits sending the day up from administering the shop.
+                    .andExpect(jsonPath("$.permissions.length()").value(37))
                     .andExpect(jsonPath("$.permissions[?(@.code == 'stock.transfer')].futureStage")
                             .value(org.hamcrest.Matchers.contains(true)))
+                    // customer.credit stopped being a placeholder when installment
+                    // plans got endpoints authorising against it. A matrix that
+                    // still flagged it would be telling the owner that granting it
+                    // does nothing, which is no longer true.
                     .andExpect(jsonPath("$.permissions[?(@.code == 'customer.credit')].futureStage")
-                            .value(org.hamcrest.Matchers.contains(true)))
+                            .value(org.hamcrest.Matchers.contains(false)))
+                    .andExpect(jsonPath("$.permissions[?(@.code == 'expense.manage')].futureStage")
+                            .value(org.hamcrest.Matchers.contains(false)))
+                    .andExpect(jsonPath("$.permissions[?(@.code == 'report.view_pl')].futureStage")
+                            .value(org.hamcrest.Matchers.contains(false)))
+                    // The new group has to reach the screen, or the matrix renders
+                    // three codes with nowhere to put them. The wire carries the
+                    // enum name; the readable label is the frontend's.
+                    .andExpect(jsonPath("$.permissions[?(@.code == 'expense.view')].group")
+                            .value(org.hamcrest.Matchers.contains("EXPENSES")))
                     .andExpect(jsonPath("$.permissions[?(@.code == 'pos.sell')].futureStage")
                             .value(org.hamcrest.Matchers.contains(false)));
         }

@@ -1,5 +1,7 @@
 package gh.giftedlabs.pos.config;
 
+import gh.giftedlabs.pos.support.ShippedRoleGrants;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import gh.giftedlabs.pos.entity.User;
 import gh.giftedlabs.pos.repository.UserRepository;
@@ -41,7 +43,12 @@ class SessionGuardFilterTest {
                 Duration.ofMinutes(15), Duration.ofMinutes(30), "http://localhost/reset", "", "noreply@localhost");
         var props = new PosProperties(new PosProperties.Deployment(PosProperties.Mode.COUNTER, "INC", "01"), auth,
                 new PosProperties.Consolidator(false, "", "", Duration.ofMinutes(15), Duration.ofSeconds(10),
-                        new PosProperties.Ingest("", Duration.ofMinutes(45))), new PosProperties.Web(""));
+                        new PosProperties.Ingest("", Duration.ofMinutes(45))), new PosProperties.Web(""),
+                // NFR-6: off in unit tests — nothing here should shell out to pg_dump.
+                new PosProperties.Backup(false, java.time.Duration.ofMinutes(15), "backups",
+                        java.time.Duration.ofDays(30), java.time.Duration.ofDays(2), "pg_dump",
+                        java.time.Duration.ofMinutes(5),
+                        new PosProperties.Offsite("", "", "", "", "auto", "")));
         // FR-AUTH-05 now asks the shift service rather than reading a session
         // flag, so the two outcomes are driven by what it answers.
         shiftService = mock(ShiftService.class);
@@ -60,6 +67,17 @@ class SessionGuardFilterTest {
                     @Override public SettingsService getObject(Object... args) { return null; }
                     @Override public SettingsService getIfAvailable() { return null; }
                     @Override public SettingsService getIfUnique() { return null; }
+                },
+                // FR-USER-02: what a role grants is editable, so the filter asks
+                // rather than reading the enum. These tests are about the idle
+                // lock, and the shipped defaults are the right answer for them.
+                new org.springframework.beans.factory.ObjectProvider<>() {
+                    private final gh.giftedlabs.pos.service.RolePermissionService grants =
+                            new ShippedRoleGrants();
+                    @Override public gh.giftedlabs.pos.service.RolePermissionService getObject() { return grants; }
+                    @Override public gh.giftedlabs.pos.service.RolePermissionService getObject(Object... args) { return grants; }
+                    @Override public gh.giftedlabs.pos.service.RolePermissionService getIfAvailable() { return grants; }
+                    @Override public gh.giftedlabs.pos.service.RolePermissionService getIfUnique() { return grants; }
                 });
         request = new MockHttpServletRequest("GET", "/api/products"); response = new MockHttpServletResponse();
         chain = mock(FilterChain.class); userId = UUID.randomUUID();

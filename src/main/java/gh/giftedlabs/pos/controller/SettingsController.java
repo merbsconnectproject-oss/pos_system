@@ -2,6 +2,7 @@ package gh.giftedlabs.pos.controller;
 
 import gh.giftedlabs.pos.dto.SettingsRequest;
 import gh.giftedlabs.pos.dto.SettingsView;
+import gh.giftedlabs.pos.dto.AppearanceSettingsRequest;
 import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.SettingsService;
@@ -42,6 +43,15 @@ public class SettingsController {
                                @AuthenticationPrincipal PosPrincipal actor,
                                HttpServletRequest request) {
         return settings.update(body, actor, clientIp(request));
+    }
+
+    /** FR-SET-03: appearance is independently delegated without general-settings authority. */
+    @PutMapping("/appearance")
+    @PreAuthorize("hasAuthority('" + Permission.Codes.SETTINGS_APPEARANCE + "')")
+    public SettingsView updateAppearance(@Valid @RequestBody AppearanceSettingsRequest body,
+                                         @AuthenticationPrincipal PosPrincipal actor,
+                                         HttpServletRequest request) {
+        return settings.updateAppearance(body, actor, clientIp(request));
     }
 
     private String clientIp(HttpServletRequest request) {

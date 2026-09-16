@@ -13,6 +13,7 @@ import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.rules.Role;
 import gh.giftedlabs.pos.service.AuthenticationService;
 import gh.giftedlabs.pos.service.AuditService;
+import gh.giftedlabs.pos.service.RolePermissionService;
 import gh.giftedlabs.pos.service.LoginAttemptService;
 import gh.giftedlabs.pos.service.LoginAttemptService.Decision;
 import org.slf4j.Logger;
@@ -50,6 +51,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final PasswordEncoder pinEncoder;
     private final LoginAttemptService loginAttempts;
     private final AuditService audit;
+    private final RolePermissionService roleGrants;
     private final Clock clock;
 
     public AuthenticationServiceImpl(
@@ -59,6 +61,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             @Qualifier("pinEncoder") PasswordEncoder pinEncoder,
             LoginAttemptService loginAttempts,
             AuditService audit,
+            RolePermissionService roleGrants,
             Clock clock) {
         this.users = users;
         this.outlets = outlets;
@@ -66,6 +69,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         this.pinEncoder = pinEncoder;
         this.loginAttempts = loginAttempts;
         this.audit = audit;
+        this.roleGrants = roleGrants;
         this.clock = clock;
     }
 
@@ -165,7 +169,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         // Both conditions must hold: the PIN proves identity, the permission
         // proves authority. A manager PIN does not make a cashier a manager.
         boolean pinMatches = pinEncoder.matches(pin, approver.getPinHash());
-        boolean permitted = approver.resolvePermissions().contains(required);
+        boolean permitted = approver.resolvePermissions(roleGrants.current()).contains(required);
 
         if (!pinMatches) {
             loginAttempts.recordFailure(throttleKey);
@@ -205,7 +209,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         UUID approver = null;
         for (User candidate : users.findActiveAtOutlet(outletId)) {
-            if (!candidate.hasPin() || !candidate.resolvePermissions().contains(required)) continue;
+            if (!candidate.hasPin() || !candidate.resolvePermissions(roleGrants.current()).contains(required)) continue;
             if (pinEncoder.matches(pin, candidate.getPinHash()) && approver == null) {
                 approver = candidate.getId();
             }
@@ -338,7 +342,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             active = assigned.getFirst();
         }
 
-        Set<String> permissions = user.resolvePermissions().stream()
+        Set<String> permissions = user.resolvePermissions(roleGrants.current()).stream()
                 .map(Permission::code)
                 .collect(Collectors.toUnmodifiableSet());
 

@@ -109,3 +109,40 @@ pos:
     reset-base-url: ${AUTH_RESET_BASE_URL:http://localhost:5173/reset-password}
     resend-api-key: ${RESEND_API_KEY:}
     resend-from: ${RESEND_FROM:Radiance POS <onboarding@resend.dev>}
+
+  # NFR-6 · NFR-7: the backup.
+  #
+  # Every fifteen minutes rather than nightly, because NFR-7 asks for a recovery
+  # point of fifteen minutes and a nightly dump has a recovery point of a day. A
+  # shop's database is a few megabytes, so a full dump that often costs nothing.
+  #
+  # WITHOUT THE OFF-SITE BLOCK THIS IS NOT A BACKUP OF A DISK FAILURE. Copies sit
+  # beside the database and die with it, which is the exact risk in the delivery
+  # plan's table. The settings screen says "this machine only" until a bucket and
+  # key exist — it will not show green on a local-only install.
+  backup:
+    enabled: ${POS_BACKUP_ENABLED:true}
+    interval: ${POS_BACKUP_INTERVAL:PT15M}
+    directory: ${POS_BACKUP_DIRECTORY:backups}
+    retention: ${POS_BACKUP_RETENTION:P30D}
+    # How long every copy is kept before thinning to one a day. Two days covers
+    # a mistake noticed the next morning.
+    keep-all: ${POS_BACKUP_KEEP_ALL:P2D}
+    # Empty means whatever is on PATH, which is right when Postgres is bundled
+    # on the counter PC. Set it when pg_dump is somewhere unusual (Windows).
+    pg-dump: ${POS_BACKUP_PG_DUMP:pg_dump}
+    timeout: ${POS_BACKUP_TIMEOUT:PT5M}
+    # S3-compatible, so Cloudflare R2 (what the plan budgets for), Backblaze or
+    # AWS all work through the same client. Off until a bucket and key exist.
+    offsite:
+      endpoint: ${POS_BACKUP_OFFSITE_ENDPOINT:}
+      bucket: ${POS_BACKUP_OFFSITE_BUCKET:}
+      access-key-id: ${POS_BACKUP_OFFSITE_ACCESS_KEY_ID:}
+      secret-access-key: ${POS_BACKUP_OFFSITE_SECRET_ACCESS_KEY:}
+      region: ${POS_BACKUP_OFFSITE_REGION:auto}
+      prefix: ${POS_BACKUP_OFFSITE_PREFIX:}
+
+  # NFR-17 · BR-2: does every stock level still equal the sum of its movements?
+  # Reports, never corrects — a number that repaired itself would hide the bug.
+  reconcile:
+    cron: ${POS_RECONCILE_CRON:0 30 2 * * *}

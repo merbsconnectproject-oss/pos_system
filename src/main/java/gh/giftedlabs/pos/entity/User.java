@@ -286,9 +286,37 @@ public class User {
      * in the enum means the contract vectors test the same code path the server
      * authorises with.
      */
+    /**
+     * Against the grants a shop is actually running — FR-USER-02.
+     *
+     * <p>What a role grants is editable and lives in {@code role_permission}; the
+     * enum's baselines are the seed and the reset, not the runtime answer. Every
+     * authorisation path takes this overload, so an owner who widens the cashier
+     * role sees it take effect rather than waiting for a release.
+     *
+     * @param baselines role → what it currently grants
+     */
+    public EnumSet<Permission> resolvePermissions(java.util.Map<Role, java.util.Set<Permission>> baselines) {
+        EnumSet<Permission> granted = EnumSet.noneOf(Permission.class);
+        roles.forEach(role -> granted.addAll(baselines.getOrDefault(role, role.baseline())));
+        return applyOverrides(granted);
+    }
+
+    /**
+     * Against the shipped defaults.
+     *
+     * <p>Kept for the contract vectors, which assert what the system ships with,
+     * and for anywhere there is no shop to ask. Production authorisation uses the
+     * overload above.
+     */
     public EnumSet<Permission> resolvePermissions() {
         EnumSet<Permission> granted = EnumSet.noneOf(Permission.class);
         roles.forEach(role -> granted.addAll(role.baseline()));
+        return applyOverrides(granted);
+    }
+
+    /** FR-USER-03: the person's own grants and revocations, on top of the role. */
+    private EnumSet<Permission> applyOverrides(EnumSet<Permission> granted) {
 
         permissionOverrides.forEach((permission, isGranted) -> {
             if (Boolean.TRUE.equals(isGranted)) {

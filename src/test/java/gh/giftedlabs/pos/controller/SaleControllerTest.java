@@ -290,6 +290,43 @@ class SaleControllerTest {
                     .andExpect(status().isUnprocessableEntity())
                     .andExpect(jsonPath("$.code").value("OVERPAYMENT_NOT_CASH"));
         }
+
+        @Test
+        @DisplayName("non-cash payments require an explicit received-funds reference — FR-PAY-03")
+        void nonCashRequiresReference() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Reference lamp " + run, "pcs", "35.00", "20");
+            Map<String, Object> payment = new LinkedHashMap<>();
+            payment.put("id", UUID.randomUUID().toString());
+            payment.put("method", "card");
+            payment.put("amount", 3500L);
+
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(sale(
+                                    line(productId, "pcs", "1", "35.00"), payment))))
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.code").value("PAYMENT_REFERENCE_REQUIRED"));
+        }
+
+        @Test
+        @DisplayName("duplicate payment ids in one request are rejected before persistence — FR-PAY-07")
+        void duplicatePaymentIdsAreRejected() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Duplicate payment " + run, "pcs", "35.00", "20");
+            String id = UUID.randomUUID().toString();
+            Map<String, Object> first = cash(1750L);
+            first.put("id", id);
+            Map<String, Object> second = cash(1750L);
+            second.put("id", id);
+
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(sale(
+                                    line(productId, "pcs", "1", "35.00"), first, second))))
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.code").value("DUPLICATE_PAYMENT"));
+        }
     }
 
     @Nested

@@ -109,6 +109,7 @@ public class SaleServiceImpl implements SaleService {
         long discountTotal = priced.stream().mapToLong(line -> line.discount).sum();
         long total = priced.stream().mapToLong(line -> line.net).sum();
 
+        validatePayments(request);
         long paid = request.payments().stream().mapToLong(SaleRequest.PaymentLine::amount).sum();
         long changeDue = settlePayments(request, total, paid);
 
@@ -334,7 +335,18 @@ public class SaleServiceImpl implements SaleService {
         // ceiling that refused it would make the agreed rate unusable by the
         // people serving the customer it was agreed with.
         BigDecimal agreed = customer == null ? BigDecimal.ZERO : customer.getDiscountRate();
-        BigDecimal allowed = settings.discountCeiling(staff.rolesOf(actor.userId())).max(agreed);
+
+        // `sale.discount` is what buys the discretion. Without it the role's
+        // ceiling is irrelevant — the ceiling answers "how much", and this
+        // answers "at all". It was previously unchecked, so revoking the code hid
+        // the control on the screen and the server still took the discount.
+        BigDecimal discretion = staff.holdsPermission(actor.userId(), Permission.SALE_DISCOUNT)
+                ? settings.discountCeiling(staff.rolesOf(actor.userId()))
+                : BigDecimal.ZERO;
+
+        // The customer's agreed rate survives either way: honouring a deal the
+        // business made is not the cashier giving money away (FR-PRICE-05).
+        BigDecimal allowed = discretion.max(agreed);
         if (percent.compareTo(allowed) <= 0) return;
 
         BigDecimal approverCeiling = approvedBy == null
@@ -361,6 +373,24 @@ public class SaleServiceImpl implements SaleService {
         if (!allCash) throw SaleException.overpaymentNotCash(total, paid);
 
         return paid - total;
+    }
+
+    /**
+     * FR-PAY-03/07: validate payment evidence before any sale is persisted.
+     * Bean validation checks shape, while this domain validation checks the
+     * payment method's business rules and duplicate client keys in one request.
+     */
+    private void validatePayments(SaleRequest request) {
+        Set<UUID> ids = new HashSet<>();
+        for (SaleRequest.PaymentLine payment : request.payments()) {
+            if (!ids.add(payment.id())) {
+                throw SaleException.duplicatePayment(payment.id());
+            }
+            if (payment.method().expectsReference()
+                    && (payment.reference() == null || payment.reference().isBlank())) {
+                throw SaleException.paymentReferenceRequired(payment.method().name());
+            }
+        }
     }
 
     /**

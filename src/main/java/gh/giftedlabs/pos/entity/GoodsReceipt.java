@@ -42,6 +42,10 @@ public class GoodsReceipt {
     @Column(name = "confirmed_by")
     private UUID confirmedBy;
 
+    /** The order this delivery is against, when it was ordered — FR-SUP-08. */
+    @Column(name = "purchase_order_id", updatable = false)
+    private UUID purchaseOrderId;
+
     /** Set on a correcting document, naming the receipt it reverses. */
     @Column(name = "reverses_id", updatable = false)
     private UUID reversesId;
@@ -58,6 +62,12 @@ public class GoodsReceipt {
     protected GoodsReceipt() { }
 
     public GoodsReceipt(UUID outletId, UUID supplierId, String reference, String note, UUID createdBy) {
+        this(outletId, supplierId, null, reference, note, createdBy);
+    }
+
+    public GoodsReceipt(UUID outletId, UUID supplierId, UUID purchaseOrderId, String reference,
+                        String note, UUID createdBy) {
+        this.purchaseOrderId = purchaseOrderId;
         this.outletId = outletId;
         this.supplierId = supplierId;
         this.reference = reference;
@@ -72,6 +82,7 @@ public class GoodsReceipt {
     public String getNote() { return note; }
     public Instant getConfirmedAt() { return confirmedAt; }
     public UUID getConfirmedBy() { return confirmedBy; }
+    public UUID getPurchaseOrderId() { return purchaseOrderId; }
     public UUID getReversesId() { return reversesId; }
     public void markReverses(UUID original) { this.reversesId = original; }
     public Instant getCreatedAt() { return createdAt; }

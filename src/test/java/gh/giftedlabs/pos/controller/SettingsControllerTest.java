@@ -115,6 +115,21 @@ class SettingsControllerTest {
         }
 
         @Test
+        @DisplayName("FR-SET-03 · a manager may change appearance without general settings access")
+        void managerMayChangeAppearanceOnly() throws Exception {
+            mvc.perform(signIn(managerName).authorise(put("/api/settings/appearance"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(Map.of(
+                                    "accentColor", "#0F766E",
+                                    "fontFamily", "SYSTEM",
+                                    "fontScalePercent", 120))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.accentColor").value("#0F766E"))
+                    .andExpect(jsonPath("$.fontFamily").value("SYSTEM"))
+                    .andExpect(jsonPath("$.fontScalePercent").value(120));
+        }
+
+        @Test
         @DisplayName("nothing on the record is a credential — FR-USER-01")
         void noSharedPinOnTheWire() throws Exception {
             MvcResult result = mvc.perform(signIn(ownerName).authorise(get("/api/settings")))
@@ -136,6 +151,8 @@ class SettingsControllerTest {
             Map<String, Object> body = defaults();
             body.put("companyName", "Radiance Lighting " + run);
             body.put("accentColor", "#0F766E");
+            body.put("fontFamily", "VERDANA");
+            body.put("fontScalePercent", 115);
             body.put("thresholds", thresholds(25, 9_900L, 3_300L));
 
             mvc.perform(signIn(ownerName).authorise(put("/api/settings"))
@@ -144,6 +161,8 @@ class SettingsControllerTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.companyName").value("Radiance Lighting " + run))
                     .andExpect(jsonPath("$.accentColor").value("#0F766E"))
+                    .andExpect(jsonPath("$.fontFamily").value("VERDANA"))
+                    .andExpect(jsonPath("$.fontScalePercent").value(115))
                     .andExpect(jsonPath("$.thresholds.cashVariancePesewas").value(3300));
 
             mvc.perform(signIn(cashierName).authorise(get("/api/settings")))
@@ -155,6 +174,30 @@ class SettingsControllerTest {
         void accentMustBeHex() throws Exception {
             Map<String, Object> body = defaults();
             body.put("accentColor", "burnt orange");
+
+            mvc.perform(signIn(ownerName).authorise(put("/api/settings"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(body)))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("FR-SET-03 · typography only accepts the safe font allowlist")
+        void fontMustBeSafe() throws Exception {
+            Map<String, Object> body = defaults();
+            body.put("fontFamily", "url(https://example.invalid/font.woff2)");
+
+            mvc.perform(signIn(ownerName).authorise(put("/api/settings"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(body)))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("FR-SET-03 · typography scale stays within an accessible layout-safe range")
+        void fontScaleIsBounded() throws Exception {
+            Map<String, Object> body = defaults();
+            body.put("fontScalePercent", 131);
 
             mvc.perform(signIn(ownerName).authorise(put("/api/settings"))
                             .contentType(MediaType.APPLICATION_JSON)
@@ -307,6 +350,8 @@ class SettingsControllerTest {
         body.put("autoPrintReceipt", true);
         body.put("showCashierOnReceipt", true);
         body.put("accentColor", "#F97316");
+        body.put("fontFamily", "JAKARTA");
+        body.put("fontScalePercent", 100);
         body.put("thresholds", thresholds(10, 50_000L, 2_000L));
         body.put("enforceFloorPriceApproval", true);
         body.put("enforceVoidApproval", true);

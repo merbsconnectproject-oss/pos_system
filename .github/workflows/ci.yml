@@ -1,0 +1,43 @@
+name: CI
+
+# This repository has no remote yet, so nothing triggers this. It is committed
+# so that the checks exist the moment one is added — `git remote add origin …`
+# is all that stands between here and a green tick.
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+
+      # Testcontainers starts a real PostgreSQL — the runner provides Docker, so
+      # nothing extra is needed here. Running the suite against an in-memory
+      # database instead would prove the code works somewhere it will never run:
+      # the schema uses gin_trgm_ops, partial indexes, enum types and an
+      # append-only trigger, none of which H2 has.
+      - name: Backend suite
+        run: ./mvnw -B test -DexcludedGroups=live
+
+      # The live checks talk to the real R2 bucket. They stay excluded above:
+      # a red build caused by somebody's connection teaches people to ignore red
+      # builds. Run them by hand when the credentials change.
+      - name: Publish test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          retention-days: 14

@@ -18,6 +18,18 @@ public final class ReportView {
     private ReportView() { }
 
     /** The headline figures for a period — FR-RPT-04 sales summary. */
+    /**
+     * @param revenue     gross takings — what was rung up
+     * @param refundTotal what went back out as returns in the same period
+     * @param netRevenue  revenue less refunds. **This is the sales figure.**
+     *                    Gross is kept beside it because a shop wants to see
+     *                    both: takings of 10,000 with 3,000 returned is a
+     *                    different month from takings of 7,000 with none
+     * @param cost        BR-5 frozen cost of what was sold, less the cost of
+     *                    what came back and went on the shelf again
+     * @param profit      netRevenue less cost. Null unless the caller may see
+     *                    cost — FR-RPT-05
+     */
     public record Summary(
             long saleCount,
             BigDecimal revenue,
@@ -25,10 +37,54 @@ public final class ReportView {
             BigDecimal averageSale,
             long voidCount,
             BigDecimal voidedValue,
+            long refundCount,
+            BigDecimal refundTotal,
+            BigDecimal netRevenue,
             /** FR-RPT-05: null unless the caller may see cost. */
             BigDecimal cost,
             BigDecimal profit,
             BigDecimal marginPercent) {
+    }
+
+    /**
+     * The profit and loss statement — {@code report.view_pl}.
+     *
+     * <p>Gross profit is trading: revenue less the cost of what was sold. Net
+     * profit takes the operating expenses off it, which is the figure that says
+     * whether the business made money. They are two disclosures, not one — the
+     * second exposes the whole cost base, rent and salaries included — so they
+     * sit behind two different permissions.
+     *
+     * <p>Every figure is summed by the database over the period. The screen this
+     * replaces built the same statement from whatever the browser had loaded and
+     * from expenses held in a React array, so the net profit an owner read was a
+     * number about nothing and reset to zero on refresh.
+     *
+     * @param operatingExpenses    PAID expenses only, in the period
+     * @param pendingExpenses      committed and not yet paid — reported beside the
+     *                             statement rather than inside it, because an
+     *                             unpaid invoice has not reduced the bank balance
+     * @param expensesByCategory   the breakdown an owner actually reads
+     * @param netProfit            gross profit less operating expenses
+     * @param netMarginPercent     null when there was no revenue to divide by
+     */
+    public record ProfitAndLoss(
+            Instant from,
+            Instant to,
+            long saleCount,
+            BigDecimal revenue,
+            BigDecimal costOfSales,
+            BigDecimal grossProfit,
+            BigDecimal grossMarginPercent,
+            BigDecimal operatingExpenses,
+            BigDecimal pendingExpenses,
+            List<ExpenseLine> expensesByCategory,
+            BigDecimal netProfit,
+            BigDecimal netMarginPercent) {
+
+        /** One category's total, with the label the screen shows. */
+        public record ExpenseLine(String category, String label, BigDecimal amount) {
+        }
     }
 
     /**

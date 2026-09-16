@@ -67,6 +67,12 @@ public interface ProductRepository extends JpaRepository<Product, java.util.UUID
               left join brand b on b.id = p.brand_id
               left join category c on c.id = p.category_id
              where (:activeOnly = false or p.is_active = true)
+               -- NFR-1. Redundant against the rule below — the first term has to
+               -- match something, and search_text holds everything the rule looks
+               -- at — but it is the one predicate the planner can answer from the
+               -- trigram index, which turns a scan of the whole catalogue into a
+               -- lookup. Without it the rule below is evaluated once per product.
+               and p.search_text like concat('%', lower(split_part(trim(:query), ' ', 1)), '%')
                and not exists (
                  select 1
                    from regexp_split_to_table(trim(:query), '[[:space:]]+') term

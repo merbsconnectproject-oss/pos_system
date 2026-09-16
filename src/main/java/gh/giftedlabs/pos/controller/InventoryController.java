@@ -134,6 +134,13 @@ public class InventoryController {
             // person posting to this endpoint.
             case SALE, SALE_VOID -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Sales movements are written by the point of sale, not entered here");
+            // Likewise a return: it is a document with a customer on the other
+            // side of it, and the goods coming back have to be tied to the line
+            // they were sold on. Posting the movement by hand would leave stock
+            // that moved for no recorded reason.
+            case CUSTOMER_RETURN, SUPPLIER_RETURN -> throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Return movements are written by processing a return against its receipt");
         };
         if (!has(authentication, needed)) {
             throw new org.springframework.security.access.AccessDeniedException("Missing " + needed);

@@ -62,5 +62,16 @@ public interface ReportService {
      * the "combined" line is then that one shop, which is the truthful answer
      * rather than a total they are not entitled to.
      */
+    /**
+     * The profit and loss statement — {@code report.view_pl}.
+     *
+     * <p>Gross profit less what the business spent running itself. Needs no
+     * {@code mayViewProfit} flag: unlike the other reports, there is no version
+     * of a P&L with the cost withheld — a statement without cost of sales is not
+     * a redacted P&L, it is a different document. The permission gates the whole
+     * endpoint instead.
+     */
+    ReportView.ProfitAndLoss profitAndLoss(ReportFilter filter);
+
     ReportView.Dashboard dashboard(List<UUID> visibleOutletIds, boolean mayViewProfit);
 }

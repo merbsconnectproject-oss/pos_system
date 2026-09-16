@@ -10,6 +10,7 @@ import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.rules.Role;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.AuditService;
+import gh.giftedlabs.pos.service.RolePermissionService;
 import gh.giftedlabs.pos.service.UserService;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
@@ -37,16 +38,18 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwords;
     private final PasswordEncoder pins;
     private final AuditService audit;
+    private final RolePermissionService roleGrants;
 
     public UserServiceImpl(UserRepository users, OutletRepository outlets,
                            @Qualifier("passwordEncoder") PasswordEncoder passwords,
                            @Qualifier("pinEncoder") PasswordEncoder pins,
-                           AuditService audit) {
+                           AuditService audit, RolePermissionService roleGrants) {
         this.users = users;
         this.outlets = outlets;
         this.passwords = passwords;
         this.pins = pins;
         this.audit = audit;
+        this.roleGrants = roleGrants;
     }
 
     @Override
@@ -55,14 +58,14 @@ public class UserServiceImpl implements UserService {
         return users.findAll().stream()
                 .filter(user -> includeInactive || user.isActive())
                 .sorted(Comparator.comparing(User::getFullName, String.CASE_INSENSITIVE_ORDER))
-                .map(UserView::of)
+                .map(user -> UserView.of(user, roleGrants.current()))
                 .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public UserView get(UUID id) {
-        return UserView.of(find(id));
+        return UserView.of(find(id), roleGrants.current());
     }
 
     /** FR-USER-01: an individual account, never a shared login. */
@@ -95,7 +98,7 @@ public class UserServiceImpl implements UserService {
 
         audit.record(actor.userId(), "USER_CREATED", "user", saved.getId(), null, snapshot(saved),
                 actor.outletId(), null, clientIp);
-        return UserView.of(saved);
+        return UserView.of(saved, roleGrants.current());
     }
 
     /**
@@ -137,7 +140,7 @@ public class UserServiceImpl implements UserService {
 
         audit.record(actor.userId(), "USER_UPDATED", "user", id, before, snapshot(user),
                 actor.outletId(), null, clientIp);
-        return UserView.of(user);
+        return UserView.of(user, roleGrants.current());
     }
 
     /**
@@ -159,14 +162,14 @@ public class UserServiceImpl implements UserService {
         Permission permission = Permission.fromCode(code)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown permission"));
 
-        boolean had = user.resolvePermissions().contains(permission);
+        boolean had = user.resolvePermissions(roleGrants.current()).contains(permission);
         if (granted == null) {
             // Back to whatever the roles say — not the same as revoking it.
             user.clearOverride(permission);
         } else {
             user.override(permission, granted);
         }
-        boolean has = user.resolvePermissions().contains(permission);
+        boolean has = user.resolvePermissions(roleGrants.current()).contains(permission);
 
         // The permission code is the field name, not a value beside it. The
         // audit renderer shows what changed and omits what did not, so a code
@@ -177,7 +180,7 @@ public class UserServiceImpl implements UserService {
                 Map.of(code, has, "override", granted == null ? "cleared" : granted.toString()),
                 actor.outletId(), null, clientIp);
 
-        return UserView.of(user);
+        return UserView.of(user, roleGrants.current());
     }
 
     /** FR-USER-07 · BR-17: deactivated, never deleted. */
@@ -195,7 +198,7 @@ public class UserServiceImpl implements UserService {
 
         audit.record(actor.userId(), active ? "USER_REACTIVATED" : "USER_DEACTIVATED", "user", id,
                 null, Map.of("username", user.getUsername()), actor.outletId(), null, clientIp);
-        return UserView.of(user);
+        return UserView.of(user, roleGrants.current());
     }
 
     @Override
@@ -204,7 +207,7 @@ public class UserServiceImpl implements UserService {
         if (userId == null) return false;
         return users.findById(userId)
                 .filter(User::isActive)
-                .map(user -> user.resolvePermissions().contains(permission))
+                .map(user -> user.resolvePermissions(roleGrants.current()).contains(permission))
                 .orElse(false);
     }
 
@@ -231,7 +234,7 @@ public class UserServiceImpl implements UserService {
     public List<RoleInfo> roleCatalogue() {
         return Arrays.stream(Role.values())
                 .map(role -> new RoleInfo(role.key(),
-                        role.baseline().stream().map(Permission::code).sorted().toList()))
+                        roleGrants.grantedTo(role).stream().map(Permission::code).sorted().toList()))
                 .toList();
     }
 

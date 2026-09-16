@@ -7,10 +7,12 @@ import gh.giftedlabs.pos.dto.StockView;
 import gh.giftedlabs.pos.entity.GoodsReceipt;
 import gh.giftedlabs.pos.entity.GoodsReceiptLine;
 import gh.giftedlabs.pos.entity.Product;
+import gh.giftedlabs.pos.entity.PurchaseOrder;
 import gh.giftedlabs.pos.entity.Supplier;
 import gh.giftedlabs.pos.exception.ProductNotFoundException;
 import gh.giftedlabs.pos.repository.GoodsReceiptRepository;
 import gh.giftedlabs.pos.repository.ProductRepository;
+import gh.giftedlabs.pos.repository.PurchaseOrderRepository;
 import gh.giftedlabs.pos.repository.SupplierRepository;
 import gh.giftedlabs.pos.rules.Costing;
 import gh.giftedlabs.pos.rules.Money;
@@ -19,6 +21,7 @@ import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.AuditService;
 import gh.giftedlabs.pos.service.GoodsReceiptService;
 import gh.giftedlabs.pos.service.InventoryService;
+import gh.giftedlabs.pos.service.PurchaseOrderService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -45,16 +48,22 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
     private static final String SOURCE = "GRN";
 
     private final GoodsReceiptRepository receipts;
+    private final PurchaseOrderRepository purchaseOrders;
+    private final PurchaseOrderService orders;
     private final SupplierRepository suppliers;
     private final ProductRepository products;
     private final InventoryService inventory;
     private final AuditService audit;
     private final Clock clock;
 
-    public GoodsReceiptServiceImpl(GoodsReceiptRepository receipts, SupplierRepository suppliers,
+    public GoodsReceiptServiceImpl(GoodsReceiptRepository receipts,
+                                   PurchaseOrderRepository purchaseOrders,
+                                   PurchaseOrderService orders, SupplierRepository suppliers,
                                    ProductRepository products, InventoryService inventory,
                                    AuditService audit, Clock clock) {
         this.receipts = receipts;
+        this.purchaseOrders = purchaseOrders;
+        this.orders = orders;
         this.suppliers = suppliers;
         this.products = products;
         this.inventory = inventory;
@@ -79,7 +88,10 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                     "%s is retired. Restore the supplier before receiving against it.".formatted(supplier.getName()));
         }
 
+        PurchaseOrder against = orderFor(request, supplier);
+
         GoodsReceipt receipt = new GoodsReceipt(request.outletId(), supplier.getId(),
+                against == null ? null : against.getId(),
                 blankToNull(request.reference()), blankToNull(request.note()), actor.userId());
 
         for (GoodsReceiptRequest.Line line : request.lines()) {
@@ -93,13 +105,62 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
 
         List<GoodsReceiptView.Line> results = postMovements(saved, actor, false, clientIp);
 
+        Map<String, Object> recorded = new java.util.LinkedHashMap<>();
+        recorded.put("supplier", supplier.getName());
+        recorded.put("reference", saved.getReference() == null ? "" : saved.getReference());
+        recorded.put("lines", results.size());
+        if (against != null) recorded.put("purchaseOrder", against.getNumber());
+
         audit.record(actor.userId(), "GOODS_RECEIVED", "goods_receipt", saved.getId(), null,
-                Map.of("supplier", supplier.getName(),
-                        "reference", saved.getReference() == null ? "" : saved.getReference(),
-                        "lines", results.size()),
-                saved.getOutletId(), null, clientIp);
+                recorded, saved.getOutletId(), null, clientIp);
+
+        // After the movements, not before: an order is only satisfied by stock
+        // that actually landed.
+        //
+        // Flushed first. What has arrived against an order is summed in SQL over
+        // the receipt lines, and this delivery is still sitting in the persistence
+        // context — so without the flush the order sees nothing arrive and stays
+        // open on a delivery that completed it.
+        if (against != null) {
+            receipts.flush();
+            orders.noteDelivery(against.getId(), actor, clientIp);
+        }
 
         return view(saved, supplier.getName(), results, false);
+    }
+
+    /**
+     * The order a delivery is against, checked against the delivery itself.
+     *
+     * <p>Three things have to agree or the variance the order exists to show is
+     * nonsense: the branch, the supplier, and the fact that the order is still
+     * open. Receiving against somebody else's order would credit their delivery
+     * to this one.
+     */
+    private PurchaseOrder orderFor(GoodsReceiptRequest request, Supplier supplier) {
+        if (request.purchaseOrderId() == null) return null;
+
+        PurchaseOrder order = purchaseOrders.findById(request.purchaseOrderId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "No such purchase order"));
+
+        if (!order.isOpen()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    order.isDraft()
+                            ? "%s has not been sent to the supplier yet".formatted(order.getNumber())
+                            : "%s is closed. Book the delivery in without an order."
+                                    .formatted(order.getNumber()));
+        }
+        if (!order.getSupplierId().equals(supplier.getId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "%s was raised with a different supplier".formatted(order.getNumber()));
+        }
+        if (!order.getOutletId().equals(request.outletId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "%s was raised for another branch".formatted(order.getNumber()));
+        }
+
+        return order;
     }
 
     /**
@@ -140,6 +201,21 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                 Map.of("reverses", original.getId().toString()),
                 Map.of("supplier", supplier.getName(), "lines", results.size()),
                 saved.getOutletId(), null, clientIp);
+
+        // A reversal does not reopen the order it delivered against. The lifecycle
+        // runs one way by design — the shop raises another order for goods it still
+        // needs — but an order reading "received in full" when the delivery was
+        // taken back would mislead whoever reads it next, so the reversal is
+        // recorded against the order too.
+        if (original.getPurchaseOrderId() != null) {
+            purchaseOrders.findById(original.getPurchaseOrderId()).ifPresent(order ->
+                    audit.record(actor.userId(), "PURCHASE_ORDER_DELIVERY_REVERSED",
+                            "purchase_order", order.getId(), null,
+                            Map.of("number", order.getNumber(),
+                                    "status", order.getStatus().name(),
+                                    "reversedReceipt", original.getId().toString()),
+                            order.getOutletId(), null, clientIp));
+        }
 
         return view(saved, supplier.getName(), results, false);
     }

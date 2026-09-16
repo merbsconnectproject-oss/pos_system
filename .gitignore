@@ -37,3 +37,13 @@ build/
 
 # Local secrets — never committed.
 .env
+
+# Local backup artifacts and generated acceptance-document build output.
+backups/
+output/
+__pycache__/
+.~lock.*
+Radiance-POS-Acceptance-Testing-Checklist.docx
+build_acceptance_checklist.py
+build_acceptance_docx.py
+docs/radiance-pos-acceptance-testing-checklist.html

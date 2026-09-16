@@ -8,6 +8,7 @@ import gh.giftedlabs.pos.exception.OutletNotPermittedException;
 import gh.giftedlabs.pos.exception.CatalogueConflictException;
 import gh.giftedlabs.pos.exception.CatalogueListException;
 import gh.giftedlabs.pos.exception.IncorrectPinException;
+import gh.giftedlabs.pos.exception.AccountingException;
 import gh.giftedlabs.pos.exception.ApprovalRequiredException;
 import gh.giftedlabs.pos.exception.CustomerPhoneTakenException;
 import gh.giftedlabs.pos.exception.InsufficientStockException;
@@ -21,6 +22,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.exc.MismatchedInputException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -169,6 +173,14 @@ public class ApiExceptionHandler {
                                 "name", ex.getExistingName())));
     }
 
+    /** Expenses and installment plans. 404 or 409, depending on which it is. */
+    @ExceptionHandler(AccountingException.class)
+    public ResponseEntity<ApiError> onAccounting(AccountingException ex) {
+        HttpStatus status = ex.isNotFound() ? HttpStatus.NOT_FOUND : HttpStatus.CONFLICT;
+        return ResponseEntity.status(status)
+                .body(new ApiError(ex.getCode(), ex.getMessage(), ex.getDetails()));
+    }
+
     @ExceptionHandler(ProductNotFoundException.class)
     public ResponseEntity<ApiError> onProductNotFound(ProductNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -246,6 +258,45 @@ public class ApiExceptionHandler {
      * The catch-all. Logs the cause and returns nothing about it — a stack
      * trace or SQL fragment in a response body is an information leak.
      */
+    /**
+     * A body the server could not read at all — a malformed id, a number where a
+     * date belongs, truncated JSON.
+     *
+     * <p>Without this it fell through to the catch-all below and a cashier was
+     * told "tell a manager if it keeps happening" for what is a 400. It also
+     * hides the real cause: the log filled with unhandled-exception stack traces
+     * for requests that were simply wrong.
+     *
+     * <p>The message names the field where Jackson can tell us, because "invalid
+     * request" sends somebody hunting through a form of twenty inputs.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiError> onUnreadableBody(HttpMessageNotReadableException ex) {
+        // Walked rather than tested once: Jackson reports a bad value inside a
+        // record as a ValueInstantiationException wrapping the real cause, so
+        // checking only the immediate cause finds nothing and the message falls
+        // back to something useless.
+        String field = "";
+        for (Throwable cause = ex; cause != null && field.isBlank(); cause = cause.getCause()) {
+            // Jackson 3 under Spring 7 — `tools.jackson`, not `com.fasterxml`.
+            // Importing the Jackson 2 classes compiles and never matches, which
+            // is how this silently produced no field name at all.
+            if (cause instanceof MismatchedInputException mismatched && !mismatched.getPath().isEmpty()) {
+                field = mismatched.getPath().stream()
+                        .map(JacksonException.Reference::getPropertyName)
+                        .filter(java.util.Objects::nonNull)
+                        .reduce((first, second) -> first + "." + second)
+                        .orElse("");
+            }
+        }
+        log.warn("Unreadable request body{}", field.isBlank() ? "" : " at " + field, ex);
+        return ResponseEntity.badRequest().body(new ApiError("INVALID_BODY",
+                field.isBlank()
+                        ? "That request could not be read. Check the values and try again."
+                        : "\"%s\" is not a value this field accepts.".formatted(field),
+                field.isBlank() ? Map.of() : Map.of("field", field)));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> onUnexpected(Exception ex) {
         log.error("Unhandled exception", ex);

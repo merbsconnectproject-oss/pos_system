@@ -60,6 +60,22 @@ public class ReportController {
                 mayViewProfit(authentication));
     }
 
+    /**
+     * The profit and loss statement.
+     *
+     * <p>{@code report.view_pl} rather than {@code report.view_profit}. Gross
+     * profit tells a manager whether the shop is buying and selling well; net
+     * profit exposes the whole cost base — the rent, what the staff are paid —
+     * which is the owner's business and not automatically a manager's.
+     */
+    @GetMapping("/profit-and-loss")
+    @PreAuthorize("hasAuthority('" + Permission.Codes.REPORT_VIEW_PL + "')")
+    public ReportView.ProfitAndLoss profitAndLoss(@RequestParam(required = false) Instant from,
+                                                  @RequestParam(required = false) Instant to,
+                                                  @RequestParam(required = false) UUID outletId) {
+        return reports.profitAndLoss(ReportFilter.of(from, to, outletId));
+    }
+
     /** FR-RPT-04: by product, category, cashier, customer, payment or movement. */
     @GetMapping("/breakdown")
     @PreAuthorize("hasAuthority('" + Permission.Codes.REPORT_VIEW + "')")

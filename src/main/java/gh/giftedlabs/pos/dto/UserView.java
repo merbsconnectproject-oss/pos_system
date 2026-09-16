@@ -36,12 +36,28 @@ public record UserView(
         Instant lastLoginAt,
         Instant createdAt) {
 
+    /**
+     * With the grants a shop is actually running — FR-USER-02.
+     *
+     * <p>The screen reads {@code effectivePermissions} to decide what to draw, so
+     * resolving against the shipped defaults here would show an owner the tabs
+     * their staff used to have rather than the ones they have now.
+     */
+    public static UserView of(User user, java.util.Map<Role, java.util.Set<Permission>> baselines) {
+        return build(user, user.resolvePermissions(baselines));
+    }
+
+    /** Against the shipped defaults — for callers with no shop to ask. */
     public static UserView of(User user) {
+        return build(user, user.resolvePermissions());
+    }
+
+    private static UserView build(User user, java.util.Set<Permission> effective) {
         return new UserView(
                 user.getId(), user.getUsername(), user.getFullName(), user.getEmail(), user.getPhone(),
                 user.getRoles().stream().map(Role::key).sorted().toList(),
                 List.copyOf(user.getOutletIds()),
-                user.resolvePermissions().stream().map(Permission::code).sorted().toList(),
+                effective.stream().map(Permission::code).sorted().toList(),
                 user.getPermissionOverrides().entrySet().stream()
                         .collect(java.util.stream.Collectors.toMap(
                                 entry -> entry.getKey().code(), Map.Entry::getValue)),

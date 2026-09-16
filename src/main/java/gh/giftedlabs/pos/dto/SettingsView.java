@@ -36,6 +36,8 @@ public record SettingsView(
         boolean showCashierOnReceipt,
 
         String accentColor,
+        String fontFamily,
+        int fontScalePercent,
 
         Thresholds thresholds,
 
@@ -76,6 +78,8 @@ public record SettingsView(
                 settings.isAutoPrintReceipt(),
                 settings.isShowCashierOnReceipt(),
                 settings.getAccentColor(),
+                settings.getFontFamily().name(),
+                settings.getFontScalePercent(),
                 new Thresholds(settings.getIdleLockMinutes(),
                         settings.getAdjustmentApprovalPesewas(),
                         settings.getCashVariancePesewas(),

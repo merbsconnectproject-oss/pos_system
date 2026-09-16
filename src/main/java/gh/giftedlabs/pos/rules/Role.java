@@ -15,7 +15,7 @@ import static gh.giftedlabs.pos.rules.Permission.*;
  * is explicit that the interface is never the only control.
  *
  * <p>Baselines are {@link EnumSet}s, which are bitmasks over the enum ordinals:
- * membership is a bit test rather than a hash lookup, and the whole set of 33
+ * membership is a bit test rather than a hash lookup, and the whole set of 36
  * fits in a single {@code long}. That matters because permission resolution
  * happens on every authenticated request.
  *
@@ -36,16 +36,25 @@ public enum Role {
             STOCK_VIEW, STOCK_RECEIVE, STOCK_ADJUST, STOCK_APPROVE_ADJUSTMENT, STOCK_OVERSELL,
             SHIFT_OPEN, SHIFT_CLOSE, CASH_MOVEMENT, CASH_VIEW_VARIANCE,
             CUSTOMER_MANAGE, CUSTOMER_CREDIT, SUPPLIER_MANAGE,
+            // Records what the branch spends. The P&L itself — REPORT_VIEW_PL —
+            // stays with the owner: net profit is the whole cost base, rent and
+            // salaries included, which is a different disclosure from the gross
+            // margin a manager already needs to do the job.
+            EXPENSE_VIEW, EXPENSE_MANAGE,
             REPORT_VIEW, REPORT_VIEW_PROFIT,
             AUDIT_VIEW,
-            SETTINGS_APPEARANCE, SETTINGS_TERMINAL)),
+            SETTINGS_APPEARANCE, SETTINGS_TERMINAL,
+            SYNC_PUSH)),
 
     /** Sells. No cost, no profit, no reports anywhere — PRD §11 criterion 7. */
     CASHIER("cashier", EnumSet.of(
             POS_SELL, SALE_DISCOUNT, SALE_REPRINT,
             STOCK_VIEW,
             SHIFT_OPEN, SHIFT_CLOSE,
-            CUSTOMER_MANAGE)),
+            CUSTOMER_MANAGE,
+            // Closing up includes sending the day to the owner. One-way and
+            // audited, so the counter can do it without an owner present.
+            SYNC_PUSH)),
 
     /** Catalogue and stock. Sees cost, cannot sell, cannot see reports. */
     STOREKEEPER("storekeeper", EnumSet.of(

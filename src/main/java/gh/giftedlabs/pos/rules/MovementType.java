@@ -23,7 +23,22 @@ public enum MovementType {
     ADJUSTMENT_IN(true),
     ADJUSTMENT_OUT(false),
     DAMAGE(false),
-    LOSS(false);
+    LOSS(false),
+
+    /**
+     * Goods back from a customer — not a void, and not an adjustment.
+     *
+     * <p>A void cancels a sale that should never have happened; a return is a
+     * later event against a sale that was correct. An adjustment is a
+     * hand-entered correction, which FR-INV-06 makes approvable past a
+     * threshold — a return is a document with a customer on the other side of
+     * it, and treating one as the other would put every refund through an
+     * approval meant for stocktake errors.
+     */
+    CUSTOMER_RETURN(true),
+
+    /** A warranty claim going on to the supplier. */
+    SUPPLIER_RETURN(false);
 
     private final boolean increases;
 

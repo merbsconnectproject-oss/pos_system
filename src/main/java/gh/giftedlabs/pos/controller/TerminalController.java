@@ -59,9 +59,18 @@ public class TerminalController {
         Terminal terminal = terminals.save(
                 new Terminal(body.outletId(), body.code().toUpperCase(), body.name(), start, BLOCK_SIZE));
 
+        // No terminal_id on this one. The audit log is written in its own
+        // transaction (REQUIRES_NEW, so a failure cannot take the record of the
+        // attempt down with it), which means it cannot see a terminal this
+        // transaction has not committed yet — the foreign key refused every
+        // insert and creating a till failed outright, every time.
+        //
+        // entity_id already names it. The terminal_id column answers "which till
+        // was this done at", and a till being created is not yet a till anything
+        // was done at.
         audit.record(actor.userId(), "TERMINAL_CREATED", "terminal", terminal.getId(), null,
                 Map.of("code", terminal.getCode(), "blockStart", start, "blockEnd", terminal.getBlockEnd()),
-                body.outletId(), terminal.getId(), clientIp(request));
+                body.outletId(), null, clientIp(request));
         return TerminalView.of(terminal);
     }
 

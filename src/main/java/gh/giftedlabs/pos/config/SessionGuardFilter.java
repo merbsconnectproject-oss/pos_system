@@ -23,6 +23,8 @@ import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 @Component
 public class SessionGuardFilter extends OncePerRequestFilter {
@@ -33,12 +35,15 @@ public class SessionGuardFilter extends OncePerRequestFilter {
     private final Clock clock;
     private final ObjectProvider<ShiftService> shifts;
     private final ObjectProvider<SettingsService> settings;
+    private final ObjectProvider<gh.giftedlabs.pos.service.RolePermissionService> roleGrants;
 
     public SessionGuardFilter(UserRepository users, PosProperties properties, AuditService audit,
                               ObjectMapper json, Clock clock, ObjectProvider<ShiftService> shifts,
-                              ObjectProvider<SettingsService> settings) {
+                              ObjectProvider<SettingsService> settings,
+                              ObjectProvider<gh.giftedlabs.pos.service.RolePermissionService> roleGrants) {
         this.users = users; this.properties = properties; this.audit = audit; this.json = json;
         this.clock = clock; this.shifts = shifts; this.settings = settings;
+        this.roleGrants = roleGrants;
     }
 
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -77,6 +82,18 @@ public class SessionGuardFilter extends OncePerRequestFilter {
             }
         }
 
+        // FR-USER-03 · NFR-9: authorise against the rights this user has *now*.
+        //
+        // The authorities were resolved once at sign-in and carried in the
+        // session, so taking a permission away had no effect until that person
+        // signed in again — which on a counter PC is a whole trading day. A
+        // revoke that does not revoke is worse than one that was never offered.
+        //
+        // The user row is already loaded above for the active and
+        // credentials-changed checks, so this costs a set comparison and, only
+        // when something actually changed, a new token.
+        refreshAuthorities(security, principal, currentUser.get());
+
         String path = request.getRequestURI();
         boolean allowedWhileLocked = path.equals("/api/auth/unlock")
                 || path.equals("/api/auth/sign-out") || path.equals("/api/auth/session")
@@ -96,6 +113,38 @@ public class SessionGuardFilter extends OncePerRequestFilter {
         }
         if (!locked) session.setAttribute(SessionServiceImpl.LAST_ACTIVITY, now);
         chain.doFilter(request, response);
+    }
+
+    /**
+     * Replaces the request's authorities with the user's current ones.
+     *
+     * <p>Only when they differ. Rebuilding the token on every request would
+     * churn the security context — and, because the context is session-backed,
+     * write the session on every call — for no gain on the overwhelming majority
+     * of requests where nothing has changed.
+     *
+     * <p>Granting is fixed by this too, and the same way: a right added while
+     * somebody is signed in is theirs on their next click rather than tomorrow.
+     */
+    private void refreshAuthorities(org.springframework.security.core.Authentication security,
+                                    PosPrincipal principal, gh.giftedlabs.pos.entity.User user) {
+        Set<String> current = security.getAuthorities().stream()
+                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
+
+        Set<String> resolved = user.resolvePermissions(roleGrants.getObject().current()).stream()
+                .map(gh.giftedlabs.pos.rules.Permission::code)
+                .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
+
+        if (current.equals(resolved)) return;
+
+        var authorities = resolved.stream()
+                .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
+                .toList();
+        var refreshed = org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+                .authenticated(principal, null, authorities);
+        refreshed.setDetails(security.getDetails());
+        SecurityContextHolder.getContext().setAuthentication(refreshed);
     }
 
     /**

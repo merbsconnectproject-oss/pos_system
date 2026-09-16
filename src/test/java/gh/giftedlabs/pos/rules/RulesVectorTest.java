@@ -250,7 +250,7 @@ class RulesVectorTest {
     }
 
     @Test
-    @DisplayName("The 33 codes match the frontend, and every wire code round-trips")
+    @DisplayName("The 37 codes match the frontend, and every wire code round-trips")
     void codeInventory() {
         TreeSet<String> expected = new TreeSet<>();
         for (JsonNode code : each(root.get("permissions").get("allCodes"))) {
@@ -258,17 +258,33 @@ class RulesVectorTest {
         }
 
         assertEquals(expected, codesOf(EnumSet.allOf(Permission.class)));
-        assertEquals(33, Permission.values().length, "PRD §6 documents 31; permissions.ts carries 33");
+        assertEquals(37, Permission.values().length,
+                "PRD §6 documents 31; permissions.ts carries 37 — two seeded for later stages, "
+                        + "three for the accounting module, and sync.push for sending the day "
+                        + "up without the rights to administer the shop");
 
         // Every wire code resolves, so a stale client cannot smuggle an unknown one through.
         expected.forEach(code -> assertTrue(Permission.ofCode(code).isPresent(), code));
         assertTrue(Permission.ofCode("not.a.permission").isEmpty());
 
-        // stock.transfer is Stage 3 and customer.credit is Stage 2 — seeded so no
-        // migration is needed later. Owner currently holds both, mirroring the
-        // frontend; see the open decision on Permission. No operational role does.
+        // stock.transfer is Stage 3, seeded so no migration is needed later.
+        // Owner holds it, mirroring the frontend; no operational role does.
         assertFalse(Role.CASHIER.baseline().contains(Permission.STOCK_TRANSFER));
         assertFalse(Role.STOREKEEPER.baseline().contains(Permission.STOCK_TRANSFER));
         assertFalse(Role.MANAGER.baseline().contains(Permission.STOCK_TRANSFER));
+
+        // customer.credit stopped being a future-stage code when installment
+        // plans got endpoints, so the flag has to stop claiming it is one.
+        assertTrue(Permission.STOCK_TRANSFER.isFutureStage());
+        assertFalse(Permission.CUSTOMER_CREDIT.isFutureStage(),
+                "installments authorise against customer.credit, so it is a real right now");
+
+        // FR-RPT-05: the P&L is the owner's. A manager records what the branch
+        // spends without being shown the business's net position.
+        assertTrue(Role.MANAGER.baseline().contains(Permission.EXPENSE_MANAGE));
+        assertFalse(Role.MANAGER.baseline().contains(Permission.REPORT_VIEW_PL));
+        assertFalse(Role.CASHIER.baseline().contains(Permission.EXPENSE_VIEW),
+                "acceptance criterion 7: a cashier sees no cost, no profit and no reports");
+        assertTrue(Role.OWNER.baseline().contains(Permission.REPORT_VIEW_PL));
     }
 }

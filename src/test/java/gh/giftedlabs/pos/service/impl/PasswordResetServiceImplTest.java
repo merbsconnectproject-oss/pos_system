@@ -39,7 +39,12 @@ class PasswordResetServiceImplTest {
                 Duration.ofMinutes(15), Duration.ofMinutes(30), "https://pos/reset-password", "", "pos@example.com");
         var props = new PosProperties(new PosProperties.Deployment(PosProperties.Mode.COUNTER, "INC", "01"),
                 auth, new PosProperties.Consolidator(false, "", "", Duration.ofMinutes(15), Duration.ofSeconds(10),
-                new PosProperties.Ingest("", Duration.ofMinutes(45))), new PosProperties.Web(""));
+                new PosProperties.Ingest("", Duration.ofMinutes(45))), new PosProperties.Web(""),
+                // NFR-6: off in unit tests — nothing here should shell out to pg_dump.
+                new PosProperties.Backup(false, java.time.Duration.ofMinutes(15), "backups",
+                        java.time.Duration.ofDays(30), java.time.Duration.ofDays(2), "pg_dump",
+                        java.time.Duration.ofMinutes(5),
+                        new PosProperties.Offsite("", "", "", "", "auto", "")));
         service = new PasswordResetServiceImpl(users, tokens, encoder, notifier, audit, props,
                 Clock.fixed(now, ZoneOffset.UTC));
         userId = UUID.randomUUID(); user = new User("ama", "Ama", "old");

@@ -21,7 +21,7 @@ D ██████████  Units & conversions  100%  FR-UOM-07 conversio
 E ██████████  Pricing            100%  branch overrides, customer levels; cost no longer leaks
 F ██████████  Inventory          100%   FR-INV-06 enforced against P's threshold
 G ██████████  Point of sale      100%   discount ceiling enforced; gates 3 and 4 pass
-H █████████░  Payments            90%   denomination shortcuts are frontend-only
+H ██████████  Payments            100%  cash, split, reference-confirmed non-cash, exact settlement, change and duplicate protection are server-enforced
 I █████████░  Receipts & printing 90%   layout, ESC/POS, both widths, audited reprints, preview; the Windows print service needs the hardware
 J ██████████  Shifts & cash      100%   blind close, BR-13 by index, BR-14 computed; gate 9 passes
 K ██████████  Suppliers & receipt  100%  supplier directory, outlet-scoped goods receipts, weighted-average costing, reversals, and supplier/product purchase history are API-backed and wired in the frontend
@@ -36,7 +36,9 @@ S ██████████  Expenses & credit  100%  expenses, P&L and ins
 T ██████████  Returns & swaps    100%  wired end to end; net of returns now reaches the takings and the P&L
 ```
 
-468 tests, all green (3 live R2 checks run on demand).
+470 requirement-counted tests green for the documented baseline (3 live R2
+checks run on demand); the full 2026-09-16 run also exposed one pre-existing
+loaded-catalogue timing flake above its 300 ms budget.
 
 ---
 
@@ -536,3 +538,110 @@ Recorded so nobody treats them as drift.
 | No `role` / `permission` / `role_permission` tables | The catalogue is the `Permission` and `Role` enums, which are asserted against the contract vectors. A table would be a second source of truth free to drift from what the server authorises with. |
 | UUID primary keys, `outlet_id` everywhere, `synced_at` | Free now, expensive to retrofit. Makes merging two shops into one cloud DB an insert rather than a migration. |
 | Prices `NUMERIC(12,4)`, not `BIGINT` pesewas | BR-11's integer rule governs stored *amounts*, not per-unit *rates*. `3 × 18.335` settles to 55.01; rounding the price first gives 55.02. |
+
+---
+
+## Purchase orders, and a permission that could never arrive — 2026-09-15
+
+**FR-SUP-08 is built.** Draft → sent → closed or cancelled. The lines freeze the
+moment the order is sent, because a delivery variance measured against an order
+somebody edited afterwards is not a variance.
+
+The decision the whole feature turns on: **received is never stored.** It is
+summed on read from the confirmed goods receipts pointing at the order. A
+received column would be a second copy of the deliveries, and the first reversal
+would put the two out of step — with the order claiming goods the ledger says
+never arrived. Partial and over-delivery therefore need no state at all; both are
+the same subtraction. Over-delivery is recorded rather than refused: the goods are
+already on the shelf.
+
+Deliveries are compared in **base units**, so 300 m loose counts against 3 drums
+ordered. Comparing purchase units would have reported a phantom shortage of three
+drums standing next to 300 m of real stock.
+
+**`sync.push` is a new, 37th permission code.** Sending the day up is not the same
+right as changing the business: pushing is one-way, additive and audited, while
+pulling configuration rewrites the counter's staff and can move its outlet id.
+Status and push now sit behind `sync.push`; publish, pull and ingest stay with
+`settings.general`. Cashiers hold it by default, so whoever locks up can send the
+day without an owner present — though the scheduled push has already sent it.
+
+### Three things found on the way
+
+- **A new permission code could never reach a running shop.** The seeder ran only
+  `if (role_permission is empty)`, which is correct exactly once. Seeding
+  unconditionally would have been worse — it would restore, on every restart,
+  every grant an owner deliberately revoked. `role_permission_seeded` (V26) now
+  records which codes have ever been *offered*, and each is handed to its default
+  roles once. `RolePermissionSeedingTest` pins both halves.
+- **`goods_receipt_line` was in no channel.** The owner received delivery
+  documents with nothing on them — no product, no quantity, no cost.
+- **`supplier` travelled in neither direction.** Every goods receipt a shop pushed
+  failed its foreign key at the owner, silently. Suppliers now travel up: a shop
+  creates its own, and they are not head-office reference data like the catalogue.
+  V27 also makes supplier names unique **per outlet** — they were globally unique,
+  so both shops buying from Melcom meant the second shop's row was refused on the
+  *name* index, which `on conflict (id)` never catches.
+
+---
+
+## Closing the checklist — 2026-09-16
+
+Everything on the list that could be built has been. Four items remain open and
+none is code: three wait on the thermal printer, and one is training a person.
+
+**NFR-1, catalogue search: 307–442 ms → 75 ms.** It had failed most builds for
+weeks and I had been calling it flaky. It was not flaky; it was a sequential scan.
+The per-term matching sits inside a correlated `NOT EXISTS` over a set-returning
+function, so the trigram indexes from V4 were never reachable and every one of
+3,000 products was tested against four terms and six fields. V28 adds a
+`search_text` column holding everything the search looks at, and one pre-filter
+predicate the planner *can* answer. The predicate is semantically redundant — the
+first term has to match anyway — so it changes the plan and no result.
+
+Worth recording what the measurement actually showed: at 3,000 rows Postgres still
+scans, even with fresh statistics, and the gain is entirely the cheap predicate
+running before the expensive one. The index earns its keep at 30,000 rows on a
+selective term (measured in a scratch container: Bitmap Index Scan). I nearly
+shipped a comment claiming the index was doing the work.
+
+**NFR-1, reports over a year: series 1,256 ms → 44 ms.** `ReportPerformanceTest`
+seeds 14,600 sales across 365 days. Five of six reports came in under 130 ms; the
+dashboard series took 1.2 s because it ran a lateral subquery per bucket, and
+`date_trunc(created_at) = bucket` inside it cannot use an index — so a year's chart
+scanned the sale table 365 times. Grouping once and joining to the buckets fixed
+it, with all 22 report tests unchanged.
+
+**NFR-5, power loss: now evidence rather than reasoning.** `PowerLossTest` kills
+the database with SIGKILL, restarts it, and asserts the committed sale, its lines,
+its payment and the receipt sequence all survived. It also pins `fsync`,
+`synchronous_commit` and `full_page_writes` on — the realistic way this requirement
+gets lost is somebody turning one off to make the till feel quicker. Testcontainers
+runs with `fsync=off` by default, which the first run caught.
+
+**NFR-4, dropouts: answered architecturally.** `CounterIndependenceTest` walks the
+import graph from the class that completes a sale and fails if anything reachable
+can leave this machine. Verified it can fail by pointing it at a class that *is* in
+the path.
+
+**NFR-12, no mouse.** The POS search results were clickable only. ↑↓ now choose,
+Enter adds, Enter completes the payment and Escape returns to the cart.
+
+**Frontend tests exist.** 40 under Vitest — money rounding and exact comparison,
+receipt numbering and block exhaustion, role visibility, scan detection, weighted
+average cost, outlet scoping. Run by `npm test`, `npm run check`, `verify.sh` and
+CI. End-to-end browser tests remain absent and are recorded as such rather than
+hidden behind the tick.
+
+**Two defects found while closing items rather than by looking for them:**
+
+- The blind cash count was cleared the moment it was submitted. When the server
+  refused — which it does when the variance passes the threshold with no note —
+  the cashier's figure was already gone, and a blind count is the one number they
+  cannot reconstruct. The screen now holds the count until the server accepts it
+  and shows the reason.
+- Outlet scoping was written out by hand in every list. Now one tested rule,
+  `belongsToOutlet`, which also settles that a record with no outlet stays visible
+  from every branch.
+
+**496 backend tests, 40 frontend, all green.**

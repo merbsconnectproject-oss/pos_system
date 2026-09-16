@@ -32,6 +32,16 @@ public class AuditServiceImpl implements AuditService {
                 encode(before), encode(after), outletId, terminalId, clientIp, clock.instant()));
     }
 
+    /** See {@link AuditService#recordInCallerTransaction} for why this exists. */
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED)
+    public void recordInCallerTransaction(UUID actorId, String action, String entityType, UUID entityId,
+                                          Map<String, ?> before, Map<String, ?> after, UUID outletId,
+                                          UUID terminalId, String clientIp) {
+        entries.save(new AuditLog(actorId, action, entityType, entityId,
+                encode(before), encode(after), outletId, terminalId, clientIp, clock.instant()));
+    }
+
     private String encode(Map<String, ?> value) {
         if (value == null || value.isEmpty()) return null;
         try { return json.writeValueAsString(value); }

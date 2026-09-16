@@ -1,5 +1,6 @@
 package gh.giftedlabs.pos.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import gh.giftedlabs.pos.TestcontainersConfiguration;
 import gh.giftedlabs.pos.entity.Outlet;
@@ -8,6 +9,7 @@ import gh.giftedlabs.pos.entity.User;
 import gh.giftedlabs.pos.repository.OutletRepository;
 import gh.giftedlabs.pos.repository.TerminalRepository;
 import gh.giftedlabs.pos.repository.UserRepository;
+import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.rules.Role;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.LoginAttemptService;
@@ -38,6 +40,7 @@ import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -178,6 +181,145 @@ class ReportControllerTest {
                             .param("to", lastYear.plus(1, ChronoUnit.DAYS).toString())))
                     .andExpect(jsonPath("$.saleCount").value(0))
                     .andExpect(jsonPath("$.revenue").value(0));
+        }
+    }
+
+    @Nested
+    @DisplayName("returns come off the takings")
+    class Returns {
+
+        @Test
+        @DisplayName("a refund reduces net sales and the profit with it")
+        void refundReducesNetSales() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            // Received at 10.00, five sold at 40.00: 200.00 in, 50.00 of cost.
+            String productId = stockedProduct(session, "Returned Cable " + run, "10.00");
+            String saleId = sell(session, productId, "5", "40.00");
+
+            mvc.perform(session.authorise(get("/api/reports/summary")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$.revenue").value(200.00))
+                    .andExpect(jsonPath("$.netRevenue").value(200.00))
+                    .andExpect(jsonPath("$.profit").value(150.00));
+
+            refund(session, saleId, "2", "RESTOCK");
+
+            // Two back at 40.00. Gross takings are still 200 — they were rung up
+            // — but the shop kept 120, and the two units' cost came back with
+            // them, so profit is 120 - 30.
+            mvc.perform(session.authorise(get("/api/reports/summary")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$.revenue").value(200.00))
+                    .andExpect(jsonPath("$.refundTotal").value(80.00))
+                    .andExpect(jsonPath("$.refundCount").value(1))
+                    .andExpect(jsonPath("$.netRevenue").value(120.00))
+                    .andExpect(jsonPath("$.cost").value(30.00))
+                    .andExpect(jsonPath("$.profit").value(90.00));
+        }
+
+        @Test
+        @DisplayName("a written-off return keeps its cost — the shop paid for stock it no longer has")
+        void writeOffKeepsItsCost() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Broken Lamp " + run, "10.00");
+            String saleId = sell(session, productId, "5", "40.00");
+
+            refund(session, saleId, "2", "DAMAGED_WRITE_OFF");
+
+            // Revenue falls by the refund, but unlike a restock the goods cannot
+            // be sold again, so their cost stays on the books as a loss.
+            mvc.perform(session.authorise(get("/api/reports/summary")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$.netRevenue").value(120.00))
+                    .andExpect(jsonPath("$.cost").value(50.00))
+                    .andExpect(jsonPath("$.profit").value(70.00));
+        }
+
+        @Test
+        @DisplayName("a returned product falls down the product ranking")
+        void productBreakdownIsNet() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String kept = stockedProduct(session, "Kept " + run, "10.00");
+            String sentBack = stockedProduct(session, "Sent Back " + run, "10.00");
+
+            sell(session, kept, "2", "50.00");                       // 100.00 kept
+            String returnedSale = sell(session, sentBack, "3", "50.00"); // 150.00, then most back
+            refund(session, returnedSale, "2", "RESTOCK");           // 100.00 back
+
+            MvcResult result = mvc.perform(session.authorise(get("/api/reports/breakdown")
+                            .param("by", "PRODUCT").param("outletId", outletId.toString())))
+                    .andExpect(status().isOk()).andReturn();
+
+            JsonNode rows = json.readTree(result.getResponse().getContentAsString());
+            // Sent Back netted to 50; Kept stayed at 100, so Kept ranks first.
+            // On gross takings the returned product would have led at 150.
+            assertEquals("Kept " + run, rows.get(0).get("name").asText(),
+                    "a product sold and returned must not outrank one that stayed sold: " + rows);
+            for (JsonNode row : rows) {
+                if (row.get("name").asText().equals("Sent Back " + run)) {
+                    assertEquals(50.00, row.get("revenue").asDouble(), 0.001);
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("the chart's sales line is net of the day's returns")
+        void seriesIsNet() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Chart " + run, "10.00");
+            String saleId = sell(session, productId, "4", "50.00");
+            refund(session, saleId, "1", "RESTOCK");
+
+            MvcResult result = mvc.perform(session.authorise(get("/api/reports/series")
+                            .param("bucket", "DAY").param("outletId", outletId.toString())))
+                    .andExpect(status().isOk()).andReturn();
+
+            JsonNode points = json.readTree(result.getResponse().getContentAsString());
+            double today = points.get(points.size() - 1).get("sales").asDouble();
+            // 200 sold, 50 back.
+            assertEquals(150.00, today, 0.001,
+                    "a chart on gross takings shows a good day that was really selling and unselling");
+        }
+
+        @Test
+        @DisplayName("a return is netted against whoever sold it, not whoever handled it")
+        void cashierBreakdownAttributesToTheSeller() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Seller " + run, "10.00");
+            String saleId = sell(session, productId, "4", "50.00");
+            refund(session, saleId, "2", "RESTOCK");
+
+            MvcResult result = mvc.perform(session.authorise(get("/api/reports/breakdown")
+                            .param("by", "CASHIER").param("outletId", outletId.toString())))
+                    .andExpect(status().isOk()).andReturn();
+
+            JsonNode rows = json.readTree(result.getResponse().getContentAsString());
+            // 200 sold less 100 returned, against the one cashier who did both.
+            assertEquals(100.00, rows.get(0).get("revenue").asDouble(), 0.001, rows.toString());
+        }
+
+        @Test
+        @DisplayName("the P&L is built on net sales, not gross")
+        void profitAndLossUsesNetSales() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "PL Return " + run, "10.00");
+            String saleId = sell(session, productId, "5", "40.00");
+            refund(session, saleId, "2", "RESTOCK");
+
+            mvc.perform(session.authorise(get("/api/reports/profit-and-loss")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isOk())
+                    // A P&L on gross takings would claim 200 and overstate the
+                    // month by everything that came back.
+                    .andExpect(jsonPath("$.revenue").value(120.00))
+                    .andExpect(jsonPath("$.costOfSales").value(30.00))
+                    .andExpect(jsonPath("$.grossProfit").value(90.00));
         }
     }
 
@@ -448,7 +590,153 @@ class ReportControllerTest {
         }
     }
 
+    @Nested
+    @DisplayName("profit and loss — report.view_pl")
+    class ProfitAndLoss {
+
+        @Test
+        @DisplayName("net profit is gross profit less the period's paid expenses")
+        void netProfitSubtractsExpenses() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            // Received at 10.00, two sold at 40.00 — 80.00 in, 20.00 of cost,
+            // 60.00 gross.
+            String productId = stockedProduct(session, "PL Cable " + run, "10.00");
+            sell(session, productId, "2", "40.00");
+
+            recordExpense(session, 15_00, "UTILITIES_POWER", "PAID");
+            recordExpense(session, 5_00, "PACKAGING_BAGS", "PAID");
+            // Owed, not gone. It must not reduce this month's net profit, or the
+            // month is understated now and double-counted when it is paid.
+            recordExpense(session, 40_00, "STAFF_PAYROLL", "PENDING");
+
+            mvc.perform(session.authorise(get("/api/reports/profit-and-loss")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.revenue").value(80.00))
+                    .andExpect(jsonPath("$.costOfSales").value(20.00))
+                    .andExpect(jsonPath("$.grossProfit").value(60.00))
+                    .andExpect(jsonPath("$.operatingExpenses").value(20.00))
+                    .andExpect(jsonPath("$.pendingExpenses").value(40.00))
+                    .andExpect(jsonPath("$.netProfit").value(40.00))
+                    .andExpect(jsonPath("$.netMarginPercent").value(50.0));
+        }
+
+        @Test
+        @DisplayName("the breakdown lists paid categories and omits the unpaid")
+        void breakdownByCategory() throws Exception {
+            Session session = signIn(ownerName);
+            recordExpense(session, 120_00, "RENT_LEASE", "PAID");
+            recordExpense(session, 30_00, "STAFF_PAYROLL", "PENDING");
+
+            mvc.perform(session.authorise(get("/api/reports/profit-and-loss")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$.expensesByCategory[0].category").value("RENT_LEASE"))
+                    // The label travels with the key so the statement prints
+                    // without the screen keeping its own translation table.
+                    .andExpect(jsonPath("$.expensesByCategory[0].label").value("Rent & Lease"))
+                    .andExpect(jsonPath("$.expensesByCategory[0].amount").value(120.00))
+                    .andExpect(jsonPath("$.expensesByCategory.length()").value(1));
+        }
+
+        @Test
+        @DisplayName("an expense removed after the fact leaves the statement")
+        void voidedExpenseIsExcluded() throws Exception {
+            Session session = signIn(ownerName);
+            String id = recordExpense(session, 80_00, "MAINTENANCE_REPAIRS", "PAID");
+
+            mvc.perform(session.authorise(delete("/api/expenses/" + id)))
+                    .andExpect(status().isNoContent());
+
+            mvc.perform(session.authorise(get("/api/reports/profit-and-loss")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$.operatingExpenses").value(0.00));
+        }
+
+        @Test
+        @DisplayName("no revenue leaves the margin absent rather than zero")
+        void noRevenueMeansNoMargin() throws Exception {
+            Session session = signIn(ownerName);
+            recordExpense(session, 10_00, "MISCELLANEOUS", "PAID");
+
+            // 0% reads as "we sold things and made nothing", which is a
+            // different month from "we sold nothing at all".
+            mvc.perform(session.authorise(get("/api/reports/profit-and-loss")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$.netMarginPercent").doesNotExist())
+                    .andExpect(jsonPath("$.netProfit").value(-10.00));
+        }
+
+        @Test
+        @DisplayName("report.view_profit is not enough — the P&L needs its own code")
+        void grossProfitDoesNotBuyTheStatement() throws Exception {
+            // A manager holds report.view and report.view_profit, so gross profit
+            // is theirs. Net profit exposes the rent and the payroll, and is not.
+            User manager = users.findByUsernameOrEmail(ownerName).orElseThrow();
+            manager.override(Permission.REPORT_VIEW_PL, false);
+            users.save(manager);
+
+            Session session = signIn(ownerName);
+            mvc.perform(session.authorise(get("/api/reports/summary")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.profit").exists());
+
+            mvc.perform(session.authorise(get("/api/reports/profit-and-loss")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
     // --- helpers -----------------------------------------------------------
+
+    /** Records an expense and returns its id. Amounts in pesewas. */
+    private String recordExpense(Session session, long pesewas, String category, String status)
+            throws Exception {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("spentOn", java.time.LocalDate.now().toString());
+        body.put("category", category);
+        body.put("title", category + " " + run);
+        body.put("amountPesewas", pesewas);
+        body.put("outletId", outletId.toString());
+        body.put("payee", "Supplier " + run);
+        body.put("paymentMethod", "BANK_TRANSFER");
+        body.put("taxDeductible", false);
+        body.put("status", status);
+
+        MvcResult created = mvc.perform(session.authorise(post("/api/expenses"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(body)))
+                .andExpect(status().isCreated()).andReturn();
+        return json.readTree(created.getResponse().getContentAsString()).get("id").asText();
+    }
+
+    /** Takes goods back against a sale, so the reports have something to net off. */
+    private void refund(Session session, String saleId, String quantity, String disposition)
+            throws Exception {
+        MvcResult returnable = mvc.perform(session.authorise(
+                        get("/api/returns/returnable/" + saleId)))
+                .andExpect(status().isOk()).andReturn();
+        String lineId = json.readTree(returnable.getResponse().getContentAsString())
+                .get("lines").get(0).get("saleItemId").asText();
+
+        Map<String, Object> line = new LinkedHashMap<>();
+        line.put("saleItemId", lineId);
+        line.put("quantityBase", quantity);
+        line.put("reason", "Customer Changed Mind");
+        line.put("disposition", disposition);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("originalSaleId", saleId);
+        body.put("kind", "REFUND");
+        body.put("items", List.of(line));
+        body.put("refundMethod", "CASH");
+
+        mvc.perform(session.authorise(post("/api/returns"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(body)))
+                .andExpect(status().isCreated());
+    }
 
     private void openShift() {
         shiftService.open(terminalId, 10_000L,
@@ -492,6 +780,7 @@ class ReportControllerTest {
         row.put("id", UUID.randomUUID().toString());
         row.put("method", method);
         row.put("amount", amount);
+        if (!"cash".equals(method)) row.put("reference", "TEST-" + UUID.randomUUID());
         return row;
     }
 

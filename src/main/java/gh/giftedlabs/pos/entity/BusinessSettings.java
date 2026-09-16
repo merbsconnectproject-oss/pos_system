@@ -23,6 +23,9 @@ public class BusinessSettings {
     /** The smallest coin the drawer actually holds. */
     public enum CashRounding { EXACT, TEN_PESEWAS, FIFTY_PESEWAS }
 
+    /** Closed list of UI fonts; the browser maps these keys to trusted stacks. */
+    public enum FontFamily { JAKARTA, SYSTEM, ARIAL, VERDANA, GEORGIA }
+
     public static final short SINGLETON_ID = 1;
 
     @Id
@@ -84,6 +87,13 @@ public class BusinessSettings {
     @Column(name = "accent_color", nullable = false)
     private String accentColor = "#F97316";
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "font_family", nullable = false)
+    private FontFamily fontFamily = FontFamily.JAKARTA;
+
+    @Column(name = "font_scale_percent", nullable = false)
+    private int fontScalePercent = 100;
+
     @Column(name = "idle_lock_minutes", nullable = false)
     private int idleLockMinutes = 10;
 
@@ -131,6 +141,8 @@ public class BusinessSettings {
     public boolean isAutoPrintReceipt() { return autoPrintReceipt; }
     public boolean isShowCashierOnReceipt() { return showCashierOnReceipt; }
     public String getAccentColor() { return accentColor; }
+    public FontFamily getFontFamily() { return fontFamily; }
+    public int getFontScalePercent() { return fontScalePercent; }
     public int getIdleLockMinutes() { return idleLockMinutes; }
     public long getAdjustmentApprovalPesewas() { return adjustmentApprovalPesewas; }
     public long getCashVariancePesewas() { return cashVariancePesewas; }
@@ -158,6 +170,8 @@ public class BusinessSettings {
     public void setAutoPrintReceipt(boolean value) { this.autoPrintReceipt = value; }
     public void setShowCashierOnReceipt(boolean value) { this.showCashierOnReceipt = value; }
     public void setAccentColor(String value) { this.accentColor = value; }
+    public void setFontFamily(FontFamily value) { this.fontFamily = value; }
+    public void setFontScalePercent(int value) { this.fontScalePercent = value; }
     public void setIdleLockMinutes(int value) { this.idleLockMinutes = value; }
     public void setAdjustmentApprovalPesewas(long value) { this.adjustmentApprovalPesewas = value; }
     public void setCashVariancePesewas(long value) { this.cashVariancePesewas = value; }

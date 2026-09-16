@@ -19,6 +19,15 @@ public record GoodsReceiptRequest(
         @NotNull(message = "Choose the branch receiving the goods") UUID outletId,
         @NotNull(message = "Choose the supplier") UUID supplierId,
 
+        /**
+         * The order this delivery is against, when there is one — FR-SUP-08.
+         *
+         * <p>Optional, and deliberately. Goods arrive without an order every day:
+         * a supplier's van turns up and the storekeeper books it in. Requiring an
+         * order would only teach people to raise a fake one afterwards.
+         */
+        UUID purchaseOrderId,
+
         @Size(max = 80) String reference,
         @Size(max = 500) String note,
 
