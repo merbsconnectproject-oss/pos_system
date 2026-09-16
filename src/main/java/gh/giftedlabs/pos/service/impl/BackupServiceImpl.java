@@ -20,6 +20,13 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.*;
 import java.nio.file.attribute.FileTime;
+import java.io.OutputStream;
+import java.security.SecureRandom;
+import java.util.Base64;
+import javax.crypto.Cipher;
+import javax.crypto.CipherOutputStream;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -91,14 +98,19 @@ public class BackupServiceImpl implements BackupService {
 
             boolean sentOffsite = false;
             String destination = directory.toString();
+            Path encrypted = null;
             if (config.hasOffsite()) {
                 // Off-site failure is not backup failure. The local copy still
                 // exists and is still worth recording; the status screen shows
                 // that it did not leave the machine.
                 try {
-                    destination = offsite.put(file, name, config.offsite());
+                    encrypted = directory.resolve(name + ".enc");
+                    encryptForOffsite(file, encrypted);
+                    destination = offsite.put(encrypted, name + ".enc", config.offsite());
                     sentOffsite = true;
+                    Files.deleteIfExists(encrypted);
                 } catch (RuntimeException uploadFailed) {
+                    if (encrypted != null) try { Files.deleteIfExists(encrypted); } catch (IOException ignored) { }
                     log.warn("Backup {} stayed local: off-site upload failed", name, uploadFailed);
                     destination = directory + " (off-site upload failed: "
                             + uploadFailed.getMessage() + ")";
@@ -118,6 +130,32 @@ public class BackupServiceImpl implements BackupService {
         }
 
         return BackupView.of(runs.saveAndFlush(record));
+    }
+
+    /** Encrypts a dump before it leaves the installation (AES-256-GCM). */
+    private void encryptForOffsite(Path source, Path target) {
+        String encoded = environment.getProperty("POS_BACKUP_ENCRYPTION_KEY", "").trim();
+        if (encoded.isBlank()) {
+            throw new IllegalStateException("POS_BACKUP_ENCRYPTION_KEY is required for off-site backups");
+        }
+        try {
+            byte[] key = Base64.getDecoder().decode(encoded);
+            if (key.length != 32) throw new IllegalArgumentException("backup key must decode to 32 bytes");
+            byte[] nonce = new byte[12];
+            new SecureRandom().nextBytes(nonce);
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(128, nonce));
+            try (OutputStream raw = Files.newOutputStream(target, StandardOpenOption.CREATE_NEW)) {
+                raw.write("POSENC1".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                raw.write(nonce);
+                try (OutputStream out = new CipherOutputStream(raw, cipher)) {
+                Files.copy(source, out);
+                }
+            }
+        } catch (Exception failure) {
+            try { Files.deleteIfExists(target); } catch (IOException ignored) { }
+            throw new IllegalStateException("could not encrypt backup for off-site storage", failure);
+        }
     }
 
     /** FR-SET-07. */
