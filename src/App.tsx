@@ -23,6 +23,8 @@ import { InstallmentsView } from './components/InstallmentsView';
 import { ReturnsExchangesView } from './components/ReturnsExchangesView';
 import { AnalyticsReportsView } from './components/AnalyticsReportsView';
 import { CashControlView } from './components/CashControlView';
+import { PurchaseOrdersView } from './components/PurchaseOrdersView';
+import type { PurchaseOrder } from './purchaseOrdersApi';
 import { GoodsReceiptView } from './components/GoodsReceiptView';
 import { ReportsView } from './components/ReportsView';
 import { AuthView } from './components/AuthView';
@@ -174,8 +176,9 @@ export default function App() {
     // BR-1: stock is per outlet, so it arrives as rows and is folded into each
     // product's per-outlet maps rather than as a figure on the product.
     if (catalogue.status === 'fulfilled') {
-      const levels = await stockApi.atOutlet(localOutletId({ ...session }, outletList)).catch(() => []);
-      setProducts(withStock(catalogue.value, levels));
+      const scope = localOutletId({ ...session }, outletList);
+      const levels = await stockApi.atOutlet(scope).catch(() => []);
+      setProducts(withStock(catalogue.value, levels, scope));
     }
     if (movementHistory.status === 'fulfilled') setMovements(movementHistory.value);
     if (supplierList.status === 'fulfilled') setSuppliers(supplierList.value);
@@ -292,6 +295,15 @@ export default function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   // FR-SUP-01: the directory is the server's.
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+
+  /**
+   * The purchase order a delivery is being booked against — FR-SUP-08.
+   *
+   * Held here rather than in the receipt screen because it is chosen on a
+   * different one: the storekeeper presses Receive on an open order and lands on
+   * the goods receipt with its outstanding lines already filled in.
+   */
+  const [receivingAgainst, setReceivingAgainst] = useState<PurchaseOrder | null>(null);
   // FR-POS-18: past transactions are the server's — BR-3 makes them
   // immutable records, and a seeded list is not a record of anything.
   const [sales, setSales] = useState<CompletedSale[]>([]);
@@ -393,6 +405,7 @@ export default function App() {
     'inventory-count',
     'inventory-transfer',
     'goods-receipt',
+    'purchase-orders',
     'stock-movements',
     'sales-history',
     'customers',
@@ -524,7 +537,7 @@ export default function App() {
 
       // The stock the ledger settled on, not an arithmetic guess.
       const levels = await stockApi.atOutlet(currentOutlet.id).catch(() => []);
-      if (levels.length > 0) setProducts((prev) => withStock(prev, levels));
+      setProducts((prev) => withStock(prev, levels, currentOutlet.id));
       void refreshMovements();
 
       return stored;
@@ -557,7 +570,7 @@ export default function App() {
           : existing));
 
         const levels = await stockApi.atOutlet(currentOutlet.id).catch(() => []);
-        if (levels.length > 0) setProducts((prev) => withStock(prev, levels));
+        setProducts((prev) => withStock(prev, levels, currentOutlet.id));
         void refreshMovements();
       })
       .catch(reportStockFailure);
@@ -665,7 +678,7 @@ export default function App() {
       stockApi.atOutlet(currentOutletId).catch(() => []),
       stockApi.movements({ limit: 200 }).catch(() => []),
     ]);
-    if (levels.length > 0) setProducts((prev) => withStock(prev, levels));
+    setProducts((prev) => withStock(prev, levels, currentOutletId));
     if (ledger.length > 0) setMovements(ledger);
   };
 
@@ -683,8 +696,9 @@ export default function App() {
     lines: { productId: string; purchaseUnit: string; conversionFactor: number; quantity: number; unitCost: number }[],
     reference: string,
     supplierId: string,
+    purchaseOrderId?: string | null,
   ) => {
-    void goodsReceiptApi.receive(currentOutlet.id, supplierId, reference, lines)
+    void goodsReceiptApi.receive(currentOutlet.id, supplierId, reference, lines, purchaseOrderId)
       .then((result) => {
         setProducts((prev) => prev.map((product) => {
           const line = result.lines.find((item) => item.productId === product.id);
@@ -698,6 +712,9 @@ export default function App() {
       })
       .then(refreshMovements)
       .then(refreshSuppliers)
+      // The order is satisfied or not by what the server recorded, so the screen
+      // lets go of it either way rather than holding a stale copy.
+      .then(() => setReceivingAgainst(null))
       .catch(reportStockFailure);
   };
 
@@ -729,18 +746,13 @@ export default function App() {
       quantity: qtyReceived,
       unitCost,
     }])
-      .then((result) => {
-        const line = result.lines[0];
-        if (line) {
-          applyLevel(productId, {
-            productId,
-            outletId: currentOutlet.id,
-            quantity: line.resultingQuantity,
-            averageCost: line.resultingAverageCost,
-            reorderLevel: product?.minStockAlert[currentOutlet.id] ?? 0,
-            low: line.resultingQuantity <= (product?.minStockAlert[currentOutlet.id] ?? 0),
-          });
-        }
+      .then(async () => {
+        // Re-read rather than patch. The receipt's response carries the new
+        // quantity and average but no reorder level, and the previous code
+        // filled that gap from local state — which is how a level the server
+        // held got overwritten with whatever this tab happened to believe.
+        const levels = await stockApi.atOutlet(currentOutlet.id).catch(() => []);
+        setProducts((prev) => withStock(prev, levels, currentOutlet.id));
       })
       .then(refreshMovements)
       // FR-SUP-07: totalSupplied is summed from receipts, so booking one in
@@ -819,7 +831,7 @@ export default function App() {
     const current = products.find((p) => p.id === productId);
     if (!current) return;
     void productsApi.setActive(productId, !current.active)
-      .then((saved) => setProducts((prev) => prev.map((p) => (p.id === productId ? merged(p, saved) : p))))
+      .then((saved) => setProducts((prev) => prev.map((p) => (p.id === productId ? merged(p, saved, null) : p))))
       .catch(reportProductFailure);
   };
 
@@ -833,26 +845,92 @@ export default function App() {
    */
   const handleAddProduct = (newProd: Product) => {
     void productsApi.create(newProd)
-      .then((saved) => setProducts((prev) => [merged(newProd, saved), ...prev]))
+      .then(async (saved) => {
+        const level = await persistOutletFigures(saved.id, newProd, { opening: true });
+        setProducts((prev) => [merged(newProd, saved, level), ...prev]);
+      })
       .catch(reportProductFailure);
   };
 
   /**
-   * Carry the per-outlet figures across the round trip.
+   * FR-INV-08 · FR-SET-02: write the per-outlet figures the product form
+   * captured, because until now nothing did.
    *
-   * Stock, cost and reorder level are F's and the API does not store them yet.
-   * Keeping whatever the form captured means the screen still shows what the
-   * user typed this session, while everything the server does own comes back
-   * from the server. They are lost on reload, which is honest — nothing has
-   * recorded them.
+   * <p>The form has always asked for a reorder level and an opening count, and
+   * they were kept in React state and nowhere else. They looked saved until the
+   * first sale, whose refetch replaced them with what the server actually held —
+   * which was the branch default, usually zero. The endpoints to record them
+   * both existed and neither was ever called.
+   *
+   * <p>Opening stock goes in as an OPENING movement rather than by writing a
+   * quantity somewhere, because BR-2 is that a level equals the sum of its
+   * movements. A count that appeared without a movement would be drift on the
+   * day it was entered.
+   *
+   * <p>Returns the level the server ends up holding, or null if nothing needed
+   * saying. A failure here is reported but does not undo the product: it exists,
+   * and the figures can be set again from the same form.
    */
-  const merged = (local: Product, saved: Product): Product => ({
-    ...saved,
-    costPrice: local.costPrice,
-    stock: local.stock,
-    minStockAlert: local.minStockAlert,
-    salesCount: local.salesCount,
-  });
+  const persistOutletFigures = async (
+    productId: string,
+    local: Product,
+    options: { opening: boolean },
+  ): Promise<StockWire | null> => {
+    const outletId = local.outletId;
+    if (!outletId || outletId === 'all-outlets') return null;
+
+    let level: StockWire | null = null;
+
+    // Opening stock first: setting the reorder level afterwards means the `low`
+    // flag that comes back is calculated against the count, not against zero.
+    const opening = local.stock[outletId] ?? 0;
+    if (options.opening && opening > 0) {
+      level = await stockApi.record({
+        productId,
+        outletId,
+        type: 'OPENING',
+        quantity: opening,
+        // BR-4: OPENING seeds the weighted average, so a cost entered on the
+        // form is the opening valuation rather than a note about one.
+        unitCost: local.costPrice[outletId] ?? undefined,
+        note: 'Opening count entered when the product was set up',
+      });
+    }
+
+    const reorder = local.minStockAlert[outletId];
+    if (reorder != null) {
+      level = await stockApi.setReorderLevel(productId, outletId, reorder);
+    }
+
+    return level;
+  };
+
+  /**
+   * Reconcile one saved product with what the server holds for it.
+   *
+   * <p>The per-outlet maps come from the stock row the server returned, never
+   * from the form. This used to keep the form's figures on the product to make
+   * the screen look right, which is how a reorder level nobody had stored
+   * survived long enough to be believed.
+   */
+  const merged = (local: Product, saved: Product, level: StockWire | null): Product => {
+    const base: Product = {
+      ...saved,
+      costPrice: local.costPrice,
+      stock: local.stock,
+      minStockAlert: local.minStockAlert,
+      salesCount: local.salesCount,
+    };
+    if (!level) return base;
+    return {
+      ...base,
+      stock: { ...base.stock, [level.outletId]: level.quantity },
+      costPrice: level.averageCost == null
+        ? base.costPrice
+        : { ...base.costPrice, [level.outletId]: level.averageCost },
+      minStockAlert: { ...base.minStockAlert, [level.outletId]: level.reorderLevel },
+    };
+  };
 
   const reportProductFailure = (failure: unknown) => {
     if (failure instanceof AuthApiError && failure.status !== 401 && failure.status !== 423) {
@@ -919,8 +997,21 @@ export default function App() {
     // the before and after itself, and a second entry written by the browser
     // would be an unverifiable duplicate of it.
     void productsApi.update(updatedProduct.id, updatedProduct)
-      .then((saved) => setProducts((prev) =>
-        prev.map((product) => (product.id === saved.id ? merged(updatedProduct, saved) : product))))
+      .then(async (saved) => {
+        // FR-INV-05: no opening movement on an edit. Changing a count is an
+        // adjustment and needs a reason code, which is the adjustment screen's
+        // job — re-posting an opening here would silently add the stock again.
+        const level = await persistOutletFigures(saved.id, updatedProduct, { opening: false });
+        // Product responses intentionally do not contain outlet stock/cost.
+        // Re-read the authoritative ledger before replacing the row; merging
+        // the form's stale maps here used to make a recent receipt disappear.
+        const levels = await stockApi.forProduct(saved.id).catch(() => []);
+        setProducts((prev) => {
+          const reconciled = prev.map((product) =>
+            product.id === saved.id ? merged(product, saved, level) : product);
+          return withStock(reconciled, levels);
+        });
+      })
       .catch(reportProductFailure);
   };
 
@@ -934,7 +1025,7 @@ export default function App() {
         !importedIds.has(product.id) && !importedSkus.has(product.sku.toLowerCase()));
       const reconciled = result.products.map((saved) => {
         const local = current.find((product) => product.id === saved.id || product.sku.toLowerCase() === saved.sku.toLowerCase());
-        return local ? merged(local, saved) : saved;
+        return local ? merged(local, saved, null) : saved;
       });
       return [...reconciled, ...untouched];
     });
@@ -971,15 +1062,31 @@ export default function App() {
    * FR-CASH-06: past the threshold the server refuses without a note, and the
    * shift stays open so the cashier can add one.
    */
+  /**
+   * FR-CASH-05. Returns the promise rather than swallowing it: the screen holds
+   * the cashier's blind count until this resolves, and shows the server's reason
+   * when it does not — a variance past the threshold needs a note (BR-14), and
+   * that is a conversation with the person at the drawer, not a generic failure.
+   */
   const handleCloseShift = (countedCash: number, note?: string) => {
-    if (!shiftInfo.id) return;
-    void shiftsApi.close(shiftInfo.id, countedCash, note)
+    // Was a silent `return`. Silent is wrong now that the screen waits on this:
+    // it would clear the count as though the close had succeeded.
+    if (!shiftInfo.id) {
+      return Promise.reject(new Error('There is no open shift to close.'));
+    }
+
+    return shiftsApi.close(shiftInfo.id, countedCash, note)
       .then((wire) => {
         setShiftInfo(toShiftInfo(wire));
         setShiftRecords((prev) => prev.map((record) =>
           record.id === wire.id ? toShiftRecord(wire, currentOutlet.name) : record));
       })
-      .catch(reportShiftFailure);
+      .catch((failure) => {
+        // Session problems are the shell's business; everything else belongs on
+        // the screen that asked.
+        if (!(failure instanceof AuthApiError)) reportShiftFailure(failure);
+        throw failure;
+      });
   };
 
   /** FR-CASH-03: a pay-in or pay-out, each with a reason. */
@@ -1076,6 +1183,25 @@ export default function App() {
     if (currentUser) void authApi.signOut().catch(() => undefined);
     resetToSignIn();
   };
+
+  /**
+   * BR-1: the quantities on screen belong to the branch that is selected.
+   *
+   * <p>Levels were fetched once at sign-in and then only as a side effect of
+   * selling, so switching branch kept showing the previous one's figures until
+   * something happened to move stock. The stock a manager was comparing was the
+   * stock of the branch they had just left.
+   */
+  useEffect(() => {
+    if (!currentUser || !currentOutletId || currentOutletId === 'all-outlets') return;
+    let active = true;
+    stockApi.atOutlet(currentOutletId)
+      .then((levels) => {
+        if (active) setProducts((prev) => withStock(prev, levels, currentOutletId));
+      })
+      .catch(() => { /* the catalogue keeps what it has; the next movement refetches */ });
+    return () => { active = false; };
+  }, [currentUser?.id, currentOutletId]);
 
   /**
    * BR-15: the audit log is the server's, not the browser's.
@@ -1680,6 +1806,22 @@ export default function App() {
               currentOutlet={currentOutlet}
               cashierName={currentUser?.fullName || 'Storekeeper'}
               onCommitReceipt={handleCommitReceipt}
+              againstOrder={receivingAgainst}
+              onClearOrder={() => setReceivingAgainst(null)}
+            />
+          )}
+
+          {/* F-08: Purchase orders (FR-SUP-08) */}
+          {activeTab === 'purchase-orders' && (
+            <PurchaseOrdersView
+              products={products}
+              suppliers={suppliers}
+              currentOutlet={currentOutlet}
+              outlets={outlets}
+              onReceiveAgainst={(order) => {
+                setReceivingAgainst(order);
+                setActiveTab('goods-receipt');
+              }}
             />
           )}
 
@@ -1725,6 +1867,10 @@ export default function App() {
               onUpdateSupplier={handleUpdateSupplier}
               onSetSupplierActive={handleSetSupplierActive}
               onReceiveStock={() => setGoodsReceiptModalOpen(true)}
+              onReceiveAgainstOrder={(order) => {
+                setReceivingAgainst(order);
+                setActiveTab('goods-receipt');
+              }}
             />
           )}
 
@@ -1975,6 +2121,9 @@ export default function App() {
         onOpenShift={() => (permissions.hasAny('shift.open', 'shift.close')) && setShiftModalOpen(true)}
         onAddCustomer={handleAddCustomer}
         onSaleCompleted={handleSaleCompleted}
+        currencyCode={generalSettings.currencyCode}
+        currencySymbol={generalSettings.currencySymbol}
+        currentUserName={currentUser.fullName}
       />
 
       {/* Cashier Shift & Drawer Modal (BR-14) */}
