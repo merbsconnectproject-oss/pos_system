@@ -89,12 +89,13 @@ public class OffsiteStore {
     public String putBytes(byte[] body, String name, String contentType,
                            PosProperties.Offsite config) {
         String key = fullKey(name, config);
+        byte[] encrypted = OffsitePayloadCrypto.encrypt(body);
         try (S3Client s3 = client(config)) {
             s3.putObject(PutObjectRequest.builder()
                     .bucket(config.bucket())
                     .key(key)
                     .contentType(contentType)
-                    .build(), RequestBody.fromBytes(body));
+                    .build(), RequestBody.fromBytes(encrypted));
         }
         return "s3://" + config.bucket() + "/" + key;
     }
@@ -108,10 +109,10 @@ public class OffsiteStore {
      */
     public Optional<byte[]> get(String name, PosProperties.Offsite config) {
         try (S3Client s3 = client(config)) {
-            return Optional.of(s3.getObjectAsBytes(GetObjectRequest.builder()
+            return Optional.of(OffsitePayloadCrypto.decrypt(s3.getObjectAsBytes(GetObjectRequest.builder()
                     .bucket(config.bucket())
                     .key(fullKey(name, config))
-                    .build()).asByteArray());
+                    .build()).asByteArray()));
         } catch (NoSuchKeyException absent) {
             return Optional.empty();
         }
