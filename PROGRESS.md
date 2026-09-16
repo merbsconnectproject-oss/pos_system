@@ -11,7 +11,7 @@ Updated after every completed feature. Detail lives in
 
 | | Features | Done | In progress | Not started |
 |---|---:|---:|---:|---:|
-| Backend | 20 | 19 | 1 | 0 |
+| Backend | 20 | 20 | 0 | 0 |
 
 ```
 A ██████████  Auth & session     100%   FR-AUTH-05 reachable since J; idle lock is a setting since P
@@ -27,7 +27,7 @@ J ██████████  Shifts & cash      100%   blind close, BR-13 b
 K ██████████  Suppliers & receipt  100%  supplier directory, outlet-scoped goods receipts, weighted-average costing, reversals, and supplier/product purchase history are API-backed and wired in the frontend
 L ██████████  Customers          100%   shared directory, phone lookup, pricing and cross-outlet history
 M ██████████  Users & permissions 100%  what a role grants is editable and persisted, and takes effect mid-session
-N █████████░  Audit               90%   every built action logs; read endpoint and view live
+N ██████████  Audit               100%  mutating actions and security events are recorded; read endpoint, pagination and acceptance coverage are live
 O ██████████  Reports & dashboard 100%  every sales surface is net of returns
 P ██████████  Settings           100%  thresholds read by the rules; backups every 15 min, off-site, tested restore
 Q ██████████  Connectivity       100%  both channels built, screens wired; power loss (NFR-5) still untested
