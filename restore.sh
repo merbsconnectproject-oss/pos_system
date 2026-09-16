@@ -35,6 +35,16 @@ fi
 DUMP="$1"
 [ -f "$DUMP" ] || { echo "No such backup: $DUMP" >&2; exit 1; }
 
+# Off-site objects are POSENC1 AES-256-GCM envelopes. Decrypt to a protected
+# temporary file; never modify or replace the encrypted source object.
+DECRYPTED=""
+if [[ "$DUMP" == *.dump.enc ]]; then
+  DECRYPTED="$(mktemp --tmpdir "pos-restore.XXXXXX.dump")"
+  trap 'rm -f "$DECRYPTED"' EXIT
+  python3 scripts/decrypt-backup.py "$DUMP" "$DECRYPTED"
+  DUMP="$DECRYPTED"
+fi
+
 cat <<WARNING
 
   About to restore $DUMP into $DB_NAME on $DB_HOST:$DB_PORT.
