@@ -1,6 +1,6 @@
 # Progress
 
-**Updated** 2026-09-16 · **Tests** targeted security suites green · **DB** connected to `pos_system`, V1–V28 applied
+**Updated** 2026-09-16 · **Tests** full backend + frontend acceptance suites green · **DB** connected to `pos_system`, V1–V28 applied
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (258 items, dual checkbox).
@@ -30,15 +30,15 @@ M ██████████  Users & permissions 100%  what a role grants i
 N ██████████  Audit               100%  mutating actions and security events are recorded; read endpoint, pagination and acceptance coverage are live
 O ██████████  Reports & dashboard 100%  every sales surface is net of returns
 P ██████████  Settings           100%  thresholds read by the rules; backups every 15 min, off-site, tested restore
-Q ██████████  Connectivity       100%  both channels built, screens wired; power loss (NFR-5) still untested
+Q ██████████  Connectivity       100%  both channels built, screens wired; power-loss recovery (NFR-5) covered by acceptance test
 R ██████████  Cross-cutting       100%  hashing, rate limiting, audit, idempotency, row locks, live permission refresh, CSRF, CORS and browser security headers
 S ██████████  Expenses & credit  100%  expenses, P&L and installment plans persist; 3 new permission codes
 T ██████████  Returns & swaps    100%  wired end to end; net of returns now reaches the takings and the P&L
 ```
 
-470 requirement-counted tests green for the documented baseline (3 live R2
-checks run on demand); the full 2026-09-16 run also exposed one pre-existing
-loaded-catalogue timing flake above its 300 ms budget.
+505 backend tests green (3 skipped) in the full 2026-09-16 Testcontainers run;
+the frontend contract and Vitest suite is also green (46 tests). Three live R2
+checks remain on-demand because they require configured credentials.
 
 ---
 
@@ -488,12 +488,9 @@ is actually there.
 
 ## Next up
 
-1. **I · Receipts & printing** — blocked on the printer, not on us. Next in
-   line, and the one remaining feature at 0%.
-2. **Q · Connectivity** — power loss (NFR-5) is untested by actually pulling the
-   plug, and the owner's push waits on the consolidator decision below.
-3. **Pricing, audit, payment and cross-cutting gaps** — continue closing the
-   remaining checklist items after the completed D/K requirements.
+1. **I · Receipts & printing** — software receipt generation, preview, ESC/POS
+   layouts and audited reprints are complete; physical printer validation remains.
+2. Release packaging and an on-site hardware acceptance pass.
 
 ---
 

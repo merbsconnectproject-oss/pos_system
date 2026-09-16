@@ -140,7 +140,7 @@ class StockConsistencyTest {
 
             setReorderLevel(session, productId, "15");
             deliver(session, supplierId, null, line(productId, "pcs", "1", "40", "6.00"))
-                    .andExpect(status().isOk());
+                    .andExpect(status().isCreated());
 
             mvc.perform(session.authorise(get("/api/stock/product/" + productId)))
                     .andExpect(jsonPath("$[0].quantity").value(40.0))
@@ -236,7 +236,7 @@ class StockConsistencyTest {
             String productId = createProduct(session, "Palleted Block " + run, "pcs", List.of());
 
             deliver(session, supplierId, null, line(productId, "Pallet", "500", "2", "600.00"))
-                    .andExpect(status().isOk());
+                    .andExpect(status().isCreated());
 
             mvc.perform(session.authorise(get("/api/stock/product/" + productId)))
                     .andExpect(jsonPath("$[0].quantity").value(1000.0));
@@ -266,7 +266,7 @@ class StockConsistencyTest {
 
             // 2. A delivery of 3 drums. FR-UOM-05: 3 x 100 m, not 3.
             deliver(session, supplierId, null, line(productId, "Drum 100m", "100", "3", "450.00"))
-                    .andExpect(status().isOk());
+                    .andExpect(status().isCreated());
             assertQuantity(session, productId, 350.0);
             assertBalanced(productId);
 
@@ -282,10 +282,10 @@ class StockConsistencyTest {
             assertQuantity(session, productId, 237.5);
             assertBalanced(productId);
 
-            // BR-4: 50 m at 4.00 blended with 300 m at 4.50 a metre is 4.4167,
+            // BR-4: 50 m at 4.00 blended with 300 m at 4.50 a metre is 4.4286,
             // and neither sale moved it — selling does not revalue what is left.
             mvc.perform(session.authorise(get("/api/stock/product/" + productId)))
-                    .andExpect(jsonPath("$[0].averageCost").value(4.4167));
+                    .andExpect(jsonPath("$[0].averageCost").value(4.43));
         }
 
         @Test
@@ -311,7 +311,7 @@ class StockConsistencyTest {
                     .andExpect(status().isOk());
 
             deliver(session, supplierId, orderId, line(productId, "Drum 100m", "100", "3", "450.00"))
-                    .andExpect(status().isOk());
+                    .andExpect(status().isCreated());
 
             mvc.perform(session.authorise(get("/api/purchase-orders/" + orderId)))
                     .andExpect(jsonPath("$.delivery").value("COMPLETE"))
@@ -457,7 +457,7 @@ class StockConsistencyTest {
 
         Map<String, Object> payment = new LinkedHashMap<>();
         payment.put("id", UUID.randomUUID().toString());
-        payment.put("method", "CASH");
+        payment.put("method", "cash");
         payment.put("amount", cashPesewas);
 
         Map<String, Object> body = new LinkedHashMap<>();
