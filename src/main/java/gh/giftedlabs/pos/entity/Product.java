@@ -1,5 +1,6 @@
 package gh.giftedlabs.pos.entity;
 
+import gh.giftedlabs.pos.exception.CatalogueConflictException;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -60,7 +61,7 @@ public class Product {
      * FR-UOM-07 locks it — see {@code assertConvertible}.
      */
     @NotBlank
-    @Column(name = "base_unit", nullable = false, updatable = false)
+    @Column(name = "base_unit", nullable = false)
     private String baseUnit;
 
     @PositiveOrZero
@@ -127,6 +128,12 @@ public class Product {
     public void setSupplierId(UUID supplierId) { this.supplierId = supplierId; }
 
     public String getBaseUnit() { return baseUnit; }
+    /** FR-UOM-01: only the service may change this before movements exist. */
+    public void setBaseUnit(String baseUnit) {
+        if (baseUnit == null || baseUnit.isBlank()) throw new IllegalArgumentException("Base unit is required");
+        this.baseUnit = baseUnit.trim();
+        touch();
+    }
 
     public BigDecimal getRetailPrice() { return retailPrice; }
     public BigDecimal getTradePrice() { return tradePrice; }
@@ -198,6 +205,50 @@ public class Product {
                 .filter(unit -> unit.getName().equalsIgnoreCase(unitName))
                 .map(ProductSellingUnit::getConversionFactor)
                 .findFirst();
+    }
+
+    /**
+     * FR-UOM-03 · BR-12: the factor for {@code unitName}, checked against the
+     * one the caller claimed.
+     *
+     * <p>This number decides how much stock leaves the shelf. It used to be
+     * taken from the request body unexamined on every path that moves
+     * inventory, so a screen holding a stale "Box of 12" could sell a box, bill
+     * for a box, and take one piece out of stock — and the level and the ledger
+     * would agree with each other while both disagreed with the shelf. Line
+     * totals were never taken on trust for this reason; the factor is the same
+     * kind of number and had simply been missed.
+     *
+     * <p>{@code claimed} may be null, which asks for the catalogue's figure
+     * without comparing anything.
+     */
+    public BigDecimal requireConversionFactor(String unitName, BigDecimal claimed) {
+        BigDecimal known = conversionFactorFor(unitName)
+                .orElseThrow(() -> CatalogueConflictException.unitNotSold(name, unitName));
+        if (claimed != null && known.compareTo(claimed) != 0) {
+            throw CatalogueConflictException.unitMismatch(name, unitName, claimed, known);
+        }
+        return known;
+    }
+
+    /**
+     * FR-UOM-05: the same check for goods coming in, where the unit may be one
+     * the shop never sells in.
+     *
+     * <p>A pallet is a purchase unit and nothing else — refusing it because it
+     * is not a selling unit would block a delivery that genuinely arrived that
+     * way. So an unrecognised unit keeps the caller's factor; a recognised one
+     * must match the catalogue, which is where the actual bug lived.
+     */
+    public BigDecimal receivingConversionFactor(String unitName, BigDecimal claimed) {
+        return conversionFactorFor(unitName)
+                .map(known -> {
+                    if (claimed != null && known.compareTo(claimed) != 0) {
+                        throw CatalogueConflictException.unitMismatch(name, unitName, claimed, known);
+                    }
+                    return known;
+                })
+                .orElse(claimed);
     }
 
     private void touch() { this.updatedAt = Instant.now(); }

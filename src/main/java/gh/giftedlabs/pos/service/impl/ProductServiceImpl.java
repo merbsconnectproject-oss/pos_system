@@ -133,13 +133,16 @@ public class ProductServiceImpl implements ProductService {
             throw CatalogueConflictException.sku(sku, products.findBySku(sku).map(Product::getName).orElse("another product"));
         }
 
-        if (movements.existsByProductId(id) && sellingUnitsChanged(product, request.sellingUnits())) {
+        boolean hasMovements = movements.existsByProductId(id);
+        if (hasMovements && (!product.getBaseUnit().equalsIgnoreCase(request.baseUnit().trim())
+                || sellingUnitsChanged(product, request.sellingUnits()))) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Selling unit conversion factors cannot change after stock or transactions exist");
+                    "Base unit and selling-unit conversion factors cannot change after stock or transactions exist");
         }
 
         product.setSku(sku);
         product.setName(request.name().trim());
+        if (!hasMovements) product.setBaseUnit(request.baseUnit().trim());
         product.setCategory(categoryNamed(request.category()));
         product.setBrand(brandNamed(request.brand()));
         product.setSupplierId(validSupplier(request.supplierId()));
