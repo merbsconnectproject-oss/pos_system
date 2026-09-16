@@ -95,9 +95,16 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                 blankToNull(request.reference()), blankToNull(request.note()), actor.userId());
 
         for (GoodsReceiptRequest.Line line : request.lines()) {
-            if (!products.existsById(line.productId())) throw new ProductNotFoundException(line.productId());
+            Product product = products.findById(line.productId())
+                    .orElseThrow(() -> new ProductNotFoundException(line.productId()));
+
+            // FR-UOM-05: if the shop knows this unit, the catalogue says what it
+            // is worth — the delivery note does not get to redefine a Box.
+            BigDecimal factor = product.receivingConversionFactor(
+                    line.purchaseUnit().trim(), line.conversionFactor());
+
             receipt.addLine(new GoodsReceiptLine(line.productId(), line.purchaseUnit().trim(),
-                    line.conversionFactor(), line.quantity(), line.unitCost()));
+                    factor, line.quantity(), line.unitCost()));
         }
 
         receipt.confirm(actor.userId(), clock.instant());

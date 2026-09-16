@@ -157,7 +157,8 @@ class SaleControllerTest {
         @DisplayName("sells in a larger unit and moves base units — FR-UOM-03")
         void sellsInAPurchaseUnit() throws Exception {
             Session session = signIn();
-            String productId = stockedProduct(session, "Drum Cable " + run, "m", "14.50", "500");
+            String productId = stockedProduct(session, "Drum Cable " + run, "m", "14.50", "500",
+                    List.of(sellingUnit("Drum 100m", "100", "1150.00")));
 
             // One drum of 100 m at 1,150.00.
             mvc.perform(session.authorise(post("/api/sales"))
@@ -852,6 +853,19 @@ class SaleControllerTest {
     /** A product with stock already received, so a sale has something to take. */
     private String stockedProduct(Session session, String name, String baseUnit,
                                   String retailPrice, String quantity) throws Exception {
+        return stockedProduct(session, name, baseUnit, retailPrice, quantity, List.of());
+    }
+
+    /**
+     * FR-UOM-02: {@code sellingUnits} are the units this product may transact in.
+     *
+     * <p>A line naming a unit the catalogue does not carry is refused, so a test
+     * that sells by the drum has to create the drum. This fixture used to leave
+     * the list empty and post whatever factor it liked, which is the behaviour
+     * FR-UOM-03 exists to prevent.
+     */
+    private String stockedProduct(Session session, String name, String baseUnit, String retailPrice,
+                                  String quantity, List<Map<String, Object>> sellingUnits) throws Exception {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", name);
         body.put("category", "Hardware & Tools");
@@ -860,6 +874,7 @@ class SaleControllerTest {
         body.put("retailPrice", retailPrice);
         body.put("tradePrice", retailPrice);
         body.put("floorPrice", "50.00".equals(retailPrice) ? retailPrice : lowerFloor(retailPrice));
+        if (!sellingUnits.isEmpty()) body.put("sellingUnits", sellingUnits);
 
         MvcResult created = mvc.perform(session.authorise(post("/api/products"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -872,6 +887,15 @@ class SaleControllerTest {
                 new PosPrincipal(ownerId, ownerName, outletId, Instant.now()), true, "127.0.0.1");
 
         return productId;
+    }
+
+    private Map<String, Object> sellingUnit(String name, String conversionFactor, String price) {
+        Map<String, Object> unit = new LinkedHashMap<>();
+        unit.put("name", name);
+        unit.put("conversionFactor", conversionFactor);
+        unit.put("price", price);
+        unit.put("tradePrice", price);
+        return unit;
     }
 
     /** A floor comfortably under retail, except where a test wants to breach it. */

@@ -493,11 +493,22 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     // --- internals ----------------------------------------------------------
 
+    /**
+     * FR-UOM-05: order lines carry the catalogue's factor.
+     *
+     * <p>What has arrived against an order is compared in base units, so an
+     * order written with a factor of its own would show a variance against a
+     * delivery that matched it exactly — the order would sit open on goods that
+     * had all turned up, or close on goods that had not.
+     */
     private void applyLines(PurchaseOrder order, PurchaseOrderRequest request) {
         for (PurchaseOrderRequest.Line line : request.lines()) {
-            if (!products.existsById(line.productId())) throw new ProductNotFoundException(line.productId());
+            Product product = products.findById(line.productId())
+                    .orElseThrow(() -> new ProductNotFoundException(line.productId()));
+            BigDecimal factor = product.receivingConversionFactor(
+                    line.purchaseUnit().trim(), line.conversionFactor());
             order.addLine(new PurchaseOrderLine(line.productId(), line.purchaseUnit().trim(),
-                    line.conversionFactor(), line.quantity(), line.unitCost()));
+                    factor, line.quantity(), line.unitCost()));
         }
     }
 

@@ -39,6 +39,38 @@ public class CatalogueConflictException extends RuntimeException {
                 Map.of("field", "barcodes", "unitName", unitName));
     }
 
+    /**
+     * FR-UOM-03: a sale in a unit the product does not sell in.
+     *
+     * <p>Distinct from {@link #unknownUnit}: that is a barcode being bound to a
+     * unit as the catalogue is edited, this is a line trying to transact in one.
+     */
+    public static CatalogueConflictException unitNotSold(String productName, String unitName) {
+        return new CatalogueConflictException("UNIT_NOT_SOLD",
+                "\"%s\" is not a unit %s is sold in. Reload the catalogue and ring the line again."
+                        .formatted(unitName, productName),
+                Map.of("field", "selectedUnit", "unitName", unitName));
+    }
+
+    /**
+     * FR-UOM-03 · BR-12: the client's conversion factor disagrees with the
+     * catalogue's.
+     *
+     * <p>Almost always a screen holding a unit that has since been edited. It is
+     * refused rather than corrected: the price on the line was chosen for the
+     * unit the cashier saw, and quietly re-scaling the quantity under it would
+     * charge for one thing and hand over another.
+     */
+    public static CatalogueConflictException unitMismatch(String productName, String unitName,
+                                                          Object claimed, Object known) {
+        return new CatalogueConflictException("UNIT_FACTOR_STALE",
+                ("One \"%s\" of %s is %s, not %s. This screen is showing an old version of the "
+                        + "catalogue — reload it before continuing.")
+                        .formatted(unitName, productName, known, claimed),
+                Map.of("field", "conversionFactor", "unitName", unitName,
+                        "expected", String.valueOf(known), "submitted", String.valueOf(claimed)));
+    }
+
     public String getCode() { return code; }
     public Map<String, Object> getDetails() { return details; }
 }

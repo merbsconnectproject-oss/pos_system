@@ -286,8 +286,14 @@ public class SaleServiceImpl implements SaleService {
                 }
             }
 
+            // FR-UOM-03: the catalogue's factor, not the browser's. What the
+            // request claimed is compared and refused if it disagrees, because a
+            // stale unit would move the wrong quantity of stock silently.
+            BigDecimal factor = product.requireConversionFactor(
+                    line.selectedUnit().trim(), line.conversionFactor());
+
             Quantity quantity = Quantity.of(line.quantity());
-            Quantity quantityBase = quantity.timesFactor(line.conversionFactor());
+            Quantity quantityBase = quantity.timesFactor(factor);
 
             long discount = line.discount() == null ? 0L : line.discount();
             // BR-11: rounded per line, and the sale total is the sum of the
@@ -304,7 +310,7 @@ public class SaleServiceImpl implements SaleService {
                     .map(StockLevel::getAverageCost)
                     .orElse(BigDecimal.ZERO);
 
-            priced.add(new PricedLine(product.getId(), line.selectedUnit().trim(), line.conversionFactor(),
+            priced.add(new PricedLine(product.getId(), line.selectedUnit().trim(), factor,
                     quantity.amount(), quantityBase.amount(), line.unitPrice(), discount,
                     gross.pesewas(), net, costAtSale, line.floorApprovedBy()));
         }
