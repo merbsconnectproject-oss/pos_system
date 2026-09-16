@@ -11,6 +11,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -102,10 +103,24 @@ public class SecurityConfig {
                         .authenticationEntryPoint(securityErrors)
                         .accessDeniedHandler(securityErrors))
 
+                // Defence-in-depth for both the embedded counter UI and the
+                // separately hosted consolidator UI. These headers prevent
+                // clickjacking, MIME sniffing, referrer leakage and browser
+                // access to device capabilities. API responses are never
+                // cacheable: sales, customer and stock data must not remain in
+                // a shared browser/proxy cache after sign-out.
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.deny())
+                        .contentTypeOptions(content -> { })
+                        .referrerPolicy(referrer -> referrer.policy(
+                                ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                        .permissionsPolicy(policy -> policy.policy(
+                                "camera=(), microphone=(), geolocation=(), payment=()")))
+
                 .csrf(csrf -> csrf
                         // Cookie-based sessions need CSRF protection. The token
                         // is readable by the frontend so it can echo it back.
-                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRepository(csrfRepository(consolidator))
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
                         // Ingest is authenticated by a key in a header, never by
                         // an ambient cookie, so CSRF does not apply to it.
@@ -121,6 +136,16 @@ public class SecurityConfig {
         }
 
         return http.build();
+    }
+
+    private CookieCsrfTokenRepository csrfRepository(boolean consolidator) {
+        CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        repository.setCookieCustomizer(cookie -> cookie
+                .secure(consolidator)
+                .httpOnly(false)
+                .sameSite(consolidator ? "Lax" : "Strict")
+                .path("/"));
+        return repository;
     }
 
     /**

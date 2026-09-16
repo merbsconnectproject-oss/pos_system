@@ -1,6 +1,6 @@
 # Progress
 
-**Updated** 2026-09-15 · **Tests** 468 green · **DB** connected to `pos_system`, V1–V23 applied
+**Updated** 2026-09-16 · **Tests** targeted security suites green · **DB** connected to `pos_system`, V1–V28 applied
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (258 items, dual checkbox).
@@ -31,7 +31,7 @@ N █████████░  Audit               90%   every built action l
 O ██████████  Reports & dashboard 100%  every sales surface is net of returns
 P ██████████  Settings           100%  thresholds read by the rules; backups every 15 min, off-site, tested restore
 Q ██████████  Connectivity       100%  both channels built, screens wired; power loss (NFR-5) still untested
-R ███████░░░  Cross-cutting       70%   hashing, rate limiting, audit, idempotency, row locks
+R ██████████  Cross-cutting       100%  hashing, rate limiting, audit, idempotency, row locks, live permission refresh, CSRF, CORS and browser security headers
 S ██████████  Expenses & credit  100%  expenses, P&L and installment plans persist; 3 new permission codes
 T ██████████  Returns & swaps    100%  wired end to end; net of returns now reaches the takings and the P&L
 ```
