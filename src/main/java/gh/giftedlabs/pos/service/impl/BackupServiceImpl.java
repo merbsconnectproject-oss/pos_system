@@ -139,7 +139,7 @@ public class BackupServiceImpl implements BackupService {
             throw new IllegalStateException("POS_BACKUP_ENCRYPTION_KEY is required for off-site backups");
         }
         try {
-            byte[] key = Base64.getDecoder().decode(encoded);
+            byte[] key = decodeBackupKey(encoded);
             if (key.length != 32) throw new IllegalArgumentException("backup key must decode to 32 bytes");
             byte[] nonce = new byte[12];
             new SecureRandom().nextBytes(nonce);
@@ -154,8 +154,21 @@ public class BackupServiceImpl implements BackupService {
             }
         } catch (Exception failure) {
             try { Files.deleteIfExists(target); } catch (IOException ignored) { }
-            throw new IllegalStateException("could not encrypt backup for off-site storage", failure);
+            throw new IllegalStateException("could not encrypt backup for off-site storage: "
+                    + (failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage()), failure);
         }
+    }
+
+    /** Accept both documented base64 and the common `openssl rand -hex 32` form. */
+    private byte[] decodeBackupKey(String value) {
+        if (value.matches("[0-9a-fA-F]{64}")) {
+            byte[] bytes = new byte[32];
+            for (int i = 0; i < bytes.length; i++) {
+                bytes[i] = (byte) Integer.parseInt(value.substring(i * 2, i * 2 + 2), 16);
+            }
+            return bytes;
+        }
+        return Base64.getDecoder().decode(value);
     }
 
     /** FR-SET-07. */
