@@ -3,6 +3,7 @@ package gh.giftedlabs.pos.service.impl;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.HexFormat;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -40,7 +41,10 @@ final class OffsitePayloadCrypto {
     private static byte[] key() {
         String value = System.getenv("POS_BACKUP_ENCRYPTION_KEY");
         if (value == null || value.isBlank()) throw new IllegalStateException("POS_BACKUP_ENCRYPTION_KEY is required");
-        byte[] key = Base64.getDecoder().decode(value.trim());
+        String encoded = value.trim();
+        byte[] key = encoded.matches("[0-9a-fA-F]{64}")
+                ? HexFormat.of().parseHex(encoded)
+                : Base64.getDecoder().decode(encoded);
         if (key.length != 32) throw new IllegalArgumentException("backup key must decode to 32 bytes");
         return key;
     }
