@@ -9,6 +9,7 @@ import { ReceiptPrintModal } from './ReceiptPrintModal';
 import { receiptsApi } from '../receiptsApi';
 import { printReceipt } from '../printService';
 import { salesApi } from '../salesApi';
+import { forOutlet } from '../outletScope';
 import { TablePagination } from './TablePagination';
 
 interface SalesHistoryViewProps {
@@ -43,7 +44,7 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  const outletSales = sales.filter((s) => currentOutlet.id === 'all-outlets' || s.outletId === currentOutlet.id);
+  const outletSales = forOutlet(sales, currentOutlet.id);
   const completedSales = outletSales.filter((s) => s.status === 'COMPLETED');
   const voidedSales = outletSales.filter((s) => s.status === 'VOIDED');
   const totalCompletedValue = completedSales.reduce((sum, s) => sum + s.total, 0);

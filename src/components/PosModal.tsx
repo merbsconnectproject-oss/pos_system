@@ -35,6 +35,8 @@ import {
   List,
   LayoutGrid,
   Rows3,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import {
   Product,
@@ -50,6 +52,8 @@ import { findByBarcodeOrSku } from '../catalogue';
 import type { PermissionSet } from '../permissions';
 import { useScanner } from '../useScanner';
 import { createBlock, issueReceiptNumber, remainingInBlock } from '../receiptSequence';
+import { receiptsApi } from '../receiptsApi';
+import { ThermalReceiptSlip } from './ThermalReceiptSlip';
 import { printReceipt } from '../printService';
 import { formatQuantity, lineTotal, moneyEquals, roundMoney, roundQuantity, sumMoney } from '../money';
 import { ManagerPinModal } from './ManagerPinModal';
@@ -93,6 +97,19 @@ interface PosModalProps {
    */
   discountCeilingPercent: number;
   onLockSession?: () => void;
+  /**
+   * FR-SET-01: the configured currency, not a compiled-in one. The till used to
+   * print "GHS (GH₵)" whatever Settings said, which made the setting a lie on
+   * every screen a cashier actually looks at.
+   */
+  currencyCode: string;
+  currencySymbol: string;
+  /**
+   * Who is signed in. The shift's cashier is the authority for the title bar
+   * (the drawer belongs to whoever opened it); this is the fallback for the
+   * moment before the shift record has loaded.
+   */
+  currentUserName: string;
 }
 
 export const PosModal: React.FC<PosModalProps> = ({
@@ -108,10 +125,30 @@ export const PosModal: React.FC<PosModalProps> = ({
   permissions,
   discountCeilingPercent,
   onLockSession,
+  currencyCode,
+  currencySymbol,
+  currentUserName,
 }) => {
   const canOversell = permissions.has('stock.oversell');
   const canDiscount = permissions.has('sale.discount');
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * NFR-12: the highlighted search result, so a sale needs no mouse.
+   *
+   * <p>The results were a list of buttons and nothing else — reachable only by
+   * clicking. A cashier with a scanner in one hand and a customer waiting cannot
+   * put the scanner down to point at a screen, which is what "core selling
+   * requires no mouse" is protecting.
+   */
+  const [highlighted, setHighlighted] = useState(0);
+  /**
+   * The till is a window, not a fixed sheet. A cashier on a small counter screen
+   * wants every pixel; one checking stock in the app behind it wants the till out
+   * of the way without losing the cart. Minimised keeps this component mounted,
+   * so the cart, the held sales and the receipt block all survive the round trip.
+   */
+  const [windowState, setWindowState] = useState<'normal' | 'maximized' | 'minimized'>('normal');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [catalogueView, setCatalogueView] = useState<'list' | 'grid' | 'table'>('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -236,43 +273,25 @@ export const PosModal: React.FC<PosModalProps> = ({
     setCart([]);
   }, [currentOutlet.id]);
 
-  // Categories tailored specifically to the distinct store line
-  const categories =
-    outletId === 'inco-hardware'
-      ? [
-          'All',
-          'Power Tools & Machinery',
-          'Hand Tools & Hardware',
-          'Plumbing & Sanitary',
-          'Paints & Adhesives',
-          'Fasteners & Fixings',
-          'Building & Site Safety',
-        ]
-      : outletId === 'apex-electricals'
-      ? [
-          'All',
-          'Cables & Wires',
-          'Switches & Sockets',
-          'Protection & Breakers',
-          'Conduits & Trunking',
-          'Lighting & Lamps',
-          'Solar & Inverters',
-        ]
-      : [
-          'All',
-          'Power Tools & Machinery',
-          'Hand Tools & Hardware',
-          'Plumbing & Sanitary',
-          'Paints & Adhesives',
-          'Fasteners & Fixings',
-          'Building & Site Safety',
-          'Cables & Wires',
-          'Switches & Sockets',
-          'Protection & Breakers',
-          'Conduits & Trunking',
-          'Lighting & Lamps',
-          'Solar & Inverters',
-        ];
+  /**
+   * The pills are the categories this branch actually stocks.
+   *
+   * They used to be two hand-written lists keyed off the outlet id, so a branch
+   * that was not one of those two got every category whether it stocked it or
+   * not, and any category added in Products was unreachable from the till.
+   */
+  const categories = React.useMemo(() => {
+    const stocked = products
+      .filter((p) => p.active && (!p.outletId || p.outletId === 'all-outlets' || p.outletId === outletId))
+      .map((p) => p.category)
+      .filter(Boolean);
+    return ['All', ...Array.from(new Set(stocked)).sort((a, b) => a.localeCompare(b))];
+  }, [products, outletId]);
+
+  // A category pill that no longer exists would filter the catalogue to nothing.
+  useEffect(() => {
+    if (!categories.includes(selectedCategory)) setSelectedCategory('All');
+  }, [categories, selectedCategory]);
 
   // Calculate totals
   const subtotal = sumMoney(cart.map((item) => item.lineTotal));
@@ -285,8 +304,12 @@ export const PosModal: React.FC<PosModalProps> = ({
 
   // FR-POS-03..06: scanner keystrokes reach the cart wherever focus sits.
   useScanner({
-    enabled: isOpen && !paymentModalOpen && !completedSale,
+    enabled: isOpen && windowState !== 'minimized' && !paymentModalOpen && !completedSale,
     onScan: (code) => {
+      // The code was typed into the search box by the type-to-search capture
+      // below; the scanner owns it from here, so clear what it left behind.
+      setSearchQuery('');
+      setHighlighted(0);
       const stocked = products.filter(
         (p) => !p.outletId || p.outletId === 'all-outlets' || p.outletId === outletId,
       );
@@ -306,6 +329,39 @@ export const PosModal: React.FC<PosModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Minimised, the till is a dock strip; it must not eat the keyboard of
+      // whatever screen the cashier minimised it to look at. Enter restores it.
+      if (windowState === 'minimized') {
+        if (e.key === 'Enter' && document.activeElement === document.body) {
+          e.preventDefault();
+          setWindowState('normal');
+        }
+        return;
+      }
+
+      // NFR-12. The payment step was the last part of a sale that needed a
+      // pointer: F2 opened it, the cash field took focus, and then the only way
+      // to finish was to click. Enter finishes it; Escape steps back to the cart
+      // rather than abandoning the sale.
+      if (paymentModalOpen && !completedSale) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handleFinalizeSale();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          setPaymentModalOpen(false);
+        }
+        return;
+      }
+
+      if (e.key === 'F11') {
+        // The browser's own full-screen is the wrong tool here: the app chrome
+        // behind the till should stay put, only the till window grows.
+        e.preventDefault();
+        setWindowState((state) => (state === 'maximized' ? 'normal' : 'maximized'));
+        return;
+      }
+
       if (e.key === 'Escape' && !paymentModalOpen && !completedSale) {
         onClose();
       } else if (e.key === 'F2' && cart.length > 0 && !paymentModalOpen) {
@@ -324,7 +380,67 @@ export const PosModal: React.FC<PosModalProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, cart, paymentModalOpen, completedSale]);
+  }, [isOpen, cart, paymentModalOpen, completedSale, windowState]);
+
+  /**
+   * FR-POS-04 / NFR-12: type anywhere, search starts.
+   *
+   * The search box previously had to be clicked or reached with F4, so a cashier
+   * who simply started typing a product name watched their keystrokes go
+   * nowhere. Anything printable typed outside a field is treated as the start of
+   * a product search and routed into the box, focus and all.
+   *
+   * It stays out of the way of the scanner (which reads raw key events wherever
+   * focus sits), of any field the cashier is already in, and of the overlays that
+   * are meant to hold attention — payment, the receipt, the PIN prompts.
+   */
+  const typingBlocked =
+    paymentModalOpen ||
+    Boolean(completedSale) ||
+    holdModalOpen ||
+    heldDrawerOpen ||
+    discountModalOpen ||
+    customerModalOpen ||
+    Boolean(unitPickerProduct) ||
+    Boolean(floorOverrideTarget);
+
+  useEffect(() => {
+    if (!isOpen || windowState === 'minimized' || typingBlocked || !shiftInfo.isOpen) return;
+
+    const handleTyping = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key.length !== 1) return;
+      // Space is how a keyboard user presses the focused button, and it is never
+      // a useful first character of a search.
+      if (event.key === ' ') return;
+
+      const active = document.activeElement as HTMLElement | null;
+      if (active === searchInputRef.current) return;
+      const tag = active?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || active?.isContentEditable) return;
+
+      event.preventDefault();
+      setSearchQuery(event.key);
+      setHighlighted(0);
+      searchInputRef.current?.focus();
+    };
+
+    window.addEventListener('keydown', handleTyping);
+    return () => window.removeEventListener('keydown', handleTyping);
+  }, [isOpen, windowState, typingBlocked, shiftInfo.isOpen]);
+
+  // A till that was minimised when something else closed it (an idle lock, say)
+  // must come back as a till, not as the dock strip it was left in.
+  useEffect(() => {
+    if (isOpen) setWindowState((state) => (state === 'minimized' ? 'normal' : state));
+  }, [isOpen]);
+
+  // Opening the till puts the caret where selling starts.
+  useEffect(() => {
+    if (!isOpen || windowState === 'minimized' || !shiftInfo.isOpen) return;
+    const frame = requestAnimationFrame(() => searchInputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [isOpen, windowState, shiftInfo.isOpen]);
 
   if (!isOpen) return null;
 
@@ -788,8 +904,8 @@ export const PosModal: React.FC<PosModalProps> = ({
       receiptNumber: '',
       outletId,
       outletName: currentOutlet.name,
-      terminalId: '01',
-      cashierName: 'Kwame A.',
+      terminalId: shiftInfo.terminalId,
+      cashierName: shiftInfo.cashier || currentUserName,
       customerId: selectedCustomer?.id,
       customerName: selectedCustomer ? selectedCustomer.name : 'Walk-in Customer',
       customerPhone: selectedCustomer?.phone,
@@ -818,14 +934,23 @@ export const PosModal: React.FC<PosModalProps> = ({
       setReceiptReprint(false);
       setPrintFailed(false);
 
-      // FR-RCPT-05: a print failure surfaces a retry; it never reverses the sale.
-      void printReceipt({
-        receiptNumber: committed.receiptNumber,
-        paperWidth: '80mm',
-        payload: committed.receiptNumber,
-      }).then((result) => {
-        if (!result.ok) setPrintFailed(true);
-      });
+      // FR-RCPT-01/05: the sale is committed before any print is attempted, and a
+      // print failure surfaces a retry — it never reverses the sale.
+      //
+      // The payload is fetched rather than assembled here. It previously sent the
+      // receipt *number* as the whole payload, so the printer received
+      // "INC-01-000123" and nothing else — no items, no totals. The server
+      // renders the real receipt from the sale it just stored.
+      void receiptsApi.forSale(committed.id, '80mm')
+        .then((receipt) => printReceipt({
+          receiptNumber: receipt.receiptNumber,
+          paperWidth: receipt.width,
+          payload: receipt.escPos,
+        }))
+        .then((result) => {
+          if (!result.ok) setPrintFailed(true);
+        })
+        .catch(() => setPrintFailed(true));
       setPaymentModalOpen(false);
       setCart([]);
       setSelectedCustomer(null);
@@ -838,29 +963,69 @@ export const PosModal: React.FC<PosModalProps> = ({
     });
   };
 
-  const filteredProducts = products.filter((p) => {
-    const matchesOutlet = !p.outletId || p.outletId === 'all-outlets' || p.outletId === outletId;
-    const matchesCat = selectedCategory === 'All' || p.category === selectedCategory;
-    const matchesSearch =
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.barcodes.some((entry) => entry.code.includes(searchQuery));
-    return matchesOutlet && matchesCat && matchesSearch && p.active;
-  });
-  const searchResults = searchQuery.trim() ? filteredProducts.slice(0, 6) : [];
+  /** Everything this branch can sell — the denominator for the title bar count. */
+  const outletProducts = products.filter(
+    (p) => p.active && (!p.outletId || p.outletId === 'all-outlets' || p.outletId === outletId),
+  );
+  const catalogueSize = outletProducts.length;
 
-  const formatMoney = (amount: number) => `GH₵ ${amount.toFixed(2)}`;
-  const receiptPaymentTotal =
-    completedSale?.payments.reduce((sum, payment) => sum + payment.amount, 0) || 0;
-  const receiptCashRendered = completedSale
-    ? receiptPaymentTotal + completedSale.changeDue
-    : 0;
-  const receiptChangeReturned = completedSale
-    ? Math.max(0, receiptCashRendered - completedSale.total)
-    : 0;
-  const receiptPaymentLabel =
-    completedSale?.payments.map((payment) => payment.provider || payment.method).join(' + ') ||
-    'Cash';
+  const needle = searchQuery.trim().toLowerCase();
+  const matchesQuery = (p: Product) =>
+    !needle ||
+    p.name.toLowerCase().includes(needle) ||
+    p.sku.toLowerCase().includes(needle) ||
+    (p.brand || '').toLowerCase().includes(needle) ||
+    p.barcodes.some((entry) => entry.code.toLowerCase().includes(needle));
+
+  const filteredProducts = outletProducts.filter(
+    (p) => (selectedCategory === 'All' || p.category === selectedCategory) && matchesQuery(p),
+  );
+
+  /**
+   * The suggestion list deliberately ignores the category pill. A cashier who
+   * left "Plumbing" selected and then typed a cable's name got "No product
+   * matches" for something the branch plainly stocks; what they typed is the
+   * more specific instruction, so it wins over what they last clicked.
+   */
+  const searchResults = needle ? outletProducts.filter(matchesQuery).slice(0, 8) : [];
+
+  // FR-SET-01: one symbol, from Settings, used everywhere money is shown here.
+  const formatMoney = (amount: number) => `${currencySymbol} ${amount.toFixed(2)}`;
+  /** Who the drawer belongs to — the shift's cashier, not whoever is compiled in. */
+  const cashierName = shiftInfo.cashier || currentUserName || 'Unknown';
+  const terminalLabel = shiftInfo.terminalId || '—';
+  const isMaximized = windowState === 'maximized';
+  // Change is the server's figure. It computes it as payments less total when
+  // the sale is committed, and recomputing it here is how the old receipt came
+  // to show double.
+
+  /**
+   * Minimised: a dock strip instead of the till. This component stays mounted,
+   * so restoring lands on exactly the cart that was left — nothing is re-rung.
+   */
+  if (windowState === 'minimized') {
+    return (
+      <div className="fixed bottom-4 right-4 z-60 animate-fade-in">
+        <button
+          type="button"
+          onClick={() => setWindowState('normal')}
+          className="flex items-center gap-3 rounded-xl border border-slate-700 bg-[#1e293b] px-4 py-3 text-white shadow-2xl hover:bg-slate-800 cursor-pointer"
+          title="Restore till"
+        >
+          <span className="rounded-lg bg-accent-500 px-1.5 py-1 text-xs font-black tracking-wider">POS</span>
+          <span className="text-left">
+            <span className="block text-xs font-black">{currentOutlet.name} • Terminal #{terminalLabel}</span>
+            <span className="block text-[10px] text-slate-300">
+              {cart.length > 0
+                ? `${cart.length} line${cart.length === 1 ? '' : 's'} • ${formatMoney(total)}`
+                : 'Cart empty'}
+            </span>
+          </span>
+          <Maximize2 className="h-4 w-4 text-slate-300" />
+        </button>
+      </div>
+    );
+  }
 
   if (!shiftInfo.isOpen) {
     return (
@@ -895,8 +1060,20 @@ export const PosModal: React.FC<PosModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-60 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-modal-backdrop">
-      <div className="bg-slate-100 rounded-xl w-full max-w-[1550px] h-[95vh] flex flex-col overflow-hidden shadow-2xl border border-slate-300 animate-modal-card">
+    <div
+      className={
+        isMaximized
+          ? 'fixed inset-0 z-60 bg-slate-900/80 backdrop-blur-xs flex animate-modal-backdrop'
+          : 'fixed inset-0 z-60 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-modal-backdrop'
+      }
+    >
+      <div
+        className={`bg-slate-100 flex flex-col overflow-hidden shadow-2xl animate-modal-card ${
+          isMaximized
+            ? 'w-full h-full'
+            : 'rounded-xl w-full max-w-[1550px] h-[95vh] border border-slate-300'
+        }`}
+      >
         {/* POS Top Bar */}
         <div className="bg-[#1e293b] text-white px-4 py-2.5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -907,14 +1084,18 @@ export const PosModal: React.FC<PosModalProps> = ({
               <div className="font-black text-sm flex items-center gap-2">
                 <span>{currentOutlet.name}</span>
                 <span className="text-[11px] font-semibold text-accent-400 bg-white/10 px-2 py-0.5 rounded-md">
-                  Terminal #01
+                  Terminal #{terminalLabel}
                 </span>
                 <span className="hidden sm:inline-block text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  {outletId === 'inco-hardware' ? 'Tools, Hardware & Plumbing Catalog' : 'Electricals, Cables & Switchgear Catalog'}
+                  {filteredProducts.length} of {catalogueSize} items
                 </span>
               </div>
               <div className="text-[10px] text-slate-300">
-                Cashier: <strong>Kwame A.</strong> • Currency: <strong>GHS (GH₵)</strong> • Town: <strong>{currentOutlet.town}</strong>
+                Cashier: <strong>{cashierName}</strong> • Currency:{' '}
+                <strong>{currencyCode} ({currencySymbol})</strong> • Town: <strong>{currentOutlet.town}</strong>
+                {shiftInfo.openedAt && (
+                  <span className="hidden lg:inline"> • Shift since <strong>{shiftInfo.openedAt}</strong></span>
+                )}
               </div>
             </div>
           </div>
@@ -939,13 +1120,31 @@ export const PosModal: React.FC<PosModalProps> = ({
               <div className="relative">
                 <button
                   onClick={() => setHeldDrawerOpen(true)}
-                  className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-xs"
+                  className="bg-accent-500 hover:bg-accent-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-xs cursor-pointer"
                 >
                   <PauseCircle className="w-4 h-4" />
                   <span>Resume Held ({heldCarts.length})</span>
                 </button>
               </div>
             )}
+            <button
+              type="button"
+              onClick={() => setWindowState('minimized')}
+              className="p-1.5 hover:bg-white/10 rounded-lg text-slate-300 hover:text-white transition-colors cursor-pointer"
+              title="Minimise till (cart is kept)"
+              aria-label="Minimise till"
+            >
+              <Minus className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setWindowState(isMaximized ? 'normal' : 'maximized')}
+              className="p-1.5 hover:bg-white/10 rounded-lg text-slate-300 hover:text-white transition-colors cursor-pointer"
+              title={isMaximized ? 'Restore till (F11)' : 'Maximise till (F11)'}
+              aria-label={isMaximized ? 'Restore till' : 'Maximise till'}
+            >
+              {isMaximized ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+            </button>
             <button
               onClick={onClose}
               className="p-1.5 hover:bg-white/10 rounded-lg text-slate-300 hover:text-white transition-colors"
@@ -982,7 +1181,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                     setOversellPrompt(null);
                     handleAddToCart(prompt.product, prompt.unitIndex, { force: true });
                   }}
-                  className="rounded-lg bg-amber-600 px-3 py-1.5 font-bold text-white"
+                  className="rounded-lg bg-slate-900 hover:bg-black px-3 py-1.5 font-bold text-white cursor-pointer"
                   title="Recorded as a flagged movement on the exceptions report (BR-9)"
                 >
                   Sell anyway
@@ -1054,38 +1253,75 @@ export const PosModal: React.FC<PosModalProps> = ({
           <div className="flex-1 flex flex-col overflow-hidden p-3 sm:p-4 space-y-3">
             {/* Search and Category Pills */}
             <div className="flex flex-col sm:flex-row gap-2 items-center justify-between">
-              <div className="relative w-full sm:w-80">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <div className="relative w-full sm:w-[28rem] lg:w-[34rem] shrink-0">
+                <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   ref={searchInputRef}
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search electrical items or SKU..."
-                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-accent-500 shadow-2xs"
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setHighlighted(0);
+                  }}
+                  onKeyDown={(event) => {
+                    if (searchResults.length === 0) return;
+
+                    if (event.key === 'ArrowDown') {
+                      event.preventDefault();
+                      setHighlighted((at) => (at + 1) % searchResults.length);
+                    } else if (event.key === 'ArrowUp') {
+                      event.preventDefault();
+                      setHighlighted((at) => (at - 1 + searchResults.length) % searchResults.length);
+                    } else if (event.key === 'Enter') {
+                      // A scanner's terminating Enter is claimed by useScanner,
+                      // which adds the scanned line itself. Acting on it here too
+                      // would add the highlighted suggestion a second time.
+                      if (event.defaultPrevented || event.nativeEvent.defaultPrevented) return;
+                      // The whole point: type a few letters, press Enter, keep
+                      // serving. Nothing here needs the pointer.
+                      event.preventDefault();
+                      const chosen = searchResults[highlighted] ?? searchResults[0];
+                      if (chosen) {
+                        handleAddToCart(chosen);
+                        setSearchQuery('');
+                        setHighlighted(0);
+                      }
+                    } else if (event.key === 'Escape' && searchQuery.trim()) {
+                      // Dismisses the list without closing the till behind it.
+                      event.stopPropagation();
+                      setSearchQuery('');
+                    }
+                  }}
+                  placeholder="Start typing a product, SKU or barcode…  ↑↓ choose · Enter adds"
+                  className="w-full pl-11 pr-3 py-3 text-sm font-semibold bg-white border-2 border-slate-300 rounded-xl focus:outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20 shadow-xs placeholder:font-normal placeholder:text-slate-400"
                 />
                 {searchQuery.trim() && (
-                  <div className="absolute left-0 right-0 top-9 z-40 bg-white border border-slate-200 rounded-xl shadow-xl p-2">
+                  <div className="absolute left-0 right-0 top-[calc(100%+0.375rem)] z-40 max-h-[60vh] overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-xl p-2">
                     {searchResults.length > 0 ? (
-                      searchResults.map((product) => {
+                      searchResults.map((product, index) => {
                         const stock = product.stock[outletId] || 0;
+                        const isHighlighted = index === highlighted;
                         return (
                           <button
                             key={product.id}
                             type="button"
+                            onMouseEnter={() => setHighlighted(index)}
                             onClick={() => {
                               handleAddToCart(product);
                               setSearchQuery('');
+                              setHighlighted(0);
                             }}
-                            className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg hover:bg-slate-50 text-left"
+                            className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-left ${
+                              isHighlighted ? 'bg-accent-50 ring-1 ring-accent-300' : 'hover:bg-slate-50'
+                            }`}
                           >
                             <div className="min-w-0">
-                              <div className="text-xs font-bold text-slate-800 truncate">{product.name}</div>
-                              <div className="text-[10px] text-slate-400 font-mono">
+                              <div className="text-sm font-bold text-slate-800 truncate">{product.name}</div>
+                              <div className="text-[11px] text-slate-400 font-mono">
                                 {product.sku} • {product.baseUnit} • {formatMoney(product.retailPrice)}
                               </div>
                             </div>
-                            <span className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5 shrink-0">
+                            <span className="text-[11px] font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5 shrink-0">
                               {stock} {product.baseUnit}
                             </span>
                           </button>
@@ -1191,12 +1427,12 @@ export const PosModal: React.FC<PosModalProps> = ({
                     <div className={`${catalogueView === 'list' || catalogueView === 'table' ? 'mt-0 pt-0 border-0' : 'mt-4 pt-3 border-t border-slate-100'} flex items-end justify-between gap-3`}>
                       <div>
                         <div className="text-sm font-bold text-slate-900">
-                          GH₵ {p.retailPrice.toFixed(2)}
+                          {formatMoney(p.retailPrice)}
                           <span className="text-[10px] text-slate-400 font-normal"> / {p.baseUnit}</span>
                         </div>
                         {selectedCustomer && (selectedCustomer.customerType === 'electrician' || selectedCustomer.customerType === 'contractor') && (
                           <div className="text-[10px] font-bold text-slate-500">
-                            Trade: GH₵ {p.tradePrice.toFixed(2)}
+                            Trade: {formatMoney(p.tradePrice)}
                           </div>
                         )}
                       </div>
@@ -1233,7 +1469,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                     {cart.reduce((a, b) => a + b.quantity, 0)} items in cart
                   </div>
                   <div className="text-base font-black text-slate-900 font-mono">
-                    GH₵ {total.toFixed(2)}
+                    {formatMoney(total)}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1410,7 +1646,7 @@ export const PosModal: React.FC<PosModalProps> = ({
 
                       {/* Editable Price per unit with Floor Price Check (BR-10) */}
                       <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-slate-400">@ GH₵</span>
+                        <span className="text-[10px] text-slate-400">@ {currencySymbol}</span>
                         <input
                           type="number"
                           step="any"
@@ -1427,7 +1663,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                       </div>
 
                       <div className="font-black text-slate-900 text-sm">
-                        GH₵ {item.lineTotal.toFixed(2)}
+                        {formatMoney(item.lineTotal)}
                       </div>
                     </div>
 
@@ -1453,7 +1689,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                       )}
                       {canDiscount && (
                         <label className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
-                          Less GH₵
+                          Less {currencySymbol}
                           <input
                             type="number"
                             step="any"
@@ -1482,7 +1718,7 @@ export const PosModal: React.FC<PosModalProps> = ({
               <div className="space-y-1.5 text-xs text-slate-600">
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
-                  <span className="font-mono font-bold">GH₵ {subtotal.toFixed(2)}</span>
+                  <span className="font-mono font-bold">{formatMoney(subtotal)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <button
@@ -1500,12 +1736,12 @@ export const PosModal: React.FC<PosModalProps> = ({
                 {cartDiscountPercent > 0 && (
                   <div className="flex justify-between text-accent-600 font-bold">
                     <span>Discount ({cartDiscountPercent}%):</span>
-                    <span className="font-mono">- GH₵ {discountTotal.toFixed(2)}</span>
+                    <span className="font-mono">- {formatMoney(discountTotal)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-base font-black text-slate-900 pt-1 border-t border-slate-300">
                   <span>TOTAL DUE:</span>
-                  <span className="text-accent-600 font-mono text-xl">GH₵ {total.toFixed(2)}</span>
+                  <span className="text-accent-600 font-mono text-xl">{formatMoney(total)}</span>
                 </div>
               </div>
 
@@ -1562,7 +1798,7 @@ export const PosModal: React.FC<PosModalProps> = ({
               <div>
                 <h3 className="font-black text-xl leading-tight">Collect Payment</h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Total Payable: <strong className="text-accent-400 text-sm font-black">GH₵ {total.toFixed(2)}</strong>
+                  Total Payable: <strong className="text-accent-400 text-sm font-black">{formatMoney(total)}</strong>
                 </p>
               </div>
               <button 
@@ -1635,7 +1871,7 @@ export const PosModal: React.FC<PosModalProps> = ({
               {activePaymentTab === 'cash' && (
                 <div className="space-y-6">
                   <div>
-                    <label className="text-sm font-bold text-slate-800 block mb-2">Cash Tendered (GH₵) *</label>
+                    <label className="text-sm font-bold text-slate-800 block mb-2">Cash Tendered ({currencySymbol}) *</label>
                     <input
                       type="number"
                       step="any"
@@ -1658,7 +1894,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                           onClick={() => setCashTendered(denom.toString())}
                           className="py-3 bg-slate-100 hover:bg-accent-50 hover:text-accent-600 hover:border-accent-300 font-black rounded-lg border border-slate-300 text-sm cursor-pointer transition-colors"
                         >
-                          GH₵ {denom}
+                          {currencySymbol} {denom}
                         </button>
                       ))}
                     </div>
@@ -1668,7 +1904,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                   <div className="bg-slate-50 border border-slate-300 rounded-xl p-5 flex justify-between items-center">
                     <span className="font-bold text-slate-700 text-base">Change Due to Customer:</span>
                     <span className="text-2xl font-black text-emerald-600 font-mono">
-                      GH₵ {changeDue.toFixed(2)}
+                      {formatMoney(changeDue)}
                     </span>
                   </div>
                 </div>
@@ -1845,7 +2081,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                             </select>
                           </label>
                           <label className="text-xs font-bold text-slate-700">
-                            Amount (GH₵)
+                            Amount ({currencySymbol})
                             <div className="mt-1 flex gap-2">
                               <input
                                 type="number"
@@ -1880,6 +2116,20 @@ export const PosModal: React.FC<PosModalProps> = ({
                                 Rest
                               </button>
                             </div>
+                            {part.method === 'cash' && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {[10, 20, 50, 100, 200].map((denomination) => (
+                                  <button
+                                    key={denomination}
+                                    type="button"
+                                    onClick={() => setSplitParts((prev) => prev.map((item) => item.id === part.id ? { ...item, amount: denomination } : item))}
+                                    className="rounded-md border border-slate-300 bg-slate-50 px-2.5 py-1 text-[11px] font-black text-slate-700 hover:border-accent-400 hover:bg-accent-50"
+                                  >
+                                    {currencySymbol} {denomination}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </label>
                         </div>
                         {part.method !== 'cash' && (
@@ -1960,6 +2210,9 @@ export const PosModal: React.FC<PosModalProps> = ({
                 className="sm:w-2/3 py-3 rounded-lg bg-accent-500 hover:bg-accent-600 text-white font-black text-sm shadow-md cursor-pointer transition-colors"
               >
                 Complete Sale &amp; Issue Receipt
+                <span className="ml-2 text-[10px] font-mono bg-white/20 px-1.5 py-0.5 rounded">
+                  Enter
+                </span>
               </button>
             </div>
           </div>
@@ -2268,7 +2521,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setPrintFailed(false)}
-                    className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white"
+                    className="rounded-lg bg-slate-900 hover:bg-black px-3 py-1.5 text-xs font-bold text-white cursor-pointer"
                   >
                     Retry print
                   </button>
@@ -2286,7 +2539,7 @@ export const PosModal: React.FC<PosModalProps> = ({
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-center">
               <div className="text-xs font-black uppercase tracking-wide text-slate-500">Change due</div>
               <div className="mt-1 text-4xl font-black tracking-tight text-slate-900">
-                {formatMoney(receiptChangeReturned)}
+                {formatMoney(completedSale.changeDue)}
               </div>
               <div
                 className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-black ${
@@ -2306,128 +2559,28 @@ export const PosModal: React.FC<PosModalProps> = ({
               </div>
             </div>
 
-            {/* PRD §9 Digital Receipt Form */}
-            <div className="bg-white p-6 rounded-2xl border border-[#E2E8F0] text-slate-800 space-y-0 select-text">
-              {/* Header Block */}
-              <section className="pb-5">
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                  <div className="flex items-center gap-2 text-emerald-700">
-                    <CheckCircle2 className="w-5 h-5 shrink-0" />
-                    <span className="text-xs font-black uppercase tracking-wide">Sale Completed Successfully</span>
-                  </div>
-                  {receiptReprint && (
-                    <span className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-rose-700">
-                      Reprint
-                    </span>
-                  )}
-                </div>
+            {/*
+              The receipt, rendered by the same component the sales history uses.
 
-                <div className="pt-5 text-center">
-                  <div className="text-lg font-black uppercase tracking-wide text-slate-900">
-                    {completedSale.outletName}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    {currentOutlet.address}
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    Tel: {currentOutlet.phone}
-                  </div>
-                </div>
+              This was a second full receipt written out by hand here, which is
+              why the slip handed over after a sale looked nothing like the one
+              reprinted later — two designs for one document. It also did its own
+              change arithmetic and got it wrong: it added the change back onto
+              the payments before subtracting the total, so a GH₵20 change showed
+              as GH₵40.
 
-                <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-                  <div>
-                    <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">Receipt No</span>
-                    <span className="font-semibold text-slate-700">{completedSale.receiptNumber}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">Date</span>
-                    <span className="font-semibold text-slate-700">{completedSale.createdAt}</span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">Cashier</span>
-                    <span className="font-semibold text-slate-700">{completedSale.cashierName}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">Customer</span>
-                    <span className="font-semibold text-slate-700">{completedSale.customerName}</span>
-                  </div>
-                </div>
-              </section>
-
-              {/* Itemized Table Block */}
-              <section className="border-t border-[#F1F5F9] py-5">
-                <div className="grid grid-cols-[1fr_92px_96px] gap-3 pb-3 text-[10px] font-black uppercase tracking-wide text-slate-400">
-                  <span>Product / Specs</span>
-                  <span className="text-right">Qty / Price</span>
-                  <span className="text-right">Line Total</span>
-                </div>
-                <div className="space-y-4">
-                  {completedSale.items.map((it, idx) => (
-                    <div key={idx} className="grid grid-cols-[1fr_92px_96px] gap-3 items-start text-xs">
-                      <div>
-                        <div className="font-medium leading-snug text-slate-700">{it.product.name}</div>
-                        <div className="mt-1 text-[11px] text-slate-500">
-                          SKU {it.product.sku} • {it.selectedUnit}
-                        </div>
-                      </div>
-                      <div className="text-right text-[11px] text-slate-500">
-                        <div className="font-semibold text-slate-600">{it.quantity} {it.selectedUnit}</div>
-                        <div>{formatMoney(it.unitPrice)} each</div>
-                      </div>
-                      <div className="text-right font-bold text-slate-900">
-                        {formatMoney(it.lineTotal)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {/* Financial Summary Block */}
-              <section className="border-t border-[#F1F5F9] py-5 space-y-3">
-                <div className="flex justify-between text-xs text-slate-600">
-                  <span>Subtotal</span>
-                  <span className="font-bold text-slate-900">{formatMoney(completedSale.subtotal)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-slate-600">
-                  <span>VAT / Taxes</span>
-                  <span className="font-bold text-slate-900">{formatMoney(0)}</span>
-                </div>
-                {completedSale.discountTotal > 0 && (
-                  <div className="flex justify-between text-xs font-bold text-accent-700">
-                    <span>Discount</span>
-                    <span>- {formatMoney(completedSale.discountTotal)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between items-end rounded-xl bg-slate-50 border border-slate-200 px-4 py-4">
-                  <span className="text-sm font-black uppercase tracking-wide text-slate-900">Total</span>
-                  <span className="text-2xl font-black tracking-tight text-slate-900">
-                    {formatMoney(completedSale.total)}
-                  </span>
-                </div>
-              </section>
-
-              {/* Payment Details Block */}
-              <section className="border-t border-[#F1F5F9] pt-5 space-y-3">
-                <div className="flex justify-between text-xs text-slate-600">
-                  <span>Payment Method</span>
-                  <span className="font-bold capitalize text-slate-900">{receiptPaymentLabel}</span>
-                </div>
-                {completedSale.payments.map((payment, i) => (
-                  <div key={`${payment.method}-${i}`} className="flex justify-between text-xs text-slate-600">
-                    <span>Paid via {payment.provider || payment.method}</span>
-                    <span className="font-bold text-slate-900">{formatMoney(payment.amount)}</span>
-                  </div>
-                ))}
-                <div className="flex justify-between text-xs text-slate-600">
-                  <span>Cash Rendered</span>
-                  <span className="font-bold text-slate-900">{formatMoney(receiptCashRendered)}</span>
-                </div>
-                <div className="flex justify-between text-xs font-bold text-slate-900">
-                  <span>Change Returned</span>
-                  <span>{formatMoney(receiptChangeReturned)}</span>
-                </div>
-                <p className="pt-3 text-center text-xs text-slate-400">Thank you for your business.</p>
-              </section>
+              One component, one design, and the figures are the server's.
+            */}
+            <div className="flex justify-center">
+              <ThermalReceiptSlip
+                sale={completedSale}
+                isReprint={receiptReprint}
+                paperWidth="80mm"
+                outletAddress={{
+                  address: currentOutlet.address || '',
+                  tel: currentOutlet.phone || '',
+                }}
+              />
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 pt-1 shrink-0">

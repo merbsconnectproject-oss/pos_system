@@ -16,7 +16,7 @@
  * `new BigDecimal("1.005")`, which is exact; `BigDecimal.valueOf(double)`
  * would re-introduce the binary float error this file exists to pin down.
  */
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,6 +27,13 @@ import { DEFAULT_ROLE_PERMISSIONS, resolvePermissions, PERMISSION_CODES } from '
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(here, '../docs/contract/test-vectors.json');
+
+/**
+ * The Java suite reads its own copy from the classpath, so both are written
+ * here. Copying by hand is a step somebody forgets, and the failure mode is the
+ * worst kind: two suites asserting different contracts, both green.
+ */
+const OUT_API = resolve(here, '../../pos-api/src/test/resources/test-vectors.json');
 
 /** Fixed 2dp string, so Java reads an exact decimal rather than a double. */
 const money = (n: number) => n.toFixed(2);
@@ -200,8 +207,23 @@ const vectors = {
   },
 };
 
+const serialised = JSON.stringify(vectors, null, 2) + '\n';
+
 mkdirSync(dirname(OUT), { recursive: true });
-writeFileSync(OUT, JSON.stringify(vectors, null, 2) + '\n', 'utf8');
+writeFileSync(OUT, serialised, 'utf8');
+
+// The backend is a separate repository. Its copy is written when it happens to
+// be checked out beside this one — which is the normal case on a developer's
+// machine, and never the case in CI, where only this repository exists.
+//
+// Deliberately not `mkdirSync` here: creating `../pos-api/src/test/resources`
+// out of nothing would leave a stray directory next to an unrelated checkout
+// and write a file nothing reads.
+if (existsSync(dirname(OUT_API))) {
+  writeFileSync(OUT_API, serialised, 'utf8');
+} else {
+  console.log('pos-api is not checked out beside this repository — wrote one copy only.');
+}
 
 const count =
   vectors.money.roundMoney.length +

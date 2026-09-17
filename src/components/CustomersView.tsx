@@ -175,7 +175,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
         <div>
           <div className="flex items-center gap-2"><h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Customers</h1><InfoHint text="Shared customer directory, trade pricing, purchase history and credit-account readiness." /></div>
         </div>
-        <button onClick={startCreate} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-xs self-start lg:self-auto">
+        <button onClick={startCreate} className="flex items-center gap-1.5 bg-slate-900 hover:bg-black text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-xs self-start lg:self-auto cursor-pointer">
           <Plus className="w-4 h-4" /> Add Customer
         </button>
       </div>

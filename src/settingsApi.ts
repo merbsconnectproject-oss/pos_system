@@ -35,6 +35,8 @@ export interface SettingsWire {
   autoPrintReceipt: boolean;
   showCashierOnReceipt: boolean;
   accentColor: string;
+  fontFamily: GeneralSettings['fontFamily'];
+  fontScalePercent: number;
   thresholds: {
     idleLockMinutes: number;
     adjustmentApprovalPesewas: number;
@@ -86,6 +88,8 @@ export const toGeneralSettings = (wire: SettingsWire): GeneralSettings => ({
   autoPrintReceipt: wire.autoPrintReceipt,
   showCashierOnReceipt: wire.showCashierOnReceipt,
   accentColor: wire.accentColor,
+  fontFamily: wire.fontFamily,
+  fontScalePercent: wire.fontScalePercent,
   thresholds: {
     idleLockMinutes: wire.thresholds.idleLockMinutes,
     adjustmentApprovalValue: toMajor(wire.thresholds.adjustmentApprovalPesewas),
@@ -108,6 +112,8 @@ const toWire = (settings: GeneralSettings) => ({
   autoPrintReceipt: settings.autoPrintReceipt,
   showCashierOnReceipt: settings.showCashierOnReceipt,
   accentColor: settings.accentColor,
+  fontFamily: settings.fontFamily,
+  fontScalePercent: settings.fontScalePercent,
   thresholds: {
     idleLockMinutes: settings.thresholds.idleLockMinutes,
     adjustmentApprovalPesewas: toPesewas(settings.thresholds.adjustmentApprovalValue),
@@ -126,6 +132,12 @@ export const settingsApi = {
     request<SettingsWire>('/api/settings', {
       method: 'PUT',
       body: JSON.stringify(toWire(settings)),
+    }).then(toGeneralSettings),
+
+  saveAppearance: (settings: Pick<GeneralSettings, 'accentColor' | 'fontFamily' | 'fontScalePercent'>) =>
+    request<SettingsWire>('/api/settings/appearance', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
     }).then(toGeneralSettings),
 
   /**

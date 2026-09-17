@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Layers, Search, Filter, ArrowDownRight, ArrowUpRight, AlertCircle, FileText } from 'lucide-react';
 import { StockMovement, Outlet } from '../types';
 import { InfoHint } from './InfoHint';
+import { belongsToOutlet } from '../outletScope';
 import { TablePagination } from './TablePagination';
 
 interface StockMovementsViewProps {
@@ -22,7 +23,7 @@ export const StockMovementsView: React.FC<StockMovementsViewProps> = ({
 
   const filtered = movements.filter((m) => {
     const matchesOutlet =
-      currentOutlet.id === 'all-outlets' || m.outletId === currentOutlet.id;
+      belongsToOutlet(m, currentOutlet.id);
     const matchesType = typeFilter === 'ALL' || m.type === typeFilter;
     const matchesSearch =
       m.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||

@@ -6,7 +6,7 @@
  * FR-PROD-04 unit-bound barcodes, and PRD §11 acceptance criterion 7.
  * If one of these fails, the API contract and the UI have drifted apart.
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 
 import {
   DEFAULT_ROLE_PERMISSIONS,
@@ -337,6 +337,56 @@ INITIAL_PRODUCTS.forEach((p) => p.barcodes.forEach((b) => {
   seen.set(b.code, p.id);
 }));
 check('no duplicate barcodes across catalogue', dupes === 0);
+
+// The palette guardrail in index.css flattens whole colour families to a pale
+// slate with !important — that is how AC-11 keeps the accent the only brand
+// colour. It also means `bg-blue-600 text-white` renders white text on #f1f5f9:
+// a button that is present, clickable, and invisible. Three create actions —
+// Add Supplier, Add Customer, Raise an Order — and the manager override modal's
+// whole header bar shipped that way, and no test could see it because the DOM
+// was perfectly correct.
+console.log('--- AC-11: no control is white text on a flattened background ---');
+{
+  const guardrail = readFileSync(new URL('index.css', import.meta.url), 'utf8');
+
+  // Read the families out of the stylesheet rather than restating them, so
+  // adding one to the guardrail extends this check automatically.
+  const flattened = new Set<string>();
+  // By rule block, not by line: the guardrail lists eight selectors on one line
+  // and the declaration that flattens them on the next. Reading line by line
+  // found only the single-line rose rule — one family out of nine — and passed.
+  guardrail.split('}').forEach((block) => {
+    if (!/background-color:\s*#[0-9a-f]{3,8}\s*!important/i.test(block)) return;
+    for (const match of block.matchAll(/\[class\*="bg-([a-z]+)-"\]/g)) flattened.add(match[1]);
+  });
+
+  const invisible: string[] = [];
+  const walk = (dir: URL) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = new URL(`${entry.name}${entry.isDirectory() ? '/' : ''}`, dir);
+      if (entry.isDirectory()) { walk(path); continue; }
+      if (!entry.name.endsWith('.tsx')) continue;
+
+      readFileSync(path, 'utf8').split('\n').forEach((line, index) => {
+        for (const attr of line.matchAll(/className=[`"]([^`"]*)[`"]/g)) {
+          const classes = attr[1];
+          if (!/\btext-white\b/.test(classes)) continue;
+          const bg = classes.match(/\bbg-([a-z]+)-\d{2,3}\b/);
+          if (bg && flattened.has(bg[1])) {
+            invisible.push(`${entry.name}:${index + 1} ${bg[0]} + text-white`);
+          }
+        }
+      });
+    }
+  };
+  walk(new URL('components/', import.meta.url));
+
+  invisible.forEach((hit) => console.log('   invisible:', hit));
+  check(
+    `${flattened.size} flattened families; no white-on-flattened control`,
+    invisible.length === 0,
+  );
+}
 
 console.log(fail === 0 ? `\nALL CHECKS PASSED (${seen.size} barcodes across ${INITIAL_PRODUCTS.length} products)` : `\n${fail} CHECK(S) FAILED`);
 process.exit(fail === 0 ? 0 : 1);

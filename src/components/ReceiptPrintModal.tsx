@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { CompletedSale } from '../types';
 import { ThermalReceiptSlip, generateReceiptPlainText } from './ThermalReceiptSlip';
+import { receiptsApi, receiptText } from '../receiptsApi';
 import { ReceiptVerificationModal } from './ReceiptVerificationModal';
 
 interface ReceiptPrintModalProps {
@@ -82,8 +83,23 @@ export const ReceiptPrintModal: React.FC<ReceiptPrintModalProps> = ({
     }
   };
 
+  /**
+   * The copy and the download are the same text the printer gets.
+   *
+   * Fetched from the server rather than rebuilt here: a copied receipt that
+   * differed from the printed one is the same drift this screen used to have
+   * three ways of.
+   */
+  const serverText = async () => {
+    const receipt = isReprint
+      ? await receiptsApi.reprint(sale.id, paperWidth)
+      : await receiptsApi.forSale(sale.id, paperWidth);
+    return receiptText(receipt);
+  };
+
   const handleCopyText = async () => {
-    const text = generateReceiptPlainText(sale, isReprint, paperWidth);
+    const text = await serverText().catch(() =>
+      generateReceiptPlainText(sale, isReprint, paperWidth));
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -101,8 +117,11 @@ export const ReceiptPrintModal: React.FC<ReceiptPrintModalProps> = ({
     }
   };
 
-  const handleDownloadTxt = () => {
-    const text = generateReceiptPlainText(sale, isReprint, paperWidth);
+  const handleDownloadTxt = async () => {
+    // Falls back to the local render only if the server is unreachable, so a
+    // counter with no connection can still hand over a copy.
+    const text = await serverText().catch(() =>
+      generateReceiptPlainText(sale, isReprint, paperWidth));
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

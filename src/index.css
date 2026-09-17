@@ -181,6 +181,18 @@
 
 /* Application palette guardrails. Charts use inline series colours and are intentionally excluded. */
 @layer utilities {
+  /* Modal bars use a dark/blue surface. Keep semantic heading defaults from
+     turning their titles dark (the global h1-h4 scale otherwise wins in some
+     browsers and makes the title disappear into the bar). */
+  [class*="bg-slate-900"] h1,
+  [class*="bg-slate-900"] h2,
+  [class*="bg-slate-900"] h3,
+  [class*="bg-blue-"] h1,
+  [class*="bg-blue-"] h2,
+  [class*="bg-blue-"] h3 {
+    color: #ffffff !important;
+  }
+
   [class*="bg-amber-"], [class*="bg-yellow-"], [class*="bg-blue-"], [class*="bg-indigo-"], [class*="bg-purple-"], [class*="bg-violet-"], [class*="bg-teal-"], [class*="bg-cyan-"] {
     background-color: #f1f5f9 !important;
   }

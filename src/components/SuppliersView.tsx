@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Building, CalendarClock, FileText, Mail, Package, Phone, Plus, Search, Truck, Wallet, X } from 'lucide-react';
+import { Building, FileText, Mail, Package, Phone, Plus, Search, Truck, Wallet, X } from 'lucide-react';
 import { Outlet, Product, StockMovement, Supplier } from '../types';
 import { InfoHint } from './InfoHint';
 import { TablePagination } from './TablePagination';
 import { goodsReceiptApi, suppliersApi, type ReceiptResult } from '../suppliersApi';
+import { PurchaseOrdersView } from './PurchaseOrdersView';
+import type { PurchaseOrder } from '../purchaseOrdersApi';
 
 type SupplierMode = 'list' | 'receipts' | 'purchase-orders' | 'balances';
 
@@ -17,6 +19,15 @@ interface SuppliersViewProps {
   onUpdateSupplier?: (supplier: Supplier) => void;
   onSetSupplierActive?: (supplier: Supplier, active: boolean) => void;
   onReceiveStock: (supplierId: string) => void;
+
+  /**
+   * Books a delivery against an open order — FR-SUP-08.
+   *
+   * Optional, because the purchase orders tab is useful without it: the shell
+   * owns which screen is showing, so it is the shell that moves somebody to the
+   * goods receipt with the order's outstanding lines filled in.
+   */
+  onReceiveAgainstOrder?: (order: PurchaseOrder) => void;
 }
 
 const formatMoney = (amount: number) => `GH₵ ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -31,6 +42,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
   onUpdateSupplier,
   onSetSupplierActive,
   onReceiveStock,
+  onReceiveAgainstOrder,
 }) => {
   const [activeMode, setActiveMode] = useState<SupplierMode>('list');
   const [searchTerm, setSearchTerm] = useState('');
@@ -164,7 +176,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
         <div>
           <div className="flex items-center gap-2"><h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Suppliers</h1><InfoHint text="Supplier records, receipt history, purchase planning and balances." /></div>
         </div>
-        <button onClick={startCreate} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-xs self-start lg:self-auto">
+        <button onClick={startCreate} className="flex items-center gap-1.5 bg-slate-900 hover:bg-black text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-xs self-start lg:self-auto cursor-pointer">
           <Plus className="w-4 h-4" /> Add Supplier
         </button>
       </div>
@@ -274,16 +286,17 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({
         </div>
       )}
 
+      {/* FR-SUP-08. The real workspace, not a description of one: this tab used
+          to hold a Stage 2 placeholder, and somebody arriving here from Suppliers
+          should get the same screen as the sidebar's Purchase Orders entry. */}
       {activeMode === 'purchase-orders' && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-6">
-          <div className="flex items-start gap-3">
-            <CalendarClock className="w-6 h-6 text-accent-600" />
-            <div>
-              <h2 className="text-lg font-black text-slate-900">Purchase Orders</h2>
-              <p className="text-sm text-slate-500">Stage 2 workspace for purchase orders, partial delivery, over-delivery and short-delivery handling.</p>
-            </div>
-          </div>
-        </div>
+        <PurchaseOrdersView
+          products={products}
+          suppliers={suppliers}
+          currentOutlet={currentOutlet.id === 'all-outlets' && realOutlets[0] ? realOutlets[0] : currentOutlet}
+          outlets={outlets}
+          onReceiveAgainst={(order) => onReceiveAgainstOrder?.(order)}
+        />
       )}
 
       {activeMode === 'balances' && (

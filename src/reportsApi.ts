@@ -19,6 +19,17 @@ export interface ReportSummary {
   averageSale: number;
   voidCount: number;
   voidedValue: number;
+  /** How many returns happened in the period, and what they gave back. */
+  refundCount: number;
+  refundTotal: number;
+  /**
+   * Revenue less refunds — **the sales figure**.
+   *
+   * `revenue` stays gross on purpose: takings of 10,000 with 3,000 returned is a
+   * different month from takings of 7,000 with none, and a shop wants to see
+   * both. Anywhere a single "total sales" is shown, this is the one.
+   */
+  netRevenue: number;
   cost?: number | null;
   profit?: number | null;
   marginPercent?: number | null;

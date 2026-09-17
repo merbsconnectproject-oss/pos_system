@@ -1256,12 +1256,18 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 {canViewCost && <div className="inline-flex rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-bold text-emerald-700">Live margin: {Number(form.retailPrice) > 0 ? (((Number(form.retailPrice) - Number(form.cost || 0)) / Number(form.retailPrice)) * 100).toFixed(1) : '0.0'}%</div>}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <label className="text-xs font-bold text-slate-700">Stock<input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" />
-                  {/* Opening stock and cost are per outlet and nothing stores
-                      them yet. Saying so beats accepting a number and dropping
-                      it, which is what this form did. */}
-                  <span className="mt-1 block text-[10px] font-semibold text-amber-700">Held for this session only — stock is recorded by Goods Receipt</span></label>
-                <label className="text-xs font-bold text-slate-700">Reorder level<input type="number" value={form.minAlert} onChange={(e) => setForm({ ...form, minAlert: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" /></label>
+                <label className="text-xs font-bold text-slate-700">{editingProduct ? 'Stock on hand' : 'Opening stock'}<input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} disabled={Boolean(editingProduct)} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500 disabled:bg-slate-100 disabled:text-slate-500" />
+                  {/* FR-INV-05: an opening count is a movement this form may
+                      write once. Changing it afterwards is an adjustment and
+                      needs a reason code, so the field goes read-only on edit
+                      rather than silently doing nothing. */}
+                  <span className="mt-1 block text-[10px] font-semibold text-slate-500">
+                    {editingProduct
+                      ? 'Change stock through Goods Receipt or a stock adjustment'
+                      : 'Recorded as an opening stock movement'}
+                  </span></label>
+                <label className="text-xs font-bold text-slate-700">Reorder level<input type="number" value={form.minAlert} onChange={(e) => setForm({ ...form, minAlert: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" />
+                  <span className="mt-1 block text-[10px] font-semibold text-slate-500">Saved against the outlet above — FR-INV-08</span></label>
                 <label className="text-xs font-bold text-slate-700">Image URL<input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" /></label>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-200">

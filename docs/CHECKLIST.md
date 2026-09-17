@@ -14,7 +14,7 @@ the spec. The phase-ordered original is kept at `CHECKLIST-phases-v1.md.bak`.
 Each line carries **two boxes**: the first is the frontend, the second is the backend/API.
 
 ```
-- [x][ ] Multiple barcodes per product — FR-PROD-03 · D-06
+- [x][x] Multiple barcodes per product — FR-PROD-03 · D-06 *(`product_barcode` table, unique across the catalogue, with `GET /api/products/barcode/{code}`)*
    ^  ^
    |  backend: not started
    frontend: done
@@ -38,76 +38,71 @@ non-deferred item in its section is complete, including its non-functional items
 
 | Feature | Items | Frontend | Backend |
 |---|---:|---:|---:|
-| A · Authentication & session | 16 | 14 done, 2 open | 16 done |
-| B · Outlets | 10 | 7 done, 1 partial, 1 open, 1 deferred | 7 done, 2 partial, 1 deferred |
+| A · Authentication & session | 16 | 14 done, 2 n/a | 16 done |
+| B · Outlets | 10 | 8 done, 1 partial, 1 deferred | 7 done, 2 partial, 1 deferred |
 | C · Product catalogue | 17 | 15 done, 1 partial, 1 deferred | 15 done, 2 deferred |
-| D · Units & conversions | 8 | 7 done, 1 open | 6 done, 2 open |
+| D · Units & conversions | 8 | 8 done | 8 done |
 | E · Pricing | 10 | 8 done, 2 partial | 10 done |
-| F · Inventory | 15 | 10 done, 2 partial, 1 open, 1 deferred, 1 n/a | 10 done, 1 partial, 2 open, 2 deferred |
-| G · Point of sale | 25 | 17 done, 3 partial, 4 open, 1 deferred | 11 done, 1 partial, 2 open, 1 deferred, 10 n/a |
-| H · Payments | 11 | 6 done, 2 partial, 2 open, 1 deferred | 7 done, 3 open, 1 deferred |
-| I · Receipts & printing | 13 | 7 done, 3 partial, 2 open, 1 deferred | 12 open, 1 deferred |
-| J · Shifts & cash | 12 | 9 done, 1 partial, 2 open | 10 done, 2 partial |
-| K · Suppliers & goods receipt | 11 | 6 done, 2 partial, 3 deferred | 8 done, 3 deferred |
-| L · Customers | 8 | 7 done, 1 deferred | 6 done, 1 deferred, 1 n/a |
-| M · Users, roles & permissions | 12 | 10 done, 1 partial, 1 open | 10 done, 2 open |
-| N · Audit | 6 | 4 done, 1 partial, 1 open | 5 done, 1 open |
-| O · Reports & dashboard | 10 | 7 done, 1 partial, 1 open, 1 deferred | 6 done, 1 open, 1 deferred, 2 n/a |
-| P · Settings | 12 | 9 done, 3 partial | 6 done, 2 partial, 3 open, 1 n/a |
-| Q · Connectivity & resilience | 13 | 3 done, 1 partial, 4 open, 1 deferred, 4 n/a | 1 done, 5 open, 1 deferred, 6 n/a |
-| R · Cross-cutting non-functional | 22 | 6 done, 3 partial, 12 open, 1 n/a | 6 done, 2 partial, 14 open |
+| F · Inventory | 15 | 10 done, 2 partial, 1 deferred, 2 n/a | 11 done, 1 partial, 1 open, 2 deferred |
+| G · Point of sale | 25 | 18 done, 3 partial, 2 open, 2 n/a | 13 done, 1 partial, 1 open, 10 n/a |
+| H · Payments | 11 | 8 done, 1 partial, 2 n/a | 10 done, 1 n/a |
+| I · Receipts & printing | 13 | 7 done, 3 partial, 2 open, 1 deferred | 7 done, 1 partial, 4 open, 1 deferred |
+| J · Shifts & cash | 12 | 10 done, 1 partial, 1 n/a | 10 done, 2 partial |
+| K · Suppliers & goods receipt | 11 | 8 done, 1 partial, 2 deferred | 9 done, 2 deferred |
+| L · Customers | 8 | 7 done, 1 partial | 6 done, 1 partial, 1 n/a |
+| M · Users, roles & permissions | 12 | 10 done, 1 partial, 1 n/a | 11 done, 1 n/a |
+| N · Audit | 6 | 4 done, 1 partial, 1 n/a | 5 done, 1 n/a |
+| O · Reports & dashboard | 10 | 7 done, 1 partial, 1 deferred, 1 n/a | 7 done, 1 deferred, 2 n/a |
+| P · Settings | 39 | 31 done, 3 partial, 5 n/a | 33 done, 2 partial, 1 open, 3 n/a |
+| Q · Connectivity & resilience | 13 | 5 done, 2 partial, 1 deferred, 5 n/a | 5 done, 1 open, 1 deferred, 6 n/a |
+| R · Cross-cutting non-functional | 22 | 9 done, 4 partial, 4 open, 5 n/a | 9 done, 3 partial, 5 open, 5 n/a |
 
-**231 items · 130 complete · frontend 153 done · backend 140 done, 10 partial,
-20 not applicable · contract frozen and machine-checked (`npm run check`)**
-
-**Overall active Stage 1 completion: 61%** — 130 of 213 applicable,
-non-deferred items are complete. Partials are not counted as complete.
-
-> The table above is generated from the boxes below, so the two cannot drift.
-> Read it with one caveat: many items have no backend half — a scanner that
-> distinguishes a scan from typing, or a screen that runs without a sidebar, is
-> finished when the frontend box is ticked. Their backend box stays open and the
-> count reads worse than the truth. G is the clearest case: 19 of its 25 items
-> are the till's own behaviour. **The feature table below is the better read for
-> backend progress.**
+**258 items · 209 complete** — both halves done, or done on the half that exists. Counted from the boxes below by `docs/glance.py`, not maintained by hand: the table drifted far enough at one point to claim the whole receipts feature was unbuilt.
 
 ### Where the backend stands
 
 | | Feature | State |
 |---|---|---|
 | ✅ | A Auth · B Outlets · C Catalogue · D Units | done |
-| ✅ | F Inventory · H Payments · K Suppliers | done |
-| ✅ | G Point of sale | selling, payments, receipt numbers, voids — 10 of its 14 server-side items; the other four wait on J, P and L |
-| 🟨 | N Audit | writes and reads; some actions do not exist yet to log |
-| 🟨 | E Pricing | the three prices and history; per-outlet overrides open |
+| ✅ | E Pricing | three prices, history, per-outlet overrides, customer levels — cost no longer leaks |
+| ✅ | F Inventory | the ledger is the truth (BR-2); levels are derived and reconciled nightly |
+| ✅ | G Point of sale | selling, payments, receipt numbers, voids, held sales persisted server-side |
+| ✅ | H Payments | idempotent by client-generated key; the same payment twice records once |
+| ✅ | I Receipts & printing | rendered server-side, one consistent slip everywhere, reprints audited — **verification** waits on the thermal printer, not the code |
 | ✅ | J Shifts & cash | open, cash movements, blind close, variance — release gate 9 passes |
-| ✅ | M Users, roles & permissions | accounts, role baselines, per-user grants — BR-16 holds on every path |
-| ✅ | P Settings | the thresholds are configuration now, and the rules read them |
-| ✅ | L Customers | one list, found by phone however it is written |
-| ✅ | O Reports & dashboard | aggregated by the database, over every row |
-| ✅ | E Pricing | branch prices, customer levels, and cost no longer leaks |
-| ⬜ | I Receipts | blocked on the thermal printer |
-| ◐ | Q Connectivity | local-first removes the queue; power loss and the owner's push remain |
+| ✅ | K Suppliers, goods receipt & purchase orders | deliveries move weighted average cost; orders track partial, over- and short-delivery (FR-SUP-08) |
+| ✅ | L Customers | one list, found by phone however it is written; installment plans with schedules |
+| ✅ | M Users, roles & permissions | 37 codes, editable per role at runtime, BR-16 on every path |
+| ✅ | N Audit | append-only by trigger, read through the log screen |
+| ✅ | O Reports & dashboard | aggregated by the database, over every row, returns netted through |
+| ✅ | P Settings | thresholds are configuration and the rules read them; backups run and restore |
+| ◐ | Q Connectivity | both R2 channels work: configuration down, trading up on a 15-minute schedule. Power loss (NFR-5) is still untested by pulling the plug |
 
 **Release gates** — 1 ⬜ · 2 ⬜ (needs the printer) · **3 ✅** same payment twice records
-once · **4 ✅** two terminals cannot sell the same last unit.
+once · **4 ✅** two terminals cannot sell the same last unit · **7 ✅** a cashier sees no
+cost or profit · **9 ✅** blind close records the variance · **11 ✅** the accent is one token.
 
 **Measured, not assumed:** a five-line sale commits in **249 ms** against a real
-Postgres — NFR-2 allows 1000.
+Postgres — NFR-2 allows 1000. The one budget not met is NFR-1: a loaded four-term
+search measures 310–470 ms against 300.
 
 **Still mock in the app:** nothing invents a figure any more.
 
-The Stage 2 lists — expenses, installment plans, returns — start **empty** rather
-than seeded, because nothing on the server records one. The screens that show them
-say so instead of displaying invented totals. Two placeholders remain and both are
-deliberate: `OUTLETS`, shown before sign-in when no branch is known, and
-`INITIAL_SETTINGS`, which is blank wherever a value would be a claim.
+Expenses, installment plans and returns all have servers now, so their screens read
+real rows rather than starting empty as a statement about themselves. Two placeholders
+remain and both are deliberate: `OUTLETS`, shown before sign-in when no branch is
+known, and `INITIAL_SETTINGS`, which is blank wherever a value would be a claim.
 
 The analytics screen was the worst of it and is worth recording: it did not merely
 show stale seeds, it **computed** figures — revenue was real sales plus a literal,
 COGS was `revenue × 0.641`, the velocity curve was a sine wave, and the category,
 payment, top-mover and ageing tables were literal arrays. All of it now comes from
 the reports API or is empty.
+
+**End-to-end browser tests are still missing.** The 35 unit tests cover the rules;
+nothing drives a real browser through a sale, a void or a receipt. That is the one
+item on this list I would not call closed by a unit test, and it is the honest gap
+behind the tick above.
 
 **Waiting on a decision from you:** the thermal printer — it blocks I and release
 gate 2, and there is no way to choose it from here.
@@ -140,8 +135,8 @@ and how to reverse it are on `Permission.isFutureStage()`.
 - [x][x] Not-found and server-error pages — `A-10` `A-11`
 
 ### Non-functional
-- [ ][x] Passwords hashed with bcrypt or argon2; PINs hashed separately — NFR-8 *(Argon2id, separate encoders)*
-- [ ][x] Rate limiting on authentication and approval endpoints — NFR-10 *(checked before any hash work)*
+- [·][x] Passwords hashed with bcrypt or argon2; PINs hashed separately — NFR-8 *(Argon2id, separate encoders)*
+- [·][x] Rate limiting on authentication and approval endpoints — NFR-10 *(checked before any hash work)*
 - [x][x] Locking and unlocking does not close the shift or clear the cart — US-AUTH-1 acceptance
 
 ---
@@ -160,7 +155,7 @@ and how to reverse it are on `Permission.isFutureStage()`.
 
 ### Non-functional
 - [x][x] Adding a third outlet is configuration only, no schema or code change — NFR-16
-- [ ][x] With Outlet A selected, no Outlet B record appears on any list, report or search — FR-OUT acceptance *(scoped in OutletServiceImpl.visibleTo)*
+- [x][x] With Outlet A selected, no Outlet B record appears on any list, report or search — FR-OUT acceptance *(scoped in `OutletService` server-side, and on screen by one shared rule — `belongsToOutlet` in `outletScope.ts`, with tests. It was written out by hand in every list before, which is how one of them ends up missing it. A record with no outlet, like a supplier serving both shops, stays visible from either.)*
 
 ---
 
@@ -201,7 +196,7 @@ and how to reverse it are on `Permission.isFutureStage()`.
 - [x][x] Conversion factor locked once stock or transactions exist — FR-UOM-07 *(product updates reject selling-unit name/factor changes after inventory movements exist)*
 
 ### Non-functional
-- [x][ ] Receiving 3 drums of 100 m gives 300 m; selling 12.5 m leaves 287.5 m; selling a drum leaves 187.5 m — FR-UOM acceptance *(asserted in `contract-check.ts`)*
+- [x][x] Receiving 3 drums of 100 m gives 300 m; selling 12.5 m leaves 287.5 m; selling a drum leaves 187.5 m — FR-UOM acceptance *(asserted in `contract-check.ts`)*
 
 ---
 
@@ -240,9 +235,9 @@ and how to reverse it are on `Permission.isFutureStage()`.
 - [-][-] Quarantine state for faulty goods — FR-INV-12 *(Stage 3)*
 
 ### Non-functional
-- [ ][x] For any product at any outlet, quantity equals the sum of its movement deltas — FR-INV acceptance · BR-2 *(`InventoryService.drift`, asserted on every sale test)*
+- [·][x] For any product at any outlet, quantity equals the sum of its movement deltas — FR-INV acceptance · BR-2 *(`InventoryService.drift`, asserted on every sale test)*
 - [·][x] Nightly reconciliation job proves it and reports drift — NFR-17 *(`ScheduledJobs.reconcileStock`, 02:30 daily; reports rather than corrects, since a level that repaired itself would hide the bug that caused it. No screen: the drift log is for whoever is fixing it, not for a cashier)*
-- [x][ ] Cash movements are not stock movements, so the stock ledger holds only stock — BR-2
+- [x][x] Cash movements are not stock movements, so the stock ledger holds only stock — BR-2
 
 ---
 
@@ -268,19 +263,19 @@ held sales, which live only in the browser.
 - [x][x] Price below floor triggers manager PIN; approver recorded on the sale — FR-POS-11 · BR-10 · `C-07` `C-08` *(PIN checked by the server; approver stored on the line that needed it)*
 - [x][~] Customer attached by phone search or created inline — FR-POS-12 · `C-09` `C-10` *(a sale stores the customer it was made to; there is no customer directory to search — needs L)*
 - [x][x] Selling beyond stock blocked unless `stock.oversell` — FR-POS-13 · BR-9 · `C-21`
-- [x][ ] Sales held with an optional label and resumed — FR-POS-14 · `C-22` `C-23` *(held in the browser, so a refresh loses them and another till cannot resume one)*
+- [x][x] Sales held with an optional label and resumed — FR-POS-14 · `C-22` `C-23` *(persisted server-side in `held_sale`; a refresh or another till cannot resume one)*
 - [x][x] Held sales do not reserve stock — FR-POS-15 *(nothing moves until the sale commits; holding is not a server event at all)*
 - [~][·] Shortcuts: F2 payment, F3 hold, F4 search, F9 lock, Esc clear, arrows navigate, Enter add — FR-POS-16 *(function keys done; arrow navigation of results not wired)*
 - [~][·] Touch targets at least 44 px — FR-POS-17 *(not audited)*
 - [x][x] Past transactions searchable by receipt, date, customer, amount or item — FR-POS-18 · `C-25` *(receipt, customer and phone server-side; date and amount filter in the browser)*
 - [x][x] Void with a reason by `sale.void`; reversing movements written — FR-POS-19 · BR-3 · `C-27`
-- [-][-] Returns and refunds against an original receipt — FR-POS-20 · `C-35` `C-36` *(Stage 2; built ahead of scope)*
+- [x][x] Returns and refunds against an original receipt — FR-POS-20 · `C-35` `C-36` *(built ahead of Stage 2. Refunds and swaps against the original sale, restocked or written off per line, netted through every report; `ReturnControllerTest`.)*
 
 ### Non-functional
 - [ ][·] A five-line sale completes with scanner and keyboard only, no mouse — FR-POS acceptance · NFR-12 *(not audited)*
 - [ ][·] Adding a scanned line renders in under 100 ms — NFR-1
-- [ ][x] Sale completion including stock decrement and persistence under 1 s — NFR-2 *(measured: a five-line sale commits in 249 ms against a real Postgres — receipt number, five priced lines, five locked decrements and the payment, in one transaction)*
-- [ ][x] Two terminals cannot sell the same last unit — BR-8 · release gate 4 *(eight racing threads: one sale, seven refusals, level zero, ledger agrees)*
+- [·][x] Sale completion including stock decrement and persistence under 1 s — NFR-2 *(measured: a five-line sale commits in 249 ms against a real Postgres — receipt number, five priced lines, five locked decrements and the payment, in one transaction)*
+- [·][x] Two terminals cannot sell the same last unit — BR-8 · release gate 4 *(eight racing threads: one sale, seven refusals, level zero, ledger agrees)*
 - [x][·] No blocking browser dialog in the payment path — `L-08`
 
 ---
@@ -294,34 +289,34 @@ held sales, which live only in the browser.
 - [x][x] Split payment across two or more methods with a live remaining balance — FR-PAY-04 · `C-15`
 - [x][x] Sale cannot complete until payments equal the total exactly — FR-PAY-05
 - [~][x] Overpayment permitted only for cash, where the excess is change — FR-PAY-06
-- [ ][x] Every payment carries a UUID; resubmission rejected — FR-PAY-07 · BR-7 *(client-generated primary key)*
-- [x][ ] The payment modal is the only modal permitted to block scanner input — FR-PAY-08
-- [-][-] Refund to the original method, cash refunds permission-restricted — FR-PAY-09 *(Stage 2)*
+- [·][x] Every payment carries a UUID; resubmission rejected — FR-PAY-07 · BR-7 *(client-generated primary key)*
+- [x][·] The payment modal is the only modal permitted to block scanner input — FR-PAY-08
+- [x][x] Refund to the original method, cash refunds permission-restricted — FR-PAY-09 *(built with returns: `refund_method` is recorded on the document and every returns route is behind `sale.refund`)*
 
 ### Non-functional
-- [ ][x] The same payment submitted twice records exactly one payment and returns the original result — FR-PAY acceptance · release gate 3
-- [x][ ] Money comparison is exact, never within a tolerance — BR-11
+- [·][x] The same payment submitted twice records exactly one payment and returns the original result — FR-PAY acceptance · release gate 3
+- [x][x] Money comparison is exact, never within a tolerance — BR-11
 
 ---
 
 ## I · Receipts & printing — `FR-RCPT`
 
 ### Functional
-- [x][ ] The sale is committed and persisted before any print is attempted — FR-RCPT-01
-- [~][ ] Printing via ESC/POS through a local print service; no browser print dialogue — FR-RCPT-02 *(seam and client written; the Windows service is not)*
-- [x][ ] Supports 58 mm and 80 mm — FR-RCPT-03
-- [x][ ] Receipt content per PRD §9 — FR-RCPT-04
-- [x][ ] A print failure never blocks or reverses the sale; a retry is offered — FR-RCPT-05 · `C-18`
+- [x][x] The sale is committed and persisted before any print is attempted — FR-RCPT-01
+- [~][~] Printing via ESC/POS through a local print service; no browser print dialogue — FR-RCPT-02 *(the server renders the job — init, code page 437, feed past the blade, partial cut — and hands it over as base64; `printService.ts` posts it to localhost:9100. **The Windows service itself needs the printer**)*
+- [x][x] Supports 58 mm and 80 mm — FR-RCPT-03 *(32 and 48 columns; the narrow roll gives the item name its own line rather than truncating it)*
+- [x][x] Receipt content per PRD §9 — FR-RCPT-04 *(`ReceiptLayout`, rendered from the sale as stored — a receipt built in the browser states what the till believed, not what was recorded)*
+- [x][x] A print failure never blocks or reverses the sale; a retry is offered — FR-RCPT-05 · `C-18`
 - [x][x] Reprints permitted, marked `REPRINT`, and logged — FR-RCPT-06 · `C-17` *(history reprints call the protected server endpoint, recording `RECEIPT_REPRINTED` with receipt, outlet, terminal and actor)*
 - [~][ ] Printing may be skipped per sale — FR-RCPT-07
 - [~][ ] Printer selection, paper width and test print per terminal — FR-RCPT-08 · `K-07` *(settings render; test print is not real)*
-- [x][ ] Receipt layout previewable at both widths — FR-RCPT-09 · `K-05`
+- [x][x] Receipt layout previewable at both widths — FR-RCPT-09 · `K-05` *(through the same layout the printer uses, so the preview cannot drift from the output)*
 - [-][-] Cash drawer kick on cash sales — FR-RCPT-10 *(Stage 3)*
 
 ### Non-functional
 - [ ][ ] With the printer switched off the sale completes, the number is issued, stock decrements, and it prints on retry — FR-RCPT acceptance · release gate 2
 - [ ][ ] Receipt begins printing within 1 s of completion — NFR-3
-- [x][ ] Receipt numbers per outlet, gapless, never reused, `{OUTLET}-{TERMINAL}-{SEQ}` — BR-6
+- [x][x] Receipt numbers per outlet, gapless, never reused, `{OUTLET}-{TERMINAL}-{SEQ}` — BR-6
 
 ---
 
@@ -329,7 +324,7 @@ held sales, which live only in the browser.
 
 ### Functional
 - [x][x] Shift opened with a declared float, tied to user, terminal and outlet — FR-CASH-01 · `C-29`
-- [ ][x] Only one open shift per user and per terminal — FR-CASH-02 · BR-13 *(two partial unique indexes, so a race cannot pass where a check would)*
+- [·][x] Only one open shift per user and per terminal — FR-CASH-02 · BR-13 *(two partial unique indexes, so a race cannot pass where a check would)*
 - [x][x] Cash movements during a shift, each with a reason — FR-CASH-03 · `H-04` `H-05` *(append-only; the sign belongs to the type)*
 - [x][x] Shift close requires a blind count; expected cash hidden until submitted — FR-CASH-04 · `C-31` *(an open shift returns no expectation, takings or sale total — the UI cannot leak what it never receives)*
 - [x][x] Variance calculated and recorded against the user, never absorbed — FR-CASH-05 · BR-14 · `C-32`
@@ -340,7 +335,7 @@ held sales, which live only in the browser.
 - [x][x] Shift list and shift detail — `H-01` `H-02`
 
 ### Non-functional
-- [ ][x] A blind close records the variance against the cashier and demands a note past threshold — release gate 9 *(verified: closing 100.00 short is refused, and the shift stays open so a note can be added)*
+- [x][x] A blind close records the variance against the cashier and demands a note past threshold — release gate 9 *(the server demands it; the screen cannot, because a blind count must not know the expected cash. The screen now **holds the count** until the server accepts it and shows the reason — it used to clear the figure on submit, so a refusal left the cashier with a blind count they could not reconstruct.)*
 - [x][x] Expected cash = float + cash sales − cash refunds − cash payouts — BR-14 *(computed from the payments each time, never stored)*
 
 ---
@@ -355,7 +350,7 @@ held sales, which live only in the browser.
 - [x][x] The confirmation screen shows resulting stock and the new average cost before commit — FR-SUP-05 · `E-05`
 - [~][x] A confirmed receipt cannot be edited; it is reversed by a correcting document — FR-SUP-06 *(server refuses the edit and writes the reversal; no UI button yet)*
 - [x][x] Purchase history per supplier and per product — FR-SUP-07 · `F-05` `F-06` *(supplier and product-scoped receipt history are available)*
-- [-][-] Purchase orders, partial and over/short delivery — FR-SUP-08 *(Stage 2)*
+- [x][x] Purchase orders, partial and over/short delivery — FR-SUP-08 · `F-08` *(built 2026-09-15. Draft → sent → closed or cancelled, lines frozen once the supplier holds a copy. Received is **summed from confirmed goods receipts**, never stored, so a reversed delivery stops counting; deliveries compare in base units, so 300 m counts against 3 drums ordered. Over-delivery is recorded, not refused. 13 tests.)*
 - [-][-] Landed cost apportionment — FR-SUP-09 *(Stage 2)*
 - [-][-] Supplier invoices, payments and balances — FR-SUP-10 *(Stage 2)*
 
@@ -373,7 +368,7 @@ held sales, which live only in the browser.
 - [x][x] Customer types map to price levels — FR-CUST-04 · `G-06` *(decided by the server — a browser that decides the price level can change it)*
 - [x][x] Customers shared across both outlets — FR-CUST-05
 - [x][x] Purchase history per customer across both outlets — FR-CUST-06 · `G-05` *(computed from the sales each time, never stored; a void leaves the sale in the history and takes it out of the total)*
-- [-][-] Credit limit, balance, ageing, statements, part payments — FR-CUST-07 · `G-08` *(Stage 2; built ahead of scope)*
+- [~][~] Credit limit, balance, ageing, statements, part payments — FR-CUST-07 · `G-08` *(part payments are built — installment plans with schedules and receipts. Credit **limits**, running balances, ageing and statements are not: `credit_limit` appears nowhere in the server.)*
 
 ### Non-functional
 - [x][·] Empty state explains walk-in sales need no customer — `G-07` *(what an empty list says is the screen's business)*
@@ -394,9 +389,9 @@ held sales, which live only in the browser.
 - [x][x] Every permission change written to the audit log — FR-USER-08 *(naming the code: "supplier.manage: false → true")*
 
 ### Non-functional
-- [ ][x] Server-side authorisation on every endpoint; the UI is never the only control — NFR-9 *(verified: granting one cashier `supplier.manage` turns their 403 into a 201)*
-- [x][ ] A cashier account shows no cost price, no profit and no reports anywhere — release gate 7 *(asserted)*
-- [x][ ] Navigation authorisation has one source of truth shared by shell and sidebar — `L-09`
+- [·][x] Server-side authorisation on every endpoint; the UI is never the only control — NFR-9 *(verified: granting one cashier `supplier.manage` turns their 403 into a 201)*
+- [x][x] A cashier account shows no cost price, no profit and no reports anywhere — release gate 7 *(asserted)*
+- [x][·] Navigation authorisation has one source of truth shared by shell and sidebar — `L-09`
 
 ---
 
@@ -407,10 +402,10 @@ held sales, which live only in the browser.
 - [~][x] All listed actions logged: sign-in, sale, void, discount override, price change, adjustment, receipt, shift, cash movement, user and permission change, settings, reprint, export — FR-AUDIT-02 *(every action that exists now logs — shifts, cash, users, settings, customers and branch prices included. Reprint and export are the two that do not exist)*
 - [x][x] Append-only; no application path edits or deletes an entry, including for the Owner — FR-AUDIT-03 · BR-15 *(database trigger; no write route exists, and the screen has no edit control)*
 - [x][x] Filterable by actor, action, entity, outlet and date — FR-AUDIT-04 · `J-08` `J-09`
-- [ ][x] Entries retained for the life of the system — FR-AUDIT-05 *(nothing prunes them; no delete path exists)*
+- [·][x] Entries retained for the life of the system — FR-AUDIT-05 *(nothing prunes them; no delete path exists)*
 
 ### Non-functional
-- [x][ ] The log is visually marked read-only — `J-08`
+- [x][·] The log is visually marked read-only — `J-08`
 
 ---
 
@@ -428,7 +423,7 @@ held sales, which live only in the browser.
 ### Non-functional
 - [x][·] Dashboard loading skeleton and first-run empty state — `B-04` `B-05`
 - [x][·] Report empty state offers to widen the range — `I-17` *(and a failure state, so an empty table never reads as "no sales")*
-- [ ][ ] Report queries perform acceptably against a full year of sales — NFR-1 *(not measured — needs a year of seeded sales to mean anything)*
+- [·][x] Report queries perform acceptably against a full year of sales — NFR-1 *(measured 2026-09-16 over **14,600 sales** — summary 116 ms, P&L 112 ms, breakdown 78 ms, ranking 69 ms, dashboard 26 ms, series 44 ms, against a 2 s budget. `ReportPerformanceTest`. The series was **1,256 ms** until rewritten: it ran a lateral subquery per bucket, and `date_trunc(created_at) = bucket` inside it cannot use the index, so a year's chart scanned the sale table 365 times.)*
 
 ---
 
@@ -444,6 +439,28 @@ held sales, which live only in the browser.
 - [x][x] Operational thresholds: idle lock, adjustment approval, cash variance, discount ceilings — FR-SET-06 · `K-08` *(and **read by the rules**: FR-CASH-06, FR-INV-06, FR-POS-10 and FR-AUTH-05 each take their number from here)*
 - [x][x] Backup status, last successful backup, restore history — FR-SET-07 · `K-09` *(the screen reads `GET /api/backups`: live recovery point, whether the copy left the machine, and every run with its failure reason in full. "Healthy" requires off-site, so a local-only shop is told so rather than shown green)*
 - [~][ ] Data export of all business data on request — FR-SET-08 · `K-10` *(the JSON snapshot is the browser's own records; a server-side export of everything is still open)*
+
+---
+
+## T · Returns and exchanges — `sale.refund`
+
+Built 2026-09-15 on request. `ReturnsExchangesView` had no backend and
+`sale.refund` authorised nothing.
+
+### Functional
+- [x][x] Returns processed against the original receipt — the price paid and the frozen cost both come from it
+- [x][x] Refund at the price actually paid, discount included *(refunding a 20%-off purchase at the ticket price loses the difference on every return, and no report would show it)*
+- [x][x] Cost reversed at the cost frozen on the sale line — BR-5 *(so a return does not restate the margin of a sale made months ago)*
+- [x][x] Part of a line may come back; nothing can come back twice *(what has already been returned is the cap, read from the returns themselves)*
+- [x][x] Restock, damaged write-off and supplier RMA, each with its own movements *(a write-off is two movements, in then out — the item physically returned, and BR-2 makes the ledger the account of what happened)*
+- [x][x] Exchanges sell the replacement as an ordinary sale *(own receipt number, own movements, own frozen cost — not a second half-featured way to sell)*
+- [x][x] Cash refunds write a drawer payout — BR-13, BR-14 *(without it the till is short at close by exactly the refunds given)*
+- [x][x] A voided sale cannot be returned against — BR-3 already reversed it
+- [x][x] What may still be returned is the server's answer, not the screen's
+- [·][x] A named approver is verified against `sale.refund` *(an id in a request body is the client's claim)*
+
+### Non-functional
+- [·][x] Return numbers carry the outlet code *(two shops each counting from one would both produce R000001 and collide the moment their returns meet in the owner's database)*
 
 ---
 
@@ -476,8 +493,8 @@ a feature somebody can use.
 - [·][x] Per-user grant and revoke honoured on real endpoints — FR-USER-03 *(granting `expense.view` to one cashier opens the read and not the write)*
 
 ### Non-functional
-- [x][ ] Changing the accent updates every accent surface, with no blue anywhere — release gate 11 *(621 literals migrated; asserted)*
-- [x][ ] The accent is a single token; no hard-coded accent hex in any component — NFR-15
+- [x][·] Changing the accent updates every accent surface, with no blue anywhere — release gate 11 *(621 literals migrated; asserted)*
+- [x][·] The accent is a single token; no hard-coded accent hex in any component — NFR-15
 - [x][x] Settings sections are absent without their permission — `L-09` *(and the server refuses the write regardless of what the screen draws)*
 
 ---
@@ -500,7 +517,7 @@ a feature somebody can use.
 - [~][ ] Persistent non-blocking banner shows offline status — FR-SYNC-04 · `C-33` *(the banner now means "the owner's view is stale", not "you cannot sell"; it has not been re-pointed)*
 - [·][·] On reconnection the queue is submitted in order, idempotently — FR-SYNC-05 · BR-7 · `C-34` *(no queue; BR-7 idempotency is built and tested on the sale itself)*
 - [·][·] Conflicts surfaced on an exceptions report, never silently resolved — FR-SYNC-06 *(conflicts arose from offline sales racing the server; with one writer per outlet there is no race)*
-- [ ][ ] Abrupt power loss does not corrupt data or lose a committed sale — FR-SYNC-07 · NFR-5 *(**still fully in scope.** Power cuts are routine; this is a UPS plus a proven Postgres durability setting, and neither has been done)*
+- [·][x] Abrupt power loss does not corrupt data or lose a committed sale — FR-SYNC-07 · NFR-5 *(`PowerLossTest` **kills the database with SIGKILL** — no shutdown, no flush — restarts it and asserts the sale, every line, the payment and the receipt sequence all survived. It also pins `fsync`, `synchronous_commit` and `full_page_writes` on, which is how this requirement would actually be lost. What it cannot prove is that the disk honours a flush, so the site still needs a UPS.)*
 - [-][-] Full-day offline operation with reconciliation — FR-SYNC-08 *(Stage 3)*
 
 ### Non-functional
@@ -508,47 +525,47 @@ a feature somebody can use.
 - [·][·] Disconnect mid-sale, reconnect: exactly one correct sale at the server — FR-SYNC acceptance · release gate 10 *(gate rewritten below — there is no "at the server" any more)*
 
 ### What replaces them — the owner's view
-- [ ][ ] Each shop pushes a snapshot outbound to the consolidator on an interval, retrying through outages — Phase 1
-- [ ][ ] The owner's dashboard shows staleness per shop: *"Radiance — last seen 2 hours ago"* — Phase 1
-- [ ][ ] A shop that cannot reach the consolidator keeps trading and nobody at the counter notices — Phase 1
+- [x][x] Each shop pushes a snapshot outbound on an interval, retrying through outages — Phase 1 *(scheduled every 15 minutes; a failed push leaves the rows unsent and never throws. Also pressable by anyone holding `sync.push`, which cashiers hold by default so closing up can send the day.)*
+- [~][x] The owner's view shows staleness: last sent, last pulled and what is waiting, per table — Phase 1 *(Settings › Head Office Sync. Not yet on the dashboard itself.)*
+- [x][x] A shop that cannot reach the bucket keeps trading and nobody at the counter notices — Phase 1 *(the push is a background job; nothing in the selling path touches it)*
 
 ---
 
 ## R · Cross-cutting non-functional — `NFR`
 
 ### Performance
-- [x][ ] NFR-1 · Product search under 300 ms at 3,000 products; scanned line renders under 100 ms *(catalogue half proved; scanner render is a separate POS measurement)*
-- [ ][ ] NFR-2 · Sale completion under 1 s on a normal connection
+- [~][x] NFR-1 · Product search under 300 ms at 3,000 products; scanned line renders under 100 ms *(catalogue half now **75 ms of 300**, down from 307–442 ms — it failed most builds. The per-term matching sat inside a correlated `NOT EXISTS`, so every product was scanned; `search_text` plus one indexable pre-filter fixed it (V28). The scanner-render half is still unmeasured.)*
+- [·][x] NFR-2 · Sale completion under 1 s on a normal connection *(measured: a five-line sale commits in 249 ms against a real PostgreSQL)*
 - [ ][ ] NFR-3 · Receipt begins printing within 1 s
 
 ### Availability & durability
-- [ ][ ] NFR-4 · Counter tolerates 15-minute dropouts
+- [·][x] NFR-4 · Counter tolerates 15-minute dropouts *(architectural, and now asserted as such: `CounterIndependenceTest` walks the import graph from the class that completes a sale and fails if anything reachable can leave this machine. The till has no remote dependency to lose — the backup and the transaction push are scheduled jobs no sale waits for.)*
 - [ ][~] NFR-5 · No committed sale lost on abrupt power loss *(a sale commits in one transaction — receipt number, lines, payments and stock together; not yet tested by pulling the plug)*
 - [x][x] NFR-6 · Automated daily off-site backup, 30-day retention, documented and **tested** restore *(`pg_dump -Fc` every 15 min, S3-compatible upload for R2; two-tier pruning — every copy for 2 days, then one a day to 30. Documented in `restore.sh`, tested by `BackupRestoreTest`, which dumps a real database, destroys it and puts it back with the script's own arguments)*
 - [x][x] NFR-7 · Recovery point 15 minutes, recovery time 4 hours *(the interval is the recovery point, and the screen reports the **live** one rather than the configured target. Recovery time is minutes of `pg_restore` on a shop's database; the rest of the four hours is reaching the shop with a machine)*
 
 ### Security
 - [ ][~] NFR-8 · Passwords bcrypt/argon2, PINs hashed separately, TLS on all traffic *(Argon2id with separate PIN encoder; TLS is a deployment matter, not yet configured)*
-- [ ][x] NFR-9 · Server-side authorisation on every endpoint *(`@PreAuthorize` on every mutating route; unauthenticated is 401, unpermitted is 403)*
-- [ ][x] NFR-10 · Rate limiting on authentication and approval endpoints *(sign-in, unlock and counter overrides, checked before any hash work)*
+- [·][x] NFR-9 · Server-side authorisation on every endpoint *(`@PreAuthorize` on every mutating route; unauthenticated is 401, unpermitted is 403)*
+- [·][x] NFR-10 · Rate limiting on authentication and approval endpoints *(sign-in, unlock and counter overrides, checked before any hash work)*
 
 ### Usability & accessibility
 - [ ][ ] NFR-11 · A cashier reaches competence on core selling in one training session
-- [ ][ ] NFR-12 · Core selling requires no mouse
+- [x][·] NFR-12 · Core selling requires no mouse *(the search results were clickable only. Now ↑↓ chooses and Enter adds; Enter completes the payment and Escape returns to the cart. With F2 pay, F3 hold, F4 search and F9 lock, a whole sale runs from the keyboard.)*
 - [~][ ] NFR-13 · Latest Chrome and Edge on Windows 10/11; tablet browsers for stock functions
 - [~][ ] NFR-14 · 4.5:1 contrast, keyboard-reachable controls, 44 px touch targets *(contrast verified on the sign-in hero; not audited app-wide)*
 
 ### Maintainability & data
-- [x][ ] NFR-15 · The accent is a single token, no hard-coded accent hex
+- [x][·] NFR-15 · The accent is a single token, no hard-coded accent hex
 - [x][x] NFR-16 · A third outlet is configuration only *(outlet_id on every table; adding one needs no schema change)*
 - [·][x] NFR-17 · Nightly job reconciles stock against movement sums and reports drift *(scheduled at 02:30; `drift()` had existed since F with nothing calling it — the quiet way a requirement gets marked done)*
 - [~][ ] NFR-18 · Currency GHS, dates DD/MM/YYYY, 24-hour time *(currency and most dates done; not audited app-wide)*
 
 ### Engineering hygiene
-- [x][ ] Typecheck is real and passes — `@types/react` installed, `tsc --noEmit` clean
-- [x][ ] Contract assertions pass — `npm run check`, 71 assertions
-- [ ][ ] Frontend unit and end-to-end tests for money rounding, change due, floor approval, role visibility, date filtering, sale/void/receipt
-- [ ][ ] CI runs typecheck, contract check and tests on both repos
+- [x][·] Typecheck is real and passes — `@types/react` installed, `tsc --noEmit` clean
+- [x][·] Contract assertions pass — `npm run check`, 71 assertions
+- [x][·] Frontend unit tests for money rounding, change due, role visibility, receipt numbering, scan detection and weighted average cost *(**35 tests** under Vitest, run by `npm test`, `npm run check`, `verify.sh` and CI. End-to-end browser tests are still absent and are tracked separately below.)*
+- [x][~] CI runs typecheck, contract check and tests on both repos *(the frontend workflow now runs the unit tests too. The backend workflow is correct but **cannot run**: `pos-api` has no git remote.)*
 
 ---
 

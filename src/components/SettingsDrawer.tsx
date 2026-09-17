@@ -244,7 +244,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
             {/* Drawer Footer */}
             <div className="p-4 border-t border-slate-300 bg-slate-50 text-center">
               <span className="text-[11px] text-slate-400">
-                DreamsPOS v1.0 • Stage 1 Certified
+                POS System v1.0 • Stage 1
               </span>
             </div>
           </div>

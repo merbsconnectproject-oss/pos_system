@@ -65,7 +65,7 @@ export const ManagerPinModal: React.FC<ManagerPinModalProps> = ({
         onClick={(e) => e.stopPropagation()}
         className="bg-white rounded-xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-300 animate-modal-card flex flex-col max-h-[92vh]"
       >
-        <div className="bg-amber-500 text-white px-6 py-5 sm:px-8 flex items-center justify-between shrink-0">
+        <div className="bg-slate-900 text-white px-6 py-5 sm:px-8 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
               <ShieldCheck className="w-5 h-5 text-white" />
@@ -77,7 +77,7 @@ export const ManagerPinModal: React.FC<ManagerPinModalProps> = ({
           </div>
           <button 
             onClick={onClose} 
-            className="text-amber-100 hover:text-white p-2 rounded-lg hover:bg-amber-600 transition-colors cursor-pointer"
+            className="text-slate-300 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -119,7 +119,7 @@ export const ManagerPinModal: React.FC<ManagerPinModalProps> = ({
             </button>
             <button
               type="submit"
-              className="sm:w-2/3 py-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold shadow-xs transition-colors cursor-pointer"
+              className="sm:w-2/3 py-3 rounded-lg bg-accent-600 hover:bg-accent-700 text-white text-sm font-bold shadow-xs transition-colors cursor-pointer"
             >
               Authorize Override
             </button>

@@ -132,6 +132,35 @@ export const usersApi = {
  * role is presented, not what it grants, and the server has no business
  * carrying copy.
  */
+/**
+ * What each role may do — FR-USER-02.
+ *
+ * Editable, and persisted. Until now the Roles & Permissions matrix wrote to
+ * React state and nothing else, so a change looked saved, reset the moment the
+ * screen re-read its props, and never reached anybody's session. The grants now
+ * live in `role_permission` on the server.
+ */
+export const rolesApi = {
+  current: () => request<Record<string, string[]>>('/api/roles'),
+
+  /**
+   * Replaces one role's permissions outright.
+   *
+   * A replace rather than a merge: taking a right away has to be as possible as
+   * giving one.
+   */
+  replace: (role: UserRole, permissions: PermissionCode[]) =>
+    request<Record<string, string[]>>(`/api/roles/${encodeURIComponent(role)}/permissions`, {
+      method: 'PUT',
+      body: JSON.stringify({ permissions }),
+    }),
+
+  /** Back to what the system ships with. */
+  reset: (role: UserRole) =>
+    request<Record<string, string[]>>(
+      `/api/roles/${encodeURIComponent(role)}/permissions/reset`, { method: 'POST' }),
+};
+
 export const toRolePermissions = (
   roles: { key: string; baseline: PermissionCode[] }[],
 ): RolePermissions[] =>

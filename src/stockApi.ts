@@ -121,11 +121,34 @@ export const stockApi = {
  * Fold stock levels into the catalogue's per-outlet maps.
  *
  * The app's `Product` carries stock, cost and reorder level keyed by outlet —
- * the shape BR-1 implies — while the API returns them as rows. Rebuilding the
- * maps from the rows each time, rather than patching them in place, keeps a
- * product that has lost its stock row from keeping a stale figure.
+ * the shape BR-1 implies — while the API returns them as rows.
+ *
+ * `scope` names the outlets these rows are the complete answer for. Within the
+ * scope the maps are rebuilt, so a product that has lost its row there loses its
+ * figure rather than keeping a stale one. Outside it they are left alone.
+ *
+ * That distinction is the whole point. Every caller fetches one outlet —
+ * `atOutlet(current)` — and this used to rebuild the maps outright, so a single
+ * sale at one branch dropped every other branch's quantity, cost and reorder
+ * level from the catalogue in memory. The branch comparison and the product's
+ * stock-by-outlet panel then read zero everywhere else, and the next thing to
+ * write a product back persisted that view.
+ *
+ * With no scope given it is inferred from the rows, which is right for a
+ * whole-catalogue load and is why an empty list changes nothing.
  */
-export const withStock = (products: Product[], levels: StockWire[]): Product[] => {
+export const withStock = (
+  products: Product[],
+  levels: StockWire[],
+  scope?: string | string[],
+): Product[] => {
+  const covered = new Set<string>(
+    scope === undefined
+      ? levels.map((level) => level.outletId)
+      : typeof scope === 'string' ? [scope] : scope,
+  );
+  if (covered.size === 0) return products;
+
   const byProduct = new Map<string, StockWire[]>();
   levels.forEach((level) => {
     const rows = byProduct.get(level.productId) || [];
@@ -133,12 +156,16 @@ export const withStock = (products: Product[], levels: StockWire[]): Product[] =
     byProduct.set(level.productId, rows);
   });
 
+  /** Keep every outlet this answer does not speak for. */
+  const outside = <T,>(map: Record<string, T> | undefined): Record<string, T> =>
+    Object.fromEntries(Object.entries(map || {}).filter(([outletId]) => !covered.has(outletId)));
+
   return products.map((product) => {
     const rows = byProduct.get(product.id) || [];
-    const stock: Record<string, number> = {};
-    const costPrice: Record<string, number> = {};
-    const replacementCost: Record<string, number> = {};
-    const minStockAlert: Record<string, number> = {};
+    const stock = outside(product.stock);
+    const costPrice = outside(product.costPrice);
+    const replacementCost = outside(product.replacementCost);
+    const minStockAlert = outside(product.minStockAlert);
 
     rows.forEach((row) => {
       stock[row.outletId] = row.quantity;

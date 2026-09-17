@@ -111,10 +111,26 @@ export const suppliersApi = {
 
 export const goodsReceiptApi = {
   /** FR-SUP-04: writes the movements and recalculates weighted average cost. */
-  receive: (outletId: string, supplierId: string, reference: string, lines: ReceiptLineDraft[]) =>
+  /**
+   * @param purchaseOrderId the order being delivered against, when there is one
+   *   (FR-SUP-08). Omitted for the van that simply turns up, which is most of them.
+   */
+  receive: (
+    outletId: string,
+    supplierId: string,
+    reference: string,
+    lines: ReceiptLineDraft[],
+    purchaseOrderId?: string | null,
+  ) =>
     request<ReceiptResult>('/api/goods-receipts', {
       method: 'POST',
-      body: JSON.stringify({ outletId, supplierId, reference, lines }),
+      body: JSON.stringify({
+        outletId,
+        supplierId,
+        reference,
+        lines,
+        purchaseOrderId: purchaseOrderId ?? null,
+      }),
     }),
 
   /** FR-SUP-06. */

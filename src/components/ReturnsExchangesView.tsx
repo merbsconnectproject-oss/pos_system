@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import { receiptsApi } from '../receiptsApi';
+import { printReceipt } from '../printService';
 import {
   RotateCcw,
   RefreshCw,
@@ -88,6 +90,8 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
   // Both of these exist so it is refused visibly rather than the return quietly
   // not being there next time somebody looks.
   const [saving, setSaving] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [printError, setPrintError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedSaleId, setSelectedSaleId] = useState<string>('');
   const [customReceiptNumber, setCustomReceiptNumber] = useState('');
@@ -140,6 +144,33 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
     }
   };
 
+  /**
+   * The lines on the receipt being returned against.
+   *
+   * <p>A return can only ever be one of these. Offering the whole catalogue let a
+   * counter pick an item that was never on the sale — the server refuses it, but
+   * only after the form has been filled in, and it was never a sensible thing to
+   * offer in the first place.
+   *
+   * <p>The price is what the customer <em>paid</em> — the line total over the
+   * quantity, so a discount is carried — not today's retail price. That is also
+   * what the refund is calculated from, so the figure on screen is the figure
+   * that will be paid back.
+   */
+  const saleLines = useMemo(() => {
+    const sale = sales.find((candidate) => candidate.id === selectedSaleId);
+    if (!sale) return [];
+    return sale.items.map((line) => ({
+      productId: line.product.id,
+      productName: line.product.name,
+      sku: line.product.sku,
+      quantitySold: line.quantity,
+      // Discount included: refunding at the undiscounted price hands back more
+      // than was taken.
+      pricePaid: line.quantity > 0 ? line.lineTotal / line.quantity : line.unitPrice,
+    }));
+  }, [sales, selectedSaleId]);
+
   // Filtered records
   const filteredRecords = useMemo(() => {
     return records.filter((r) => {
@@ -185,6 +216,35 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
     setSettlementMethod('');
     setTransactionNotes('');
     setModalOpen(true);
+  };
+
+  /**
+   * Prints the credit note on the thermal printer.
+   *
+   * <p>Not `window.print()`. FR-RCPT-02 is explicit that receipts do not go
+   * through the browser dialogue, and a voucher printed on A4 while the sale it
+   * reverses came out of the till roll is the mismatch this screen had. The
+   * server renders it through the same layout as the receipt.
+   */
+  const handlePrintCreditNote = async (record: ReturnExchangeRecord) => {
+    setPrinting(true);
+    setPrintError(null);
+    try {
+      const note = await receiptsApi.forReturn(record.id, '80mm');
+      const result = await printReceipt({
+        receiptNumber: note.receiptNumber,
+        paperWidth: note.width,
+        payload: note.escPos,
+      });
+      // FR-RCPT-05: a print failure is reported, never silent — and never
+      // reverses anything, because the return is already recorded.
+      if (result.ok === false) setPrintError(result.detail);
+
+    } catch (failure) {
+      setPrintError(failure instanceof Error ? failure.message : 'The credit note could not be printed.');
+    } finally {
+      setPrinting(false);
+    }
   };
 
   // Submit Return or Swap
@@ -234,7 +294,11 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
       // receipt number: the price paid and the frozen cost both live on the
       // original line, and neither can be recovered from a string.
       originalSaleId: selectedSaleId || undefined,
-      customerId: `cust-${Date.now()}`,
+      // The customer is whoever was on the original sale. Inventing an id here
+      // made one up per return — it was never a real customer, and the server
+      // could not read it as an id at all, which is what turned a return into a
+      // "tell a manager" error.
+      customerId: undefined,
       customerName: customerName.trim() || 'Walk-in Customer',
       customerPhone: customerPhone.trim() || 'N/A',
       outletId: matchedOutlet.id,
@@ -728,22 +792,28 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                           required
                           value={item.productId}
                           onChange={(e) => {
-                            const p = products.find((prod) => prod.id === e.target.value);
+                            const line = saleLines.find((candidate) => candidate.productId === e.target.value);
                             const updated = [...returnItems];
                             updated[idx] = {
                               ...updated[idx],
                               productId: e.target.value,
-                              productName: p ? p.name : item.productName,
-                              unitPrice: p ? p.retailPrice : item.unitPrice,
+                              productName: line ? line.productName : item.productName,
+                              sku: line ? line.sku : item.sku,
+                              // The price paid, not today's price.
+                              unitPrice: line ? line.pricePaid : item.unitPrice,
+                              // Never more than was bought.
+                              quantity: line ? Math.min(item.quantity || 1, line.quantitySold) : item.quantity,
                             };
                             setReturnItems(updated);
                           }}
                           className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-accent-500 text-slate-900"
                         >
-                          <option value="" disabled>Select product</option>
-                          {products.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} (GH₵ {p.retailPrice.toFixed(2)})
+                          <option value="" disabled>
+                            {selectedSaleId ? 'Select an item from this receipt' : 'Choose the receipt first'}
+                          </option>
+                          {saleLines.map((line) => (
+                            <option key={line.productId} value={line.productId}>
+                              {line.productName} — {line.quantitySold} @ GH₵ {line.pricePaid.toFixed(2)}
                             </option>
                           ))}
                         </select>
@@ -1169,6 +1239,12 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
               <p className="text-[11px] text-slate-400">Radiance Lighting • Verified Customer Service</p>
             </div>
 
+            {printError && (
+              <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800 font-sans">
+                {printError} The credit note is saved either way — reprint it when the printer is ready.
+              </div>
+            )}
+
             <div className="flex items-center gap-3 pt-3 font-sans">
               <button
                 onClick={() => setSelectedVoucher(null)}
@@ -1177,12 +1253,13 @@ export const ReturnsExchangesView: React.FC<ReturnsExchangesViewProps> = ({
                 Close
               </button>
               <button
-                onClick={() => window.print()}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-black text-white rounded-lg shadow-xs cursor-pointer"
+                onClick={() => void handlePrintCreditNote(selectedVoucher)}
+                disabled={printing}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-black text-white rounded-lg shadow-xs cursor-pointer disabled:opacity-60 disabled:cursor-wait"
                 style={{ backgroundColor: accentColor || 'var(--accent, #c55200)' }}
               >
                 <Printer className="w-4 h-4" />
-                <span>Print Voucher</span>
+                <span>{printing ? 'Printing…' : 'Print Credit Note'}</span>
               </button>
             </div>
           </div>

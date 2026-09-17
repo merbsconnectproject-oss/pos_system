@@ -311,7 +311,11 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
   const num = (value: number | null | undefined) => Number(value ?? 0);
 
   const metrics = useMemo(() => {
-    const grossRevenue = num(summary?.revenue);
+    // Net of returns. `summary.revenue` is gross takings; anything a shop reads
+    // as "sales" has to have what came back taken off it, or a month with heavy
+    // returns looks like a good one.
+    const grossRevenue = num(summary?.netRevenue);
+    const refundTotal = num(summary?.refundTotal);
     // BR-5 · FR-RPT-06: the cost frozen on each line when it was sold. Null
     // when this user may not see cost, and then so is everything derived
     // from it — rather than a percentage of revenue standing in for it.
@@ -324,6 +328,8 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
 
     return {
       grossRevenue,
+      refundTotal,
+      refundCount: summary?.refundCount ?? 0,
       estimatedCOGS: cogs,
       grossProfit,
       grossMarginPct: num(summary?.marginPercent),

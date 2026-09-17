@@ -1642,6 +1642,8 @@ export const INITIAL_SETTINGS: GeneralSettings = {
   autoPrintReceipt: true,
   showCashierOnReceipt: true,
   accentColor: DEFAULT_ACCENT,
+  fontFamily: 'JAKARTA',
+  fontScalePercent: 100,
   // K-08 / FR-SET-06
   thresholds: {
     idleLockMinutes: 10,

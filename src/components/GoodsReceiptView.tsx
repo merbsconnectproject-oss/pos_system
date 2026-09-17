@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ClipboardCheck, Package, Plus, Trash2, Undo2 } from 'lucide-react';
 import { Outlet, Product, StockMovement, Supplier } from '../types';
 import { formatMoney, formatQuantity, roundMoney, roundQuantity, sumMoney } from '../money';
 import { matchesSearch } from '../catalogue';
 import { costPerBaseUnit, weightedAverageCost } from '../stockCosting';
 import { InfoHint } from './InfoHint';
+import type { PurchaseOrder } from '../purchaseOrdersApi';
 
 /**
  * E-04 / E-05 — Receive stock.
@@ -39,7 +40,19 @@ interface GoodsReceiptViewProps {
     lines: { productId: string; purchaseUnit: string; conversionFactor: number; quantity: number; unitCost: number }[],
     reference: string,
     supplierId: string,
+    purchaseOrderId?: string | null,
   ) => void;
+
+  /**
+   * An order this delivery is against — FR-SUP-08.
+   *
+   * <p>When set, the lines start as what is still outstanding on that order, in
+   * the units it was written in. They remain editable, because the point of the
+   * screen is to record what actually turned up: the order is the expectation,
+   * not the evidence.
+   */
+  againstOrder?: PurchaseOrder | null;
+  onClearOrder?: () => void;
 }
 
 const newLine = (): ReceiptLine => ({
@@ -57,6 +70,8 @@ export const GoodsReceiptView: React.FC<GoodsReceiptViewProps> = ({
   currentOutlet,
   cashierName,
   onCommitReceipt,
+  againstOrder,
+  onClearOrder,
 }) => {
   const [supplierId, setSupplierId] = useState(suppliers[0]?.id || '');
   const [reference, setReference] = useState('');
@@ -92,6 +107,31 @@ export const GoodsReceiptView: React.FC<GoodsReceiptViewProps> = ({
     return { line, product, quantityBase, onHand, currentAvg, newAvg, resultingStock: roundQuantity(onHand + quantityBase) };
   });
 
+  // Arriving from a purchase order: start with what is still outstanding, in the
+  // units the order was written in, and pin the supplier to the one it was raised
+  // with. The figures stay editable — the screen records what turned up, and what
+  // turned up is not always what was promised.
+  useEffect(() => {
+    if (!againstOrder) return;
+
+    setSupplierId(againstOrder.supplierId);
+    setReference((current) => current || '');
+
+    const outstanding = againstOrder.lines.filter((line) => line.outstandingQuantity > 0);
+    const source = outstanding.length > 0 ? outstanding : againstOrder.lines;
+
+    setLines(
+      source.map((line, index) => ({
+        id: `po-${againstOrder.id}-${index}`,
+        productId: line.productId,
+        unitName: line.purchaseUnit,
+        conversionFactor: line.conversionFactor,
+        quantity: line.outstandingQuantity > 0 ? line.outstandingQuantity : 0,
+        unitCost: line.unitCost,
+      })),
+    );
+  }, [againstOrder]);
+
   const commit = () => {
     const ref = reference.trim() || `GRN-${Date.now().toString().slice(-6)}`;
     const supplierName = suppliers.find((s) => s.id === supplierId)?.name || 'Unknown supplier';
@@ -106,6 +146,7 @@ export const GoodsReceiptView: React.FC<GoodsReceiptViewProps> = ({
       })),
       ref,
       supplierId,
+      againstOrder?.id ?? null,
     );
     setPosted(ref);
     setConfirming(false);
@@ -158,6 +199,29 @@ export const GoodsReceiptView: React.FC<GoodsReceiptViewProps> = ({
           <p className="text-2xl font-black text-slate-900">{formatMoney(runningTotal)}</p>
         </div>
       </header>
+
+      {againstOrder && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent-200 bg-accent-50/60 p-4">
+          <div className="text-xs text-slate-700">
+            <p className="font-black text-slate-900">
+              Delivering against {againstOrder.number}
+            </p>
+            <p className="mt-0.5">
+              {againstOrder.supplierName ?? 'the supplier'} ·{' '}
+              {againstOrder.lines.filter((line) => line.outstandingQuantity > 0).length} line(s)
+              still outstanding. Change any quantity that did not arrive in full.
+            </p>
+          </div>
+          {onClearOrder && (
+            <button
+              onClick={onClearOrder}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+            >
+              Receive without an order
+            </button>
+          )}
+        </div>
+      )}
 
       <section className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 bg-white p-5 md:grid-cols-3">
         <label className="text-xs font-bold text-slate-700">

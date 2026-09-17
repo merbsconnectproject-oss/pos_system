@@ -39,9 +39,13 @@ export const PERMISSION_CODES = [
   'customer.manage',
   'customer.credit',
   'supplier.manage',
+  // Expenses & accounting
+  'expense.view',
+  'expense.manage',
   // Reporting
   'report.view',
   'report.view_profit',
+  'report.view_pl',
   // Administration
   'user.manage',
   'audit.view',
@@ -49,6 +53,7 @@ export const PERMISSION_CODES = [
   'settings.general',
   'settings.appearance',
   'settings.terminal',
+  'sync.push',
 ] as const;
 
 export type PermissionCode = (typeof PERMISSION_CODES)[number];
@@ -60,6 +65,7 @@ export type PermissionGroup =
   | 'Stock'
   | 'Cash & shifts'
   | 'Customers & suppliers'
+  | 'Expenses & accounting'
   | 'Reporting'
   | 'Administration';
 
@@ -102,8 +108,12 @@ export const PERMISSION_CATALOGUE: PermissionMeta[] = [
   { code: 'customer.credit', group: 'Customers & suppliers', label: 'Manage customer credit', description: 'Set credit limits and take part payments (Stage 2).' },
   { code: 'supplier.manage', group: 'Customers & suppliers', label: 'Manage suppliers', description: 'Create and amend supplier records.' },
 
+  { code: 'expense.view', group: 'Expenses & accounting', label: 'View expenses', description: 'See recorded operating expenses and their totals.' },
+  { code: 'expense.manage', group: 'Expenses & accounting', label: 'Record expenses', description: 'Record, amend and delete operating expenses.' },
+
   { code: 'report.view', group: 'Reporting', label: 'View reports', description: 'Open the reporting workspace.' },
   { code: 'report.view_profit', group: 'Reporting', label: 'View profit reports', description: 'See revenue, COGS, gross profit and margin (FR-RPT-05).' },
+  { code: 'report.view_pl', group: 'Reporting', label: 'View profit & loss', description: 'See the P&L: operating expenses and net profit, not only gross.' },
 
   { code: 'user.manage', group: 'Administration', label: 'Manage users', description: 'Create users, assign roles and outlets, reset credentials.' },
   { code: 'audit.view', group: 'Administration', label: 'View the audit log', description: 'Read the append-only activity record.' },
@@ -111,6 +121,7 @@ export const PERMISSION_CATALOGUE: PermissionMeta[] = [
   { code: 'settings.general', group: 'Administration', label: 'Change general settings', description: 'Business profile, outlets, receipts, thresholds, backups.' },
   { code: 'settings.appearance', group: 'Administration', label: 'Change appearance', description: 'Set the accent colour (FR-SET-03).' },
   { code: 'settings.terminal', group: 'Administration', label: 'Change terminal settings', description: 'Printer, paper width and test print (FR-SET-05).' },
+  { code: 'sync.push', group: 'Administration', label: 'Send trading to head office', description: "Send this shop's sales and stock up to the owner. One-way and audited; does not include pulling configuration." },
 ];
 
 export const PERMISSION_GROUPS: PermissionGroup[] = [
@@ -120,6 +131,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   'Stock',
   'Cash & shifts',
   'Customers & suppliers',
+  'Expenses & accounting',
   'Reporting',
   'Administration',
 ];
@@ -143,15 +155,20 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionCode[]> = {
     'stock.view', 'stock.receive', 'stock.adjust', 'stock.approve_adjustment', 'stock.oversell',
     'shift.open', 'shift.close', 'cash.movement', 'cash.view_variance',
     'customer.manage', 'customer.credit', 'supplier.manage',
+    'expense.view', 'expense.manage',
     'report.view', 'report.view_profit',
     'audit.view',
     'settings.appearance', 'settings.terminal',
+    'sync.push',
   ],
   cashier: [
     'pos.sell', 'sale.discount', 'sale.reprint',
     'stock.view',
     'shift.open', 'shift.close',
     'customer.manage',
+    // Closing up includes sending the day to the owner. One-way and audited,
+    // so the counter can do it without an owner present.
+    'sync.push',
   ],
   storekeeper: [
     'price.view_cost',
@@ -238,7 +255,11 @@ export const TAB_PERMISSIONS: Partial<Record<string, PermissionCode[]>> = {
   'returns-exchanges': ['sale.refund'],
   'cash-control': ['cash.view_variance', 'shift.close'],
   shifts: ['shift.open', 'shift.close'],
-  expenses: ['cash.movement'],
+  // The expenses screen is its own right, not a side effect of being allowed to
+  // move cash in a drawer. `cash.movement` was standing in for a code that did
+  // not exist, which meant anyone who could bank the day's takings could also
+  // read the rent and the payroll.
+  expenses: ['expense.view'],
   installments: ['customer.credit'],
   products: ['stock.view'],
   'products-import': ['product.import'],
@@ -254,8 +275,10 @@ export const TAB_PERMISSIONS: Partial<Record<string, PermissionCode[]>> = {
   'stock-movements': ['stock.view'],
   customers: ['customer.manage'],
   suppliers: ['supplier.manage'],
+  'purchase-orders': ['supplier.manage'],
   'audit-log': ['audit.view'],
-  settings: ['settings.general', 'settings.appearance', 'settings.terminal', 'user.manage'],
+  settings: ['settings.general', 'settings.appearance', 'settings.terminal', 'user.manage',
+    'sync.push'],
 };
 
 /** L-09: controls the user lacks permission for are absent, not disabled. */

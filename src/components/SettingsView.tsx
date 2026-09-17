@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { settingsApi } from '../settingsApi';
 import { backupsApi, formatAge, formatBytes, type BackupStatusWire } from '../backupsApi';
+import { syncApi, staleness, type SyncStatus } from '../syncApi';
 import { InfoHint } from './InfoHint';
 import {
   Users,
@@ -109,7 +110,8 @@ type SettingsTab =
   | 'thresholds'
   | 'printers'
   | 'appearance'
-  | 'backup';
+  | 'backup'
+  | 'sync';
 
 const SETTINGS_TABS: {
   key: SettingsTab;
@@ -128,6 +130,10 @@ const SETTINGS_TABS: {
   { key: 'printers', label: 'Hardware & Receipts', hint: '80mm / 58mm thermal templates', icon: Printer, requires: 'settings.terminal' },
   { key: 'appearance', label: 'Theme', hint: 'Accent colour & visual palette', icon: Palette, requires: 'settings.appearance' },
   { key: 'backup', label: 'Backup', hint: 'Backup status, restores & accounting exports', icon: Database, requires: 'settings.general' },
+  // sync.push, not settings.general: closing up should not require the rights to
+  // rename the business. Whoever holds only this code sees this tab and no other,
+  // and inside it only the one-way "send" action.
+  { key: 'sync', label: 'Head Office Sync', hint: 'Send the day to the owner; administrators publish configuration', icon: CloudUpload, requires: 'sync.push' },
 ];
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -166,6 +172,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [backupStatus, setBackupStatus] = useState<BackupStatusWire | null>(null);
   const [backupError, setBackupError] = useState<string | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
+
+  // The two R2 channels. Loaded when the tab opens rather than on mount — a
+  // shop on the theme tab has no use for it, and status walks every table
+  // counting what is unsent.
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [syncBusy, setSyncBusy] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [syncOutletId, setSyncOutletId] = useState<string>('');
 
   // General Store Settings State
   const [companyName, setCompanyName] = useState(generalSettings.companyName);
@@ -952,6 +967,42 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       userOutletFilter === 'all' || u.outletId === 'all-outlets' || u.outletId === userOutletFilter;
     return matchSearch && matchOutlet;
   });
+
+  /** What this instance has and has not sent. Re-read after every action. */
+  const loadSyncStatus = React.useCallback(async () => {
+    try {
+      setSyncStatus(await syncApi.status());
+      setSyncError(null);
+    } catch (failure) {
+      setSyncError(failure instanceof Error ? failure.message : 'Could not read the sync status');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'sync' && permissions.has('sync.push')) void loadSyncStatus();
+  }, [activeTab, permissions, loadSyncStatus]);
+
+  /**
+   * Runs one channel action and reports what it did.
+   *
+   * <p>All four share this because the shape is the same every time: press,
+   * wait, say what happened in rows and batches rather than "Done". An owner
+   * pressing Update wants to know whether anything actually arrived.
+   */
+  const runSync = async (name: string, action: () => Promise<{ message: string }>) => {
+    setSyncBusy(name);
+    setSyncError(null);
+    setSyncResult(null);
+    try {
+      const outcome = await action();
+      setSyncResult(outcome.message);
+      await loadSyncStatus();
+    } catch (failure) {
+      setSyncError(failure instanceof Error ? failure.message : `${name} failed.`);
+    } finally {
+      setSyncBusy(null);
+    }
+  };
 
   // FR-SET-07: the status the screen asks for on every open. A stale "healthy"
   // is worse than no light at all, so it is re-read rather than cached.
@@ -2658,6 +2709,208 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
           )}
+
+          {/* TAB 8: HEAD OFFICE SYNC — the two R2 channels */}
+          {activeTab === 'sync' && permissions.has('sync.push') && (
+            <div className="bg-white rounded-xl border border-slate-300 p-6 shadow-2xs space-y-6">
+              <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-200">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    Head Office Sync
+                    <InfoHint text="Configuration comes down from the owner; trading goes up to them. Neither is needed to sell — a shop trades through any outage." />
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    {syncStatus
+                      ? syncStatus.summary
+                      : syncError
+                        ? syncError
+                        : 'Reading the sync status…'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => void loadSyncStatus()}
+                  title="Re-read the status"
+                  className="p-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer shrink-0"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
+                </button>
+              </div>
+
+              {/* No bucket, no channels. Said plainly rather than by every
+                  button failing one at a time. */}
+              {syncStatus && !syncStatus.configured && (
+                <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-300 text-xs font-bold text-amber-900">
+                  No storage bucket is configured, so nothing can be published or sent.
+                  Add the off-site keys in the environment and restart.
+                </div>
+              )}
+
+              {syncStatus && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px]">
+                  <div>
+                    <span className="text-slate-400 block">This instance:</span>
+                    <span className="font-bold text-slate-800">
+                      {syncStatus.mode === 'CONSOLIDATOR' ? "Owner's view" : 'Shop counter'}
+                      {syncStatus.outletCode ? ` · ${syncStatus.outletCode}` : ''}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">Waiting to send:</span>
+                    {/* Not an alarm. The till does not need the network to
+                        trade; this only says how far behind the owner is. */}
+                    <span className={`font-bold ${syncStatus.pendingRows > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                      {syncStatus.pendingRows === 0 ? 'nothing' : `${syncStatus.pendingRows} row(s)`}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">Last sent:</span>
+                    <span className="font-bold text-slate-800">{staleness(syncStatus.lastPushedAt)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">Configuration pulled:</span>
+                    <span className="font-bold text-slate-800">{staleness(syncStatus.configPulledAt)}</span>
+                  </div>
+                </div>
+              )}
+
+              {syncResult && (
+                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800">
+                  {syncResult}
+                </div>
+              )}
+              {syncError && syncStatus && (
+                <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800">
+                  {syncError}
+                </div>
+              )}
+
+              <div className={`grid grid-cols-1 gap-4 ${
+                permissions.has('settings.general') ? 'md:grid-cols-2' : ''
+              }`}>
+                {/* ── Channel 1, down: the owner publishes, a shop pulls ──
+                    Administrators only. Pulling rewrites this counter's staff and
+                    can move its outlet id, which is not a closing-up task. */}
+                {permissions.has('settings.general') && (
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-300 space-y-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                      <Download className="w-4 h-4 text-accent-500" />
+                      Configuration
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Products, prices, staff and settings. Published by the owner, pulled by each
+                      shop — one direction only, so a branch can never overwrite head office.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-bold text-slate-700">
+                      Publish for a branch
+                    </label>
+                    <select
+                      value={syncOutletId}
+                      onChange={(event) => setSyncOutletId(event.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:outline-accent-500"
+                    >
+                      <option value="">Choose a branch…</option>
+                      {outlets
+                        .filter((outlet) => outlet.id !== 'all-outlets')
+                        .map((outlet) => (
+                          <option key={outlet.id} value={outlet.id}>{outlet.name}</option>
+                        ))}
+                    </select>
+                    <button
+                      onClick={() => void runSync('Publish', () => syncApi.publishConfiguration(syncOutletId))}
+                      disabled={!syncOutletId || syncBusy !== null || !syncStatus?.configured}
+                      className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed text-white px-3.5 py-2.5 rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      <CloudUpload className="w-4 h-4" />
+                      <span>{syncBusy === 'Publish' ? 'Publishing…' : 'Publish configuration'}</span>
+                    </button>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200">
+                    <button
+                      onClick={() => void runSync('Get configuration', syncApi.getConfiguration)}
+                      disabled={syncBusy !== null || !syncStatus?.configured}
+                      className="w-full flex items-center justify-center gap-2 border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed text-slate-800 px-3.5 py-2.5 rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>{syncBusy === 'Get configuration' ? 'Applying…' : 'Get configuration'}</span>
+                    </button>
+                    <p className="mt-2 text-[10px] text-slate-400 leading-snug">
+                      Safe to run again at any time. This is the button a new counter presses once
+                      the owner has published — it sets the whole shop up.
+                    </p>
+                  </div>
+                </div>
+                )}
+
+                {/* ── Channel 2, up: the shop pushes, the owner ingests ── */}
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-300 space-y-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                      <CloudUpload className="w-4 h-4 text-accent-500" />
+                      Trading
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Sales, returns, stock, shifts, cash and the audit log. Sent in batches; each
+                      one is numbered, so a missing batch is visible rather than silent.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => void runSync('Send', syncApi.push)}
+                    disabled={syncBusy !== null || !syncStatus?.configured}
+                    className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed text-white px-3.5 py-2.5 rounded-xl text-xs font-bold cursor-pointer"
+                  >
+                    <CloudUpload className="w-4 h-4" />
+                    <span>{syncBusy === 'Send' ? 'Sending…' : 'Send trading to head office'}</span>
+                  </button>
+
+                  {permissions.has('settings.general') && (
+                  <div className="pt-2 border-t border-slate-200">
+                    <button
+                      onClick={() => void runSync('Update', syncApi.ingest)}
+                      disabled={syncBusy !== null || !syncStatus?.configured}
+                      className="w-full flex items-center justify-center gap-2 border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed text-slate-800 px-3.5 py-2.5 rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      <span>{syncBusy === 'Update' ? 'Bringing in…' : 'Update from the shops'}</span>
+                    </button>
+                    <p className="mt-2 text-[10px] text-slate-400 leading-snug">
+                      The owner presses this. Batches already taken in are skipped, so pressing it
+                      twice changes nothing.
+                    </p>
+                  </div>
+                  )}
+
+                  {/* What exactly is waiting, so "12 rows" is checkable. */}
+                  {syncStatus && Object.keys(syncStatus.pendingByTable).length > 0 && (
+                    <div className="pt-2 border-t border-slate-200">
+                      <div className="text-[11px] font-bold text-slate-700 mb-1.5">Waiting to send</div>
+                      <div className="space-y-1">
+                        {Object.entries(syncStatus.pendingByTable).map(([table, count]) => (
+                          <div key={table} className="flex justify-between text-[11px]">
+                            <span className="text-slate-500">{table.replace(/_/g, ' ')}</span>
+                            <span className="font-bold text-slate-800">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <p className="text-[10px] text-slate-400 leading-snug border-t border-slate-200 pt-3">
+                None of this is needed to sell. A shop records every sale locally and trades through
+                any outage; these buttons only decide how current the owner&apos;s view is. Trading
+                is also sent automatically every fifteen minutes, so pressing Send at closing time
+                confirms the day has gone rather than being the only thing that sends it.
+              </p>
+            </div>
+          )}
+
       </div>
 
       {/* SET UP / EDIT STORE BRANCH MODAL */}

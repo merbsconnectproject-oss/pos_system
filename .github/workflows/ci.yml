@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # BR-4, BR-6, BR-11, BR-12 and the PRD §6 permission matrix, asserted
+      # against the vectors in docs/contract. The backend repository holds its
+      # own copy of the same file and asserts the same rules — if these two ever
+      # disagree, one of them is wrong about what the system does.
+      - name: Contract assertions
+        run: npm run check:contract
+
+      # NFR: money rounding, receipt numbering, role visibility, scan detection
+      # and weighted average cost. These run in milliseconds and are the only
+      # place the frontend's own rules are checked as behaviour rather than as
+      # vectors shared with the backend.
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npx vite build
+
+      # The vectors are generated from permissions.ts and the rules modules. A
+      # regenerated file that differs from the committed one means somebody
+      # changed a rule and did not regenerate — which the backend would only
+      # discover later, in a different repository.
+      - name: Contract vectors are up to date
+        run: |
+          npm run -s gen:vectors
+          if ! git diff --quiet -- docs/contract/test-vectors.json; then
+            echo "::error::test-vectors.json is stale — run 'npm run gen:vectors' and commit the result."
+            git diff -- docs/contract/test-vectors.json
+            exit 1
+          fi

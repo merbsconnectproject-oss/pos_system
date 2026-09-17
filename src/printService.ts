@@ -17,6 +17,14 @@ export interface PrintJob {
   paperWidth: '58mm' | '80mm';
   /** FR-RCPT-06: reprints carry a REPRINT band. */
   isReprint?: boolean;
+  /**
+   * Base64 ESC/POS, rendered by the server.
+   *
+   * Not text assembled here. A receipt built in the browser states what the till
+   * believed rather than what was recorded, and a reprint built that way could
+   * differ from the original — the one thing a reprint must never do. The server
+   * renders both from the stored sale, so they cannot.
+   */
   payload: string;
 }
 
