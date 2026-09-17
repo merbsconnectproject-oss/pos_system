@@ -63,11 +63,17 @@ Copy-Item (Join-Path $BackendRoot 'LICENSE') $Stage
 Copy-Item (Join-Path $PSScriptRoot 'THIRD-PARTY-NOTICES.txt') $Stage
 
 # A private runtime keeps the counter independent of whichever Java happens to
-# be installed on Windows. JDK 25 can link from its run-time image and may omit
-# the legacy jmods directory, so name the conservative module set explicitly.
-# jdk.compiler is needed for source-file launch of the backup decrypt helper.
-$runtimeModules = 'java.se,jdk.compiler,jdk.crypto.ec,jdk.localedata,jdk.unsupported,jdk.zipfs'
-Invoke-Checked 'jlink.exe' @('--add-modules', $runtimeModules, '--bind-services', '--strip-debug', '--no-header-files', '--no-man-pages', '--compress=zip-6', '--output', (Join-Path $Stage 'runtime'))
+# be installed on Windows. Link a compact image when packaged modules exist.
+# GitHub's hosted Temurin 25 image omits them, so copy that complete JDK as the
+# reliable fallback; it also retains source-file launch for backup decryption.
+$runtime = Join-Path $Stage 'runtime'
+$jmods = Join-Path $env:JAVA_HOME 'jmods'
+if (Test-Path $jmods) {
+    Invoke-Checked 'jlink.exe' @('--module-path', $jmods, '--add-modules', 'ALL-MODULE-PATH', '--bind-services', '--strip-debug', '--no-header-files', '--no-man-pages', '--compress=zip-6', '--output', $runtime)
+} else {
+    Write-Warning "Packaged JDK modules are unavailable; bundling the complete JDK from $env:JAVA_HOME"
+    Copy-Item $env:JAVA_HOME $runtime -Recurse
+}
 
 if (-not $WinSwPath) {
     $WinSwPath = Join-Path $DependencyCache 'WinSW-x64-2.12.0.exe'
