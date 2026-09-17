@@ -12,6 +12,8 @@ on:
         required: true
         default: main
   push:
+    branches:
+      - feature/auth-session
     tags:
       - 'v*'
 
