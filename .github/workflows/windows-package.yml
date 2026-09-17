@@ -1,0 +1,82 @@
+name: Windows package
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Installer version
+        required: true
+        default: 0.1.0
+      frontend_ref:
+        description: pos-system branch, tag, or SHA
+        required: true
+        default: main
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  package:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out backend
+        uses: actions/checkout@v4
+        with:
+          path: pos-api
+
+      - name: Check out frontend
+        uses: actions/checkout@v4
+        with:
+          repository: sowlbaby/pos-system
+          ref: ${{ inputs.frontend_ref || 'main' }}
+          path: pos-system
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+          cache-dependency-path: pos-api/pom.xml
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: pos-system/package-lock.json
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --yes --no-progress
+
+      - name: Resolve version
+        id: version
+        shell: powershell
+        run: |
+          $version = '${{ inputs.version }}'
+          if (-not $version) { $version = '${{ github.ref_name }}'.TrimStart('v') }
+          "value=$version" >> $env:GITHUB_OUTPUT
+
+      # The Testcontainers suite runs in the Linux CI job. Windows packaging
+      # still performs the complete frontend check and assembles the already
+      # tested backend with its embedded web assets.
+      - name: Frontend checks
+        working-directory: pos-system
+        run: npm ci; npm run check
+
+      - name: Build offline installer
+        working-directory: pos-api
+        shell: powershell
+        run: .\packaging\windows\build-installer.ps1 -Version '${{ steps.version.outputs.value }}' -SkipTests
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: radiance-pos-windows-${{ steps.version.outputs.value }}
+          path: |
+            pos-api/dist/Radiance-POS-Setup-*.exe
+            pos-api/dist/Radiance-POS-Setup-*.sha256
+          if-no-files-found: error
+          retention-days: 30

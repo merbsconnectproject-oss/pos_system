@@ -41,6 +41,7 @@ build/
 # Local backup artifacts and generated acceptance-document build output.
 backups/
 output/
+packaging/windows/stage/
 __pycache__/
 .~lock.*
 Radiance-POS-Acceptance-Testing-Checklist.docx

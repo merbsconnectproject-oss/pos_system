@@ -1,6 +1,6 @@
 # Progress
 
-**Updated** 2026-09-16 · **Tests** full backend + frontend acceptance suites green · **DB** connected to `pos_system`, V1–V28 applied
+**Updated** 2026-09-17 · **Tests** full backend + frontend acceptance suites green · **DB** connected to `pos_system`, V1–V28 applied
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (258 items, dual checkbox).
@@ -36,7 +36,8 @@ S ██████████  Expenses & credit  100%  expenses, P&L and ins
 T ██████████  Returns & swaps    100%  wired end to end; net of returns now reaches the takings and the P&L
 ```
 
-505 backend tests green (3 skipped) in the full 2026-09-16 Testcontainers run;
+508 backend tests green (3 skipped) across the full 2026-09-17 Testcontainers run and the
+new Windows bootstrap/encryption acceptance checks;
 the frontend contract and Vitest suite is also green (46 tests). Three live R2
 checks remain on-demand because they require configured credentials.
 
@@ -53,6 +54,7 @@ checks remain on-demand because they require configured credentials.
 | Database | `pos_system` on localhost, role `giftedlabs`, **V1 applied** |
 | Deployment config | `counter` / `consolidator` profiles; Railway `DATABASE_URL` + `PORT` handled |
 | Security baseline | Argon2id, separate PIN hashing, session-cookie policy, CSRF, CORS |
+| Windows delivery | Offline x64 installer: embedded UI, private Java/PostgreSQL, service lifecycle, secure onboarding, diagnostics, upgrades and data-preserving uninstall |
 
 **Two bugs found and fixed in the frozen frontend:**
 `roundMoney(1.005)` returned 1.00 where `BigDecimal.HALF_UP` gives 1.01 — the

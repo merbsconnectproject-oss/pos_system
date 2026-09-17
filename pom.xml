@@ -169,4 +169,42 @@
 		</plugins>
 	</build>
 
+	<!--
+	  The counter installer ships one same-origin application. The Windows build
+	  supplies -Dfrontend.dist=<vite-output> and this profile copies that output
+	  into Spring Boot's static resource directory before the executable JAR is
+	  assembled. Normal backend builds do not need the sibling frontend checkout.
+	-->
+	<profiles>
+		<profile>
+			<id>bundled-frontend</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-resources-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>bundle-counter-frontend</id>
+								<phase>generate-resources</phase>
+								<goals>
+									<goal>copy-resources</goal>
+								</goals>
+								<configuration>
+									<outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
+									<resources>
+										<resource>
+											<directory>${frontend.dist}</directory>
+											<filtering>false</filtering>
+										</resource>
+									</resources>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
+
 </project>

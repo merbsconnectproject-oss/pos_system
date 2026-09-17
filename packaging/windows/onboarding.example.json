@@ -1,0 +1,19 @@
+{
+  "ownerUsername": "admin",
+  "ownerName": "System Administrator",
+  "ownerEmail": "owner@example.com",
+  "ownerPassword": "replace-with-a-strong-password",
+  "ownerPasswordConfirm": "replace-with-a-strong-password",
+  "ownerPin": "2468",
+  "ownerPinConfirm": "2468",
+  "outletCode": "RAD",
+  "outletName": "Radiance Lighting",
+  "terminalCode": "01",
+  "offsiteEnabled": false,
+  "offsiteEndpoint": "",
+  "offsiteBucket": "",
+  "offsiteAccessKey": "",
+  "offsiteSecretKey": "",
+  "offsiteRegion": "auto",
+  "offsitePrefix": ""
+}

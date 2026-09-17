@@ -1,6 +1,8 @@
 package gh.giftedlabs.pos.service.impl;
 
 import gh.giftedlabs.pos.config.PosProperties;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -34,6 +36,19 @@ import java.util.Optional;
  */
 @Component
 public class OffsiteStore {
+
+    private final String encryptionKey;
+
+    /** Production constructor: supports a protected external properties file as well as environment variables. */
+    @Autowired
+    public OffsiteStore(Environment environment) {
+        this.encryptionKey = environment.getProperty("POS_BACKUP_ENCRYPTION_KEY", "");
+    }
+
+    /** Live test/command-line constructor retains the documented environment-variable path. */
+    public OffsiteStore() {
+        this.encryptionKey = System.getenv("POS_BACKUP_ENCRYPTION_KEY");
+    }
 
     /**
      * Uploads and returns where it went.
@@ -89,7 +104,7 @@ public class OffsiteStore {
     public String putBytes(byte[] body, String name, String contentType,
                            PosProperties.Offsite config) {
         String key = fullKey(name, config);
-        byte[] encrypted = OffsitePayloadCrypto.encrypt(body);
+        byte[] encrypted = OffsitePayloadCrypto.encrypt(body, encryptionKey);
         try (S3Client s3 = client(config)) {
             s3.putObject(PutObjectRequest.builder()
                     .bucket(config.bucket())
@@ -112,7 +127,7 @@ public class OffsiteStore {
             return Optional.of(OffsitePayloadCrypto.decrypt(s3.getObjectAsBytes(GetObjectRequest.builder()
                     .bucket(config.bucket())
                     .key(fullKey(name, config))
-                    .build()).asByteArray()));
+                    .build()).asByteArray(), encryptionKey));
         } catch (NoSuchKeyException absent) {
             return Optional.empty();
         }

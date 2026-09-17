@@ -58,8 +58,9 @@ public class InitialAdminBootstrap implements ApplicationRunner {
         // BR-6: a till cannot number a receipt without a block, and a shop
         // cannot sell without a till. One is created with the first outlet so
         // the install is usable rather than usable-after-a-settings-trip.
-        if (terminals.findByOutletIdAndCodeIgnoreCase(outlet.getId(), "01").isEmpty()) {
-            terminals.save(new Terminal(outlet.getId(), "01", "Counter 1", 1L, 10_000L));
+        if (terminals.findByOutletIdAndCodeIgnoreCase(outlet.getId(), properties.terminalCode()).isEmpty()) {
+            terminals.save(new Terminal(outlet.getId(), properties.terminalCode(),
+                    properties.terminalName(), 1L, 10_000L));
         }
 
         User owner = new User(properties.username(), properties.fullName(),

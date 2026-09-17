@@ -1,0 +1,26 @@
+<service>
+  <id>RadiancePos</id>
+  <name>Radiance POS</name>
+  <description>Radiance POS local-first application and API.</description>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <depend>RadiancePosPostgreSQL</depend>
+  <serviceaccount>
+    <username>NT AUTHORITY\LocalService</username>
+  </serviceaccount>
+  <executable>%BASE%\..\runtime\bin\java.exe</executable>
+  <arguments>-Xrs -XX:MaxRAMPercentage=60 -jar "%BASE%\..\app\pos-api.jar" --spring.config.additional-location="file:%PROGRAMDATA%\GiftedLabs\Radiance POS\config\application.properties"</arguments>
+  <workingdirectory>%PROGRAMDATA%\GiftedLabs\Radiance POS</workingdirectory>
+  <stoptimeout>30sec</stoptimeout>
+  <onfailure action="restart" delay="5 sec" />
+  <onfailure action="restart" delay="15 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <logpath>%PROGRAMDATA%\GiftedLabs\Radiance POS\logs</logpath>
+  <log mode="roll-by-size-time">
+    <sizeThreshold>10485760</sizeThreshold>
+    <pattern>yyyyMMdd</pattern>
+    <autoRollAtTime>00:00:00</autoRollAtTime>
+    <zipOlderThanNumDays>7</zipOlderThanNumDays>
+    <keepFiles>14</keepFiles>
+  </log>
+</service>
