@@ -60,7 +60,13 @@ jobs:
         shell: powershell
         run: |
           $version = '${{ inputs.version }}'
-          if (-not $version) { $version = '${{ github.ref_name }}'.TrimStart('v') }
+          if (-not $version) {
+            if ('${{ github.ref_type }}' -eq 'tag') {
+              $version = '${{ github.ref_name }}'.TrimStart('v')
+            } else {
+              $version = '0.1.0'
+            }
+          }
           "value=$version" >> $env:GITHUB_OUTPUT
 
       # The Testcontainers suite runs in the Linux CI job. Windows packaging

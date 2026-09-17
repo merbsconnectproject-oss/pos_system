@@ -65,7 +65,9 @@ Copy-Item (Join-Path $PSScriptRoot 'THIRD-PARTY-NOTICES.txt') $Stage
 # A private runtime keeps the counter independent of whichever Java happens to
 # be installed on Windows. ALL-MODULE-PATH is intentionally conservative for a
 # reflective Spring application; reliability matters more than saving 30 MB.
-Invoke-Checked 'jlink.exe' @('--add-modules', 'ALL-MODULE-PATH', '--strip-debug', '--no-header-files', '--no-man-pages', '--compress=zip-6', '--output', (Join-Path $Stage 'runtime'))
+$jmods = Join-Path $env:JAVA_HOME 'jmods'
+if (-not (Test-Path $jmods)) { throw "JDK modules not found at $jmods" }
+Invoke-Checked 'jlink.exe' @('--module-path', $jmods, '--add-modules', 'ALL-MODULE-PATH', '--strip-debug', '--no-header-files', '--no-man-pages', '--compress=zip-6', '--output', (Join-Path $Stage 'runtime'))
 
 if (-not $WinSwPath) {
     $WinSwPath = Join-Path $DependencyCache 'WinSW-x64-2.12.0.exe'
