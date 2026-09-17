@@ -37,7 +37,6 @@ if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'The Wi
 if (-not (Test-Path (Join-Path $FrontendRoot 'package-lock.json'))) { throw "Frontend checkout not found at $FrontendRoot" }
 if (-not (Test-Path $InnoCompiler)) { throw "Inno Setup compiler not found at $InnoCompiler" }
 
-New-Item -ItemType Directory -Force $DependencyCache | Out-Null
 Remove-Item $Stage, $WebOutput -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $Stage, $WebOutput | Out-Null
 
@@ -48,6 +47,7 @@ Invoke-Checked 'npx.cmd' @('vite', 'build', '--outDir', $WebOutput, '--emptyOutD
 $mavenArgs = @('-B', 'clean', 'package', '-Pbundled-frontend', "-Dfrontend.dist=$WebOutput")
 if ($SkipTests) { $mavenArgs += '-DskipTests' }
 Invoke-Checked (Join-Path $BackendRoot 'mvnw.cmd') $mavenArgs
+New-Item -ItemType Directory -Force $DependencyCache | Out-Null
 
 $jar = Get-ChildItem (Join-Path $BackendRoot 'target') -Filter 'pos-api-*.jar' |
     Where-Object Name -NotLike '*.original' | Select-Object -First 1
