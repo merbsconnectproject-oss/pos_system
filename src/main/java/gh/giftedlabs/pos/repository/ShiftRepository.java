@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.Instant;
 
 /**
  * Shifts — FR-CASH, BR-13.
@@ -33,6 +34,10 @@ public interface ShiftRepository extends JpaRepository<Shift, UUID> {
     default Optional<Shift> findOpenForTerminal(UUID terminalId) {
         return findByTerminalIdAndStatus(terminalId, Shift.Status.OPEN);
     }
+
+    /** Open shifts whose 23:00 business-day boundary has passed. */
+    List<Shift> findByStatusAndOpenedAtLessThanEqualOrderByOpenedAtAsc(
+            Shift.Status status, Instant cutoff);
 
     @Query("""
            select s from Shift s

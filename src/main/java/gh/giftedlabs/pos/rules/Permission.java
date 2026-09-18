@@ -102,7 +102,7 @@ public enum Permission {
     SETTINGS_TERMINAL(Codes.SETTINGS_TERMINAL, Group.ADMIN, "Configure this terminal and its printer"),
 
     /**
-     * Sending the day's trading up to head office, and nothing else.
+     * Sending the day's trading through Cloud Sync, and nothing else.
      *
      * <p>Separate from {@link #SETTINGS_GENERAL} because the two are not the same
      * risk. Pushing is one-way, additive and audited: the worst a cashier can do
@@ -115,7 +115,7 @@ public enum Permission {
      * minutes; this is for the person who wants to see it leave before they lock
      * the door.
      */
-    SYNC_PUSH(Codes.SYNC_PUSH, Group.ADMIN, "Send this shop's trading to head office");
+    SYNC_PUSH(Codes.SYNC_PUSH, Group.ADMIN, "Send this shop's trading to Cloud Sync");
 
     /** PRD §6 groupings, used to lay out the permissions screen. */
     public enum Group {

@@ -36,6 +36,12 @@ pos:
     outlet-code: ${OUTLET_CODE:}
     terminal-code: ${TERMINAL_CODE:01}
 
+  shift:
+    # An abandoned drawer must not remain available for the next trading day.
+    # The startup check catches the boundary if the counter was powered off at 23:00.
+    auto-close-cron: ${POS_SHIFT_AUTO_CLOSE_CRON:0 0 23 * * *}
+    auto-close-zone: ${POS_SHIFT_AUTO_CLOSE_ZONE:Africa/Accra}
+
   consolidator:
     # Outbound push. Disabled until the owner's view is provisioned, so a shop
     # installed today needs no change when the consolidator goes live later.

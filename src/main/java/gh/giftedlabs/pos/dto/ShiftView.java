@@ -26,6 +26,7 @@ public record ShiftView(
         long openingFloat,
         Instant openedAt,
         String status,
+        boolean automaticallyClosed,
 
         /** Null until closed. */
         Long countedCash,

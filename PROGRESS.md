@@ -1,6 +1,6 @@
 # Progress
 
-**Updated** 2026-09-17 · **Tests** full backend + frontend acceptance suites green · **DB** connected to `pos_system`, V1–V28 applied
+**Updated** 2026-09-18 · **Tests** full backend + frontend acceptance suites green · **DB** connected to `pos_system`, V1–V30 applied
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (258 items, dual checkbox).
@@ -23,22 +23,22 @@ F ██████████  Inventory          100%   FR-INV-06 enforced a
 G ██████████  Point of sale      100%   discount ceiling enforced; gates 3 and 4 pass
 H ██████████  Payments            100%  cash, split, reference-confirmed non-cash, exact settlement, change and duplicate protection are server-enforced
 I █████████░  Receipts & printing 90%   layout, ESC/POS, both widths, audited reprints, preview; the Windows print service needs the hardware
-J ██████████  Shifts & cash      100%   blind close, BR-13 by index, BR-14 computed; gate 9 passes
+J ██████████  Shifts & cash      100%   blind/manual close plus audited 23:00 automatic close; gates remain green
 K ██████████  Suppliers & receipt  100%  supplier directory, outlet-scoped goods receipts, weighted-average costing, reversals, and supplier/product purchase history are API-backed and wired in the frontend
 L ██████████  Customers          100%   shared directory, phone lookup, pricing and cross-outlet history
 M ██████████  Users & permissions 100%  what a role grants is editable and persisted, and takes effect mid-session
 N ██████████  Audit               100%  mutating actions and security events are recorded; read endpoint, pagination and acceptance coverage are live
 O ██████████  Reports & dashboard 100%  every sales surface is net of returns
 P ██████████  Settings           100%  thresholds read by the rules; backups every 15 min, off-site, tested restore
-Q ██████████  Connectivity       100%  both channels built, screens wired; power-loss recovery (NFR-5) covered by acceptance test
+Q ██████████  Connectivity       100%  both channels built; Cloud Sync frequency is owner-configurable; power-loss recovery covered
 R ██████████  Cross-cutting       100%  hashing, rate limiting, audit, idempotency, row locks, live permission refresh, CSRF, CORS and browser security headers
 S ██████████  Expenses & credit  100%  expenses, P&L and installment plans persist; 3 new permission codes
 T ██████████  Returns & swaps    100%  wired end to end; net of returns now reaches the takings and the P&L
 ```
 
-508 backend tests green (3 skipped) across the full 2026-09-17 Testcontainers run and the
-new Windows bootstrap/encryption acceptance checks;
-the frontend contract and Vitest suite is also green (46 tests). Three live R2
+514 backend tests green (3 skipped) across the full 2026-09-18 Testcontainers run and the
+new Cloud Sync scheduling and Windows application-window acceptance checks;
+the frontend contract and Vitest suite is also green (54 tests). Three live R2
 checks remain on-demand because they require configured credentials.
 
 ---
@@ -51,10 +51,17 @@ checks remain on-demand because they require configured credentials.
 | Contract vectors | 81 vectors generated from the frontend, read by **both** suites |
 | Database tests | Testcontainers defaults to PostgreSQL 18; local cached-image override is `-Dtest.postgres.image=...` |
 | `rules/` ported | `Money` `Quantity` `Costing` `ReceiptSequence` `Permission` `Role` |
-| Database | `pos_system` on localhost, role `giftedlabs`, **V1 applied** |
+| Database | `pos_system` on localhost, role `giftedlabs`, **V1–V30 applied** |
 | Deployment config | `counter` / `consolidator` profiles; Railway `DATABASE_URL` + `PORT` handled |
 | Security baseline | Argon2id, separate PIN hashing, session-cookie policy, CSRF, CORS |
-| Windows delivery | Offline x64 installer: embedded UI, private Java/PostgreSQL, service lifecycle, secure onboarding, diagnostics, upgrades and data-preserving uninstall |
+| Windows delivery | Offline x64 installer: embedded UI, private Java/PostgreSQL, service lifecycle, secure onboarding, diagnostics, upgrades and data-preserving uninstall; desktop and Start-menu launchers open a dedicated Edge/Chrome app window without browser chrome |
+| Ubuntu delivery | Native `.deb`: embedded UI and Java 25 runtime, Ubuntu PostgreSQL, hardened systemd service, secure onboarding, desktop launcher and diagnostics |
+| Commercial catalogue UI | POS category pills come from the database-managed catalogue; category, brand and unit renames use the styled in-app editor rather than a browser prompt |
+| Refresh continuity | The current authorised workspace and open POS terminal survive a page refresh; state is scoped per user and cleared on sign-out |
+| Automatic shift close | On counter deployments, any shift still open at the latest 23:00 `Africa/Accra` boundary is closed and audited; startup catches a boundary missed while the machine was off, while physical count and variance remain explicitly pending |
+| Startup render safety | The shell renders while its outlet is still loading; missing browser assets are ordinary 404 responses rather than logged internal errors |
+| Workspace motion | Every module shares a viewport-aware reveal system, softly elevated interactive surfaces and page transitions; reduced-motion preferences disable it without hiding content |
+| Configurable Cloud Sync | Owners/admins choose the automatic upload interval in Settings › Cloud Sync from 15 minutes to 24 hours; manual sync stays immediate and failed attempts respect the chosen request cadence |
 
 **Two bugs found and fixed in the frozen frontend:**
 `roundMoney(1.005)` returned 1.00 where `BigDecimal.HALF_UP` gives 1.01 — the

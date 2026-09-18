@@ -190,16 +190,16 @@ public class ConfigurationChannel {
     }
 
     /**
-     * Takes on head office's id for this outlet, when a first run invented one.
+     * Takes on Cloud Sync's id for this outlet, when a first run invented one.
      *
      * <p>A fresh counter bootstraps itself an outlet so somebody can sign in at
-     * all — and gives it a random id, because it has never heard of head office.
+     * all — and gives it a random id, because it has never received cloud configuration.
      * The owner's copy of the same shop has a different id and the same code, and
-     * {@code outlet.code} is unique: inserting head office's row violates the
+     * {@code outlet.code} is unique: inserting Cloud Sync's row violates the
      * <em>code</em> index, which an {@code on conflict (id)} clause does not
      * catch. Every first "Get configuration" failed with a 500.
      *
-     * <p>Both ids have to agree, and head office's must win. It is the id every
+     * <p>Both ids have to agree, and Cloud Sync's must win. It is the id every
      * product, price and pushed sale is keyed to; if a shop kept its own, its
      * trading would arrive at the owner's view attached to an outlet that exists
      * nowhere else, and the combined reports would quietly sum to nothing.
@@ -218,14 +218,14 @@ public class ConfigurationChannel {
             long trading = countTrading(local);
             if (trading > 0) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, ("""
-                        This counter already has %d recorded transaction(s) against outlet %s,                         under a different id from head office's. Applying the configuration would                         detach them. Push this shop's trading first, or set it up on a clean                         database.""").formatted(trading, wire.code()));
+                        This counter already has %d recorded transaction(s) against outlet %s,                         under a different id from Cloud Sync. Applying the configuration would                         detach them. Sync this shop's trading first, or set it up on a clean                         database.""").formatted(trading, wire.code()));
             }
 
             // Nothing has traded yet, so the only things pointing at the invented
             // outlet are what the first run created: a till and the bootstrap
             // account's assignment. Move them over, then let it go.
             //
-            // The code has to be freed before head office's row can take it —
+            // The code has to be freed before Cloud Sync's row can take it —
             // it is unique. Parked on a temporary one that still satisfies BR-6's
             // receipt-safe shape (2-6 upper alphanumerics), because the check
             // constraint is not suspended for housekeeping.
@@ -248,7 +248,7 @@ public class ConfigurationChannel {
             jdbc.getJdbcTemplate().update("delete from user_outlet where outlet_id = ?", local);
             jdbc.getJdbcTemplate().update("delete from outlet where id = ?", local);
 
-            log.info("Adopted head office id for outlet {} (was {})", wire.code(), local);
+            log.info("Adopted Cloud Sync id for outlet {} (was {})", wire.code(), local);
         }
     }
 
@@ -278,6 +278,8 @@ public class ConfigurationChannel {
         row.setReceiptHeaderMessage(wire.receiptHeaderMessage());
         row.setReceiptFooterPolicy(wire.receiptFooterPolicy());
         row.setAccentColor(wire.accentColor());
+        row.setCloudSyncIntervalMinutes(wire.cloudSyncIntervalMinutes() >= 15
+                ? wire.cloudSyncIntervalMinutes() : 15);
         row.setIdleLockMinutes(thresholds.idleLockMinutes());
         row.setAdjustmentApprovalPesewas(thresholds.adjustmentApprovalPesewas());
         row.setCashVariancePesewas(thresholds.cashVariancePesewas());
@@ -396,12 +398,13 @@ public class ConfigurationChannel {
     private OutletConfig.Business toBusiness(BusinessSettings row) {
         if (row == null) {
             return new OutletConfig.Business("", "", false, BigDecimal.ZERO, "GHS", "GH₵",
-                    "EXACT", null, null, "#C55200");
+                    "EXACT", null, null, "#C55200", 15);
         }
         return new OutletConfig.Business(row.getCompanyName(), row.getTaxRegistrationNumber(),
                 row.isTaxEnabled(), row.getTaxRatePercent(), row.getCurrencyCode(),
                 row.getCurrencySymbol(), row.getCashRounding().name(),
-                row.getReceiptHeaderMessage(), row.getReceiptFooterPolicy(), row.getAccentColor());
+                row.getReceiptHeaderMessage(), row.getReceiptFooterPolicy(), row.getAccentColor(),
+                row.getCloudSyncIntervalMinutes());
     }
 
     private OutletConfig.Thresholds toThresholds(BusinessSettings row) {

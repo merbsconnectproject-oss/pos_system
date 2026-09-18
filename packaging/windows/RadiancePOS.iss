@@ -34,7 +34,7 @@ Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs c
 Name: "{commonappdata}\GiftedLabs\Radiance POS"; Permissions: admins-full system-full
 
 [Icons]
-Name: "{group}\Open Radiance POS"; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\tools\open-pos.ps1"""; WorkingDir: "{app}"
+Name: "{group}\Open Radiance POS"; Filename: "powershell.exe"; Parameters: "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\tools\open-pos.ps1"""; WorkingDir: "{app}"
 Name: "{group}\Configure or repair Radiance POS"; Filename: "powershell.exe"; Parameters: "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\tools\onboard.ps1"""; WorkingDir: "{app}"
 Name: "{group}\Radiance POS Diagnostics"; Filename: "powershell.exe"; Parameters: "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\tools\diagnostics.ps1"""; WorkingDir: "{app}"
 Name: "{group}\Restore a Radiance POS backup"; Filename: "powershell.exe"; Parameters: "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\tools\restore-backup.ps1"""; WorkingDir: "{app}"

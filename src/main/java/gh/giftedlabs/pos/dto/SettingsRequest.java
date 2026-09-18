@@ -59,11 +59,20 @@ public record SettingsRequest(
         @Max(value = 130, message = "Font size cannot exceed 130%")
         int fontScalePercent,
 
+        @Min(value = 15, message = "Cloud sync cannot run more often than every 15 minutes")
+        @Max(value = 1440, message = "Cloud sync must run at least once every 24 hours")
+        int cloudSyncIntervalMinutes,
+
         @NotNull @Valid Thresholds thresholds,
 
         boolean enforceFloorPriceApproval,
         boolean enforceVoidApproval,
         boolean enforceBlindShiftCount) {
+
+    @AssertTrue(message = "Cloud sync intervals must be in 15-minute steps")
+    public boolean isCloudSyncIntervalStepValid() {
+        return cloudSyncIntervalMinutes % 15 == 0;
+    }
 
     public record Thresholds(
 

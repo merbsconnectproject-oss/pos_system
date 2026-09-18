@@ -97,6 +97,10 @@ public class BusinessSettings {
     @Column(name = "idle_lock_minutes", nullable = false)
     private int idleLockMinutes = 10;
 
+    /** Minutes between automatic uploads of trading data to cloud storage. */
+    @Column(name = "cloud_sync_interval_minutes", nullable = false)
+    private int cloudSyncIntervalMinutes = 15;
+
     /** BR-11 · FR-INV-06: pesewas. */
     @Column(name = "adjustment_approval_pesewas", nullable = false)
     private long adjustmentApprovalPesewas = 50_000L;
@@ -144,6 +148,7 @@ public class BusinessSettings {
     public FontFamily getFontFamily() { return fontFamily; }
     public int getFontScalePercent() { return fontScalePercent; }
     public int getIdleLockMinutes() { return idleLockMinutes; }
+    public int getCloudSyncIntervalMinutes() { return cloudSyncIntervalMinutes; }
     public long getAdjustmentApprovalPesewas() { return adjustmentApprovalPesewas; }
     public long getCashVariancePesewas() { return cashVariancePesewas; }
     public boolean isEnforceFloorPriceApproval() { return enforceFloorPriceApproval; }
@@ -173,6 +178,7 @@ public class BusinessSettings {
     public void setFontFamily(FontFamily value) { this.fontFamily = value; }
     public void setFontScalePercent(int value) { this.fontScalePercent = value; }
     public void setIdleLockMinutes(int value) { this.idleLockMinutes = value; }
+    public void setCloudSyncIntervalMinutes(int value) { this.cloudSyncIntervalMinutes = value; }
     public void setAdjustmentApprovalPesewas(long value) { this.adjustmentApprovalPesewas = value; }
     public void setCashVariancePesewas(long value) { this.cashVariancePesewas = value; }
     public void setEnforceFloorPriceApproval(boolean value) { this.enforceFloorPriceApproval = value; }

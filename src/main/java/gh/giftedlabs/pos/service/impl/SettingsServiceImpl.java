@@ -88,6 +88,7 @@ public class SettingsServiceImpl implements SettingsService {
         row.setAccentColor(request.accentColor().toUpperCase(Locale.ROOT));
         row.setFontFamily(BusinessSettings.FontFamily.valueOf(request.fontFamily()));
         row.setFontScalePercent(request.fontScalePercent());
+        row.setCloudSyncIntervalMinutes(request.cloudSyncIntervalMinutes());
 
         SettingsRequest.Thresholds wanted = request.thresholds();
         row.setIdleLockMinutes(wanted.idleLockMinutes());
@@ -138,6 +139,9 @@ public class SettingsServiceImpl implements SettingsService {
 
     @Override
     public Duration idleTimeout() { return Duration.ofMinutes(snapshot().idleLockMinutes()); }
+
+    @Override
+    public Duration cloudSyncInterval() { return Duration.ofMinutes(snapshot().cloudSyncIntervalMinutes()); }
 
     @Override
     public BigDecimal discountCeiling(Set<Role> roles) {
@@ -206,7 +210,7 @@ public class SettingsServiceImpl implements SettingsService {
     protected Snapshot load() {
         BusinessSettings row = row();
         return new Snapshot(row.getCashVariancePesewas(), row.getAdjustmentApprovalPesewas(),
-                row.getIdleLockMinutes(), ceilingMap(), clock.instant());
+                row.getIdleLockMinutes(), row.getCloudSyncIntervalMinutes(), ceilingMap(), clock.instant());
     }
 
     private Map<String, Object> fields(BusinessSettings row, Map<String, BigDecimal> byRole) {
@@ -225,6 +229,7 @@ public class SettingsServiceImpl implements SettingsService {
         state.put("fontFamily", row.getFontFamily().name());
         state.put("fontScalePercent", row.getFontScalePercent());
         state.put("idleLockMinutes", row.getIdleLockMinutes());
+        state.put("cloudSyncIntervalMinutes", row.getCloudSyncIntervalMinutes());
         state.put("adjustmentApprovalPesewas", row.getAdjustmentApprovalPesewas());
         state.put("cashVariancePesewas", row.getCashVariancePesewas());
         state.put("enforceFloorPriceApproval", row.isEnforceFloorPriceApproval());
@@ -244,6 +249,7 @@ public class SettingsServiceImpl implements SettingsService {
 
     /** What the rules read, held for {@link #SNAPSHOT_TTL}. */
     protected record Snapshot(long cashVariance, long adjustmentApproval, int idleLockMinutes,
+                              int cloudSyncIntervalMinutes,
                               Map<String, BigDecimal> ceilings, java.time.Instant takenAt) {
     }
 }

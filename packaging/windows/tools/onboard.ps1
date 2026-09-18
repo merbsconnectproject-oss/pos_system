@@ -381,7 +381,12 @@ try {
     }
     $state | ConvertTo-Json | Set-Content (Join-Path $DataRoot 'install-state.json') -Encoding UTF8
     if ($script:ProgressForm) { $script:ProgressForm.Close() }
-    if (-not $NoLaunch) { Start-Process 'http://127.0.0.1:8080/' }
+    if (-not $NoLaunch) {
+        Start-Process 'powershell.exe' -ArgumentList @(
+            '-NoProfile', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass',
+            '-File', (Join-Path $InstallRoot 'tools\open-pos.ps1')
+        )
+    }
     Add-Type -AssemblyName PresentationFramework
     [System.Windows.MessageBox]::Show('Radiance POS is installed, protected, and ready to use.', 'Setup complete', 'OK', 'Information') | Out-Null
 } catch {

@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.*;
 
 /**
@@ -128,6 +129,23 @@ public class ShiftServiceImpl implements ShiftService {
         return view(shift);
     }
 
+    @Override
+    @Transactional
+    public int autoCloseDue(Instant cutoff) {
+        List<Shift> due = shifts.findByStatusAndOpenedAtLessThanEqualOrderByOpenedAtAsc(
+                Shift.Status.OPEN, cutoff);
+        for (Shift shift : due) {
+            long expected = expectedCash(shift);
+            shift.closeAutomatically(expected,
+                    "Automatically closed at the 23:00 business-day boundary; physical cash was not counted.",
+                    clock.instant());
+            audit.recordInCallerTransaction(null, "SHIFT_AUTO_CLOSED", "shift", shift.getId(), null,
+                    Map.of("expected", expected, "cutoff", cutoff.toString(), "countPending", true),
+                    shift.getOutletId(), shift.getTerminalId(), "scheduler");
+        }
+        return due.size();
+    }
+
     /** FR-CASH-03. */
     @Override
     @Transactional
@@ -231,6 +249,7 @@ public class ShiftServiceImpl implements ShiftService {
                 shift.getId(), shift.getOutletId(), shift.getTerminalId(),
                 shift.getCashierId(), nameOf(shift.getCashierId()),
                 shift.getOpeningFloat(), shift.getOpenedAt(), shift.getStatus().name(),
+                shift.isAutomaticallyClosed(),
                 shift.getCountedCash(), shift.getExpectedCash(),
                 shift.getVariance(), shift.getVarianceNote(),
                 shift.getClosedAt(), nameOf(shift.getClosedBy()),

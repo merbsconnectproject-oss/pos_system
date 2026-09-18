@@ -30,6 +30,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -252,6 +253,13 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(status)
                 .body(new ApiError(status.name(),
                         ex.getReason() == null ? status.getReasonPhrase() : ex.getReason(), Map.of()));
+    }
+
+    /** A missing browser asset is a normal 404, not an application failure. */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiError> onMissingResource(NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiError("NOT_FOUND", "Resource not found", Map.of()));
     }
 
     /**

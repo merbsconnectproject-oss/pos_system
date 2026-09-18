@@ -7,6 +7,7 @@ import gh.giftedlabs.pos.security.PosPrincipal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.Instant;
 
 /** Shifts and the cash drawer — FR-CASH, BR-13, BR-14. */
 public interface ShiftService {
@@ -25,6 +26,9 @@ public interface ShiftService {
      */
     ShiftView close(UUID shiftId, long countedCash, String note, long varianceThreshold,
                     PosPrincipal actor, String clientIp);
+
+    /** Close still-open shifts that crossed the configured business-day boundary. */
+    int autoCloseDue(Instant cutoff);
 
     /** FR-CASH-03. */
     ShiftView recordCash(UUID shiftId, CashMovementType type, long amount, String reason,

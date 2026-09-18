@@ -66,7 +66,8 @@ public record OutletConfig(
             String cashRounding,
             String receiptHeaderMessage,
             String receiptFooterPolicy,
-            String accentColor) {
+            String accentColor,
+            int cloudSyncIntervalMinutes) {
     }
 
     /** FR-SET-06: the numbers the rules are enforced against. */

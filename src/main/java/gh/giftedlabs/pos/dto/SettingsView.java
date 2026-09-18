@@ -38,6 +38,7 @@ public record SettingsView(
         String accentColor,
         String fontFamily,
         int fontScalePercent,
+        int cloudSyncIntervalMinutes,
 
         Thresholds thresholds,
 
@@ -80,6 +81,7 @@ public record SettingsView(
                 settings.getAccentColor(),
                 settings.getFontFamily().name(),
                 settings.getFontScalePercent(),
+                settings.getCloudSyncIntervalMinutes(),
                 new Thresholds(settings.getIdleLockMinutes(),
                         settings.getAdjustmentApprovalPesewas(),
                         settings.getCashVariancePesewas(),

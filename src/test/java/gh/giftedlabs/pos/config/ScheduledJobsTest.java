@@ -6,11 +6,16 @@ import gh.giftedlabs.pos.repository.ProductRepository;
 import gh.giftedlabs.pos.repository.StockLevelRepository;
 import gh.giftedlabs.pos.service.BackupService;
 import gh.giftedlabs.pos.service.InventoryService;
+import gh.giftedlabs.pos.service.ShiftService;
+import gh.giftedlabs.pos.service.SettingsService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -36,6 +41,17 @@ class ScheduledJobsTest {
     private final InventoryService inventory = mock(InventoryService.class);
     private final ProductRepository products = mock(ProductRepository.class);
     private final StockLevelRepository levels = mock(StockLevelRepository.class);
+    private final ShiftService shifts = mock(ShiftService.class);
+    private final SettingsService settings = mock(SettingsService.class);
+    private final Clock clock = Clock.fixed(Instant.parse("2026-09-18T23:00:00Z"), ZoneOffset.UTC);
+
+    @Test
+    @DisplayName("an active shift is automatically closed at 23:00 local time")
+    void closesAnActiveShiftAtElevenPm() {
+        jobs(true).closeOverdueShifts();
+
+        verify(shifts).autoCloseDue(Instant.parse("2026-09-18T23:00:00Z"));
+    }
 
     @Test
     @DisplayName("the timer does not take a backup when backups are switched off — NFR-6")
@@ -115,13 +131,34 @@ class ScheduledJobsTest {
         assertDoesNotThrow(() -> configuredJobs().pushToHeadOffice());
     }
 
+    @Test
+    @DisplayName("cloud uploads wait for the interval saved in Settings")
+    void cloudPushUsesTheSavedInterval() {
+        Instant first = Instant.parse("2026-09-18T08:00:00Z");
+        Clock movingClock = mock(Clock.class);
+        when(movingClock.instant()).thenReturn(first, first.plus(Duration.ofMinutes(15)),
+                first.plus(Duration.ofHours(1)));
+        when(settings.cloudSyncInterval()).thenReturn(Duration.ofHours(1));
+        ScheduledJobs jobs = configuredJobs(movingClock);
+
+        jobs.pushToHeadOffice();
+        jobs.pushToHeadOffice();
+        jobs.pushToHeadOffice();
+
+        verify(sync, times(2)).push(any(), eq("scheduled"));
+    }
+
     private ScheduledJobs jobs(boolean backupsEnabled) {
         return new ScheduledJobs(backups, inventory, products, levels,
-                properties(backupsEnabled), provider(sync));
+                properties(backupsEnabled), provider(sync), shifts, settings, clock, "Africa/Accra");
     }
 
     /** The same jobs, with somewhere to push to. */
     private ScheduledJobs configuredJobs() {
+        return configuredJobs(clock);
+    }
+
+    private ScheduledJobs configuredJobs(Clock jobClock) {
         var withBucket = new PosProperties(
                 new PosProperties.Deployment(PosProperties.Mode.COUNTER, "INC", "01"),
                 properties(true).auth(), properties(true).consolidator(), new PosProperties.Web(""),
@@ -129,7 +166,8 @@ class ScheduledJobsTest {
                         Duration.ofDays(30), Duration.ofDays(2), "pg_dump", Duration.ofMinutes(5),
                         new PosProperties.Offsite("https://example.r2.cloudflarestorage.com",
                                 "bucket", "key", "secret", "auto", "")));
-        return new ScheduledJobs(backups, inventory, products, levels, withBucket, provider(sync));
+        return new ScheduledJobs(backups, inventory, products, levels, withBucket, provider(sync),
+                shifts, settings, jobClock, "Africa/Accra");
     }
 
     private static <T> org.springframework.beans.factory.ObjectProvider<T> provider(T value) {

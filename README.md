@@ -13,6 +13,21 @@ onboarding, diagnostics, upgrade handling and data-preserving uninstall.
 .\packaging\windows\build-installer.ps1 -Version 0.1.0
 ```
 
+## Ubuntu counter installer
+
+The Ubuntu package runs natively without Wine or Bottles. It bundles Java 25,
+installs PostgreSQL, registers a hardened `systemd` service, and adds a desktop
+launcher. Build and install it with:
+
+```bash
+./packaging/linux/build-deb.sh 0.1.0
+sudo apt install ./dist/Radiance-POS_0.1.0_amd64.deb
+sudo radiance-pos-setup
+```
+
+See [`packaging/linux/README.md`](packaging/linux/README.md) for operation and
+troubleshooting commands.
+
 ## Development
 
 Run `./mvnw test` for the full backend suite or `./run.sh` for the local counter

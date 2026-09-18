@@ -153,6 +153,7 @@ class SettingsControllerTest {
             body.put("accentColor", "#0F766E");
             body.put("fontFamily", "VERDANA");
             body.put("fontScalePercent", 115);
+            body.put("cloudSyncIntervalMinutes", 120);
             body.put("thresholds", thresholds(25, 9_900L, 3_300L));
 
             mvc.perform(signIn(ownerName).authorise(put("/api/settings"))
@@ -163,6 +164,7 @@ class SettingsControllerTest {
                     .andExpect(jsonPath("$.accentColor").value("#0F766E"))
                     .andExpect(jsonPath("$.fontFamily").value("VERDANA"))
                     .andExpect(jsonPath("$.fontScalePercent").value(115))
+                    .andExpect(jsonPath("$.cloudSyncIntervalMinutes").value(120))
                     .andExpect(jsonPath("$.thresholds.cashVariancePesewas").value(3300));
 
             mvc.perform(signIn(cashierName).authorise(get("/api/settings")))
@@ -352,6 +354,7 @@ class SettingsControllerTest {
         body.put("accentColor", "#F97316");
         body.put("fontFamily", "JAKARTA");
         body.put("fontScalePercent", 100);
+        body.put("cloudSyncIntervalMinutes", 15);
         body.put("thresholds", thresholds(10, 50_000L, 2_000L));
         body.put("enforceFloorPriceApproval", true);
         body.put("enforceVoidApproval", true);

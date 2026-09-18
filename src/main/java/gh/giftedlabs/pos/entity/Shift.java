@@ -67,6 +67,10 @@ public class Shift {
     @Column(name = "closed_by")
     private UUID closedBy;
 
+    /** Closed by the end-of-day scheduler without inventing a physical count. */
+    @Column(name = "automatically_closed", nullable = false)
+    private boolean automaticallyClosed;
+
     @OneToMany(mappedBy = "shift", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("createdAt ASC")
     private List<CashMovement> cashMovements = new ArrayList<>();
@@ -94,6 +98,7 @@ public class Shift {
     public String getVarianceNote() { return varianceNote; }
     public Instant getClosedAt() { return closedAt; }
     public UUID getClosedBy() { return closedBy; }
+    public boolean isAutomaticallyClosed() { return automaticallyClosed; }
     public List<CashMovement> getCashMovements() { return List.copyOf(cashMovements); }
 
     public boolean isOpen() { return status == Status.OPEN; }
@@ -129,5 +134,21 @@ public class Shift {
         this.status = Status.CLOSED;
         this.closedAt = at;
         this.closedBy = actorId;
+    }
+
+    /**
+     * End the trading session without claiming that somebody counted cash.
+     * Expected cash is retained for reconciliation; count and variance stay
+     * null because no physical observation took place.
+     */
+    public void closeAutomatically(long expected, String note, Instant at) {
+        if (!isOpen()) throw new IllegalStateException("This shift is already closed");
+
+        this.expectedCash = expected;
+        this.varianceNote = note;
+        this.status = Status.CLOSED;
+        this.closedAt = at;
+        this.closedBy = null;
+        this.automaticallyClosed = true;
     }
 }

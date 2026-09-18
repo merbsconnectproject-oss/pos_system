@@ -3,6 +3,8 @@ package gh.giftedlabs.pos.config;
 import gh.giftedlabs.pos.entity.BackupRun;
 import gh.giftedlabs.pos.service.BackupService;
 import gh.giftedlabs.pos.service.InventoryService;
+import gh.giftedlabs.pos.service.ShiftService;
+import gh.giftedlabs.pos.service.SettingsService;
 import gh.giftedlabs.pos.repository.ProductRepository;
 import gh.giftedlabs.pos.repository.StockLevelRepository;
 import org.slf4j.Logger;
@@ -13,8 +15,16 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 /**
  * The two jobs this system runs on its own — NFR-6, NFR-17.
@@ -35,16 +45,50 @@ public class ScheduledJobs {
     private final StockLevelRepository levels;
     private final PosProperties properties;
     private final ObjectProvider<SyncService> sync;
+    private final ShiftService shifts;
+    private final SettingsService settings;
+    private final Clock clock;
+    private final ZoneId shiftZone;
+    private volatile Instant lastCloudSyncAttempt;
 
     public ScheduledJobs(BackupService backups, InventoryService inventory,
                          ProductRepository products, StockLevelRepository levels,
-                         PosProperties properties, ObjectProvider<SyncService> sync) {
+                         PosProperties properties, ObjectProvider<SyncService> sync,
+                         ShiftService shifts, SettingsService settings, Clock clock,
+                         @Value("${pos.shift.auto-close-zone:Africa/Accra}") String shiftZone) {
         this.backups = backups;
         this.inventory = inventory;
         this.products = products;
         this.levels = levels;
         this.properties = properties;
         this.sync = sync;
+        this.shifts = shifts;
+        this.settings = settings;
+        this.clock = clock;
+        this.shiftZone = ZoneId.of(shiftZone);
+    }
+
+    /**
+     * Close the day's still-open shifts at 23:00 local time.
+     *
+     * <p>The same check runs once at startup. A counter switched off at 23:00
+     * cannot execute a timer, so startup closes only shifts older than the most
+     * recent 23:00 boundary; a shift opened this morning remains untouched.
+     */
+    @Scheduled(cron = "${pos.shift.auto-close-cron:0 0 23 * * *}",
+            zone = "${pos.shift.auto-close-zone:Africa/Accra}")
+    @EventListener(ApplicationReadyEvent.class)
+    public void closeOverdueShifts() {
+        if (!properties.deployment().isCounter()) return;
+
+        ZonedDateTime now = ZonedDateTime.ofInstant(clock.instant(), shiftZone);
+        ZonedDateTime cutoff = now.toLocalDate().atTime(LocalTime.of(23, 0)).atZone(shiftZone);
+        if (now.isBefore(cutoff)) cutoff = cutoff.minusDays(1);
+
+        int closed = shifts.autoCloseDue(cutoff.toInstant());
+        if (closed > 0) {
+            log.info("Shift close: automatically closed {} shift(s) at the 23:00 boundary", closed);
+        }
     }
 
     /**
@@ -84,21 +128,28 @@ public class ScheduledJobs {
      * network.
      */
     @Scheduled(fixedDelayString = "${pos.consolidator.push-interval:PT15M}", initialDelay = 120_000)
-    public void pushToHeadOffice() {
+    public synchronized void pushToHeadOffice() {
         if (!properties.backup().offsite().isConfigured()) return;
         // The owner's own instance receives; it does not send to itself.
         if (properties.deployment().isConsolidator()) return;
 
+        Instant now = clock.instant();
+        var interval = settings.cloudSyncInterval();
+        if (lastCloudSyncAttempt != null && now.isBefore(lastCloudSyncAttempt.plus(interval))) return;
+        // Failed uploads also respect the chosen interval. Otherwise an outage
+        // would turn the inexpensive schedule into a request every scheduler tick.
+        lastCloudSyncAttempt = now;
+
         try {
             var sent = sync.getObject().push(systemActor(), "scheduled");
             if (sent.rows() > 0) {
-                log.info("Sync: sent {} row(s) to the owner's view", sent.rows());
+                log.info("Cloud Sync: sent {} row(s)", sent.rows());
             }
         } catch (RuntimeException unreachable) {
             // Logged at warn, not error: a shop with no line is the expected
             // state half the time, and an error a day trains people to ignore
             // the log.
-            log.warn("Sync: could not send to the owner's view — {}", unreachable.getMessage());
+            log.warn("Cloud Sync: upload deferred — {}", unreachable.getMessage());
         }
     }
 

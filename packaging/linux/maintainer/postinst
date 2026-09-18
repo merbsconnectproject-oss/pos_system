@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -e
+
+if ! getent group radiance-pos >/dev/null; then
+  addgroup --system radiance-pos
+fi
+if ! id radiance-pos >/dev/null 2>&1; then
+  adduser --system --ingroup radiance-pos --home /var/lib/radiance-pos --no-create-home --disabled-login radiance-pos
+fi
+
+install -d -o root -g radiance-pos -m 750 /etc/radiance-pos
+install -d -o radiance-pos -g radiance-pos -m 750 /var/lib/radiance-pos /var/lib/radiance-pos/backups
+chown -R root:radiance-pos /opt/radiance-pos
+chmod -R o-rwx /opt/radiance-pos
+find /opt/radiance-pos -type d -exec chmod 750 {} +
+chmod 750 /opt/radiance-pos/runtime/bin/java
+
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl start postgresql.service || true
+fi
+
+if [[ ! -f /etc/radiance-pos/pos.env ]]; then
+  DB_PASSWORD=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
+  if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='radiance_pos'" | grep -q 1; then
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "CREATE ROLE radiance_pos LOGIN PASSWORD '$DB_PASSWORD'"
+  else
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "ALTER ROLE radiance_pos WITH LOGIN PASSWORD '$DB_PASSWORD'"
+  fi
+  if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname='pos_system'" | grep -q 1; then
+    runuser -u postgres -- createdb --owner=radiance_pos pos_system
+  else
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "ALTER DATABASE pos_system OWNER TO radiance_pos"
+  fi
+  cat >/etc/radiance-pos/pos.env <<EOF
+SPRING_PROFILES_ACTIVE=counter
+JDBC_DATABASE_URL="jdbc:postgresql://127.0.0.1:5432/pos_system"
+DB_USERNAME="radiance_pos"
+DB_PASSWORD="$DB_PASSWORD"
+PORT=8080
+POS_BIND_ADDRESS="127.0.0.1"
+OUTLET_CODE="RAD"
+TERMINAL_CODE="01"
+POS_BACKUP_DIRECTORY="/var/lib/radiance-pos/backups"
+POS_BOOTSTRAP_ADMIN_ENABLED=false
+EOF
+  chown root:radiance-pos /etc/radiance-pos/pos.env
+  chmod 640 /etc/radiance-pos/pos.env
+fi
+
+if command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; then
+  systemctl daemon-reload
+  systemctl enable radiance-pos.service >/dev/null
+  systemctl restart radiance-pos.service || true
+fi
+
+if [[ ! -f /var/lib/radiance-pos/.configured ]]; then
+  echo
+  echo "Radiance POS was installed. Finish setup with:"
+  echo "  sudo radiance-pos-setup"
+fi
+
+exit 0

@@ -157,7 +157,7 @@ public class SyncServiceImpl implements SyncService {
                 actor.outletId(), null, clientIp);
 
         return new SyncView.Transfer(true, 1, total, counts, List.of(key),
-                "Sent %d rows to the owner's view.".formatted(total));
+                "Cloud Sync uploaded %d rows.".formatted(total));
     }
 
     // --- channel 2, down ----------------------------------------------------
@@ -309,9 +309,9 @@ public class SyncServiceImpl implements SyncService {
 
         String summary;
         if (!offsite.isConfigured()) {
-            summary = "No bucket is configured. Nothing is being sent to the owner's view.";
+            summary = "No cloud storage bucket is configured. Cloud Sync is off.";
         } else if (total == 0) {
-            summary = "Everything here has reached the owner's view.";
+            summary = "Everything here has reached Cloud Sync.";
         } else {
             // Deliberately not an alarm. The till does not need the network to
             // trade; this only says how far behind the owner's view is.

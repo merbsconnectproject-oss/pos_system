@@ -20,6 +20,8 @@ PostgreSQL 18, and WinSW. The installed application binds only to
 7. Removes the plaintext bootstrap password and PIN, restarts the application,
    and verifies health again before opening the POS.
 8. Adds Start-menu entries for opening, repairing and diagnosing the install.
+   The POS opens through Edge or Chrome's installed-app mode as a dedicated,
+   maximized Radiance POS window without an address bar or browser tabs.
 
 Runtime data is under `%ProgramData%\GiftedLabs\Radiance POS`. ACLs separate
 the PostgreSQL administrator secret from the lower-privilege application
@@ -81,7 +83,9 @@ file after setup. Upgrades do not need it and preserve the database/config.
   and health-checks the application.
 - **Diagnostics** writes service state, health, disk space and the latest log
   tail to a text file on the current user's desktop. It does not copy secrets.
-- Local backups are written every 15 minutes. Disk-loss protection requires
+- Local backups are written every 15 minutes. Cloud Sync's trading-upload
+  interval is independently configurable in Settings from 15 minutes to 24
+  hours. Disk-loss protection requires
   off-site backup; configure it during onboarding or later in Settings.
 - Uninstall never deletes the database. Once a restorable backup has been
   verified, an administrator may explicitly remove the retained ProgramData

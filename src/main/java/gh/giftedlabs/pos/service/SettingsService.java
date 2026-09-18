@@ -35,6 +35,9 @@ public interface SettingsService {
     /** FR-AUTH-05: how long a session may sit idle before it locks. */
     Duration idleTimeout();
 
+    /** How long automatic trading uploads wait between cloud requests. */
+    Duration cloudSyncInterval();
+
     /**
      * FR-POS-10: the largest discount these roles may apply unapproved.
      *
