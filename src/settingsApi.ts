@@ -37,6 +37,7 @@ export interface SettingsWire {
   accentColor: string;
   fontFamily: GeneralSettings['fontFamily'];
   fontScalePercent: number;
+  cloudSyncIntervalMinutes: number;
   thresholds: {
     idleLockMinutes: number;
     adjustmentApprovalPesewas: number;
@@ -90,6 +91,7 @@ export const toGeneralSettings = (wire: SettingsWire): GeneralSettings => ({
   accentColor: wire.accentColor,
   fontFamily: wire.fontFamily,
   fontScalePercent: wire.fontScalePercent,
+  cloudSyncIntervalMinutes: wire.cloudSyncIntervalMinutes ?? 15,
   thresholds: {
     idleLockMinutes: wire.thresholds.idleLockMinutes,
     adjustmentApprovalValue: toMajor(wire.thresholds.adjustmentApprovalPesewas),
@@ -114,6 +116,7 @@ const toWire = (settings: GeneralSettings) => ({
   accentColor: settings.accentColor,
   fontFamily: settings.fontFamily,
   fontScalePercent: settings.fontScalePercent,
+  cloudSyncIntervalMinutes: settings.cloudSyncIntervalMinutes,
   thresholds: {
     idleLockMinutes: settings.thresholds.idleLockMinutes,
     adjustmentApprovalPesewas: toPesewas(settings.thresholds.adjustmentApprovalValue),

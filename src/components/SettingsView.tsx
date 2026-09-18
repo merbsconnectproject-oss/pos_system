@@ -113,6 +113,12 @@ type SettingsTab =
   | 'backup'
   | 'sync';
 
+const formatSyncInterval = (minutes: number) => {
+  if (minutes < 60) return `${minutes} minutes`;
+  const hours = minutes / 60;
+  return hours === 1 ? '1 hour' : `${hours} hours`;
+};
+
 const SETTINGS_TABS: {
   key: SettingsTab;
   label: string;
@@ -133,7 +139,7 @@ const SETTINGS_TABS: {
   // sync.push, not settings.general: closing up should not require the rights to
   // rename the business. Whoever holds only this code sees this tab and no other,
   // and inside it only the one-way "send" action.
-  { key: 'sync', label: 'Head Office Sync', hint: 'Send the day to the owner; administrators publish configuration', icon: CloudUpload, requires: 'sync.push' },
+  { key: 'sync', label: 'Cloud Sync', hint: 'Control automatic cloud uploads and sync data now', icon: CloudUpload, requires: 'sync.push' },
 ];
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -181,6 +187,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [syncOutletId, setSyncOutletId] = useState<string>('');
+  const [cloudSyncIntervalMinutes, setCloudSyncIntervalMinutes] = useState(
+    generalSettings.cloudSyncIntervalMinutes,
+  );
+
+  useEffect(() => {
+    setCloudSyncIntervalMinutes(generalSettings.cloudSyncIntervalMinutes);
+  }, [generalSettings.cloudSyncIntervalMinutes]);
 
   // General Store Settings State
   const [companyName, setCompanyName] = useState(generalSettings.companyName);
@@ -952,6 +965,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     showToast('Operational thresholds saved.');
   };
 
+  const handleSaveCloudSyncInterval = () => {
+    onUpdateGeneralSettings({ ...generalSettings, cloudSyncIntervalMinutes });
+    showToast(`Automatic Cloud Sync will run every ${formatSyncInterval(cloudSyncIntervalMinutes)}.`);
+  };
+
   const handleResetRolePermissions = () => {
     setEditableRoles(rolesPermissions);
     showToast('Permissions reset to previously saved configuration.');
@@ -1574,7 +1592,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                               </div>
                               <div className="text-[10px] text-slate-400">
                                 {u.outletId === 'all-outlets'
-                                  ? 'Head Office'
+                                  ? 'Cloud Console'
                                   : outlets.find((o) => o.id === u.outletId)?.town || '—'}
                               </div>
                             </div>
@@ -2710,14 +2728,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           )}
 
-          {/* TAB 8: HEAD OFFICE SYNC — the two R2 channels */}
+          {/* TAB 8: CLOUD SYNC — the two R2 channels */}
           {activeTab === 'sync' && permissions.has('sync.push') && (
             <div className="bg-white rounded-xl border border-slate-300 p-6 shadow-2xs space-y-6">
               <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-200">
                 <div>
                   <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    Head Office Sync
-                    <InfoHint text="Configuration comes down from the owner; trading goes up to them. Neither is needed to sell — a shop trades through any outage." />
+                    Cloud Sync
+                    <InfoHint text="Configuration comes down from cloud storage; trading uploads to it. Neither is needed to sell — a shop trades through any outage." />
                   </h2>
                   <p className="text-xs text-slate-500">
                     {syncStatus
@@ -2750,14 +2768,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <div>
                     <span className="text-slate-400 block">This instance:</span>
                     <span className="font-bold text-slate-800">
-                      {syncStatus.mode === 'CONSOLIDATOR' ? "Owner's view" : 'Shop counter'}
+                      {syncStatus.mode === 'CONSOLIDATOR' ? 'Cloud console' : 'Shop counter'}
                       {syncStatus.outletCode ? ` · ${syncStatus.outletCode}` : ''}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400 block">Waiting to send:</span>
                     {/* Not an alarm. The till does not need the network to
-                        trade; this only says how far behind the owner is. */}
+                        trade; this only says how far behind Cloud Sync is. */}
                     <span className={`font-bold ${syncStatus.pendingRows > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
                       {syncStatus.pendingRows === 0 ? 'nothing' : `${syncStatus.pendingRows} row(s)`}
                     </span>
@@ -2784,6 +2802,50 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               )}
 
+              {permissions.has('settings.general') && (
+                <div className="rounded-xl border border-accent-200 bg-accent-50/60 p-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="max-w-2xl">
+                      <label htmlFor="cloud-sync-interval" className="text-xs font-black text-slate-900">
+                        Automatic upload frequency
+                      </label>
+                      <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                        Choose how often this counter sends pending trading data to Cloud Sync.
+                        Longer intervals reduce cloud requests. Manual sync remains available below.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        id="cloud-sync-interval"
+                        value={cloudSyncIntervalMinutes}
+                        onChange={(event) => setCloudSyncIntervalMinutes(Number(event.target.value))}
+                        className="min-w-40 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-xs font-bold text-slate-800"
+                      >
+                        <option value={15}>Every 15 minutes</option>
+                        <option value={30}>Every 30 minutes</option>
+                        <option value={60}>Every hour</option>
+                        <option value={120}>Every 2 hours</option>
+                        <option value={240}>Every 4 hours</option>
+                        <option value={360}>Every 6 hours</option>
+                        <option value={720}>Every 12 hours</option>
+                        <option value={1440}>Every 24 hours</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleSaveCloudSyncInterval}
+                        disabled={cloudSyncIntervalMinutes === generalSettings.cloudSyncIntervalMinutes}
+                        className="rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white hover:bg-black disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Save interval
+                      </button>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-[10px] font-semibold text-slate-500">
+                    Approximately {Math.ceil(1440 / cloudSyncIntervalMinutes)} automatic sync checks per day.
+                  </p>
+                </div>
+              )}
+
               <div className={`grid grid-cols-1 gap-4 ${
                 permissions.has('settings.general') ? 'md:grid-cols-2' : ''
               }`}>
@@ -2799,7 +2861,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     </div>
                     <p className="text-[11px] text-slate-500">
                       Products, prices, staff and settings. Published by the owner, pulled by each
-                      shop — one direction only, so a branch can never overwrite head office.
+                      shop — one direction only, so a branch can never overwrite cloud configuration.
                     </p>
                   </div>
 
@@ -2865,7 +2927,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed text-white px-3.5 py-2.5 rounded-xl text-xs font-bold cursor-pointer"
                   >
                     <CloudUpload className="w-4 h-4" />
-                    <span>{syncBusy === 'Send' ? 'Sending…' : 'Send trading to head office'}</span>
+                    <span>{syncBusy === 'Send' ? 'Sending…' : 'Sync trading now'}</span>
                   </button>
 
                   {permissions.has('settings.general') && (

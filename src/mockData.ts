@@ -1644,6 +1644,7 @@ export const INITIAL_SETTINGS: GeneralSettings = {
   accentColor: DEFAULT_ACCENT,
   fontFamily: 'JAKARTA',
   fontScalePercent: 100,
+  cloudSyncIntervalMinutes: 15,
   // K-08 / FR-SET-06
   thresholds: {
     idleLockMinutes: 10,

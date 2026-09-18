@@ -58,12 +58,30 @@ import { printReceipt } from '../printService';
 import { formatQuantity, lineTotal, moneyEquals, roundMoney, roundQuantity, sumMoney } from '../money';
 import { ManagerPinModal } from './ManagerPinModal';
 import { heldSalesApi, type HeldSaleWire } from '../heldSalesApi';
+import { catalogueApi, type CatalogueListItem } from '../catalogueApi';
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: 'Cash',
   momo: 'Mobile Money',
   card: 'Card',
   transfer: 'Bank Transfer',
+};
+
+/**
+ * The database list is authoritative. Product-derived names are only a
+ * continuity fallback when the list endpoint is temporarily unavailable.
+ */
+export const posCategoryOptions = (
+  catalogueCategories: CatalogueListItem[] | null,
+  products: Product[],
+  outletId: string,
+) => {
+  const names = catalogueCategories !== null
+    ? catalogueCategories.filter((category) => category.active).map((category) => category.name)
+    : products
+        .filter((product) => product.active && (!product.outletId || product.outletId === 'all-outlets' || product.outletId === outletId))
+        .map((product) => product.category);
+  return ['All', ...Array.from(new Set(names.filter(Boolean))).sort((a, b) => a.localeCompare(b))];
 };
 
 interface PosModalProps {
@@ -150,6 +168,8 @@ export const PosModal: React.FC<PosModalProps> = ({
    */
   const [windowState, setWindowState] = useState<'normal' | 'maximized' | 'minimized'>('normal');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [catalogueCategories, setCatalogueCategories] = useState<CatalogueListItem[] | null>(null);
+  const [categoriesUnavailable, setCategoriesUnavailable] = useState(false);
   const [catalogueView, setCatalogueView] = useState<'list' | 'grid' | 'table'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -202,6 +222,23 @@ export const PosModal: React.FC<PosModalProps> = ({
     }).catch(() => { /* the POS remains usable; the server will retry on reopen */ });
     return () => { active = false; };
   }, [isOpen, currentOutlet.id, products, customers]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
+    setCategoriesUnavailable(false);
+    catalogueApi.list('categories')
+      .then((categories) => {
+        if (active) setCatalogueCategories(categories);
+      })
+      .catch(() => {
+        if (active) {
+          setCatalogueCategories(null);
+          setCategoriesUnavailable(true);
+        }
+      });
+    return () => { active = false; };
+  }, [isOpen]);
 
   // Payment modal states
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -273,20 +310,13 @@ export const PosModal: React.FC<PosModalProps> = ({
     setCart([]);
   }, [currentOutlet.id]);
 
-  /**
-   * The pills are the categories this branch actually stocks.
-   *
-   * They used to be two hand-written lists keyed off the outlet id, so a branch
-   * that was not one of those two got every category whether it stocked it or
-   * not, and any category added in Products was unreachable from the till.
-   */
-  const categories = React.useMemo(() => {
-    const stocked = products
-      .filter((p) => p.active && (!p.outletId || p.outletId === 'all-outlets' || p.outletId === outletId))
-      .map((p) => p.category)
-      .filter(Boolean);
-    return ['All', ...Array.from(new Set(stocked)).sort((a, b) => a.localeCompare(b))];
-  }, [products, outletId]);
+  // Product Catalogue → Catalogue Setup is the single source of truth. This
+  // means a category added by a merchant appears at the till without a code
+  // change or a new installer.
+  const categories = React.useMemo(
+    () => posCategoryOptions(catalogueCategories, products, outletId),
+    [catalogueCategories, products, outletId],
+  );
 
   // A category pill that no longer exists would filter the catalogue to nothing.
   useEffect(() => {
@@ -1347,7 +1377,8 @@ export const PosModal: React.FC<PosModalProps> = ({
 
             {/* Category Pills */}
               <div className="flex items-center justify-between gap-2 w-full">
-                <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
+                <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 overflow-x-auto w-full pb-1 sm:pb-0 scrollbar-none">
                 {categories.map((cat) => (
                   <button
                     key={cat}
@@ -1361,6 +1392,8 @@ export const PosModal: React.FC<PosModalProps> = ({
                     {cat}
                   </button>
                 ))}
+                </div>
+                {categoriesUnavailable && <p className="mt-1 text-[10px] font-semibold text-amber-700">Category service unavailable; showing categories from the loaded products.</p>}
                 </div>
                 <div className="flex shrink-0 rounded-lg border border-slate-300 bg-white p-0.5" role="group" aria-label="Catalogue view">
                   <button type="button" aria-pressed={catalogueView === 'list'} onClick={() => setCatalogueView('list')} className={`rounded-md p-1.5 ${catalogueView === 'list' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`} title="List view"><List className="h-4 w-4" /></button>

@@ -240,7 +240,8 @@ trace.
 The owner's combined view. `FR-RPT-01` asks for five figures per outlet — a summary,
 not a drill-down — so it needs no replication.
 
-- Each shop POSTs a snapshot every 15 minutes. **Outbound only**, per-outlet token
+- Each shop POSTs a snapshot on an owner-configurable 15-minute to 24-hour interval.
+  **Outbound only**, per-outlet token; manual Cloud Sync remains immediate
 - The same JAR in the cloud under a `consolidator` profile
 - ~3–5 days · ~$60/year on Railway Hobby
 - Dashboard must show staleness: *"Radiance — last seen 2 hours ago"*

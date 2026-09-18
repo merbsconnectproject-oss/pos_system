@@ -175,7 +175,7 @@ export const CashControlView: React.FC<CashControlViewProps> = ({ shiftInfo, sal
                     </td>
                     <td className="px-4 py-3">
                       <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${record.status === 'open' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                        {record.status === 'open' ? 'Open' : 'Closed'}
+                        {record.status === 'open' ? 'Open' : record.automaticallyClosed ? 'Auto-closed' : 'Closed'}
                       </span>
                     </td>
                   </tr>

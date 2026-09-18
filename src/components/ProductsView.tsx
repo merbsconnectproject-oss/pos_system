@@ -64,27 +64,6 @@ interface ProductsViewProps {
   permissions: PermissionSet;
 }
 
-const productCategories: Product['category'][] = [
-  'Power Tools & Machinery',
-  'Hand Tools & Hardware',
-  'Plumbing & Sanitary',
-  'Paints & Adhesives',
-  'Fasteners & Fixings',
-  'Building & Site Safety',
-  'Cables & Wires',
-  'Switches & Sockets',
-  'Protection & Breakers',
-  'Conduits & Trunking',
-  'Lighting & Lamps',
-  'Solar & Inverters',
-  'Hardware & Tools',
-  'Plumbing & Pipes',
-];
-
-// Kept only as the fallback shape for the product form's typing; the
-// selectable list now comes from /api/catalogue/units.
-const baseUnits: Product['baseUnit'][] = ['m', 'pcs', 'length', 'roll', 'box', 'kg', 'bucket', 'tin', 'set', 'pair'];
-
 const formatMoney = (amount: number) => `GH₵ ${amount.toFixed(2)}`;
 
 const stockKeyFor = (product: Product, currentOutlet: Outlet) =>
@@ -150,6 +129,12 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   permissions,
 }) => {
   const canViewCost = permissions.has('price.view_cost');
+  const canCreateProduct = permissions.has('product.create');
+  const canEditProduct = permissions.has('product.edit');
+  const canImportProducts = permissions.has('product.import');
+  const canEditPrices = permissions.has('price.edit');
+  const canReceiveStock = permissions.has('stock.receive');
+  const canAdjustStock = permissions.has('stock.adjust');
   const [activeMode, setActiveMode] = useState<ProductMode>(mode);
   const realOutlets = outlets.filter((outlet) => outlet.id !== 'all-outlets');
   const defaultStore = currentOutlet.id !== 'all-outlets' ? currentOutlet.id : realOutlets[0]?.id || 'inco-hardware';
@@ -184,15 +169,21 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const [setupValues, setSetupValues] = useState<Record<CatalogueList, CatalogueListItem[]>>({
     categories: [], brands: [], units: [],
   });
-  const [setupModal, setSetupModal] = useState<{ type: CatalogueList; label: string } | null>(null);
+  const [setupModal, setSetupModal] = useState<{
+    type: CatalogueList;
+    label: string;
+    action: 'add' | 'rename';
+    id?: string;
+    originalName?: string;
+  } | null>(null);
   const [setupValue, setSetupValue] = useState('');
   const [setupError, setSetupError] = useState<string | null>(null);
+  const [setupSaving, setSetupSaving] = useState(false);
 
-  const refreshSetup = useCallback(() => {
+  const refreshSetup = useCallback(() =>
     loadCatalogueLists()
       .then(setSetupValues)
-      .catch(() => setSetupError('Could not load the catalogue lists.'));
-  }, []);
+      .catch(() => setSetupError('Could not load the catalogue lists.')), []);
 
   useEffect(() => { refreshSetup(); }, [refreshSetup]);
 
@@ -200,12 +191,33 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
    * The server's refusal is the message worth showing — it names the entry and
    * says how many products still use it, which a generic failure cannot.
    */
-  const runSetupChange = (change: Promise<unknown>) => {
+  const runSetupChange = async (change: () => Promise<unknown>) => {
+    if (!canEditProduct) return false;
     setSetupError(null);
-    void change
-      .then(() => refreshSetup())
-      .catch((failure) => setSetupError(
-        failure instanceof ApiError ? failure.message : 'The change could not be saved.'));
+    try {
+      await change();
+      await refreshSetup();
+      return true;
+    } catch (failure) {
+      setSetupError(failure instanceof ApiError ? failure.message : 'The change could not be saved.');
+      return false;
+    }
+  };
+
+  const submitSetupValue = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!setupModal || setupSaving) return;
+    const value = setupValue.trim();
+    if (!value || (setupModal.action === 'rename' && value === setupModal.originalName)) return;
+    setSetupSaving(true);
+    const saved = setupModal.action === 'add'
+      ? await runSetupChange(() => catalogueApi.add(setupModal.type, value))
+      : await runSetupChange(() => catalogueApi.rename(setupModal.type, setupModal.id!, value));
+    setSetupSaving(false);
+    if (saved) {
+      setSetupModal(null);
+      setSetupValue('');
+    }
   };
 
   useEffect(() => {
@@ -213,6 +225,34 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   }, [mode]);
 
   const [form, setForm] = useState<ProductForm>(emptyProductForm);
+
+  // Permissions can be revoked while this tab is already open. Close any
+  // mutation surface immediately rather than letting the user finish a long
+  // form only to discover the refusal at submit time.
+  useEffect(() => {
+    const modeAllowed = activeMode === 'list'
+      || (activeMode === 'import' && canImportProducts)
+      || (activeMode === 'setup' && canEditProduct)
+      || (activeMode === 'bulk-price' && canEditPrices);
+    if (!modeAllowed) setActiveMode('list');
+
+    if (addModalOpen) {
+      const allowed = editingProduct ? canEditProduct : canCreateProduct;
+      if (!allowed) {
+        setAddModalOpen(false);
+        setEditingProduct(null);
+      }
+    }
+    if (!canEditProduct) setSetupModal(null);
+  }, [
+    activeMode,
+    addModalOpen,
+    editingProduct,
+    canCreateProduct,
+    canEditProduct,
+    canImportProducts,
+    canEditPrices,
+  ]);
 
   const brands = useMemo(() => ['All', ...Array.from(new Set(products.map((p) => p.brand))).sort()], [products]);
 
@@ -262,12 +302,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   }, [products, selectedProductIds]);
 
   const startCreate = () => {
+    if (!canCreateProduct) return;
     setForm(emptyProductForm);
     setEditingProduct(null);
     setAddModalOpen(true);
   };
 
   const startEdit = (product: Product) => {
+    if (!canEditProduct) return;
     const key = stockKeyFor(product, currentOutlet);
     setForm({
       storeId: product.outletId || defaultStore,
@@ -296,6 +338,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
 
   const submitProduct = (event: React.FormEvent) => {
     event.preventDefault();
+    if (editingProduct ? !canEditProduct : !canCreateProduct) return;
     if (!form.storeId || !form.category || !form.baseUnit) return;
     const barcode = form.barcode.trim();
     const retailPrice = Number(form.retailPrice) || 0;
@@ -334,9 +377,15 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       retailPrice,
       tradePrice,
       floorPrice,
-      costPrice: { ...(editingProduct?.costPrice || {}), [form.storeId]: cost },
-      stock: { ...(editingProduct?.stock || {}), [form.storeId]: stock },
-      minStockAlert: { ...(editingProduct?.minStockAlert || {}), [form.storeId]: minAlert },
+      costPrice: canReceiveStock && canViewCost
+        ? { ...(editingProduct?.costPrice || {}), [form.storeId]: cost }
+        : { ...(editingProduct?.costPrice || {}) },
+      stock: canReceiveStock
+        ? { ...(editingProduct?.stock || {}), [form.storeId]: stock }
+        : { ...(editingProduct?.stock || {}) },
+      minStockAlert: canAdjustStock
+        ? { ...(editingProduct?.minStockAlert || {}), [form.storeId]: minAlert }
+        : { ...(editingProduct?.minStockAlert || {}) },
       imageUrl: form.imageUrl.trim() || 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=400&auto=format&fit=crop&q=80',
       salesCount: editingProduct?.salesCount || 0,
       active: editingProduct?.active ?? true,
@@ -404,7 +453,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           <div key={section.title} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
             <div className="p-4 border-b border-slate-200 flex items-center justify-between">
               <h2 className="text-sm font-black text-slate-900">{section.title}</h2>
-              <button onClick={() => { setSetupValue(''); setSetupModal({ type: section.type, label: section.add.replace('Add ', '') }); }} className="text-xs font-bold text-accent-600 hover:underline">{section.add}</button>
+              <button onClick={() => { if (!canEditProduct) return; setSetupError(null); setSetupValue(''); setSetupModal({ type: section.type, label: section.add.replace('Add ', ''), action: 'add' }); }} className="text-xs font-bold text-accent-600 hover:underline">{section.add}</button>
             </div>
             <div className="divide-y divide-slate-100">
               {section.rows.map((row) => (
@@ -414,10 +463,10 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     <div className="text-xs text-slate-400">{row.count} products using this value</div>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <button onClick={() => { const next = window.prompt(`Rename ${section.title.toLowerCase()}`, row.name); if (next?.trim() && next.trim() !== row.name) runSetupChange(catalogueApi.rename(section.type, row.id, next.trim())); }} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" title="Rename">
+                    <button onClick={() => { if (!canEditProduct) return; setSetupError(null); setSetupValue(row.name); setSetupModal({ type: section.type, label: section.add.replace('Add ', ''), action: 'rename', id: row.id, originalName: row.name }); }} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" title={`Rename ${row.name}`}>
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => runSetupChange(catalogueApi.setActive(section.type, row.id, false))} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" title="Deactivate">
+                    <button onClick={() => { void runSetupChange(() => catalogueApi.setActive(section.type, row.id, false)); }} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" title="Deactivate">
                       <Power className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -427,7 +476,31 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           </div>
         ))}
       </div>
-      {setupModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><form onSubmit={(event) => { event.preventDefault(); const value = setupValue.trim(); if (!value) return; runSetupChange(catalogueApi.add(setupModal.type, value)); setSetupModal(null); setSetupValue(''); }} className="w-full max-w-md rounded-xl border border-slate-300 bg-white shadow-xl"><div className="flex items-center justify-between rounded-t-xl bg-slate-900 px-5 py-4 text-white"><div><p className="text-[10px] font-bold uppercase tracking-wider text-accent-300">Catalogue setup</p><h2 className="mt-1 text-sm font-black">Add {setupModal.label}</h2></div><button type="button" onClick={() => setSetupModal(null)} className="text-xs text-slate-300">Close</button></div><div className="space-y-3 p-5"><label className="block text-xs font-bold text-slate-700">{setupModal.label[0].toUpperCase() + setupModal.label.slice(1)}<input autoFocus required value={setupValue} onChange={(event) => setSetupValue(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-sans" placeholder={`Enter ${setupModal.label}`} /></label><button className="w-full rounded-lg bg-accent-600 px-3 py-2.5 text-xs font-bold text-white">Save {setupModal.label}</button></div></form></div>}
+      {setupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !setupSaving) setSetupModal(null); }}>
+          <form onSubmit={submitSetupValue} role="dialog" aria-modal="true" aria-labelledby="catalogue-editor-title" className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between bg-slate-900 px-5 py-4 text-white">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-accent-300">Catalogue setup</p>
+                <h2 id="catalogue-editor-title" className="mt-1 text-base font-black">{setupModal.action === 'add' ? 'Add' : 'Rename'} {setupModal.label}</h2>
+              </div>
+              <button type="button" disabled={setupSaving} onClick={() => setSetupModal(null)} className="rounded-lg p-2 text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-50" aria-label="Close catalogue editor"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="space-y-4 p-5">
+              <p className="text-xs leading-5 text-slate-500">This value will be available wherever products use {setupModal.type === 'units' ? 'a unit of measure' : `a ${setupModal.label}`}.</p>
+              <label className="block text-xs font-bold text-slate-700">
+                {setupModal.label[0].toUpperCase() + setupModal.label.slice(1)} name
+                <input autoFocus required value={setupValue} onChange={(event) => setSetupValue(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm font-sans text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-100" placeholder={`Enter ${setupModal.label} name`} />
+              </label>
+              {setupError && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs font-semibold text-rose-700">{setupError}</div>}
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                <button type="button" disabled={setupSaving} onClick={() => setSetupModal(null)} className="rounded-lg border border-slate-300 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+                <button disabled={setupSaving || !setupValue.trim() || (setupModal.action === 'rename' && setupValue.trim() === setupModal.originalName)} className="rounded-lg bg-accent-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-accent-700 disabled:cursor-not-allowed disabled:bg-slate-300">{setupSaving ? 'Saving…' : setupModal.action === 'add' ? `Add ${setupModal.label}` : 'Save changes'}</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
       </>
     );
   };
@@ -443,6 +516,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   };
 
   const handleImportFile = async (file: File) => {
+    if (!canImportProducts) return;
     const text = await file.text();
     const parsed = parseDelimited(text, file.name.endsWith('.tsv') ? '\t' : ',');
     setImportFileName(file.name);
@@ -457,7 +531,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   );
 
   const commitImport = async () => {
-    if (!importValidation) return;
+    if (!canImportProducts || !importValidation) return;
     setImportError(null);
     setImportCommitting(true);
     const created = rowsToProducts(
@@ -938,9 +1012,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                           <Barcode className="w-3.5 h-3.5" />
                         </button>
                         <button onClick={() => setSelectedProduct(product)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer" title="View detail"><Eye className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => startEdit(product)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer" title="Edit product"><Edit2 className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => onToggleActive(product.id)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer" title="Deactivate product"><Power className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => onOpenAdjustment(product)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer" title="Adjust stock"><Sliders className="w-3.5 h-3.5" /></button>
+                        {canEditProduct && <button onClick={() => startEdit(product)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer" title="Edit product"><Edit2 className="w-3.5 h-3.5" /></button>}
+                        {canEditProduct && <button onClick={() => onToggleActive(product.id)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer" title={product.active ? 'Deactivate product' : 'Reactivate product'}><Power className="w-3.5 h-3.5" /></button>}
+                        {canAdjustStock && <button onClick={() => onOpenAdjustment(product)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer" title="Adjust stock"><Sliders className="w-3.5 h-3.5" /></button>}
                       </div>
                     </td>
                   </tr>
@@ -954,7 +1028,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           <div className="py-16 text-center">
             <Package className="w-12 h-12 mx-auto text-slate-300" />
             <h3 className="mt-3 font-black text-slate-900">No products yet</h3>
-            <p className="text-sm text-slate-500 mt-1">Import a catalogue or add the first product manually.</p>
+            <p className="text-sm text-slate-500 mt-1">
+              {canCreateProduct || canImportProducts
+                ? 'Import a catalogue or add the first product manually.'
+                : 'No products have been configured for this catalogue.'}
+            </p>
           </div>
         )}
         {products.length > 0 && filteredProducts.length === 0 && (
@@ -988,22 +1066,22 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           <button onClick={exportProducts} className="flex items-center gap-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer">
             <Download className="w-4 h-4" /> Export
           </button>
-          <button onClick={() => onOpenGoodsReceipt()} className="flex items-center gap-1.5 bg-slate-900 hover:bg-black text-white text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer">
+          {canReceiveStock && <button onClick={() => onOpenGoodsReceipt()} className="flex items-center gap-1.5 bg-slate-900 hover:bg-black text-white text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer">
             <Truck className="w-4 h-4 text-accent-400" /> Goods Receipt
-          </button>
-          <button onClick={startCreate} className="flex items-center gap-1.5 bg-accent-500 hover:bg-accent-600 text-white text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer shadow-xs">
+          </button>}
+          {canCreateProduct && <button onClick={startCreate} className="flex items-center gap-1.5 bg-accent-500 hover:bg-accent-600 text-white text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer shadow-xs">
             <Plus className="w-4 h-4" /> Add Product
-          </button>
+          </button>}
         </div>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl p-1.5 shadow-xs flex gap-1 overflow-x-auto">
-        {[
-          ['list', 'Products'],
-          ['import', 'Import'],
-          ['setup', 'Setup'],
-          ['bulk-price', 'Bulk Price'],
-        ].map(([value, label]) => (
+        {([
+          ['list', 'Products', true],
+          ['import', 'Import', canImportProducts],
+          ['setup', 'Setup', canEditProduct],
+          ['bulk-price', 'Bulk Price', canEditPrices],
+        ] as const).filter(([, , allowed]) => allowed).map(([value, label]) => (
           <button
             key={value}
             type="button"
@@ -1020,9 +1098,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       </div>
 
       {activeMode === 'list' && renderList()}
-      {activeMode === 'setup' && renderSetup()}
-      {activeMode === 'import' && renderImport()}
-      {activeMode === 'bulk-price' && renderBulkPrice()}
+      {activeMode === 'setup' && canEditProduct && renderSetup()}
+      {activeMode === 'import' && canImportProducts && renderImport()}
+      {activeMode === 'bulk-price' && canEditPrices && renderBulkPrice()}
 
       {selectedProduct && (
         <div className="fixed inset-0 z-70 flex justify-end bg-slate-900/50 backdrop-blur-xs animate-modal-backdrop">
@@ -1202,7 +1280,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         </div>
       )}
 
-      {addModalOpen && (
+      {addModalOpen && (editingProduct ? canEditProduct : canCreateProduct) && (
         <div onClick={() => setAddModalOpen(false)} className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-center justify-center p-4 sm:p-6 animate-modal-backdrop">
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-xl w-full max-w-5xl shadow-2xl border border-slate-300 max-h-[92vh] flex flex-col overflow-hidden animate-modal-card">
             <div className="bg-slate-900 text-white px-6 py-5 sm:px-8 flex justify-between items-center shrink-0">
@@ -1242,21 +1320,21 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   <label className="text-xs font-bold text-slate-700">Base unit<select required value={form.baseUnit} onChange={(e) => setForm({ ...form, baseUnit: e.target.value as Product['baseUnit'] | '' })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500"><option value="" disabled>Select unit</option>{setupValues.units.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label>
                   <label className="text-xs font-bold text-slate-700">Extra unit<input value={form.sellingUnitName} onChange={(e) => setForm({ ...form, sellingUnitName: e.target.value })} placeholder="Carton, Drum, Box" className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500" /></label>
                   <label className="text-xs font-bold text-slate-700">Factor to base<input type="number" value={form.sellingUnitFactor} onChange={(e) => setForm({ ...form, sellingUnitFactor: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500" /></label>
-                  <label className="text-xs font-bold text-slate-700">Unit override price<input type="number" value={form.sellingUnitPrice} onChange={(e) => setForm({ ...form, sellingUnitPrice: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500" /></label>
+                  <label className="text-xs font-bold text-slate-700">Unit override price<input type="number" value={form.sellingUnitPrice} onChange={(e) => setForm({ ...form, sellingUnitPrice: e.target.value })} disabled={Boolean(editingProduct) && !canEditPrices} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500 disabled:bg-slate-100 disabled:text-slate-500" /></label>
                 </div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 space-y-4">
                 <h4 className="text-sm font-black text-slate-900 flex items-center gap-2"><BarChart3 className="w-4 h-4 text-accent-500" /> Pricing panel</h4>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  {canViewCost && <label className="text-xs font-bold text-slate-700">Cost<input type="number" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500" /></label>}
-                  <label className="text-xs font-bold text-slate-700">Retail<input type="number" required value={form.retailPrice} onChange={(e) => setForm({ ...form, retailPrice: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500" /></label>
-                  <label className="text-xs font-bold text-slate-700">Trade<input type="number" value={form.tradePrice} onChange={(e) => setForm({ ...form, tradePrice: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500" /></label>
-                  <label className="text-xs font-bold text-slate-700">Floor<input type="number" value={form.floorPrice} onChange={(e) => setForm({ ...form, floorPrice: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500" /></label>
+                  {canViewCost && canReceiveStock && <label className="text-xs font-bold text-slate-700">Cost<input type="number" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500" /></label>}
+                  <label className="text-xs font-bold text-slate-700">Retail<input type="number" required value={form.retailPrice} onChange={(e) => setForm({ ...form, retailPrice: e.target.value })} disabled={Boolean(editingProduct) && !canEditPrices} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500 disabled:bg-slate-100 disabled:text-slate-500" /></label>
+                  <label className="text-xs font-bold text-slate-700">Trade<input type="number" value={form.tradePrice} onChange={(e) => setForm({ ...form, tradePrice: e.target.value })} disabled={Boolean(editingProduct) && !canEditPrices} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500 disabled:bg-slate-100 disabled:text-slate-500" /></label>
+                  <label className="text-xs font-bold text-slate-700">Floor<input type="number" value={form.floorPrice} onChange={(e) => setForm({ ...form, floorPrice: e.target.value })} disabled={Boolean(editingProduct) && !canEditPrices} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500 disabled:bg-slate-100 disabled:text-slate-500" /></label>
                 </div>
                 {canViewCost && <div className="inline-flex rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-bold text-emerald-700">Live margin: {Number(form.retailPrice) > 0 ? (((Number(form.retailPrice) - Number(form.cost || 0)) / Number(form.retailPrice)) * 100).toFixed(1) : '0.0'}%</div>}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <label className="text-xs font-bold text-slate-700">{editingProduct ? 'Stock on hand' : 'Opening stock'}<input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} disabled={Boolean(editingProduct)} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500 disabled:bg-slate-100 disabled:text-slate-500" />
+                {canReceiveStock && <label className="text-xs font-bold text-slate-700">{editingProduct ? 'Stock on hand' : 'Opening stock'}<input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} disabled={Boolean(editingProduct)} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500 disabled:bg-slate-100 disabled:text-slate-500" />
                   {/* FR-INV-05: an opening count is a movement this form may
                       write once. Changing it afterwards is an adjustment and
                       needs a reason code, so the field goes read-only on edit
@@ -1265,9 +1343,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     {editingProduct
                       ? 'Change stock through Goods Receipt or a stock adjustment'
                       : 'Recorded as an opening stock movement'}
-                  </span></label>
-                <label className="text-xs font-bold text-slate-700">Reorder level<input type="number" value={form.minAlert} onChange={(e) => setForm({ ...form, minAlert: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" />
-                  <span className="mt-1 block text-[10px] font-semibold text-slate-500">Saved against the outlet above — FR-INV-08</span></label>
+                  </span></label>}
+                {canAdjustStock && <label className="text-xs font-bold text-slate-700">Reorder level<input type="number" value={form.minAlert} onChange={(e) => setForm({ ...form, minAlert: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" />
+                  <span className="mt-1 block text-[10px] font-semibold text-slate-500">Saved against the outlet above — FR-INV-08</span></label>}
                 <label className="text-xs font-bold text-slate-700">Image URL<input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" /></label>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-200">

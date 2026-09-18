@@ -23,6 +23,7 @@ export interface ShiftWire {
   openingFloat: number;
   openedAt: string;
   status: 'OPEN' | 'CLOSED';
+  automaticallyClosed: boolean;
   countedCash?: number | null;
   expectedCash?: number | null;
   variance?: number | null;
@@ -60,6 +61,7 @@ export const toShiftInfo = (wire: ShiftWire): ShiftInfo => ({
   countedCash: wire.countedCash == null ? undefined : toMajor(wire.countedCash),
   variance: wire.variance == null ? undefined : toMajor(wire.variance),
   varianceNote: wire.varianceNote || undefined,
+  automaticallyClosed: wire.automaticallyClosed,
 });
 
 export const toShiftRecord = (wire: ShiftWire, outletName: string): ShiftRecord => ({
@@ -79,6 +81,7 @@ export const toShiftRecord = (wire: ShiftWire, outletName: string): ShiftRecord 
   countedCash: wire.countedCash == null ? undefined : toMajor(wire.countedCash),
   variance: wire.variance == null ? undefined : toMajor(wire.variance),
   varianceNote: wire.varianceNote || undefined,
+  automaticallyClosed: wire.automaticallyClosed,
   status: wire.status === 'OPEN' ? 'open' : 'closed',
 });
 

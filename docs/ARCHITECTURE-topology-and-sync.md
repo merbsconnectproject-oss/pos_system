@@ -210,8 +210,10 @@ data/INC/000002-2026-09-15T0830.json
   before cash movements — so foreign keys resolve on the way in.
 - **Kept ~90 days** by an R2 lifecycle rule. They double as a second off-site copy of the transaction
   history, beside the `pg_dump` backups already going to the same bucket (NFR-6).
-- **Never blocks trading.** With no connection, rows simply accumulate unstamped.
-  `pos.consolidator.pushInterval` already exists, defaulting to 15 minutes.
+- **Never blocks trading.** With no connection, rows simply accumulate unstamped. The owner/admin
+  chooses the automatic upload frequency in **Settings › Cloud Sync**, from 15 minutes to 24 hours
+  in 15-minute steps. The scheduler wakes locally every 15 minutes and consults that database-backed
+  setting before making a cloud request; manual **Sync trading now** requests remain immediate.
 
 ---
 

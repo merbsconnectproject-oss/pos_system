@@ -60,7 +60,7 @@ export const syncApi = {
   ingest: () => request<SyncTransfer>('/api/sync/ingest', { method: 'POST' }),
 };
 
-/** "2 hours ago" — the answer to "how stale is the owner's view". */
+/** "2 hours ago" — the answer to "how stale is Cloud Sync". */
 export const staleness = (at: string | null): string => {
   if (!at) return 'never';
   const minutes = Math.floor((Date.now() - Date.parse(at)) / 60000);

@@ -121,7 +121,7 @@ export const PERMISSION_CATALOGUE: PermissionMeta[] = [
   { code: 'settings.general', group: 'Administration', label: 'Change general settings', description: 'Business profile, outlets, receipts, thresholds, backups.' },
   { code: 'settings.appearance', group: 'Administration', label: 'Change appearance', description: 'Set the accent colour (FR-SET-03).' },
   { code: 'settings.terminal', group: 'Administration', label: 'Change terminal settings', description: 'Printer, paper width and test print (FR-SET-05).' },
-  { code: 'sync.push', group: 'Administration', label: 'Send trading to head office', description: "Send this shop's sales and stock up to the owner. One-way and audited; does not include pulling configuration." },
+  { code: 'sync.push', group: 'Administration', label: 'Send trading to cloud', description: "Upload this shop's sales and stock to Cloud Sync. One-way and audited; does not include pulling configuration." },
 ];
 
 export const PERMISSION_GROUPS: PermissionGroup[] = [

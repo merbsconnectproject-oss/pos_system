@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect, useRef, type FormEvent } from 'react';
-import { AlertTriangle, ArrowLeft, Home, LockKeyhole, RotateCcw, ServerCrash, ShieldCheck, WifiOff } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Home, LockKeyhole, RefreshCw, RotateCcw, ServerCrash, ShieldCheck, WifiOff, X } from 'lucide-react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
@@ -28,10 +28,8 @@ import type { PurchaseOrder } from './purchaseOrdersApi';
 import { GoodsReceiptView } from './components/GoodsReceiptView';
 import { ReportsView } from './components/ReportsView';
 import { AuthView } from './components/AuthView';
-import {
-  OUTLETS,
-  INITIAL_SETTINGS,
-} from './mockData';
+import { WorkspaceLoadingScreen } from './components/WorkspaceLoadingScreen';
+import { DEFAULT_GENERAL_SETTINGS } from './appDefaults';
 import {
   Outlet,
   OutletId,
@@ -72,6 +70,12 @@ import { installmentsApi } from './installmentsApi';
 import { returnsApi } from './returnsApi';
 import { rolesApi, usersApi, toRolePermissions } from './usersApi';
 import { terminalsApi } from './salesApi';
+import {
+  decodeWorkspaceLocation,
+  encodeWorkspaceLocation,
+  workspaceLocationKey,
+} from './workspaceLocation';
+import { useScrollReveal } from './useScrollReveal';
 
 /**
  * Outlets now come from the API, so a session's outlet id *is* the app's outlet
@@ -108,13 +112,28 @@ const accountFromSession = (session: AuthSession, outlets: Outlet[]): UserAccoun
   };
 };
 
+const workspaceFailureLabel: Record<string, string> = {
+  branches: 'branches',
+  catalogue: 'products',
+  movements: 'stock movements',
+  suppliers: 'suppliers',
+  sales: 'sales history',
+  shift: 'current shift',
+  shiftHistory: 'shift history',
+  roles: 'permissions',
+  settings: 'settings',
+  customers: 'customers',
+};
+
 export default function App() {
-  const [outlets, setOutlets] = useState<Outlet[]>(OUTLETS);
-  const [currentOutletId, setCurrentOutletId] = useState<OutletId>(OUTLETS[0]?.id);
+  const [outlets, setOutlets] = useState<Outlet[]>([]);
+  const [currentOutletId, setCurrentOutletId] = useState<OutletId>('');
 
   // Authenticated session (null until a staff member signs in)
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState('Checking your secure session…');
+  const [workspaceFailures, setWorkspaceFailures] = useState<string[]>([]);
   const [sessionLockReason, setSessionLockReason] = useState<'manual' | 'expired' | null>(null);
   const [unlockPin, setUnlockPin] = useState('');
   const [unlockError, setUnlockError] = useState<string | null>(null);
@@ -129,6 +148,8 @@ export default function App() {
   useEffect(() => {
     mainScrollRef.current?.scrollTo({ top: 0, behavior: 'instant' });
   }, [activeTab]);
+
+  useScrollReveal(mainScrollRef, activeTab);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -150,7 +171,8 @@ export default function App() {
    * app, so setting it before the data arrives renders a dashboard against
    * whatever state happens to be there.
    */
-  const loadWorkspace = useCallback(async (session: AuthSession) => {
+  const loadWorkspace = useCallback(async (session: AuthSession, restoreLocation = false) => {
+    setWorkspaceFailures([]);
     // Settled, not `all`: a catalogue that fails to load is a poorer screen,
     // not a reason to throw away a valid session and send the user back to
     // sign-in. Each result is applied on its own merits.
@@ -167,10 +189,25 @@ export default function App() {
 
 
 
+    // If the richer branch directory is unavailable, the authenticated session
+    // still supplies truthful branch ids and names. Never substitute demo stores.
+    const sessionOutlets: Outlet[] = [session.activeOutlet, ...session.outletChoices]
+      .filter((outlet): outlet is NonNullable<typeof outlet> => outlet !== null)
+      .filter((outlet, index, list) => list.findIndex((candidate) => candidate.id === outlet.id) === index)
+      .map((outlet) => ({
+        id: outlet.id,
+        name: outlet.name,
+        town: '',
+        phone: '',
+        address: '',
+        receiptPrefix: outlet.code,
+        managerName: '',
+        active: true,
+      }));
     const outletList = branches.status === 'fulfilled' && branches.value.length > 0
       ? branches.value
-      : OUTLETS;
-    if (branches.status === 'fulfilled' && branches.value.length > 0) setOutlets(branches.value);
+      : sessionOutlets;
+    setOutlets(outletList);
 
     // An empty catalogue is a legitimate answer — a new installation has none.
     // BR-1: stock is per outlet, so it arrives as rows and is folded into each
@@ -235,6 +272,9 @@ export default function App() {
     Object.entries(loaded).forEach(([name, result]) => {
       if (result.status === 'rejected') console.error(`[workspace] ${name} failed to load`, result.reason);
     });
+    setWorkspaceFailures(Object.entries(loaded)
+      .filter(([, result]) => result.status === 'rejected')
+      .map(([name]) => name));
 
     // FR-USER: staff are only readable with user.manage, so a cashier gets a
     // 403 here. Asked for on its own and allowed to fail — a cashier has no
@@ -266,6 +306,17 @@ export default function App() {
       if (credits) setReturnsExchanges(credits);
     }
 
+    if (restoreLocation) {
+      const restoredPermissions = resolvePermissions(account.effectivePermissions || []);
+      const restored = decodeWorkspaceLocation(
+        sessionStorage.getItem(workspaceLocationKey(account.id)),
+        (tab) => canAccessTab(restoredPermissions, tab),
+        restoredPermissions.has('pos.sell'),
+      );
+      setActiveTab(restored.activeTab);
+      setPosOpen(restored.posOpen);
+    }
+
     setCurrentOutletId(localOutletId(session, outletList));
     setCurrentUser(account);
   }, []);
@@ -273,7 +324,12 @@ export default function App() {
   useEffect(() => {
     let active = true;
     authApi.current()
-      .then((session) => { if (active) return loadWorkspace(session); })
+      .then((session) => {
+        if (active) {
+          setLoadingMessage('Loading your workspace…');
+          return loadWorkspace(session, true);
+        }
+      })
       .catch((failure) => {
         // 401 is the ordinary answer for a browser that is not signed in.
         if (active && !(failure instanceof AuthApiError && failure.status === 401)) {
@@ -334,7 +390,7 @@ export default function App() {
   // `J-06`: the role baselines come from the same enum the server
   // authorises with, so the matrix cannot describe rights it does not grant.
   const [rolesPermissions, setRolesPermissions] = useState<RolePermissions[]>([]);
-  const [generalSettings, setGeneralSettings] = useState<GeneralSettings>(INITIAL_SETTINGS);
+  const [generalSettings, setGeneralSettings] = useState<GeneralSettings>(DEFAULT_GENERAL_SETTINGS);
 
   // Shift & Cash Drawer state (PRD BR-14)
   /**
@@ -430,6 +486,17 @@ export default function App() {
     if (currentUser && currentUser && !can('pos.sell')) setPosOpen(false);
   }, [currentUser, permissions.codes.join(',')]);
 
+  // Refreshing the installed app should restore the user's workspace rather
+  // than silently dropping them on Dashboard. Session storage is deliberate:
+  // it survives reloads but not sign-out or a completely new browser session.
+  useEffect(() => {
+    if (!currentUser || authLoading) return;
+    sessionStorage.setItem(
+      workspaceLocationKey(currentUser.id),
+      encodeWorkspaceLocation(activeTab, posOpen),
+    );
+  }, [activeTab, posOpen, currentUser?.id, authLoading]);
+
   // FR-SET-03/04: one call repaints every accent surface; semantics stay fixed.
   useEffect(() => {
     document.documentElement.style.setProperty('--primary-accent', accentColor);
@@ -504,7 +571,7 @@ export default function App() {
       window.removeEventListener('click', resetIdleTimer);
       window.removeEventListener('touchstart', resetIdleTimer);
     };
-  }, [currentUser, sessionLockReason, currentOutlet.name, generalSettings.thresholds.idleLockMinutes]);
+  }, [currentUser, sessionLockReason, currentOutlet?.name, generalSettings.thresholds.idleLockMinutes]);
 
   // PRD BR-1 & BR-2: Sale Completed handler
   /**
@@ -828,6 +895,7 @@ export default function App() {
   };
 
   const handleToggleActive = (productId: string) => {
+    if (!can('product.edit')) return;
     const current = products.find((p) => p.id === productId);
     if (!current) return;
     void productsApi.setActive(productId, !current.active)
@@ -844,6 +912,7 @@ export default function App() {
    * never saved.
    */
   const handleAddProduct = (newProd: Product) => {
+    if (!can('product.create')) return;
     void productsApi.create(newProd)
       .then(async (saved) => {
         const level = await persistOutletFigures(saved.id, newProd, { opening: true });
@@ -884,7 +953,7 @@ export default function App() {
     // Opening stock first: setting the reorder level afterwards means the `low`
     // flag that comes back is calculated against the count, not against zero.
     const opening = local.stock[outletId] ?? 0;
-    if (options.opening && opening > 0) {
+    if (options.opening && can('stock.receive') && opening > 0) {
       level = await stockApi.record({
         productId,
         outletId,
@@ -898,7 +967,7 @@ export default function App() {
     }
 
     const reorder = local.minStockAlert[outletId];
-    if (reorder != null) {
+    if (can('stock.adjust') && reorder != null) {
       level = await stockApi.setReorderLevel(productId, outletId, reorder);
     }
 
@@ -993,6 +1062,7 @@ export default function App() {
   };
 
   const handleUpdateProduct = (updatedProduct: Product) => {
+    if (!can('product.edit')) return;
     // No appendAuditLog here any more: the server records PRODUCT_UPDATED with
     // the before and after itself, and a second entry written by the browser
     // would be an unverifiable duplicate of it.
@@ -1017,6 +1087,9 @@ export default function App() {
 
   /** FR-PROD-10: one server transaction, then reconcile the catalogue from its response. */
   const handleImportProducts = async (rows: Product[]) => {
+    if (!can('product.import')) {
+      throw new Error('You do not have permission to import products.');
+    }
     const result = await productsApi.import(rows);
     setProducts((current) => {
       const importedIds = new Set(result.products.map((product) => product.id));
@@ -1122,7 +1195,9 @@ export default function App() {
     // Setting the user first would drop straight onto a dashboard built from
     // whatever was in state, which is precisely the stale-until-refresh bug.
     setAuthLoading(true);
+    setLoadingMessage('Loading your workspace…');
     setActiveTab('dashboard');
+    setPosOpen(false);
     void loadWorkspace(session).finally(() => setAuthLoading(false));
   };
 
@@ -1169,6 +1244,7 @@ export default function App() {
    * signal, and tear down again in a loop.
    */
   const resetToSignIn = () => {
+    if (currentUser) sessionStorage.removeItem(workspaceLocationKey(currentUser.id));
     setCurrentUser(null);
     setSessionLockReason(null);
     setUnlockPin('');
@@ -1202,6 +1278,37 @@ export default function App() {
       .catch(() => { /* the catalogue keeps what it has; the next movement refetches */ });
     return () => { active = false; };
   }, [currentUser?.id, currentOutletId]);
+
+  // The 23:00 close happens on the server even if this browser is idle. Keep
+  // the shell in step so it stops presenting the old drawer as active without
+  // requiring a manual refresh or a refused sale first.
+  useEffect(() => {
+    if (!currentUser || !shiftInfo.isOpen) return;
+    let active = true;
+    const refreshShift = () => {
+      void shiftsApi.current()
+        .then(async (open) => {
+          if (!active) return;
+          if (open) {
+            setShiftInfo(toShiftInfo(open));
+            return;
+          }
+          const recent = await shiftsApi.recent(currentOutletId, 5);
+          if (!active) return;
+          const closed = recent.find((shift) => shift.id === shiftInfo.id);
+          if (closed) {
+            setShiftInfo(toShiftInfo(closed));
+            setShiftRecords((records) => records.map((record) =>
+              record.id === closed.id ? toShiftRecord(closed, currentOutlet?.name || '') : record));
+          } else {
+            setShiftInfo((previous) => ({ ...previous, isOpen: false }));
+          }
+        })
+        .catch(() => { /* the next poll or server request will reconcile it */ });
+    };
+    const timer = window.setInterval(refreshShift, 30_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [currentUser?.id, currentOutletId, currentOutlet?.name, shiftInfo.id, shiftInfo.isOpen]);
 
   /**
    * BR-15: the audit log is the server's, not the browser's.
@@ -1509,13 +1616,22 @@ export default function App() {
     }
   };
 
+  const retryWorkspaceLoad = () => {
+    setAuthLoading(true);
+    setLoadingMessage('Refreshing your workspace…');
+    void authApi.current()
+      .then(loadWorkspace)
+      .catch((failure) => {
+        if (!(failure instanceof AuthApiError && failure.status === 401)) {
+          setAppErrorReference(`LOAD-${Date.now().toString().slice(-6)}`);
+        }
+      })
+      .finally(() => setAuthLoading(false));
+  };
+
   // Gate the whole application behind the sign-in flow.
   if (authLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-sm font-bold text-white">
-        Starting secure session…
-      </div>
-    );
+    return <WorkspaceLoadingScreen message={loadingMessage} />;
   }
 
   if (!currentUser) {
@@ -1567,8 +1683,34 @@ export default function App() {
           permissions={permissions}
         />
 
-        <main ref={mainScrollRef} className="flex-1 overflow-y-auto bg-[#f8f9fa] pb-12">
+        <main ref={mainScrollRef} className="app-main flex-1 overflow-y-auto bg-[#f8f9fa] pb-12" data-active-page={activeTab}>
           {isOffline && <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800"><WifiOff className="h-4 w-4" /> Offline mode: committed work remains available and new transactions will queue for sync.</div>}
+          {workspaceFailures.length > 0 && (
+            <div
+              className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-rose-200 bg-rose-50 px-4 py-2.5 text-xs text-rose-800"
+              role="alert"
+            >
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 font-semibold">
+                Some information could not be loaded ({workspaceFailures.map((name) => workspaceFailureLabel[name] || name).join(', ')}). Empty sections may be incomplete.
+              </span>
+              <button
+                type="button"
+                onClick={retryWorkspaceLoad}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-2.5 py-1.5 font-bold text-rose-800 hover:bg-rose-100"
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Retry
+              </button>
+              <button
+                type="button"
+                onClick={() => setWorkspaceFailures([])}
+                className="rounded-md p-1 text-rose-700 hover:bg-rose-100"
+                aria-label="Dismiss loading warning"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
           {/* Main Dashboard */}
           {activeTab === 'dashboard' && (
             <Dashboard

@@ -45,26 +45,14 @@ export interface Product {
   name: string;
   sku: string;
   outletId?: OutletId; // Dedicated store assignment
-  category:
-    | 'Power Tools & Machinery'
-    | 'Hand Tools & Hardware'
-    | 'Plumbing & Sanitary'
-    | 'Paints & Adhesives'
-    | 'Fasteners & Fixings'
-    | 'Building & Site Safety'
-    | 'Cables & Wires'
-    | 'Switches & Sockets'
-    | 'Protection & Breakers'
-    | 'Conduits & Trunking'
-    | 'Lighting & Lamps'
-    | 'Solar & Inverters'
-    | 'Hardware & Tools'
-    | 'Plumbing & Pipes';
+  /** Managed in Product Catalogue → Catalogue Setup, not compiled into the UI. */
+  category: string;
   brand: string;
   description?: string;
   supplierId?: string;
   barcodes: ProductBarcode[]; // FR-PROD-03: many per product, each bound to a unit
-  baseUnit: 'm' | 'pcs' | 'length' | 'roll' | 'box' | 'kg' | 'bucket' | 'tin' | 'set' | 'pair';
+  /** Managed in Product Catalogue → Catalogue Setup, not compiled into the UI. */
+  baseUnit: string;
   sellingUnits?: SellingUnit[];
   retailPrice: number;
   tradePrice: number;
@@ -202,6 +190,7 @@ export interface ShiftInfo {
   variance?: number;
   varianceNote?: string;
   closedAt?: string;
+  automaticallyClosed?: boolean;
 }
 
 /**
@@ -252,6 +241,7 @@ export interface ShiftRecord {
   countedCash?: number;
   variance?: number;
   varianceNote?: string;
+  automaticallyClosed?: boolean;
   status: 'open' | 'closed';
 }
 
@@ -337,6 +327,8 @@ export interface GeneralSettings {
   accentColor: string;
   fontFamily: 'JAKARTA' | 'SYSTEM' | 'ARIAL' | 'VERDANA' | 'GEORGIA';
   fontScalePercent: number;
+  /** Minutes between automatic trading uploads to cloud storage. */
+  cloudSyncIntervalMinutes: number;
   thresholds: OperationalThresholds;
 }
 

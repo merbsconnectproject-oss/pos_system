@@ -525,8 +525,8 @@ a feature somebody can use.
 - [·][·] Disconnect mid-sale, reconnect: exactly one correct sale at the server — FR-SYNC acceptance · release gate 10 *(gate rewritten below — there is no "at the server" any more)*
 
 ### What replaces them — the owner's view
-- [x][x] Each shop pushes a snapshot outbound on an interval, retrying through outages — Phase 1 *(scheduled every 15 minutes; a failed push leaves the rows unsent and never throws. Also pressable by anyone holding `sync.push`, which cashiers hold by default so closing up can send the day.)*
-- [~][x] The owner's view shows staleness: last sent, last pulled and what is waiting, per table — Phase 1 *(Settings › Head Office Sync. Not yet on the dashboard itself.)*
+- [x][x] Each shop pushes a snapshot outbound on an interval, retrying through outages — Phase 1 *(the owner/admin chooses 15 minutes to 24 hours in 15-minute steps; a failed push leaves the rows unsent and does not increase cloud request frequency. Manual sync remains available to anyone holding `sync.push`, which cashiers hold by default so closing up can send the day.)*
+- [~][x] The owner's view shows staleness: last sent, last pulled and what is waiting, per table — Phase 1 *(Settings › Cloud Sync. Not yet on the dashboard itself.)*
 - [x][x] A shop that cannot reach the bucket keeps trading and nobody at the counter notices — Phase 1 *(the push is a background job; nothing in the selling path touches it)*
 
 ---
