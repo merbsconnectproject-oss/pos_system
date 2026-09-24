@@ -21,6 +21,7 @@ import {
   Printer,
   Search,
   Sliders,
+  Store,
   Tag,
   Truck,
   Upload,
@@ -43,6 +44,7 @@ import {
 } from '../productImport';
 import { exportToCsv } from '../utils/csvExport';
 import { ProductBarcodeModal, ProductBarcodeSvg } from './ProductBarcodeModal';
+import { ProductPricingModal } from './ProductPricingModal';
 import { TablePagination } from './TablePagination';
 
 type ProductMode = 'list' | 'import' | 'setup' | 'bulk-price';
@@ -153,6 +155,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [barcodeModalOpen, setBarcodeModalOpen] = useState(false);
+  /** FR-PRICE-03 · FR-PRICE-06: whose branch prices are open, if any. */
+  const [pricingProduct, setPricingProduct] = useState<Product | null>(null);
   const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [importStep, setImportStep] = useState<ImportStep>('upload');
@@ -1015,6 +1019,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                         {canEditProduct && <button onClick={() => startEdit(product)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer" title="Edit product"><Edit2 className="w-3.5 h-3.5" /></button>}
                         {canEditProduct && <button onClick={() => onToggleActive(product.id)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer" title={product.active ? 'Deactivate product' : 'Reactivate product'}><Power className="w-3.5 h-3.5" /></button>}
                         {canAdjustStock && <button onClick={() => onOpenAdjustment(product)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer" title="Adjust stock"><Sliders className="w-3.5 h-3.5" /></button>}
+                        {canViewCost && <button onClick={() => setPricingProduct(product)} className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer" title="Branch prices and price history (FR-PRICE-03, FR-PRICE-06)"><Store className="w-3.5 h-3.5" /></button>}
                       </div>
                     </td>
                   </tr>
@@ -1367,6 +1372,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         product={barcodeProduct}
         products={selectedProductIds.length > 0 ? selectedProductsForPrint : products}
         currentOutlet={currentOutlet}
+      />
+
+      {/* FR-PRICE-03 · FR-PRICE-06: branch prices, and what they have been. */}
+      <ProductPricingModal
+        product={pricingProduct}
+        outlets={outlets}
+        canEdit={permissions.has('price.edit')}
+        onClose={() => setPricingProduct(null)}
       />
     </div>
   );

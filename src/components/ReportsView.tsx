@@ -6,9 +6,11 @@ import { formatMoney, roundMoney } from '../money';
 import { exportToCsv } from '../utils/csvExport';
 import { InfoHint } from './InfoHint';
 import { reportsApi, type ReportFilters, type ReportRow, type ReportSummary } from '../reportsApi';
+import { catalogueApi } from '../catalogueApi';
+import { usersApi } from '../usersApi';
 import { TablePagination } from './TablePagination';
 
-type ReportTab = 'index' | 'sales' | 'product' | 'category' | 'cashier' | 'customer' | 'profit' | 'best-sellers' | 'slow-movers' | 'stock' | 'movements' | 'payments' | 'discounts' | 'voids' | 'purchases';
+type ReportTab = 'index' | 'sales' | 'product' | 'category' | 'cashier' | 'customer' | 'profit' | 'best-sellers' | 'slow-movers' | 'stock' | 'valuation' | 'low-stock' | 'movements' | 'payments' | 'end-of-day' | 'discounts' | 'voids' | 'purchases';
 /**
  * The lists are gone from here on purpose — FR-RPT-04.
  *
@@ -19,9 +21,16 @@ type ReportTab = 'index' | 'sales' | 'product' | 'category' | 'cashier' | 'custo
 interface ReportsViewProps { outlets: Outlet[]; currentOutlet: Outlet; currentUser: UserAccount | null; permissions: PermissionSet; }
 type Row = { name: string; qty: number; revenue: number; secondary?: string };
 const money = (value: number) => `GH₵ ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/** FR-RPT-03: the methods the server's `paymentMethod` filter accepts. */
+const PAYMENT_METHOD_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'momo', label: 'Mobile money' },
+  { value: 'card', label: 'Card' },
+  { value: 'transfer', label: 'Bank transfer' },
+];
 const reportGroups: Array<{ key: Exclude<ReportTab, 'index'>; label: string }> = [
   { key: 'sales', label: 'Sales summary' }, { key: 'product', label: 'By product' }, { key: 'category', label: 'By category' }, { key: 'cashier', label: 'By cashier' }, { key: 'customer', label: 'By customer' }, { key: 'profit', label: 'Gross profit' },
-  { key: 'best-sellers', label: 'Best sellers' }, { key: 'slow-movers', label: 'Slow movers' }, { key: 'stock', label: 'Stock on hand' }, { key: 'movements', label: 'Stock movements' }, { key: 'payments', label: 'Payments' }, { key: 'discounts', label: 'Discounts' }, { key: 'voids', label: 'Voids & refunds' }, { key: 'purchases', label: 'Purchases' },
+  { key: 'best-sellers', label: 'Best sellers' }, { key: 'slow-movers', label: 'Slow movers' }, { key: 'stock', label: 'Stock on hand' }, { key: 'valuation', label: 'Inventory valuation' }, { key: 'low-stock', label: 'Low stock' }, { key: 'movements', label: 'Stock movements' }, { key: 'payments', label: 'Payments' }, { key: 'end-of-day', label: 'End of day' }, { key: 'discounts', label: 'Discounts' }, { key: 'voids', label: 'Voids & refunds' }, { key: 'purchases', label: 'Purchases' },
 ];
 
 const ReportTable: React.FC<{ title: string; rows: Row[]; columns: [string, string, string] }> = ({ title, rows, columns }) => {
@@ -42,7 +51,34 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ outlets, currentOutlet
   const [range, setRange] = useState('30d');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  /**
+   * FR-RPT-03: "filterable by outlet, date range and, where relevant,
+   * category, user and payment method."
+   *
+   * <p>The reports API has taken all five since it was written. The screen
+   * offered outlet and date, so three of the five were unreachable — a manager
+   * could not ask what one cashier sold, or what went through MoMo.
+   */
+  const [category, setCategory] = useState('all');
+  const [userId, setUserId] = useState('all');
+  const [paymentMethod, setPaymentMethod] = useState('all');
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  const [userOptions, setUserOptions] = useState<Array<{ id: string; name: string }>>([]);
   const canProfit = permissions.has('report.view_profit');
+
+  // Loaded once: the filter lists do not change while a report is being read.
+  useEffect(() => {
+    let current = true;
+    void catalogueApi.list('categories')
+      .then((items) => { if (current) setCategoryOptions(items.map((item) => item.name)); })
+      .catch(() => { if (current) setCategoryOptions([]); });
+    void usersApi.list()
+      .then((people) => {
+        if (current) setUserOptions(people.map((person) => ({ id: person.id, name: person.fullName || person.username })));
+      })
+      .catch(() => { if (current) setUserOptions([]); });
+    return () => { current = false; };
+  }, []);
   const dateBounds = useMemo(() => {
     const end = customEnd ? new Date(`${customEnd}T23:59:59`) : new Date();
     const start = customStart ? new Date(`${customStart}T00:00:00`) : new Date(end);
@@ -61,7 +97,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ outlets, currentOutlet
     from: dateBounds.start,
     to: dateBounds.end,
     outletId: outlet === 'all' ? null : outlet,
-  }), [dateBounds, outlet]);
+    category: category === 'all' ? null : category,
+    userId: userId === 'all' ? null : userId,
+    paymentMethod: paymentMethod === 'all' ? null : paymentMethod,
+  }), [dateBounds, outlet, category, userId, paymentMethod]);
 
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
@@ -117,6 +156,30 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ outlets, currentOutlet
             revenue: money2(row.valueAtCost),
             secondary: `${row.sku} · ${row.outletName} · reorder at ${row.reorderLevel}${row.low ? ' · LOW' : ''}`,
           }));
+        case 'valuation':
+          // FR-RPT-04 inventory valuation. On the API since it was written and
+          // never given a tab, so an owner could see quantities but never what
+          // the stock on the shelves was worth.
+          return (await reportsApi.stock('valuation', filters)).map((row) => ({
+            name: row.name,
+            qty: Number(row.quantity),
+            revenue: money2(row.valueAtCost),
+            secondary: `${row.sku} · ${row.outletName} · ${money(money2(row.averageCost))} average cost`,
+          }));
+        case 'low-stock':
+          // FR-RPT-04 low stock, and FR-INV-05's reorder level is the test the
+          // server applies — not a threshold this screen re-invents.
+          return (await reportsApi.stock('low', filters)).map((row) => ({
+            name: row.name,
+            qty: Number(row.quantity),
+            revenue: money2(row.valueAtCost),
+            secondary: `${row.sku} · ${row.outletName} · reorder at ${row.reorderLevel}`,
+          }));
+        case 'end-of-day':
+          // FR-RPT-04 end-of-day: what settled, by method, for the period the
+          // filter names. The cash line is what should be in the drawer.
+          return (await reportsApi.breakdown('payment', filters))
+            .map((row) => asRow(row, `${row.quantity} payments`));
         case 'voids':
           return (await reportsApi.exceptions('void', filters)).map((row) => ({
             name: row.receiptNumber,
@@ -188,6 +251,45 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ outlets, currentOutlet
     if (activeTab === 'discounts') return <ReportTable title="Discount and override log" rows={rows} columns={['Product / reason', 'Count', 'Given away']} />;
     if (activeTab === 'slow-movers') return <ReportTable title="Slow movers — no sale this period" rows={rows} columns={['Product', 'Units held', canProfit ? 'Value tied up' : '—']} />;
     if (activeTab === 'stock') return <ReportTable title="Stock on hand" rows={rows} columns={['Product', 'Quantity', canProfit ? 'Value at cost' : '—']} />;
+    if (activeTab === 'valuation') {
+      // FR-RPT-05: the valuation *is* the cost. There is no version of this
+      // report with the cost withheld, so the permission gates the whole thing
+      // rather than a column of it.
+      if (!canProfit) return <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">Inventory valuation requires the <code className="font-mono text-xs">price.view_cost</code> permission.</div>;
+      return (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Metric label="Lines valued" value={String(rows.length)} />
+            <Metric label="Total at cost" value={money(rows.reduce((sum, row) => sum + row.revenue, 0))} valueClass="text-emerald-700" />
+          </div>
+          <ReportTable title="Inventory valuation" rows={rows} columns={['Product', 'Quantity', 'Value at cost']} />
+        </div>
+      );
+    }
+    if (activeTab === 'low-stock') return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Metric label="Lines at or below reorder level" value={String(rows.length)} />
+          <Metric label="Branch" value={outlet === 'all' ? 'All outlets' : outlets.find((item) => item.id === outlet)?.name || outlet} />
+        </div>
+        <ReportTable title="Low stock" rows={rows} columns={['Product', 'Quantity', canProfit ? 'Value at cost' : '—']} />
+      </div>
+    );
+    if (activeTab === 'end-of-day') return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+          <Metric label="Completed sales" value={String(saleCount)} />
+          <Metric label="Takings, net of returns" value={money(money2(summary?.netRevenue))} />
+          <Metric label="Refunded" value={money(money2(summary?.refundTotal))} />
+          <Metric label="Voided" value={money(money2(summary?.voidedValue))} />
+        </div>
+        <ReportTable title="Settled by payment method" rows={rows} columns={['Method', 'Payments', 'Value']} />
+        <p className="text-xs text-slate-500">
+          The cash line is what the drawer should hold for this period before float and
+          cash movements. A shift&rsquo;s own blind count and variance are on the cash control screen.
+        </p>
+      </div>
+    );
     if (activeTab === 'profit' && !canProfit) return <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">Profit reporting requires the <code className="font-mono text-xs">report.view_profit</code> permission.</div>;
     if (activeTab === 'profit') return (
       <div className="space-y-4">
@@ -252,7 +354,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ outlets, currentOutlet
     // The sales summary is the totals above plus what made them up.
     return <ReportTable title="Sales summary — by product" rows={rows} columns={['Product', 'Units', 'Revenue']} />;
   };
-  return <div className="mx-auto max-w-[1600px] space-y-5 p-4 md:p-6 animate-fade-in"><header className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-micro-caps text-accent-700">Reporting workspace</p><div className="mt-1 flex items-center gap-2"><h1 className="text-2xl font-black text-slate-900">Business reports</h1><InfoHint text="Review sales, stock, payments, and control activity from recorded transactions." /></div></div><div className="flex flex-wrap gap-2"><select value={outlet} onChange={(event) => setOutlet(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700"><option value="all">All outlets</option>{outlets.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select value={range} onChange={(event) => setRange(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700"><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="mtd">Month to date</option><option value="ytd">Year to date</option></select><button onClick={exportReport} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"><Download className="h-4 w-4" /> Export</button></div></header><nav className="flex gap-1 overflow-x-auto border-b border-slate-200" aria-label="Report sections"><button onClick={() => setActiveTab('index')} className={`whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-bold ${activeTab === 'index' ? 'border-accent-600 text-accent-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>Report index</button>{reportGroups.filter((item) => item.key !== 'profit' || canProfit).map((item) => <button key={item.key} onClick={() => setActiveTab(item.key)} className={`whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-bold ${activeTab === item.key ? 'border-accent-600 text-accent-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{item.label}</button>)}</nav>{activeTab === 'index' ? <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">{[['Sales', 'Revenue, products, categories, cashiers, and customers.', 'sales', <TrendingUp className="h-5 w-5" />], ['Stock', 'Stock position, valuation, movements, and slow movers.', 'stock', <Package className="h-5 w-5" />], ['Cash', 'Payment methods, shifts, and end-of-day reconciliation.', 'payments', <Wallet className="h-5 w-5" />], ['Control', 'Discounts, overrides, voids, refunds, and purchases.', 'voids', <ShieldCheck className="h-5 w-5" />]].map(([title, description, key, icon]) => <button key={String(key)} onClick={() => setActiveTab(key as ReportTab)} className="group border border-slate-200 bg-white p-5 text-left transition-colors hover:border-accent-300"><span className="text-accent-700">{icon}</span><h2 className="mt-4 text-sm font-black text-slate-900">{title}</h2><p className="mt-1 text-xs leading-5 text-slate-500">{description}</p><span className="mt-5 inline-block text-xs font-bold text-accent-700 group-hover:text-accent-800">Open report group</span></button>)}</div> : <section className="space-y-4"><div className="grid grid-cols-1 gap-3 md:grid-cols-3"><Metric label="Completed sales" value={String(saleCount)} /><Metric label="Revenue" value={money(revenue)} /><Metric label="Report period" value={range === '30d' ? 'Last 30 days' : range.toUpperCase()} /></div>{failure ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-sm font-bold text-rose-700">{failure}</div> : loading ? <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">Loading…</div> : renderReport()}</section>}</div>;
+  return <div className="mx-auto max-w-[1600px] space-y-5 p-4 md:p-6 animate-fade-in"><header className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-micro-caps text-accent-700">Reporting workspace</p><div className="mt-1 flex items-center gap-2"><h1 className="text-2xl font-black text-slate-900">Business reports</h1><InfoHint text="Review sales, stock, payments, and control activity from recorded transactions." /></div></div><div className="flex flex-wrap gap-2"><select value={outlet} onChange={(event) => setOutlet(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700"><option value="all">All outlets</option>{outlets.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select value={range} onChange={(event) => setRange(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700"><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="mtd">Month to date</option><option value="ytd">Year to date</option></select><select value={category} onChange={(event) => setCategory(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700" aria-label="Category"><option value="all">All categories</option>{categoryOptions.map((name) => <option key={name} value={name}>{name}</option>)}</select><select value={userId} onChange={(event) => setUserId(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700" aria-label="User"><option value="all">All users</option>{userOptions.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select><select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700" aria-label="Payment method"><option value="all">All payment methods</option>{PAYMENT_METHOD_OPTIONS.map((method) => <option key={method.value} value={method.value}>{method.label}</option>)}</select><button onClick={exportReport} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"><Download className="h-4 w-4" /> Export</button></div></header><nav className="flex gap-1 overflow-x-auto border-b border-slate-200" aria-label="Report sections"><button onClick={() => setActiveTab('index')} className={`whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-bold ${activeTab === 'index' ? 'border-accent-600 text-accent-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>Report index</button>{reportGroups.filter((item) => item.key !== 'profit' || canProfit).map((item) => <button key={item.key} onClick={() => setActiveTab(item.key)} className={`whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-bold ${activeTab === item.key ? 'border-accent-600 text-accent-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{item.label}</button>)}</nav>{activeTab === 'index' ? <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">{[['Sales', 'Revenue, products, categories, cashiers, and customers.', 'sales', <TrendingUp className="h-5 w-5" />], ['Stock', 'Stock position, valuation, movements, and slow movers.', 'stock', <Package className="h-5 w-5" />], ['Cash', 'Payment methods, shifts, and end-of-day reconciliation.', 'payments', <Wallet className="h-5 w-5" />], ['Control', 'Discounts, overrides, voids, refunds, and purchases.', 'voids', <ShieldCheck className="h-5 w-5" />]].map(([title, description, key, icon]) => <button key={String(key)} onClick={() => setActiveTab(key as ReportTab)} className="group border border-slate-200 bg-white p-5 text-left transition-colors hover:border-accent-300"><span className="text-accent-700">{icon}</span><h2 className="mt-4 text-sm font-black text-slate-900">{title}</h2><p className="mt-1 text-xs leading-5 text-slate-500">{description}</p><span className="mt-5 inline-block text-xs font-bold text-accent-700 group-hover:text-accent-800">Open report group</span></button>)}</div> : <section className="space-y-4"><div className="grid grid-cols-1 gap-3 md:grid-cols-3"><Metric label="Completed sales" value={String(saleCount)} /><Metric label="Revenue" value={money(revenue)} /><Metric label="Report period" value={range === '30d' ? 'Last 30 days' : range.toUpperCase()} /></div>{failure ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-sm font-bold text-rose-700">{failure}</div> : loading ? <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">Loading…</div> : renderReport()}</section>}</div>;
 };
 
 const Metric = ({ label, value, valueClass = 'text-slate-900' }: { label: string; value: string; valueClass?: string }) => <div className="border border-slate-200 bg-white p-4"><p className="text-micro-caps text-slate-500">{label}</p><p className={`mt-2 text-lg font-black ${valueClass}`}>{value}</p></div>;

@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Search, Printer, X, Download, Filter, Eye, FileText } from 'lucide-react';
 import { CompletedSale, Outlet, StockMovement } from '../types';
 import { ManagerPinModal } from './ManagerPinModal';
 import { exportToCsv } from '../utils/csvExport';
 import { InfoHint } from './InfoHint';
-import { ThermalReceiptSlip } from './ThermalReceiptSlip';
 import { ReceiptPrintModal } from './ReceiptPrintModal';
+import type { ReceiptBranding } from './ThermalReceiptSlip';
 import { receiptsApi } from '../receiptsApi';
 import { printReceipt } from '../printService';
 import { salesApi } from '../salesApi';
@@ -15,12 +15,15 @@ import { TablePagination } from './TablePagination';
 interface SalesHistoryViewProps {
   sales: CompletedSale[];
   currentOutlet: Outlet;
+  /** FR-SET-01: the header a reprint carries, which is the original's header. */
+  receiptBranding: ReceiptBranding;
   onVoidSale: (saleId: string, reason: string, approver: string, reversingMovements: StockMovement[]) => void;
 }
 
 export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
   sales,
   currentOutlet,
+  receiptBranding,
   onVoidSale,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -34,7 +37,7 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
   const [maxAmount, setMaxAmount] = useState('');
   const [viewingReceipt, setViewingReceipt] = useState<CompletedSale | null>(null);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
-  const [printTarget, setPrintTarget] = useState<CompletedSale | null>(null);
+  const [printError, setPrintError] = useState<string | null>(null);
   const [paperWidth, setPaperWidth] = useState<'80mm' | '58mm'>('80mm');
   const [isReprint, setIsReprint] = useState(false);
   const [voidingSale, setVoidingSale] = useState<CompletedSale | null>(null);
@@ -89,22 +92,13 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
 
   const selectedSale = filteredSales.find((s) => s.id === selectedSaleId) || null;
 
-  // The local ESC/POS service is preferred. Browser printing is retained only
-  // as an explicit recovery path when the service is unavailable.
-  useEffect(() => {
-    if (!printTarget) return;
-    const clearTarget = () => setPrintTarget(null);
-    window.addEventListener('afterprint', clearTarget);
-    const timer = window.setTimeout(() => window.print(), 60);
-    return () => { window.removeEventListener('afterprint', clearTarget); window.clearTimeout(timer); };
-  }, [printTarget]);
-
   // Prints the currently selected receipt (or the one open in the preview modal).
   const handlePrintReceipt = async (sale?: CompletedSale, width?: '80mm' | '58mm') => {
     const target = sale || viewingReceipt || selectedSale;
     if (!target) return;
     setSelectedSaleId(target.id);
     if (width) setPaperWidth(width);
+    setPrintError(null);
     // Anything printed from the history log is by definition a reprint.
     setIsReprint(true);
     try {
@@ -119,9 +113,9 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
         isReprint: true,
         payload: receipt.escPos,
       });
-      if (!result.ok) setPrintTarget(target);
-    } catch {
-      setPrintTarget(target);
+      if (result.ok === false) setPrintError(result.detail);
+    } catch (error) {
+      setPrintError(error instanceof Error ? error.message : 'The receipt could not be printed.');
     }
   };
 
@@ -532,6 +526,12 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
 
       <TablePagination page={page} pageSize={pageSize} total={filteredSales.length} onPageChange={setPage} onPageSizeChange={setPageSize} />
 
+      {printError && (
+        <div role="alert" className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-900">
+          {printError} The sale is unchanged; retry when the printer is ready.
+        </div>
+      )}
+
       {/* Dedicated Print-Friendly Receipt Modal (PRD §9) */}
       {viewingReceipt && (
         <ReceiptPrintModal
@@ -539,6 +539,7 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
           sale={viewingReceipt}
           onClose={() => setViewingReceipt(null)}
           onPrint={(targetSale, width) => handlePrintReceipt(targetSale, width)}
+          branding={receiptBranding}
           isReprint={isReprint}
           allSales={filteredSales}
           onSelectSale={(newSale) => {
@@ -546,18 +547,6 @@ export const SalesHistoryView: React.FC<SalesHistoryViewProps> = ({
             setViewingReceipt(newSale);
           }}
         />
-      )}
-
-      {/* Isolated print surface — the only node the print stylesheet keeps visible */}
-      {printTarget && (
-        <div id="printable-receipt" aria-hidden="true">
-          <ThermalReceiptSlip
-            sale={printTarget}
-            isReprint={isReprint}
-            paperWidth={paperWidth}
-            showBarcode={true}
-          />
-        </div>
       )}
 
       {/* Manager PIN Modal for Void */}

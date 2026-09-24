@@ -28,7 +28,7 @@ import { SalesPurchaseChart } from './SalesPurchaseChart';
 import { CustomerOverviewChart } from './CustomerOverviewChart';
 import { CompletedSale, Outlet, OutletId, Product, ShiftInfo, UserAccount } from '../types';
 import type { PermissionSet } from '../permissions';
-import { reportsApi, type DashboardView } from '../reportsApi';
+import { reportsApi, type DashboardView, type ReportRow } from '../reportsApi';
 
 interface DashboardProps {
   products: Product[];
@@ -198,6 +198,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const isOwner = permissions.has('outlet.view_all');
   const isCashier = !permissions.has('report.view');
+  const canViewReports = permissions.has('report.view');
   const canViewProfit = permissions.has('report.view_profit');
   const canViewStockValue = permissions.has('price.view_cost');
   const greeting = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening';
@@ -249,6 +250,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
    */
   const [serverDashboard, setServerDashboard] = useState<DashboardView | null>(null);
   const [serverTrend, setServerTrend] = useState<{ revenue: number; profit: number } | null>(null);
+  const [topSellerRows, setTopSellerRows] = useState<ReportRow[] | null>(null);
+
+  const localTopSellerRows = useMemo<ReportRow[]>(() => {
+    const quantities = new Map<string, number>();
+    scopedSales.forEach((sale) => {
+      sale.items.forEach((item) => {
+        quantities.set(item.product.id, (quantities.get(item.product.id) || 0) + item.quantity);
+      });
+    });
+    return [...quantities.entries()]
+      .map(([productId, quantity]) => {
+        const product = scopedProducts.find((candidate) => candidate.id === productId);
+        return {
+          key: productId,
+          name: product?.name || 'Unknown product',
+          secondary: product?.sku || null,
+          quantity,
+          revenue: 0,
+        };
+      })
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 4);
+  }, [scopedProducts, scopedSales]);
 
   useEffect(() => {
     let current = true;
@@ -256,16 +280,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
     const fourteenDaysAgo = new Date(now.getTime() - 14 * 86400000);
 
+    const rankingOutlet = resolvedScope === 'all' ? null : resolvedScope;
     Promise.all([
       reportsApi.dashboard(),
       // The trend badges compare two real weeks rather than two slices of a
       // loaded list — a badge that is wrong is worse than no badge.
       reportsApi.summary({ from: sevenDaysAgo, to: now }),
       reportsApi.summary({ from: fourteenDaysAgo, to: sevenDaysAgo }),
+      // Product.salesCount is catalogue metadata and is not maintained by the
+      // sales transaction. Use the database ranking so units sold are real,
+      // complete, and scoped to the outlet currently shown.
+      canViewReports
+        ? reportsApi.ranking('best', { outletId: rankingOutlet }, 4)
+        : Promise.resolve([] as ReportRow[]),
     ])
-      .then(([dashboard, thisWeek, lastWeek]) => {
+      .then(([dashboard, thisWeek, lastWeek, ranking]) => {
         if (!current) return;
         setServerDashboard(dashboard);
+        setTopSellerRows(ranking);
         const change = (now7: number, prev: number) =>
           prev === 0 ? (now7 > 0 ? 100 : 0) : ((now7 - prev) / prev) * 100;
         setServerTrend({
@@ -279,7 +311,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       });
 
     return () => { current = false; };
-  }, [currentOutlet.id]);
+  }, [canViewReports, currentOutlet.id, resolvedScope, sales.length]);
 
   /** The card for the branch in view, or the combined line for "all". */
   const serverCard = useMemo(() => {
@@ -325,7 +357,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     return {
       salesToday: takings,
-      estimatedProfit: serverCard?.profitToday == null ? estimatedProfit : Number(serverCard.profitToday),
+      // FR-RPT-05: when the server withheld profit it withheld it, and falling
+      // back to a local sum defeats the permission — the more so now that the
+      // sale lines carry no cost for such a reader, which made the local figure
+      // equal to the full sale value rather than the margin on it.
+      estimatedProfit: !canViewProfit
+        ? 0
+        : serverCard?.profitToday == null ? estimatedProfit : Number(serverCard.profitToday),
       expectedCash: serverCard ? Number(serverCard.expectedCash) : shiftInfo.openingFloat + cashSales,
       stockValue,
       transactions: receipts,
@@ -334,6 +372,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       openShifts: serverCard ? serverCard.openShifts : (shiftInfo.isOpen ? 1 : 0),
     };
   }, [
+    canViewProfit,
     serverCard,
     scopedOutletIds,
     scopedProducts,
@@ -653,7 +692,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <LowStockCard items={lowStockItems} onViewAll={onViewAllLowStock} />
           <RecentSalesCard sales={scopedSales} onSelectTab={onSelectTab} />
-          <TopSellersCard products={scopedProducts} onSelectTab={onSelectTab} />
+          <TopSellersCard products={scopedProducts} rows={topSellerRows ?? localTopSellerRows} onSelectTab={onSelectTab} />
         </section>
       </div>
     );
@@ -863,7 +902,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         )}
         <LowStockCard items={lowStockItems} onViewAll={onViewAllLowStock} />
         <RecentSalesCard sales={scopedSales} onSelectTab={onSelectTab} />
-        <TopSellersCard products={scopedProducts} onSelectTab={onSelectTab} />
+        <TopSellersCard products={scopedProducts} rows={topSellerRows ?? localTopSellerRows} onSelectTab={onSelectTab} />
       </section>
     </div>
   );
@@ -961,9 +1000,11 @@ const RecentSalesCard = ({
 
 const TopSellersCard = ({
   products,
+  rows,
   onSelectTab,
 }: {
   products: Product[];
+  rows: ReportRow[];
   onSelectTab: (tab: string) => void;
 }) => (
   <div className="bg-white rounded-2xl border border-slate-200 p-5">
@@ -977,21 +1018,22 @@ const TopSellersCard = ({
       </button>
     </div>
     <div className="mt-4 space-y-3">
-      {[...products]
-        .sort((a, b) => (b.salesCount || 0) - (a.salesCount || 0))
-        .slice(0, 4)
-        .map((product) => (
-          <div key={product.id} className="flex items-center justify-between gap-3">
+      {rows.map((row) => {
+          const product = products.find((candidate) => candidate.id === row.key);
+          return (
+          <div key={row.key} className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-xs font-bold text-slate-800 truncate">{product.name}</div>
-              <div className="text-[11px] text-slate-400">{product.category}</div>
+              <div className="text-xs font-bold text-slate-800 truncate">{row.name}</div>
+              <div className="text-[11px] text-slate-400">{product?.category || row.secondary || 'Product'}</div>
             </div>
             <span className="text-xs font-black text-slate-900 shrink-0 flex items-center gap-1">
               <ArrowUpRight className="w-3.5 h-3.5 text-emerald-600" />
-              {product.salesCount || 0}
+              {Number(row.quantity).toLocaleString('en-US')} sold
             </span>
           </div>
-        ))}
+          );
+        })}
+      {rows.length === 0 && <div className="text-xs text-slate-500 py-4">No products sold in this scope yet.</div>}
     </div>
   </div>
 );

@@ -1,16 +1,15 @@
 /**
- * Local print service seam — FR-RCPT-01, 02, 05.
+ * Local in-process printing seam — FR-RCPT-01, 02, 05.
  *
- * Printing goes to an ESC/POS service running on the counter PC, not through the
- * browser print dialogue. This module is the boundary: the POS calls `printReceipt`
+ * Printing goes to the Spring server running on the counter PC, not through the
+ * browser print dialogue. The server submits raw ESC/POS to the operating-system
+ * spooler. This module is the boundary: the POS calls `printReceipt`
  * **after** the sale is committed, and a failure never blocks or reverses it — the
  * caller surfaces a retry strip instead (C-18).
  *
- * The real implementation POSTs to the local service (typically
- * http://localhost:{PRINT_SERVICE_PORT}/print). Until that service exists this
- * reports `service-unavailable`, which is the truthful answer and exercises the
- * failure path the PRD requires.
  */
+
+import { ApiError, request } from './apiClient';
 
 export interface PrintJob {
   receiptNumber: string;
@@ -32,26 +31,24 @@ export type PrintResult =
   | { ok: true }
   | { ok: false; reason: 'service-unavailable' | 'printer-offline' | 'error'; detail: string };
 
-export const PRINT_SERVICE_URL = 'http://localhost:9100/print';
+export const PRINT_SERVICE_URL = '/api/printing/receipt';
 
 /** Never throws. A print failure is a reportable outcome, not an exception. */
 export async function printReceipt(job: PrintJob): Promise<PrintResult> {
   try {
-    const response = await fetch(PRINT_SERVICE_URL, {
+    await request<{ ok: true; printer: string; receiptNumber: string }>(PRINT_SERVICE_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(job),
-      signal: AbortSignal.timeout(3000),
     });
-    if (!response.ok) {
-      return { ok: false, reason: 'printer-offline', detail: `Print service returned ${response.status}.` };
-    }
     return { ok: true };
-  } catch {
+  } catch (error) {
+    if (error instanceof ApiError && ['PRINTER_OFFLINE', 'PRINTER_NOT_FOUND'].includes(error.code)) {
+      return { ok: false, reason: 'printer-offline', detail: error.message };
+    }
     return {
       ok: false,
       reason: 'service-unavailable',
-      detail: 'No local print service is reachable on this terminal.',
+      detail: error instanceof Error ? error.message : 'The local print service is unavailable.',
     };
   }
 }

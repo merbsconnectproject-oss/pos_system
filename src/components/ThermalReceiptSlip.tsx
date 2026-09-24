@@ -1,35 +1,93 @@
 import React, { useMemo } from 'react';
 import QRCode from 'qrcode';
-import { CompletedSale } from '../types';
+import { CompletedSale, GeneralSettings, Outlet } from '../types';
+import { ProductBarcodeSvg } from './ProductBarcodeModal';
+
+/**
+ * Whose shop the slip belongs to — the block at the top of every receipt.
+ *
+ * Every field is passed in. The component used to keep a map of two outlets'
+ * addresses and phone numbers compiled into it, so a third shop printed
+ * somebody else's street and a renamed one printed its old name forever. None
+ * of it is invented here now: what is not supplied is not printed.
+ */
+export interface ReceiptBranding {
+  /** The business that owns the branches. */
+  companyName?: string | null;
+  /** Shown above the name. Served by the API, so it follows what Settings holds. */
+  logoUrl?: string | null;
+  /** The branch that made the sale, and the town it trades in. */
+  outletName?: string | null;
+  addressLine?: string | null;
+  phone?: string | null;
+  taxRegistrationNumber?: string | null;
+  /** FR-SET-02: the branch's returns policy, or the business's. */
+  footerPolicy?: string | null;
+  /** FR-SET-01: the configured currency. The screen keeps the symbol. */
+  currencySymbol?: string;
+  /** What the printer puts against the figures, which cannot render the symbol. */
+  currencyCode?: string;
+}
 
 export interface ThermalReceiptSlipProps {
   sale: CompletedSale;
+  branding?: ReceiptBranding;
   isReprint?: boolean;
   paperWidth?: '80mm' | '58mm';
+  /** FR-RCPT-01: the receipt number as bars, at the foot. On by default. */
   showBarcode?: boolean;
+  /**
+   * The customer verification code.
+   *
+   * Off by default, and deliberately: the printed slip carries the barcode, not
+   * this. A preview that showed a QR the roll does not have is exactly the drift
+   * this screen is meant to have stopped having.
+   */
   showQrCode?: boolean;
   qrPayloadType?: 'verify-url' | 'receipt-id' | 'detailed';
   onScanQrCode?: () => void;
-  outletAddress?: {
-    address: string;
-    tel: string;
-  };
 }
 
-const OUTLET_DEFAULT_ADDRESSES: Record<string, { address: string; tel: string }> = {
-  'inco-hardware': {
-    address: '12 Main Street, Koforidua',
-    tel: '+233 24 000 0002',
-  },
-  'apex-electricals': {
-    address: 'Harper Road, Kumasi',
-    tel: '+233 24 000 0003',
-  },
+/**
+ * The header block, assembled from what the business and the branch actually
+ * hold — the same two records the server builds its header from.
+ *
+ * One function rather than a literal at each call site, because the till and
+ * the history screen printing headers that disagreed is how the shop ended up
+ * with two receipts for one sale.
+ */
+export const receiptBranding = (
+  settings: GeneralSettings,
+  outlet?: Outlet | null
+): ReceiptBranding => {
+  const company = settings.companyName?.trim() || '';
+  const branch = outlet?.name?.trim() || '';
+  // The town, unless the branch name already says it. Two branches of one
+  // business are told apart by where they are.
+  const town = outlet?.town?.trim() || '';
+  const named = branch && town && !branch.toLowerCase().includes(town.toLowerCase())
+    ? `${branch} - ${town}`
+    : branch;
+
+  return {
+    // No business profile yet: the branch takes the top line rather than the
+    // receipt opening with an address and no name at all.
+    companyName: company || named || null,
+    outletName: company && named.toLowerCase() !== company.toLowerCase() ? named : null,
+    logoUrl: settings.logoUrl || null,
+    addressLine: outlet?.address?.trim() || null,
+    phone: outlet?.phone?.trim() || null,
+    taxRegistrationNumber: settings.taxRegistrationNumber?.trim() || null,
+    footerPolicy: settings.receiptFooterPolicy?.trim() || null,
+    currencySymbol: settings.currencySymbol,
+    currencyCode: settings.currencyCode,
+  };
 };
 
 /**
- * Dynamically generated high-contrast vector QR code for thermal printing & customer verification.
- * Generated synchronously from receipt ID for instant rendering without canvas taint or print delays.
+ * Dynamically generated high-contrast vector QR code for customer verification.
+ * Generated synchronously from the receipt ID for instant rendering without
+ * canvas taint or print delays.
  */
 export const ReceiptQrCode: React.FC<{
   receiptId: string;
@@ -97,7 +155,6 @@ export const ReceiptQrCode: React.FC<{
       title={onScanClick ? 'Click to preview customer mobile verification' : undefined}
     >
       <div className="flex items-center gap-2.5 sm:gap-3">
-        {/* Dynamically Generated High-Contrast Vector QR Code */}
         <div className="shrink-0 bg-white p-1 border border-black">
           <svg
             viewBox={`0 0 ${matrix.size + 2} ${matrix.size + 2}`}
@@ -107,7 +164,6 @@ export const ReceiptQrCode: React.FC<{
             className="block"
             aria-label={`Verification QR Code for receipt ${receiptId}`}
           >
-            {/* Pure white quiet zone */}
             <rect
               className="qr-quiet-zone"
               x="0"
@@ -116,31 +172,25 @@ export const ReceiptQrCode: React.FC<{
               height={matrix.size + 2}
               fill="#ffffff"
             />
-            {/* Black QR matrix modules */}
             {matrix.cells.map(({ x, y }) => (
               <rect key={`${x}-${y}`} x={x + 1} y={y + 1} width={1} height={1} fill="#000000" />
             ))}
           </svg>
         </div>
 
-        {/* Small, human-readable 'Verify Receipt Online' text label next to it */}
         <div className="min-w-0 flex-1 space-y-0.5">
           <div className="font-mono text-[10.5px] sm:text-[11px] font-black uppercase tracking-tight text-black leading-tight">
             Verify Receipt Online
           </div>
-
           <div className="font-mono text-[8.5px] sm:text-[9px] font-bold tracking-wider text-black">
             * {receiptId} *
           </div>
-
           <div className="font-mono text-[7.5px] sm:text-[8px] text-black leading-tight truncate">
             radiancepos.gh/verify/{receiptId}
           </div>
-
           <div className="font-sans text-[7.5px] sm:text-[8px] text-black leading-tight pt-0.5">
-            Scan code with phone camera to authenticate receipt & view digital warranty
+            Scan code with phone camera to authenticate receipt &amp; view digital warranty
           </div>
-
           {onScanClick && (
             <div className="text-[8px] text-accent-600 font-sans font-bold group-hover:underline print:hidden pt-0.5 flex items-center gap-1">
               <span>Click to test customer scan</span>
@@ -153,419 +203,383 @@ export const ReceiptQrCode: React.FC<{
   );
 };
 
-/**
- * Generates an ink-saving SVG barcode simulating Code 128 / thermal barcodes.
- * Pure vector lines ensure razor-sharp rendering on both 203 DPI thermal printers
- * and 600+ DPI laser/inkjet printers without grey anti-aliasing fuzz.
- */
-const ThermalBarcode: React.FC<{ value: string }> = ({ value }) => {
-  // Deterministic pattern based on characters
-  const bars: number[] = [];
-  let checksum = 0;
-  for (let i = 0; i < value.length; i++) {
-    const code = value.charCodeAt(i);
-    checksum += code * (i + 1);
-    bars.push(1 + (code % 3));
-    bars.push(1 + ((code >> 1) % 2));
-    bars.push(1 + ((code >> 2) % 3));
-  }
-  // Add guard bars
-  const fullBars = [2, 1, 2, 1, ...bars.slice(0, 36), 2, 1, 2];
+/** A heavy rule — around the header block and the total, as the printer does it. */
+const HeavyRule: React.FC = () => (
+  <div className="my-2 border-t-4 border-double border-black" />
+);
 
-  return (
-    <div className="flex flex-col items-center justify-center my-2 space-y-1">
-      <svg
-        className="w-full max-w-[210px] h-9"
-        viewBox="0 0 240 40"
-        preserveAspectRatio="none"
-        shapeRendering="crispEdges"
-        aria-hidden="true"
-      >
-        {fullBars.map((width, idx) => {
-          if (idx % 2 !== 0) return null;
-          const x = fullBars.slice(0, idx).reduce((sum, w) => sum + w * 2.8, 4);
-          return (
-            <rect
-              key={idx}
-              x={x}
-              y={0}
-              width={Math.max(1.8, width * 1.7)}
-              height={40}
-              fill="#000000"
-            />
-          );
-        })}
-      </svg>
-      <div className="font-mono text-[9px] tracking-widest text-black font-semibold uppercase">
-        * {value} *
-      </div>
-    </div>
-  );
-};
+/** The light rule between sections. */
+const Rule: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <div className={`border-t border-dashed border-black ${className}`} />
+);
+
+/** A band nobody can miss: white on black, which is what `GS B` prints. */
+const Band: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="bg-black text-white text-center font-black uppercase tracking-[0.25em] text-[10px] py-1 px-2 leading-tight">
+    {children}
+  </div>
+);
+
+/** One "Label : value" row from the transaction block. */
+const Detail: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+  <div className="flex items-baseline gap-2">
+    <span className="w-[68px] shrink-0 uppercase tracking-wider text-[9px] font-bold text-black/70">
+      {label}
+    </span>
+    <span className="flex-1 text-right font-semibold tracking-tight text-black break-words">
+      {value}
+    </span>
+  </div>
+);
 
 /**
- * Generates formatted pure ASCII plain-text receipt slip
- * Compatible with raw ESC/POS thermal printers, clipboard, WhatsApp, or SMS.
+ * Generates the plain-ASCII slip, laid out exactly as the server lays it out.
+ *
+ * Used only when the server cannot be reached — {@link ReceiptPrintModal} asks
+ * the API first, so what is copied or downloaded is normally the printer's own
+ * text. This is the counter's offline copy, and it follows the same order so the
+ * two cannot look like different documents.
  */
 export function generateReceiptPlainText(
   sale: CompletedSale,
   isReprint = false,
-  width: '80mm' | '58mm' = '80mm'
+  width: '80mm' | '58mm' = '80mm',
+  branding: ReceiptBranding = {}
 ): string {
-  const colWidth = width === '58mm' ? 32 : 44;
-  const divider = '-'.repeat(colWidth);
-  const doubleDivider = '='.repeat(colWidth);
-  const address =
-    OUTLET_DEFAULT_ADDRESSES[sale.outletId] || {
-      address: 'Ghana Commercial Hub',
-      tel: '+233 24 000 0000',
-    };
+  const columns = width === '58mm' ? 32 : 44;
+  const rule = '-'.repeat(columns);
+  const heavyRule = '='.repeat(columns);
+  const currency = branding.currencyCode || 'GHS';
 
-  const center = (text: string) => {
-    const pad = Math.max(0, Math.floor((colWidth - text.length) / 2));
-    return ' '.repeat(pad) + text;
-  };
+  const centre = (text: string) =>
+    ' '.repeat(Math.max(0, Math.floor((columns - text.length) / 2))) + text;
 
-  const justify = (left: string, right: string) => {
-    const space = Math.max(1, colWidth - left.length - right.length);
-    return left + ' '.repeat(space) + right;
-  };
+  const pad = (left: string, right: string) =>
+    left + ' '.repeat(Math.max(1, columns - left.length - right.length)) + right;
+
+  const amount = (value: number) => `${currency} ${value.toFixed(2)}`;
+  const money = (label: string, value: number) => pad(label, amount(value));
 
   const lines: string[] = [];
 
-  lines.push(center('[ RADIANCE POS ]'));
-  lines.push(center(sale.outletName.toUpperCase()));
-  lines.push(center(address.address));
-  lines.push(center(`Tel: ${address.tel}`));
-  lines.push(divider);
-
-  if (isReprint) {
-    lines.push(center('*** REPRINT ***'));
-    lines.push(divider);
+  if (branding.companyName) lines.push(centre(branding.companyName));
+  if (branding.outletName) lines.push(centre(branding.outletName));
+  if (branding.addressLine) lines.push(centre(branding.addressLine));
+  if (branding.phone) lines.push(centre(`Tel: ${branding.phone}`));
+  if (branding.taxRegistrationNumber) {
+    lines.push(centre(`VAT / TIN: ${branding.taxRegistrationNumber}`));
   }
+  lines.push(heavyRule);
 
+  lines.push(centre('SALES RECEIPT'));
+  if (isReprint) lines.push(centre('*** REPRINT ***'));
   if (sale.status === 'VOIDED') {
-    lines.push(center('*** VOIDED TRANSACTION ***'));
-    if (sale.voidReason) {
-      lines.push(center(`Reason: ${sale.voidReason}`));
-    }
-    if (sale.voidedBy) {
-      lines.push(center(`Approved: ${sale.voidedBy}`));
-    }
-    lines.push(divider);
+    lines.push(centre('*** VOIDED ***'));
+    lines.push(centre(sale.voidReason || 'No reason recorded'));
   }
+  lines.push(rule);
 
-  lines.push(justify('Receipt :', sale.receiptNumber));
-  lines.push(justify('Date    :', sale.createdAt));
-  lines.push(justify('Cashier :', sale.cashierName));
-  const custDesc = sale.customerPhone
-    ? `${sale.customerName} (${sale.customerPhone})`
-    : sale.customerName;
-  lines.push(justify('Customer:', custDesc.slice(0, colWidth - 10)));
-  lines.push(justify('Terminal:', `TERM-${sale.terminalId || '01'}`));
-  lines.push(divider);
+  lines.push(`Receipt : ${sale.receiptNumber}`);
+  lines.push(`Date    : ${sale.createdAt}`);
+  lines.push(`Cashier : ${sale.cashierName}`);
+  if (sale.terminalId) lines.push(`Till    : TILL-${sale.terminalId}`);
+  lines.push(`Customer: ${sale.customerName}`);
+  lines.push(rule);
 
-  // Line items
+  lines.push(pad('ITEM', 'AMOUNT'));
+  lines.push(rule);
   sale.items.forEach((item) => {
-    lines.push(item.product.name.slice(0, colWidth));
-    const qtyUnit = `${item.quantity} ${item.selectedUnit || item.product.baseUnit} @ ${item.unitPrice.toFixed(2)}`;
-    const lineTotal = item.lineTotal.toFixed(2);
-    lines.push(justify(`  ${qtyUnit}`, lineTotal));
-    if (item.discount > 0) {
-      lines.push(justify('  Discount', `-${item.discount.toFixed(2)}`));
-    }
+    lines.push(item.product.name.slice(0, columns));
+    const unit = item.selectedUnit || item.product.baseUnit;
+    lines.push(pad(
+      `  ${item.quantity} ${unit} @ ${amount(item.unitPrice)}`,
+      amount(item.lineTotal)));
+    if (item.discount > 0) lines.push(pad('  Item discount', amount(-item.discount)));
   });
+  lines.push(rule);
 
-  lines.push(divider);
-  lines.push(justify('Subtotal', `GHc ${sale.subtotal.toFixed(2)}`));
-  const discountTotal = sale.discountTotal ?? (sale as any).discount ?? 0;
-  if (discountTotal > 0) {
-    lines.push(justify('Discount', `-GHc ${discountTotal.toFixed(2)}`));
-  }
-  const tax = (sale as any).tax ?? 0;
-  if (tax > 0) {
-    lines.push(justify('VAT / Tax', `GHc ${tax.toFixed(2)}`));
-  }
+  lines.push(money('Subtotal', sale.subtotal));
+  const discountTotal = sale.discountTotal ?? 0;
+  if (discountTotal > 0) lines.push(money('Discount', -discountTotal));
 
-  lines.push(doubleDivider);
-  lines.push(justify('TOTAL', `GHc ${sale.total.toFixed(2)}`));
-  lines.push(doubleDivider);
+  lines.push(heavyRule);
+  lines.push(money('TOTAL', sale.total));
+  lines.push(heavyRule);
 
-  // Payments
   if (sale.payments && sale.payments.length > 0) {
-    sale.payments.forEach((p) => {
-      const label = p.provider || p.method.toUpperCase();
-      lines.push(justify(`Paid via ${label}:`, `GHc ${p.amount.toFixed(2)}`));
-      if (p.reference) {
-        lines.push(`  Ref: ${p.reference}`);
-      }
+    sale.payments.forEach((payment) => {
+      lines.push(money(payment.provider || payment.method.toUpperCase(), payment.amount));
+      if (payment.reference) lines.push(`  Ref: ${payment.reference}`);
     });
+  } else {
+    lines.push(money('Cash', sale.total));
   }
+  lines.push(money('Change due', sale.changeDue ?? 0));
+  lines.push(rule);
 
-  const changeDue = sale.changeDue ?? 0;
-  lines.push(justify('Change Due:', `GHc ${changeDue.toFixed(2)}`));
-
-  lines.push(divider);
-  lines.push(center('Goods returnable within 7'));
-  lines.push(center('days with this receipt.'));
-  lines.push(center('Thank you for your business!'));
-  lines.push(divider);
-  lines.push(center('[ VERIFY RECEIPT ONLINE ]'));
-  lines.push(center(`https://radiancepos.gh/verify/${sale.receiptNumber}`));
-  lines.push(center(`* ${sale.receiptNumber} *`));
+  (branding.footerPolicy || '')
+    .split(' ')
+    .filter(Boolean)
+    .reduce<string[]>((wrapped, word) => {
+      const last = wrapped[wrapped.length - 1];
+      if (last && `${last} ${word}`.length <= columns) {
+        wrapped[wrapped.length - 1] = `${last} ${word}`;
+      } else {
+        wrapped.push(word);
+      }
+      return wrapped;
+    }, [])
+    .forEach((line) => lines.push(centre(line)));
+  lines.push(centre('Thank you.'));
+  lines.push(rule);
+  lines.push(centre(`* ${sale.receiptNumber} *`));
 
   return lines.join('\n');
 }
 
 /**
- * Dedicated thermal receipt slip formatted strictly according to PRD §9.
- * Uses 100% ink-saving monochrome black and white design with zero background fills
- * to prevent graying, toner waste, or muddy output on thermal / standard printers.
+ * The receipt as the roll will show it — PRD §9, FR-RCPT-03.
+ *
+ * Laid out section for section against `ReceiptLayout` on the server, in the
+ * same order, from the same fields: the mark and the shop first, the barcode
+ * last. The server is still the authority on what prints; this is the picture
+ * of it, and it is a picture of the right document only because the two follow
+ * one structure.
+ *
+ * Pure black on white with no filled backgrounds except the bands, which the
+ * printer fills too. A grey panel that looks soft on a screen comes off a
+ * thermal head as a smear.
  */
 export const ThermalReceiptSlip: React.FC<ThermalReceiptSlipProps> = ({
   sale,
+  branding = {},
   isReprint = false,
   paperWidth = '80mm',
-  showBarcode = false,
-  showQrCode = true,
+  showBarcode = true,
+  showQrCode = false,
   qrPayloadType = 'verify-url',
   onScanQrCode,
-  outletAddress,
 }) => {
-  const address =
-    outletAddress ||
-    OUTLET_DEFAULT_ADDRESSES[sale.outletId] || {
-      address: 'Ghana Commercial Hub',
-      tel: '+233 24 000 0000',
-    };
-
-  const discountTotal = sale.discountTotal ?? (sale as any).discount ?? 0;
-  const tax = (sale as any).tax ?? 0;
-  const changeDue = sale.changeDue ?? 0;
   const is58mm = paperWidth === '58mm';
+  const symbol = branding.currencySymbol || 'GH₵';
+  const discountTotal = sale.discountTotal ?? 0;
+  const changeDue = sale.changeDue ?? 0;
+
+  const money = (value: number) => `${symbol} ${value.toFixed(2)}`;
 
   return (
     <article
-      className={`receipt-doc font-mono text-black select-text ${
+      className={`receipt-doc font-mono text-black select-text mx-auto px-1 ${
         is58mm ? 'slip-58mm max-w-[240px] text-[10px]' : 'slip-80mm max-w-[320px] text-[11px]'
-      } leading-snug mx-auto p-1`}
+      } leading-snug`}
       data-receipt-number={sale.receiptNumber}
-      style={{
-        color: '#000000',
-        backgroundColor: '#ffffff',
-      }}
+      style={{ color: '#000000', backgroundColor: '#ffffff' }}
     >
-      {/* Thermal Store Logo & Header */}
-      <header className="text-center space-y-0.5 pb-1">
-        <div className="text-[10px] tracking-widest font-black uppercase text-black">
-          [ RADIANCE POS ]
-        </div>
-        <div className="font-black text-sm uppercase tracking-tight text-black">
-          {sale.outletName}
-        </div>
-        <div className="text-[10px] leading-tight text-black">
-          {address.address}
-        </div>
-        <div className="text-[10px] text-black">
-          Tel: {address.tel}
+      {/*
+        The mark, the business, the branch, where it is and its number — in the
+        order somebody reads them, and before anything about the transaction.
+        A slip that opened with a receipt number was one a customer could not
+        place, which is what this block is for.
+      */}
+      <header className="text-center space-y-1 pt-1 pb-2">
+        {branding.logoUrl && (
+          <img
+            src={branding.logoUrl}
+            alt=""
+            className="mx-auto block max-h-14 w-auto max-w-[70%] object-contain contrast-[1.35] grayscale"
+          />
+        )}
+
+        {branding.companyName && (
+          <h1 className={`font-black tracking-tight leading-none text-black ${
+            is58mm ? 'text-[15px]' : 'text-[19px]'
+          }`}>
+            {branding.companyName}
+          </h1>
+        )}
+
+        {branding.outletName && (
+          <div className="font-bold uppercase tracking-[0.18em] text-[9px] text-black">
+            {branding.outletName}
+          </div>
+        )}
+
+        <div className="space-y-0.5 font-sans text-[9.5px] leading-snug text-black">
+          {branding.addressLine && <div>{branding.addressLine}</div>}
+          {branding.phone && <div>Tel: {branding.phone}</div>}
+          {branding.taxRegistrationNumber && (
+            <div>VAT / TIN: {branding.taxRegistrationNumber}</div>
+          )}
         </div>
       </header>
 
-      {/* Crisp Solid Thermal Separator */}
-      <div className="border-t border-black border-dashed my-1.5" />
+      <HeavyRule />
 
-      {/* Reprint Status Banner (Ink-saving: pure black border, NO background fill) */}
-      {isReprint && (
-        <div className="my-1.5 py-0.5 border border-black text-center font-black tracking-widest text-[10px] uppercase text-black">
-          *** REPRINT ***
-        </div>
-      )}
-
-      {/* Voided Status Banner (Ink-saving: pure black border, NO background fill) */}
-      {sale.status === 'VOIDED' && (
-        <div className="my-1.5 p-1 border-2 border-black text-center text-black">
-          <div className="font-black tracking-widest text-[11px] uppercase">
-            *** VOIDED TRANSACTION ***
-          </div>
-          {sale.voidReason && (
-            <div className="text-[9px] mt-0.5 font-sans leading-tight">
-              Reason: {sale.voidReason}
+      {/* What this document is, before what is on it. */}
+      <div className="space-y-1">
+        <Band>Sales Receipt</Band>
+        {isReprint && <Band>*** Reprint ***</Band>}
+        {sale.status === 'VOIDED' && (
+          <div className="space-y-1">
+            <Band>*** Voided ***</Band>
+            <div className="text-center font-sans text-[9px] leading-tight text-black">
+              {sale.voidReason || 'No reason recorded'}
+              {sale.voidedBy && <> · approved by {sale.voidedBy}</>}
             </div>
-          )}
-          {sale.voidedBy && (
-            <div className="text-[9px] font-mono">
-              Auth by: {sale.voidedBy} {sale.voidedAt ? `(${sale.voidedAt})` : ''}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Transaction Metadata */}
-      <section className="space-y-0.5 text-[10px] text-black">
-        <div className="flex justify-between items-baseline">
-          <span className="font-semibold">Receipt :</span>
-          <span className="font-bold tracking-tight text-black">{sale.receiptNumber}</span>
-        </div>
-        <div className="flex justify-between items-baseline">
-          <span className="font-semibold">Date    :</span>
-          <span>{sale.createdAt}</span>
-        </div>
-        <div className="flex justify-between items-baseline">
-          <span className="font-semibold">Cashier :</span>
-          <span>{sale.cashierName}</span>
-        </div>
-        <div className="flex justify-between items-baseline">
-          <span className="font-semibold">Customer:</span>
-          <span className="font-bold truncate max-w-[65%] text-right">
-            {sale.customerName}
-            {sale.customerType && sale.customerType !== 'retail' && (
-              <span className="font-normal capitalize text-[9px]"> ({sale.customerType})</span>
-            )}
-          </span>
-        </div>
-        {sale.customerPhone && (
-          <div className="flex justify-between items-baseline">
-            <span className="font-semibold">Phone   :</span>
-            <span>{sale.customerPhone}</span>
           </div>
         )}
-        <div className="flex justify-between items-baseline">
-          <span className="font-semibold">Terminal:</span>
-          <span>TERM-{sale.terminalId || '01'}</span>
-        </div>
+      </div>
+
+      <Rule className="my-2" />
+
+      {/* The transaction, and which counter to take a query back to. */}
+      <section className="space-y-1 text-[10px]">
+        <Detail label="Receipt" value={<span className="font-black">{sale.receiptNumber}</span>} />
+        <Detail label="Date" value={sale.createdAt} />
+        <Detail label="Cashier" value={sale.cashierName} />
+        {sale.terminalId && <Detail label="Till" value={`TILL-${sale.terminalId}`} />}
+        <Detail
+          label="Customer"
+          value={
+            <>
+              {sale.customerName}
+              {sale.customerType && sale.customerType !== 'retail' && (
+                <span className="font-normal capitalize"> ({sale.customerType})</span>
+              )}
+            </>
+          }
+        />
+        {sale.customerPhone && <Detail label="Phone" value={sale.customerPhone} />}
       </section>
 
-      {/* Item Table Header */}
-      <div className="border-t border-black border-dashed mt-2 mb-1" />
-      <div className="flex justify-between text-[9px] font-bold uppercase tracking-wider pb-1 text-black">
-        <span>Description / Qty</span>
-        <span>Amount (GHS)</span>
+      <Rule className="mt-2" />
+      <div className="flex justify-between py-1 text-[9px] font-black uppercase tracking-[0.15em] text-black">
+        <span>Item</span>
+        <span>Amount</span>
       </div>
-      <div className="border-t border-black border-dotted mb-1.5" />
+      <Rule />
 
-      {/* Line Items (Authentic Thermal POS Stacking) */}
-      <div className="space-y-2 py-0.5">
-        {sale.items.map((it, idx) => (
-          <div key={idx} className="break-inside-avoid">
-            {/* Item Name */}
-            <div className="font-bold leading-tight text-black text-[10px] sm:text-[11px]">
-              {it.product.name}
-            </div>
-
-            {/* Qty x Unit Price -> Line Total */}
-            <div className="flex justify-between items-baseline text-[10px] text-black pl-2">
-              <span>
-                {it.quantity} {it.selectedUnit || it.product.baseUnit || 'pcs'} @{' '}
-                {it.unitPrice.toFixed(2)}
+      <div className="divide-y divide-dotted divide-black/25">
+        {sale.items.map((item, index) => (
+          <div key={index} className="break-inside-avoid py-1.5">
+            <div className="font-bold leading-tight text-black">{item.product.name}</div>
+            <div className="flex justify-between items-baseline pl-2 text-[10px] text-black">
+              <span className="text-black/75">
+                {item.quantity} {item.selectedUnit || item.product.baseUnit || 'pcs'} @{' '}
+                {money(item.unitPrice)}
               </span>
-              <span className="font-bold tracking-tight text-black">
-                {it.lineTotal.toFixed(2)}
-              </span>
+              <span className="font-bold tracking-tight tabular-nums">{money(item.lineTotal)}</span>
             </div>
-
-            {/* Item-level discount if any */}
-            {it.discount > 0 && (
-              <div className="flex justify-between text-[9px] pl-2 text-black italic">
-                <span>└ Item Discount</span>
-                <span>-{it.discount.toFixed(2)}</span>
+            {item.discount > 0 && (
+              <div className="flex justify-between pl-2 text-[9px] italic text-black">
+                <span>Item discount</span>
+                <span className="tabular-nums">- {money(item.discount)}</span>
               </div>
             )}
           </div>
         ))}
       </div>
 
-      {/* Summary / Totals */}
-      <div className="border-t border-black border-dashed mt-2 pt-1.5 space-y-1 text-[10px] text-black">
+      <Rule />
+
+      {/* Totals — the one figure a customer checks gets the weight. */}
+      <section className="pt-1.5 space-y-1 text-[10px] tabular-nums">
         <div className="flex justify-between">
           <span>Subtotal</span>
-          <span>GH₵ {sale.subtotal.toFixed(2)}</span>
+          <span>{money(sale.subtotal)}</span>
         </div>
-
         {discountTotal > 0 && (
           <div className="flex justify-between font-medium">
-            <span>Discount Total</span>
-            <span>- GH₵ {discountTotal.toFixed(2)}</span>
+            <span>Discount</span>
+            <span>- {money(discountTotal)}</span>
           </div>
         )}
+      </section>
 
-        {tax > 0 && (
-          <div className="flex justify-between">
-            <span>VAT / Tax (15%)</span>
-            <span>GH₵ {tax.toFixed(2)}</span>
-          </div>
-        )}
-
-        {/* Crisp Double Divider for TOTAL (PRD §9) */}
-        <div className="border-t-2 border-black my-1" />
-        <div className="flex justify-between items-baseline py-0.5 text-xs font-black text-black">
-          <span className="text-sm">TOTAL</span>
-          <span className="text-sm font-mono tracking-tight">
-            GH₵ {sale.total.toFixed(2)}
+      <div className="my-2 border-y-4 border-double border-black py-2">
+        <div className="flex justify-between items-baseline">
+          <span className={`font-black uppercase tracking-[0.2em] ${is58mm ? 'text-xs' : 'text-sm'}`}>
+            Total
+          </span>
+          <span className={`font-black tracking-tight tabular-nums ${is58mm ? 'text-base' : 'text-lg'}`}>
+            {money(sale.total)}
           </span>
         </div>
-        <div className="border-b-2 border-black mb-1.5" />
+      </div>
 
-        {/* Payments Tendered Breakdown */}
+      {/* What was tendered, and what went back across the counter. */}
+      <section className="space-y-1 text-[10px] tabular-nums">
         {sale.payments && sale.payments.length > 0 ? (
-          sale.payments.map((p, idx) => (
-            <div key={idx} className="space-y-0.5">
-              <div className="flex justify-between text-[10px]">
-                <span className="font-medium">
-                  Paid via {p.provider || p.method.toUpperCase()}
+          sale.payments.map((payment, index) => (
+            <div key={index}>
+              <div className="flex justify-between">
+                <span className="font-medium capitalize">
+                  {payment.provider || payment.method}
                 </span>
-                <span className="font-semibold">GH₵ {p.amount.toFixed(2)}</span>
+                <span className="font-semibold">{money(payment.amount)}</span>
               </div>
-              {p.reference && (
-                <div className="text-[9px] pl-2 text-black">
-                  Ref: {p.reference}
-                </div>
+              {payment.reference && (
+                <div className="pl-2 text-[9px] text-black/75">Ref: {payment.reference}</div>
               )}
             </div>
           ))
         ) : (
-          <div className="flex justify-between text-[10px]">
-            <span>Paid via CASH</span>
-            <span>GH₵ {sale.total.toFixed(2)}</span>
+          <div className="flex justify-between">
+            <span className="font-medium">Cash</span>
+            <span className="font-semibold">{money(sale.total)}</span>
           </div>
         )}
-
-        <div className="flex justify-between text-[10px] pt-0.5">
-          <span>Change Due</span>
-          <span className="font-semibold">GH₵ {changeDue.toFixed(2)}</span>
+        <div className="flex justify-between font-bold">
+          <span>Change due</span>
+          <span>{money(changeDue)}</span>
         </div>
-      </div>
+      </section>
 
-      {/* Legal Return Policy & Footer (PRD §9) */}
-      <div className="border-t border-black border-dashed mt-3 pt-2 text-center space-y-1">
-        <div className="text-[10px] font-semibold leading-tight text-black">
-          Goods returnable within 7
-          <br />
-          days with this receipt.
-        </div>
-        <div className="text-[10px] font-bold uppercase tracking-wider text-black pt-0.5">
-          Thank you for your business!
-        </div>
+      <Rule className="mt-2" />
 
-        {/* Dynamic Verification QR Code Overlay at the Bottom of the Slip */}
+      <footer className="pt-2 text-center space-y-1.5">
+        {/*
+          The shop's own returns policy, or nothing. A default policy printed
+          under a shop's name is a promise the shop did not make.
+        */}
+        {branding.footerPolicy && (
+          <p className="font-sans text-[9.5px] leading-snug text-black">
+            {branding.footerPolicy}
+          </p>
+        )}
+        <p className="font-black uppercase tracking-[0.2em] text-[10px] text-black">Thank you.</p>
+
         {showQrCode && (
-          <div className="py-1">
-            <ReceiptQrCode
-              receiptId={sale.receiptNumber}
-              paperWidth={paperWidth}
-              payloadType={qrPayloadType}
-              sale={sale}
-              onScanClick={onScanQrCode}
-            />
-          </div>
+          <ReceiptQrCode
+            receiptId={sale.receiptNumber}
+            paperWidth={paperWidth}
+            payloadType={qrPayloadType}
+            sale={sale}
+            onScanClick={onScanQrCode}
+          />
         )}
 
-        {/* Optional 1D Barcode (For Optical Register Hand Scanners) */}
-        {showBarcode && <ThermalBarcode value={sale.receiptNumber} />}
-
-        <div className="text-[8px] pt-1 text-black font-sans leading-tight">
-          Radiance POS Cloud Sync • Audit Verified
-        </div>
-      </div>
+        {/*
+          Last, because that is where a hand scanner looks and where the printer
+          puts it. A slip a customer brings back is found by scanning it rather
+          than by typing fourteen characters off the top of the page.
+        */}
+        {showBarcode && (
+          <div className="pt-1 break-inside-avoid">
+            <ProductBarcodeSvg
+              value={sale.receiptNumber}
+              format="CODE128"
+              width={is58mm ? 1.1 : 1.4}
+              height={is58mm ? 34 : 42}
+              displayValue={false}
+              className="w-full max-w-full"
+            />
+            <div className="pt-1 font-mono text-[9px] font-bold tracking-[0.25em] text-black">
+              * {sale.receiptNumber} *
+            </div>
+          </div>
+        )}
+      </footer>
     </article>
   );
 };

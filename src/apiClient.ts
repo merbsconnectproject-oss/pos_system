@@ -63,6 +63,29 @@ async function csrfToken() {
   return csrf;
 }
 
+/**
+ * The CSRF header, for a request this module cannot send itself.
+ *
+ * <p>A multipart upload has to be sent with `fetch` directly: the browser must
+ * add the multipart boundary to `Content-Type`, and `request` sets that header
+ * to `application/json` for every body it sees. The token is still needed, so
+ * it is exported rather than duplicated.
+ */
+export async function csrfHeader(): Promise<Record<string, string>> {
+  const token = await csrfToken();
+  return { [token.headerName]: token.token };
+}
+
+/** The API's own message from a failed response, or a sensible fallback. */
+export async function errorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const body: ApiErrorBody = await response.json();
+    return body.message || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method || 'GET').toUpperCase();
   const headers = new Headers(init.headers);

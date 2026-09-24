@@ -3,6 +3,9 @@ import { settingsApi } from '../settingsApi';
 import { backupsApi, formatAge, formatBytes, type BackupStatusWire } from '../backupsApi';
 import { syncApi, staleness, type SyncStatus } from '../syncApi';
 import { InfoHint } from './InfoHint';
+import { UserPermissionsModal } from './UserPermissionsModal';
+import { receiptsApi } from '../receiptsApi';
+import { exportApi } from '../exportApi';
 import {
   Users,
   ShieldCheck,
@@ -79,6 +82,14 @@ interface SettingsViewProps {
    */
   onUpdateUsers: (users: UserAccount[]) => Promise<void>;
   /**
+   * FR-USER-03 · BR-16: set, clear or withhold one permission for one person.
+   *
+   * <p>Its own call rather than part of the bulk user save: an override is a
+   * single decision the server records and audits on its own, and folding it
+   * into "save this user" would rewrite every other field to change one box.
+   */
+  onSetUserPermission: (userId: string, code: PermissionCode, granted?: boolean) => Promise<void>;
+  /**
    * FR-USER-01: create one account.
    *
    * <p>Separate from {@link onUpdateUsers} because a create should not depend
@@ -150,6 +161,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   currentUser,
   users,
   onUpdateUsers,
+  onSetUserPermission,
   onCreateUser,
   rolesPermissions,
   onUpdateRolesPermissions,
@@ -907,6 +919,82 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setIsUserModalOpen(false);
   };
 
+  /** FR-USER-03: whose permissions are open, if any. */
+  const [permissionsFor, setPermissionsFor] = useState<UserAccount | null>(null);
+
+  /**
+   * FR-SET-01: the business logo.
+   *
+   * <p>`logoUrl` was the only field, so the logo had to already live somewhere
+   * on the internet — on a counter whose connection cannot be relied on to make
+   * a sale. The bytes now go to the server, which serves them back.
+   *
+   * <p>`logoVersion` busts the browser cache after an upload: the URL does not
+   * change, so without it the old picture stays on screen and the shop thinks
+   * the upload failed.
+   */
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const [logoVersion, setLogoVersion] = useState(() => Date.now());
+  const [hasLogo, setHasLogo] = useState(Boolean(generalSettings.logoUrl));
+
+  const handleLogoChosen = async (file: File | undefined) => {
+    if (!file) return;
+    setLogoBusy(true);
+    setLogoError(null);
+    try {
+      await settingsApi.uploadLogo(file);
+      setHasLogo(true);
+      setLogoVersion(Date.now());
+      onAddAuditLog({
+        actor: 'Admin',
+        action: 'SETTINGS_LOGO_CHANGED',
+        entity: 'System Config',
+        outletName: currentOutlet.name,
+        details: `Uploaded a business logo (${Math.round(file.size / 1024)} KB)`,
+      });
+      showToast('Logo saved.');
+    } catch (failure) {
+      setLogoError(failure instanceof Error ? failure.message : 'The logo could not be saved.');
+    } finally {
+      setLogoBusy(false);
+    }
+  };
+
+  const handleLogoRemoved = async () => {
+    setLogoBusy(true);
+    setLogoError(null);
+    try {
+      await settingsApi.removeLogo();
+      setHasLogo(false);
+      setLogoVersion(Date.now());
+      showToast('Logo removed.');
+    } catch (failure) {
+      setLogoError(failure instanceof Error ? failure.message : 'The logo could not be removed.');
+    } finally {
+      setLogoBusy(false);
+    }
+  };
+
+  /** FR-RCPT-09: the slip as the server renders it, at the chosen width. */
+  const [receiptPreview, setReceiptPreview] = useState<string[]>([]);
+  const [receiptPreviewError, setReceiptPreviewError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    setReceiptPreviewError(null);
+    void receiptsApi.preview(printerWidth === '58mm' ? '58mm' : '80mm')
+      .then((receipt) => { if (current) setReceiptPreview(receipt.lines); })
+      .catch((failure) => {
+        if (!current) return;
+        setReceiptPreview([]);
+        setReceiptPreviewError(failure instanceof Error
+          ? failure.message
+          : 'The preview could not be rendered.');
+      });
+    return () => { current = false; };
+  }, [printerWidth]);
+
   const handleToggleUserActive = (userId: string) => {
     const userToToggle = users.find((u) => u.id === userId);
     if (!userToToggle) return;
@@ -1070,40 +1158,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   // Export full JSON database
-  const handleExportFullBackup = () => {
-    const backupData = {
-      system: 'POS System',
-      version: '2.6',
-      exportedAt: new Date().toISOString(),
-      activeOutlet: currentOutlet,
-      settings: generalSettings,
-      users: users.map(({ pinCode, ...rest }) => rest), // sanitized
-      rolesPermissions,
-      totalProducts: products.length,
-      totalSales: sales.length,
-      products,
-      sales,
-    };
+  const [exporting, setExporting] = useState<'JSON' | 'CSV' | null>(null);
 
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backupData, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute(
-      'download',
-      `pos_system_data_snapshot_${new Date().toISOString().slice(0, 10)}.json`
-    );
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-
-    onAddAuditLog({
-      actor: 'Admin',
-      action: 'SYSTEM_BACKUP_EXPORT',
-      entity: 'System Data',
-      outletName: currentOutlet.name,
-      details: 'Generated complete system JSON backup archive with products, sales, and configuration',
-    });
-    showToast('Data snapshot exported.');
+  /**
+   * FR-SET-08: the shop's data, from the server.
+   *
+   * <p>This used to build a file out of whatever this browser had loaded and
+   * call it a "full backup" — products and sales the screen happened to be
+   * holding, which at a hundred receipts is right and at a hundred and one is
+   * quietly incomplete. The contract term is all business data, and only the
+   * server can honour it.
+   */
+  const handleExportBusinessData = async (format: 'JSON' | 'CSV') => {
+    setExporting(format);
+    try {
+      await exportApi.download(format);
+      // FR-AUDIT-02: the server records it too, against the account that asked.
+      // This is the local copy the audit screen shows without a round trip.
+      onAddAuditLog({
+        actor: 'Admin',
+        action: 'DATA_EXPORTED',
+        entity: 'System Data',
+        outletName: currentOutlet.name,
+        details: format === 'JSON'
+          ? 'Downloaded the complete business archive (JSON)'
+          : 'Downloaded the accounting export (CSV)',
+      });
+      showToast(format === 'JSON' ? 'Business archive downloaded.' : 'Accounting export downloaded.');
+    } catch (failure) {
+      showToast(failure instanceof Error ? failure.message : 'The export failed.');
+    } finally {
+      setExporting(null);
+    }
   };
 
   const swatches = ACCENT_PRESETS.map((preset) => ({
@@ -1219,6 +1305,52 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     onChange={(e) => setCompanyName(e.target.value)}
                     className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500 font-medium"
                   />
+                </div>
+
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-bold text-slate-700">Business logo</label>
+                  <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 border border-slate-300 rounded-xl">
+                    {hasLogo ? (
+                      <img
+                        src={`/api/settings/logo?v=${logoVersion}`}
+                        alt="Business logo"
+                        className="h-12 w-auto max-w-[160px] object-contain bg-white rounded-lg border border-slate-200 p-1"
+                      />
+                    ) : (
+                      <span className="text-[11px] text-slate-500">No logo uploaded.</span>
+                    )}
+                    <label className="cursor-pointer px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-black text-white text-[11px] font-bold">
+                      {logoBusy ? 'Saving…' : hasLogo ? 'Replace' : 'Upload'}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                        className="hidden"
+                        disabled={logoBusy}
+                        onChange={(event) => {
+                          void handleLogoChosen(event.target.files?.[0]);
+                          // Cleared so choosing the same file twice fires again.
+                          event.target.value = '';
+                        }}
+                      />
+                    </label>
+                    {hasLogo && (
+                      <button
+                        type="button"
+                        disabled={logoBusy}
+                        onClick={() => void handleLogoRemoved()}
+                        className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-[11px] font-bold hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    )}
+                    <span className="text-[11px] text-slate-500">
+                      PNG, JPEG, WebP, GIF or SVG, up to 512&nbsp;KB. It prints on receipts and is
+                      carried by the database backup.
+                    </span>
+                  </div>
+                  {logoError && (
+                    <p className="text-[11px] font-bold text-rose-700">{logoError}</p>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -1663,6 +1795,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 </button>
                               )}
 
+                              <button
+                                onClick={() => setPermissionsFor(u)}
+                                className="inline-flex items-center justify-center p-1.5 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-300 transition-colors cursor-pointer"
+                                title="Permissions for this person (FR-USER-03)"
+                              >
+                                <ShieldCheck className="w-4 h-4 shrink-0" />
+                              </button>
                               <button
                                 onClick={() => handleOpenEditUserModal(u)}
                                 className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 cursor-pointer"
@@ -2161,69 +2300,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
                 </div>
 
-                {/* Live Receipt Mockup Preview */}
+                {/* FR-RCPT-09: the server's own renderer, at this width. */}
                 <div className="lg:col-span-5 bg-slate-100 p-4 rounded-xl border border-slate-300 flex flex-col items-center">
                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Live Thermal Preview ({printerWidth})
+                    Thermal preview ({printerWidth})
                   </div>
-                  <div
-                    className={`bg-white shadow-md p-4 rounded-md border border-slate-300 font-mono text-[11px] text-slate-800 space-y-2 ${
-                      printerWidth === '80mm' ? 'w-64' : 'w-52'
-                    }`}
-                  >
-                    <div className="text-center font-bold pb-1 border-b border-dashed border-slate-300">
-                      <div className="text-xs font-black">{generalSettings.companyName}</div>
-                      <div className="text-[10px] text-slate-500">{currentOutlet.name}</div>
-                      <div className="text-[9px] text-slate-400">{receiptHeader}</div>
-                    </div>
-
-                    <div className="text-[10px] space-y-0.5">
-                      <div className="flex justify-between">
-                        <span>RCPT:</span>
-                        <span className="font-bold">{currentOutlet.receiptPrefix}-004312</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>DATE:</span>
-                        <span>05/09/2026 11:30</span>
-                      </div>
-                      {showCashier && (
-                        <div className="flex justify-between">
-                          <span>CASHIER:</span>
-                          <span>Kwame A.</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="border-t border-b border-dashed border-slate-300 py-1.5 space-y-1 text-[10px]">
-                      <div className="flex justify-between font-bold">
-                        <span>ITEM</span>
-                        <span>TOTAL</span>
-                      </div>
-                      <div className="flex justify-between text-slate-600">
-                        <span>1x Ingco 850W Drill</span>
-                        <span>650.00</span>
-                      </div>
-                      <div className="flex justify-between text-slate-600">
-                        <span>2x PVC Pressure Pipe</span>
-                        <span>160.00</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-0.5 text-[10px] pt-1">
-                      <div className="flex justify-between font-black text-xs">
-                        <span>TOTAL:</span>
-                        <span>GH₵ 810.00</span>
-                      </div>
-                      <div className="flex justify-between text-slate-500">
-                        <span>PAID (MOMO):</span>
-                        <span>GH₵ 810.00</span>
-                      </div>
-                    </div>
-
-                    <div className="text-center text-[9px] text-slate-400 pt-2 border-t border-dashed border-slate-300">
-                      {receiptFooter}
-                    </div>
-                  </div>
+                  {/*
+                    Rendered by `/api/receipts/preview`, which is the same layout
+                    the printer is handed. What was here instead was a hand-built
+                    mock-up in JSX — a second renderer with its own idea of the
+                    columns, a receipt number of INC-004312 and a cashier called
+                    Kwame A. A preview whose only job is to show what will print
+                    should not be capable of disagreeing with it.
+                  */}
+                  {receiptPreviewError ? (
+                    <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                      {receiptPreviewError}
+                    </p>
+                  ) : receiptPreview.length === 0 ? (
+                    <p className="text-xs text-slate-500">Rendering&hellip;</p>
+                  ) : (
+                    <pre className={`bg-white shadow-md p-4 rounded-md border border-slate-300 font-mono text-[11px] leading-[1.35] text-slate-800 overflow-x-auto ${
+                      printerWidth === '80mm' ? 'w-72' : 'w-56'
+                    }`}>
+{receiptPreview.join('\n')}
+                    </pre>
+                  )}
+                  <p className="mt-2 text-[10px] text-slate-400 text-center">
+                    {printerWidth === '80mm' ? '48' : '32'} columns, as the printer receives it.
+                  </p>
                 </div>
               </div>
             </div>
@@ -2603,26 +2708,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
                       <FileText className="w-4 h-4 text-accent-500" />
-                      Data Snapshot (JSON)
+                      Business data export (JSON)
                     </div>
                     {/*
-                      Called a snapshot rather than a backup, because that is
-                      what it is: a file built from what this browser currently
-                      holds. It cannot contain what was never loaded, and it
-                      lands on the same disk as the database — neither of which
-                      is true of the backup above.
+                      Read from the server, table by table, in one consistent
+                      read. What was here before built a file out of whatever
+                      this browser had loaded and called it a full backup — at a
+                      hundred receipts that is right, and at a hundred and one it
+                      is quietly incomplete.
                     */}
                     <p className="text-[11px] text-slate-500">
-                      A portable JSON file of the records loaded on this screen — products, sales and configuration.
-                      For recovering the shop, use the database backup above.
+                      Every record the business holds &mdash; sales, stock, customers, suppliers,
+                      staff and settings &mdash; as one archive. For restoring the shop after a
+                      failure, use the database backup above.
                     </p>
                   </div>
                   <button
-                    onClick={handleExportFullBackup}
-                    className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-black text-white px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                    onClick={() => void handleExportBusinessData('JSON')}
+                    disabled={exporting !== null}
+                    className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-black text-white px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
                   >
                     <Download className="w-4 h-4" />
-                    <span>Download Full Backup (.JSON)</span>
+                    <span>{exporting === 'JSON' ? 'Preparing…' : 'Download business archive (.json)'}</span>
                   </button>
                 </div>
 
@@ -2634,9 +2741,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       Accounting CSV Packages
                     </div>
                     <p className="text-[11px] text-emerald-800">
-                      Format-standardized with UTF-8 BOM encoding for QuickBooks, Sage, Xero, and Microsoft Excel.
+                      For QuickBooks, Sage, Xero and Excel. The full package is read from the
+                      server; the two buttons beneath it export what is on this screen.
                     </p>
                   </div>
+                  <button
+                    onClick={() => void handleExportBusinessData('CSV')}
+                    disabled={exporting !== null}
+                    className="w-full flex items-center justify-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>{exporting === 'CSV' ? 'Preparing…' : 'Download accounting package (.zip)'}</span>
+                  </button>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => {
@@ -3805,6 +3921,31 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* FR-USER-03 · BR-16: per-person grants, over and above the role. */}
+      <UserPermissionsModal
+        user={permissionsFor}
+        roleCodes={
+          rolesPermissions.find((entry) => entry.role === permissionsFor?.role)?.permissions || []
+        }
+        onClose={() => setPermissionsFor(null)}
+        onSetPermission={async (code, granted) => {
+          if (!permissionsFor) return;
+          await onSetUserPermission(permissionsFor.id, code, granted);
+          // Re-read the person from the refreshed list so the row shows what
+          // the server stored, not what this screen asked for.
+          setPermissionsFor((current) => (current
+            ? users.find((person) => person.id === current.id) || current
+            : current));
+          onAddAuditLog({
+            actor: 'Admin',
+            action: 'USER_PERMISSION_CHANGED',
+            entity: 'User',
+            outletName: currentOutlet.name,
+            details: `${code} ${granted === undefined ? 'cleared to role default' : granted ? 'granted' : 'withheld'} for ${permissionsFor.fullName || permissionsFor.username}`,
+          });
+        }}
+      />
     </div>
   );
 };

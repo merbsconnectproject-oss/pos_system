@@ -16,11 +16,19 @@ interface CustomersViewProps {
   onUpdateCustomer?: (customer: Customer) => Promise<Customer>;
   /** BR-17: deactivated, never deleted — they are on receipts already printed. */
   onSetCustomerActive?: (customerId: string, active: boolean) => Promise<Customer>;
+  /**
+   * FR-CUST-07: whether this person may set a credit limit.
+   *
+   * <p>`customer.credit` on the server. Deciding how much a customer may owe is
+   * a commercial decision, not a clerical one.
+   */
+  canSetCredit?: boolean;
 }
 
 const formatMoney = (amount: number) => `GH₵ ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const CustomersView: React.FC<CustomersViewProps> = ({
+  canSetCredit = false,
   customers,
   sales = [],
   outlets = [],
@@ -43,6 +51,8 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
     email: '',
     address: '',
     customerType: '' as Customer['customerType'] | '',
+    /** FR-CUST-07: kept as text so an empty box means "leave it alone". */
+    creditLimit: '',
     notes: '',
   });
 
@@ -58,7 +68,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
   const startCreate = () => {
     setEditingCustomer(null);
     setSaveError(null);
-    setForm({ name: '', phone: '', email: '', address: '', customerType: '', notes: '' });
+    setForm({ name: '', phone: '', email: '', address: '', customerType: '', creditLimit: '', notes: '' });
     setModalOpen(true);
   };
 
@@ -73,6 +83,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
       email: customer.email || '',
       address: customer.address || '',
       customerType: customer.customerType,
+      creditLimit: customer.creditLimit ? String(customer.creditLimit) : '',
       notes: customer.notes || '',
     });
     setModalOpen(true);
@@ -100,6 +111,12 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
       totalPurchased: editingCustomer?.totalPurchased || 0,
       salesCount: editingCustomer?.salesCount || 0,
       discountRate: editingCustomer?.discountRate,
+      // FR-CUST-07: an empty box leaves the limit as it was rather than
+      // withdrawing credit. Explicit zero does withdraw it, which is the only
+      // way to say so.
+      creditLimit: form.creditLimit.trim() === ''
+        ? editingCustomer?.creditLimit
+        : Math.max(0, Number(form.creditLimit) || 0),
       notes: form.notes.trim(),
     };
 
@@ -226,7 +243,21 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                       </td>
                       <td className="py-3 px-4 font-mono text-slate-600">{customer.phone}</td>
                       <td className="py-3 px-4"><span className="capitalize rounded-full bg-slate-100 text-slate-700 px-2 py-0.5 text-[10px] font-bold">{customer.customerType}</span></td>
-                      <td className="py-3 px-4 font-semibold text-slate-700">{customer.customerType === 'retail' ? 'Retail Standard' : `Trade Price (${customer.discountRate || 8}% off)`}</td>
+                      <td className="py-3 px-4 font-semibold text-slate-700">
+                        {/*
+                          `customer.discountRate || 8` was here, which read a
+                          genuine zero as 8% — so a trade customer on no agreed
+                          rate was shown a discount the till would never give.
+                        */}
+                        {customer.customerType === 'retail'
+                          ? 'Retail'
+                          : `Trade${(customer.discountRate ?? 0) > 0 ? ` · ${customer.discountRate}% off` : ''}`}
+                        {canSetCredit && (customer.creditLimit ?? 0) > 0 && (
+                          <span className="mt-0.5 block text-[11px] font-normal text-slate-500">
+                            {formatMoney(customer.creditLimit ?? 0)} credit limit
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-right font-black text-slate-900">{formatMoney(customer.totalPurchased)}</td>
                       <td className="py-3 px-4 text-right font-mono text-slate-600">{customer.salesCount}</td>
                       <td className="py-3 px-4">
@@ -387,7 +418,29 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                 <label className="text-sm font-bold text-slate-800">Email<input value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-accent-500" /></label>
                 <label className="text-sm font-bold text-slate-800">Type<select required value={form.customerType} onChange={(event) => setForm({ ...form, customerType: event.target.value as Customer['customerType'] | '' })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white focus:outline-accent-500"><option value="" disabled>Select customer type</option><option value="retail">Retail</option><option value="electrician">Electrician</option><option value="contractor">Contractor</option><option value="company">Company</option></select></label>
               </div>
-              <label className="text-sm font-bold text-slate-800 block">Address<input value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-accent-500" /></label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <label className="text-sm font-bold text-slate-800">Address<input value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-accent-500" /></label>
+                {canSetCredit && (
+                  <label className="text-sm font-bold text-slate-800">
+                    Credit limit (GH₵)
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      inputMode="decimal"
+                      value={form.creditLimit}
+                      onChange={(event) => setForm({ ...form, creditLimit: event.target.value })}
+                      placeholder="0.00 — no credit"
+                      className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-accent-500"
+                    />
+                    {/* FR-CUST-07: the ceiling that makes credit a policy. */}
+                    <span className="mt-1 block text-[11px] font-normal text-slate-500">
+                      The most they may owe across open installment plans. Zero, or empty on a new
+                      customer, means no credit.
+                    </span>
+                  </label>
+                )}
+              </div>
               <label className="text-sm font-bold text-slate-800 block">Notes<textarea rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} className="mt-1.5 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-accent-500" /></label>
               <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-slate-200">
                 <button type="button" onClick={() => setModalOpen(false)} className="sm:w-1/3 py-3 rounded-lg border border-slate-300 font-bold text-sm text-slate-600 hover:bg-slate-50">Cancel</button>

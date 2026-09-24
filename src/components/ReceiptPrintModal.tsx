@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { CompletedSale } from '../types';
 import { ThermalReceiptSlip, generateReceiptPlainText } from './ThermalReceiptSlip';
+import type { ReceiptBranding } from './ThermalReceiptSlip';
 import { receiptsApi, receiptText } from '../receiptsApi';
 import { ReceiptVerificationModal } from './ReceiptVerificationModal';
 
@@ -29,6 +30,14 @@ interface ReceiptPrintModalProps {
   isReprint?: boolean;
   allSales?: CompletedSale[];
   onSelectSale?: (sale: CompletedSale) => void;
+  /**
+   * Whose shop this is — FR-SET-01, FR-SET-02.
+   *
+   * Passed in rather than looked up here, and never defaulted to a name. A
+   * preview that filled in a plausible shop is a preview of a different
+   * receipt than the one that prints.
+   */
+  branding?: ReceiptBranding;
 }
 
 export const ReceiptPrintModal: React.FC<ReceiptPrintModalProps> = ({
@@ -39,13 +48,19 @@ export const ReceiptPrintModal: React.FC<ReceiptPrintModalProps> = ({
   isReprint = true,
   allSales = [],
   onSelectSale,
+  branding = {},
 }) => {
   const [paperWidth, setPaperWidth] = useState<'80mm' | '58mm'>('80mm');
-  const [viewMode, setViewMode] = useState<'slip-only' | 'slip-audit'>('slip-only');
-  const [verificationMode, setVerificationMode] = useState<'qr-only' | 'barcode-only' | 'both'>('qr-only');
+  const [viewMode, setViewMode] = useState<'slip-only' | 'slip-audit' | 'slip-printer'>('slip-only');
+  /**
+   * FR-RCPT-01: the barcode is what the roll carries, so it is what the preview
+   * opens on. The QR is a screen aid — the printer is never sent one.
+   */
+  const [verificationMode, setVerificationMode] = useState<'barcode-only' | 'qr-only' | 'both'>('barcode-only');
   const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [scale, setScale] = useState<number>(100);
+  const [printerLines, setPrinterLines] = useState<string[] | null>(null);
+  const [printerError, setPrinterError] = useState<string | null>(null);
 
   // Close on Escape key & Print on Ctrl/Cmd+P
   useEffect(() => {
@@ -63,6 +78,34 @@ export const ReceiptPrintModal: React.FC<ReceiptPrintModalProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, sale, paperWidth, onClose, onPrint]);
+
+  /**
+   * FR-RCPT-09: what the roll will actually say, beside the picture of it.
+   *
+   * Fetched through `forSale` and never `reprint`, even in reprint mode: the
+   * reprint route writes an audit entry, and opening a tab to look at a receipt
+   * must not record that a second copy was issued.
+   */
+  useEffect(() => {
+    if (!isOpen || viewMode !== 'slip-printer') return;
+
+    let current = true;
+    setPrinterError(null);
+    receiptsApi
+      .forSale(sale.id, paperWidth)
+      .then((receipt) => {
+        if (current) setPrinterLines(receipt.lines);
+      })
+      .catch((error: unknown) => {
+        if (!current) return;
+        setPrinterLines(null);
+        setPrinterError(
+          error instanceof Error ? error.message : 'The receipt could not be read from the server.');
+      });
+    return () => {
+      current = false;
+    };
+  }, [isOpen, viewMode, sale.id, paperWidth]);
 
   if (!isOpen) return null;
 
@@ -99,7 +142,7 @@ export const ReceiptPrintModal: React.FC<ReceiptPrintModalProps> = ({
 
   const handleCopyText = async () => {
     const text = await serverText().catch(() =>
-      generateReceiptPlainText(sale, isReprint, paperWidth));
+      generateReceiptPlainText(sale, isReprint, paperWidth, branding));
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -121,7 +164,7 @@ export const ReceiptPrintModal: React.FC<ReceiptPrintModalProps> = ({
     // Falls back to the local render only if the server is unreachable, so a
     // counter with no connection can still hand over a copy.
     const text = await serverText().catch(() =>
-      generateReceiptPlainText(sale, isReprint, paperWidth));
+      generateReceiptPlainText(sale, isReprint, paperWidth, branding));
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -169,7 +212,7 @@ export const ReceiptPrintModal: React.FC<ReceiptPrintModalProps> = ({
                 )}
               </div>
               <p className="text-[11px] text-slate-400">
-                Crisp ink-saving thermal layout • Pure B&amp;W typography • 0% background fill
+                Logo, shop and location first • barcode last • laid out as the roll prints it
               </p>
             </div>
           </div>
@@ -272,6 +315,18 @@ export const ReceiptPrintModal: React.FC<ReceiptPrintModalProps> = ({
                 >
                   Slip + Audit
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('slip-printer')}
+                  className={`px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                    viewMode === 'slip-printer'
+                      ? 'bg-slate-700 text-white font-bold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="The exact text the printer is sent, rendered by the server"
+                >
+                  Printer Text
+                </button>
               </div>
             </div>
 
@@ -281,29 +336,29 @@ export const ReceiptPrintModal: React.FC<ReceiptPrintModalProps> = ({
               <div className="inline-flex bg-slate-800 p-0.5 rounded-lg border border-slate-700">
                 <button
                   type="button"
-                  onClick={() => setVerificationMode('qr-only')}
-                  className={`px-2 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1 cursor-pointer ${
-                    verificationMode === 'qr-only'
-                      ? 'bg-slate-700 text-white font-bold'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                  title="Dynamic Customer QR Code"
-                >
-                  <QrCode className="w-3 h-3" />
-                  <span>QR Code</span>
-                </button>
-                <button
-                  type="button"
                   onClick={() => setVerificationMode('barcode-only')}
                   className={`px-2 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1 cursor-pointer ${
                     verificationMode === 'barcode-only'
                       ? 'bg-slate-700 text-white font-bold'
                       : 'text-slate-400 hover:text-white'
                   }`}
-                  title="1D Optical Barcode"
+                  title="Code 128 of the receipt number — this is what prints"
                 >
                   <Barcode className="w-3 h-3" />
                   <span>Barcode</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVerificationMode('qr-only')}
+                  className={`px-2 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1 cursor-pointer ${
+                    verificationMode === 'qr-only'
+                      ? 'bg-slate-700 text-white font-bold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Customer verification QR — shown on screen only, not sent to the printer"
+                >
+                  <QrCode className="w-3 h-3" />
+                  <span>QR (screen)</span>
                 </button>
                 <button
                   type="button"
@@ -392,6 +447,7 @@ export const ReceiptPrintModal: React.FC<ReceiptPrintModalProps> = ({
               >
                 <ThermalReceiptSlip
                   sale={sale}
+                  branding={branding}
                   isReprint={isReprint}
                   paperWidth={paperWidth}
                   showQrCode={verificationMode === 'qr-only' || verificationMode === 'both'}
@@ -416,6 +472,54 @@ export const ReceiptPrintModal: React.FC<ReceiptPrintModalProps> = ({
               <span>Optimized for 203 DPI direct thermal and desktop printing without margins</span>
             </div>
           </div>
+
+          {/*
+            FR-RCPT-09: the server's own rendering, character for character.
+
+            Beside the slip rather than instead of it, because the question this
+            answers is whether the two agree. Anything the roll will say and the
+            picture does not is visible here without walking to the printer.
+          */}
+          {viewMode === 'slip-printer' && (
+            <div className="w-full lg:w-[380px] bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3 shrink-0">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-accent-400" />
+                  <span>Exact printer output</span>
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Rendered by the server at {paperWidth}. This is the text sent to the
+                  printer &mdash; the slip beside it is the same layout, drawn.
+                </p>
+              </div>
+
+              {printerError && (
+                <p
+                  role="alert"
+                  className="rounded-lg border border-amber-800 bg-amber-950/50 px-3 py-2 text-[11px] font-semibold text-amber-200"
+                >
+                  {printerError}
+                </p>
+              )}
+
+              {!printerError && !printerLines && (
+                <p className="text-[11px] text-slate-500">Reading the receipt from the server&hellip;</p>
+              )}
+
+              {printerLines && (
+                <pre className="overflow-x-auto rounded-lg bg-slate-950 border border-slate-800 p-3 font-mono text-[10px] leading-[1.45] text-slate-200 whitespace-pre">
+                  {printerLines.join('\n')}
+                </pre>
+              )}
+
+              {isReprint && printerLines && (
+                <p className="text-[10px] text-slate-500 leading-snug">
+                  The REPRINT band is added when the copy is actually issued. Viewing it
+                  here does not log a reprint.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Audit Details Panel (When viewMode === 'slip-audit') */}
           {viewMode === 'slip-audit' && (

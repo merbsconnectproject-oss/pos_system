@@ -83,6 +83,26 @@ export function compareMoney(a: number, b: number): number {
   return toPesewas(a) - toPesewas(b);
 }
 
+/**
+ * Settle a cash payment from the amount physically handed to the cashier.
+ *
+ * The tendered amount must be the payment that is persisted. Replacing it with
+ * the bill total makes an overpayment look exact and permanently loses the
+ * customer's change from the receipt.
+ */
+export function settleCash(total: number, tendered: number): {
+  amount: number;
+  changeDue: number;
+  sufficient: boolean;
+} {
+  const amount = roundMoney(tendered);
+  return {
+    amount,
+    changeDue: Math.max(0, roundMoney(amount - total)),
+    sufficient: compareMoney(amount, total) >= 0,
+  };
+}
+
 /** NFR-18: currency GHS, two decimal places, grouped thousands. */
 export function formatMoney(major: number, currencySymbol = 'GH₵'): string {
   const safe = Number.isFinite(major) ? major : 0;

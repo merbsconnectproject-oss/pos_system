@@ -117,6 +117,15 @@ export interface CompletedSale {
   items: CartItem[];
   subtotal: number;
   discountTotal: number;
+  /**
+   * FR-POS-10: the percentage taken off the whole bill, when one was.
+   *
+   * The percentage rather than the cedis, because it is what the server needs
+   * to resolve the concession against its own subtotal.
+   */
+  cartDiscountPercent?: number;
+  /** FR-POS-10: who approved the bill-level concession, when it needed one. */
+  cartDiscountApproverId?: string;
   total: number;
   payments: PaymentEntry[];
   changeDue: number;
@@ -152,6 +161,8 @@ export interface Customer {
   totalPurchased: number;
   salesCount: number;
   discountRate?: number;
+  /** FR-CUST-07: the most they may owe across open installment plans. */
+  creditLimit?: number;
   notes?: string;
   /** FR-CUST-02: the form already asks for these; the record now keeps them. */
   email?: string;
@@ -309,6 +320,14 @@ export interface OperationalThresholds {
 
 export interface GeneralSettings {
   companyName: string;
+  /**
+   * FR-SET-01: where the logo is served from, or null when none is set.
+   *
+   * <p>Set by the server to its own endpoint when a logo is uploaded, so every
+   * reader keeps using this one field and none of them needs to know the bytes
+   * live in the database.
+   */
+  logoUrl: string | null;
   taxRegistrationNumber: string;
   taxEnabled: boolean;
   taxRatePercent: number;
@@ -379,6 +398,18 @@ export interface InstallmentScheduleItem {
   receiptNumber?: string;
 }
 
+export interface InstallmentPaymentRecord {
+  id: string;
+  receiptNumber: string;
+  amount: number;
+  balanceAfter: number;
+  receivedOn: string;
+  paymentMethod: PaymentMethod;
+  reference?: string;
+  cashierName: string;
+  createdAt: string;
+}
+
 export interface CustomerInstallmentPlan {
   id: string;
   planNumber: string; // e.g. INST-2026-001
@@ -404,6 +435,7 @@ export interface CustomerInstallmentPlan {
   startDate: string;
   status: 'ACTIVE' | 'COMPLETED' | 'DEFAULTED';
   schedule: InstallmentScheduleItem[];
+  payments: InstallmentPaymentRecord[];
   notes?: string;
   createdAt: string;
 }

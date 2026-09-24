@@ -26,6 +26,7 @@ import { InfoHint } from './InfoHint';
 import { TablePagination } from './TablePagination';
 import {
   CustomerInstallmentPlan,
+  InstallmentPaymentRecord,
   InstallmentScheduleItem,
   Customer,
   Product,
@@ -33,28 +34,48 @@ import {
   PaymentMethod,
 } from '../types';
 import { exportToCsv } from '../utils/csvExport';
+import { installmentsApi } from '../installmentsApi';
+import { printReceipt } from '../printService';
 
 interface InstallmentsViewProps {
   plans?: CustomerInstallmentPlan[];
   installmentPlans?: CustomerInstallmentPlan[];
   onAddPlan: (plan: CustomerInstallmentPlan) => void;
-  onUpdatePlan: (updatedPlan: CustomerInstallmentPlan) => void;
+  onRecordPayment: (
+    planId: string,
+    amount: number,
+    receivedOn: string,
+    method: PaymentMethod,
+    reference?: string,
+  ) => Promise<CustomerInstallmentPlan>;
   customers?: Customer[];
   products?: Product[];
   currentOutlet: Outlet;
   outlets: Outlet[];
   accentColor?: string;
+  /**
+   * FR-CUST-07: write a plan off as defaulted, or bring it back.
+   *
+   * <p>Needs `settings.general` on the server as well as `customer.credit` —
+   * writing a debt off is the owner's call, not the counter's. The API was
+   * complete and had no caller, so a plan that would never be paid stayed
+   * "active" for ever and kept inflating the receivables figure.
+   */
+  onSetDefaulted?: (planId: string, defaulted: boolean, reason?: string) => Promise<void>;
+  canWriteOff?: boolean;
 }
 
 export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
   plans: propPlans,
   installmentPlans,
   onAddPlan,
-  onUpdatePlan,
+  onRecordPayment,
   customers = [],
   products = [],
   currentOutlet,
   outlets,
+  onSetDefaulted,
+  canWriteOff = false,
   accentColor,
 }) => {
   const plans = propPlans || installmentPlans || [];
@@ -67,6 +88,11 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
 
   // New Plan Modal State
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  /** FR-CUST-07: the plan being written off or reinstated, and why. */
+  const [defaultTarget, setDefaultTarget] = useState<CustomerInstallmentPlan | null>(null);
+  const [defaultReason, setDefaultReason] = useState('');
+  const [defaultSaving, setDefaultSaving] = useState(false);
+  const [defaultError, setDefaultError] = useState<string | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [planOutletId, setPlanOutletId] = useState<string>('');
   const [planFrequency, setPlanFrequency] = useState<'weekly' | 'biweekly' | 'monthly' | ''>('');
@@ -86,18 +112,16 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
   const [paymentAmount, setPaymentAmount] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>('');
   const [paymentReference, setPaymentReference] = useState('');
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   // Receipt Slip Modal
   const [paymentReceiptSlip, setPaymentReceiptSlip] = useState<{
     plan: CustomerInstallmentPlan;
-    installmentNum: number;
-    amountPaid: number;
-    method: string;
-    reference: string;
-    date: string;
-    receiptNumber: string;
-    newBalance: number;
+    payment: InstallmentPaymentRecord;
+    reprint: boolean;
   } | null>(null);
+  const [receiptPrintStatus, setReceiptPrintStatus] = useState<'ready' | 'printing' | 'sent' | 'failed'>('ready');
 
   // Calculate Overdue & Filtered Plans
   const processedPlans = useMemo(() => {
@@ -146,59 +170,59 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
     setPaymentAmount('');
     setPaymentMethod('');
     setPaymentReference('');
+    setPaymentError(null);
     setPaymentModalOpen(true);
   };
 
   // Submit Installment Payment
-  const handleSubmitPayment = (e: React.FormEvent) => {
+  const handleSubmitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     const installmentNum = parseInt(selectedInstallmentNum, 10);
     if (!activePlanForPayment || !paymentMethod || Number.isNaN(installmentNum) || !paymentAmount || parseFloat(paymentAmount) <= 0) return;
 
     const amount = parseFloat(paymentAmount);
-    const receiptNum = `RAD-INST-${activePlanForPayment.planNumber.replace('INST-', '')}-${installmentNum}`;
     const today = new Date().toISOString().slice(0, 10);
+    setPaymentSaving(true);
+    setPaymentError(null);
+    try {
+      const saved = await onRecordPayment(
+        activePlanForPayment.id, amount, today, paymentMethod, paymentReference || undefined,
+      );
+      const recorded = saved.payments[0];
+      if (!recorded) throw new Error('The payment was saved but its receipt record was not returned.');
+      setPaymentModalOpen(false);
+      setReceiptPrintStatus('ready');
+      setPaymentReceiptSlip({ plan: saved, payment: recorded, reprint: false });
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : 'The payment could not be saved.');
+    } finally {
+      setPaymentSaving(false);
+    }
+  };
 
-    const updatedSchedule: InstallmentScheduleItem[] = activePlanForPayment.schedule.map((item) => {
-      if (item.installmentNumber === installmentNum) {
-        const newPaid = item.paidAmount + amount;
-        return {
-          ...item,
-          paidAmount: newPaid,
-          paidDate: today,
-          paymentMethod: paymentMethod,
-          reference: paymentReference,
-          status: newPaid >= item.expectedAmount ? 'PAID' : 'PARTIAL',
-          receiptNumber: receiptNum,
-        };
-      }
-      return item;
-    });
-
-    const newRemainingBalance = Math.max(0, activePlanForPayment.remainingBalance - amount);
-    const allPaid = updatedSchedule.every((s) => s.status === 'PAID') || newRemainingBalance <= 0;
-
-    const updatedPlan: CustomerInstallmentPlan = {
-      ...activePlanForPayment,
-      remainingBalance: newRemainingBalance,
-      status: allPaid ? 'COMPLETED' : activePlanForPayment.status,
-      schedule: updatedSchedule,
-    };
-
-    onUpdatePlan(updatedPlan);
-    setPaymentModalOpen(false);
-
-    // Open Printable Receipt Slip
-    setPaymentReceiptSlip({
-      plan: activePlanForPayment,
-      installmentNum,
-      amountPaid: amount,
-      method: paymentMethod.toUpperCase(),
-      reference: paymentReference,
-      date: new Date().toLocaleString('en-GB'),
-      receiptNumber: receiptNum,
-      newBalance: newRemainingBalance,
-    });
+  const handlePrintPaymentReceipt = async () => {
+    if (!paymentReceiptSlip) return;
+    // The first copy immediately after collection is the original. Any later
+    // copy from the same dialog is a marked, audited reprint.
+    const reprint = paymentReceiptSlip.reprint || receiptPrintStatus === 'sent';
+    setReceiptPrintStatus('printing');
+    try {
+      const receipt = await installmentsApi.paymentReceipt(
+        paymentReceiptSlip.plan.id,
+        paymentReceiptSlip.payment.id,
+        '80mm',
+        reprint,
+      );
+      const result = await printReceipt({
+        receiptNumber: receipt.receiptNumber,
+        paperWidth: receipt.width,
+        isReprint: receipt.reprint,
+        payload: receipt.escPos,
+      });
+      setReceiptPrintStatus(result.ok ? 'sent' : 'failed');
+    } catch {
+      setReceiptPrintStatus('failed');
+    }
   };
 
   // Create New Plan Submit
@@ -266,6 +290,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
       startDate: now.toISOString().slice(0, 10),
       status: 'ACTIVE',
       schedule: schedule,
+      payments: [],
       notes: planNotes,
       createdAt: `${now.toISOString().slice(0, 10)} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
     };
@@ -582,6 +607,21 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {plan.status !== 'COMPLETED' && canWriteOff && onSetDefaulted && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDefaultTarget(plan);
+                          }}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                            plan.status === 'DEFAULTED'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                              : 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
+                          }`}
+                        >
+                          {plan.status === 'DEFAULTED' ? 'Reinstate' : 'Mark defaulted'}
+                        </button>
+                      )}
                       {plan.status === 'ACTIVE' && (
                         <button
                           onClick={(e) => {
@@ -684,7 +724,8 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                                       <div>
                                         <div className="font-bold text-slate-800">{item.paidDate}</div>
                                         <div className="text-[10px] text-slate-400">
-                                          {item.receiptNumber} ({item.paymentMethod})
+                                          {item.paymentMethod}
+                                          {item.reference ? ` · ${item.reference}` : ''}
                                         </div>
                                       </div>
                                     ) : (
@@ -719,26 +760,6 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                                         Pay Now
                                       </button>
                                     )}
-                                    {item.status === 'PAID' && item.receiptNumber && (
-                                      <button
-                                        onClick={() =>
-                                          setPaymentReceiptSlip({
-                                            plan: plan,
-                                            installmentNum: item.installmentNumber,
-                                            amountPaid: item.paidAmount,
-                                            method: (item.paymentMethod || 'momo').toUpperCase(),
-                                            reference: item.reference || '',
-                                            date: item.paidDate || '',
-                                            receiptNumber: item.receiptNumber,
-                                            newBalance: plan.remainingBalance,
-                                          })
-                                        }
-                                        className="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
-                                        title="Reprint Installment Receipt"
-                                      >
-                                        Receipt
-                                      </button>
-                                    )}
                                   </td>
                                 </tr>
                               );
@@ -746,6 +767,63 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                           </tbody>
                         </table>
                       </div>
+                    </div>
+
+                    {/* Permanent collection history. A schedule row is an
+                        aggregate and cannot identify two part-payments; these
+                        are the actual saved payments and their exact receipts. */}
+                    <div>
+                      <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                        Payment History &amp; Receipts
+                      </h4>
+                      {plan.payments.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-4 text-xs text-slate-500">
+                          No installment payments have been recorded yet.
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto rounded-xl border border-slate-300 bg-white">
+                          <table className="w-full text-left text-xs">
+                            <thead className="border-b border-slate-300 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                              <tr>
+                                <th className="px-3 py-2.5">Receipt</th>
+                                <th className="px-3 py-2.5">Date</th>
+                                <th className="px-3 py-2.5">Amount</th>
+                                <th className="px-3 py-2.5">Method / Reference</th>
+                                <th className="px-3 py-2.5">Balance after</th>
+                                <th className="px-3 py-2.5">Received by</th>
+                                <th className="px-3 py-2.5 text-right">Receipt</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
+                              {plan.payments.map((payment) => (
+                                <tr key={payment.id}>
+                                  <td className="px-3 py-2.5 font-mono font-bold text-slate-900">{payment.receiptNumber}</td>
+                                  <td className="px-3 py-2.5">{payment.receivedOn}</td>
+                                  <td className="px-3 py-2.5 font-mono font-bold text-emerald-700">GH₵ {payment.amount.toFixed(2)}</td>
+                                  <td className="px-3 py-2.5">
+                                    <span className="capitalize">{payment.paymentMethod.replace('_', ' ')}</span>
+                                    {payment.reference && <div className="text-[10px] text-slate-400">{payment.reference}</div>}
+                                  </td>
+                                  <td className="px-3 py-2.5 font-mono font-bold">GH₵ {payment.balanceAfter.toFixed(2)}</td>
+                                  <td className="px-3 py-2.5">{payment.cashierName}</td>
+                                  <td className="px-3 py-2.5 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setReceiptPrintStatus('ready');
+                                        setPaymentReceiptSlip({ plan, payment, reprint: true });
+                                      }}
+                                      className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-700 hover:bg-slate-200"
+                                    >
+                                      View / Reprint
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -868,6 +946,12 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                 </div>
               </div>
 
+              {paymentError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700">
+                  {paymentError}
+                </div>
+              )}
+
               <div className="pt-3 flex flex-col sm:flex-row items-center justify-end gap-3 border-t border-slate-200">
                 <button
                   type="button"
@@ -878,10 +962,11 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="w-full sm:w-auto px-6 py-2.5 text-sm font-black text-white rounded-lg shadow-xs transition-all cursor-pointer hover:opacity-95"
+                  disabled={paymentSaving}
+                  className="w-full sm:w-auto px-6 py-2.5 text-sm font-black text-white rounded-lg shadow-xs transition-all cursor-pointer hover:opacity-95 disabled:cursor-wait disabled:opacity-60"
                   style={{ backgroundColor: accentColor || 'var(--accent, #c55200)' }}
                 >
-                  Confirm &amp; Issue Receipt
+                  {paymentSaving ? 'Saving Payment…' : 'Confirm & Issue Receipt'}
                 </button>
               </div>
             </form>
@@ -1136,12 +1221,17 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
               <div className="text-xs bg-slate-100 text-slate-700 px-3 py-1 rounded-full inline-block font-mono font-bold">
                 INSTALLMENT PAYMENT RECEIPT
               </div>
+              {paymentReceiptSlip.reprint && (
+                <div className="text-xs bg-slate-900 text-white px-3 py-1 rounded-full inline-block font-black">
+                  REPRINT
+                </div>
+              )}
             </div>
 
             <div className="space-y-2 border-b border-dashed border-slate-300 pb-4">
               <div className="flex justify-between">
                 <span className="text-slate-500 font-sans">Receipt #:</span>
-                <span className="font-bold text-slate-900">{paymentReceiptSlip.receiptNumber}</span>
+                <span className="font-bold text-slate-900">{paymentReceiptSlip.payment.receiptNumber}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500 font-sans">Plan #:</span>
@@ -1157,23 +1247,23 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500 font-sans">Date:</span>
-                <span className="text-slate-700">{paymentReceiptSlip.date}</span>
+                <span className="text-slate-700">{paymentReceiptSlip.payment.receivedOn}</span>
               </div>
             </div>
 
             <div className="space-y-2 border-b border-dashed border-slate-300 pb-4">
               <div className="flex justify-between text-base font-black">
                 <span className="font-sans">AMOUNT PAID:</span>
-                <span className="text-emerald-700">GH₵ {paymentReceiptSlip.amountPaid.toFixed(2)}</span>
+                <span className="text-emerald-700">GH₵ {paymentReceiptSlip.payment.amount.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-slate-600 text-xs">
                 <span className="font-sans">Payment Method:</span>
-                <span className="font-bold">{paymentReceiptSlip.method}</span>
+                <span className="font-bold capitalize">{paymentReceiptSlip.payment.paymentMethod.replace('_', ' ')}</span>
               </div>
-              {paymentReceiptSlip.reference && (
+              {paymentReceiptSlip.payment.reference && (
                 <div className="flex justify-between text-slate-600 text-xs">
                   <span className="font-sans">Ref / TxID:</span>
-                  <span>{paymentReceiptSlip.reference}</span>
+                  <span>{paymentReceiptSlip.payment.reference}</span>
                 </div>
               )}
             </div>
@@ -1185,7 +1275,11 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
               </div>
               <div className="flex justify-between font-bold text-blue-700 text-sm">
                 <span className="font-sans">REMAINING BALANCE:</span>
-                <span>GH₵ {paymentReceiptSlip.newBalance.toFixed(2)}</span>
+                <span>GH₵ {paymentReceiptSlip.payment.balanceAfter.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500 font-sans">Received by:</span>
+                <span>{paymentReceiptSlip.payment.cashierName}</span>
               </div>
             </div>
 
@@ -1202,12 +1296,99 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
                 Done
               </button>
               <button
-                onClick={() => window.print()}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-black text-white rounded-lg shadow-xs cursor-pointer"
+                onClick={() => void handlePrintPaymentReceipt()}
+                disabled={receiptPrintStatus === 'printing'}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-black text-white rounded-lg shadow-xs cursor-pointer disabled:cursor-wait disabled:opacity-60"
                 style={{ backgroundColor: accentColor || 'var(--accent, #c55200)' }}
               >
                 <Printer className="w-4 h-4" />
-                <span>Print Slip</span>
+                <span>{receiptPrintStatus === 'printing'
+                  ? 'Printing…'
+                  : paymentReceiptSlip.reprint || receiptPrintStatus === 'sent'
+                    ? 'Reprint Slip' : 'Print Slip'}</span>
+              </button>
+            </div>
+            {receiptPrintStatus === 'sent' && (
+              <p className="text-center text-xs font-bold text-emerald-700 font-sans">Receipt sent to POS-80.</p>
+            )}
+            {receiptPrintStatus === 'failed' && (
+              <p className="text-center text-xs font-bold text-rose-700 font-sans">
+                The payment is saved, but printing failed. Check the printer and try again.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+      {/* FR-CUST-07: writing a debt off, with the reason recorded. */}
+      {defaultTarget && (
+        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl p-5 space-y-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                {defaultTarget.status === 'DEFAULTED' ? 'Reinstate this plan' : 'Mark this plan defaulted'}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                {defaultTarget.planNumber} &middot; {defaultTarget.customerName} &middot;{' '}
+                GH₵ {defaultTarget.remainingBalance.toFixed(2)} outstanding.
+                {defaultTarget.status === 'DEFAULTED'
+                  ? ' Reinstating returns it to the active list and to the receivables figure.'
+                  : ' A defaulted plan stops counting towards receivables. The schedule is kept.'}
+              </p>
+            </div>
+
+            <label className="block">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Reason
+              </span>
+              <textarea
+                value={defaultReason}
+                onChange={(event) => setDefaultReason(event.target.value)}
+                rows={3}
+                placeholder="Why is this being written off?"
+                className="mt-1 w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-accent-500"
+              />
+            </label>
+
+            {defaultError && (
+              <p className="text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                {defaultError}
+              </p>
+            )}
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setDefaultTarget(null); setDefaultReason(''); setDefaultError(null); }}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={defaultSaving}
+                onClick={async () => {
+                  if (!onSetDefaulted) return;
+                  setDefaultSaving(true);
+                  setDefaultError(null);
+                  try {
+                    await onSetDefaulted(
+                      defaultTarget.id,
+                      defaultTarget.status !== 'DEFAULTED',
+                      defaultReason.trim() || undefined,
+                    );
+                    setDefaultTarget(null);
+                    setDefaultReason('');
+                  } catch (failure) {
+                    setDefaultError(failure instanceof Error ? failure.message : 'That could not be saved.');
+                  } finally {
+                    setDefaultSaving(false);
+                  }
+                }}
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold disabled:opacity-50"
+              >
+                {defaultSaving
+                  ? 'Saving…'
+                  : defaultTarget.status === 'DEFAULTED' ? 'Reinstate' : 'Mark defaulted'}
               </button>
             </div>
           </div>

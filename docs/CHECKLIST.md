@@ -1,7 +1,7 @@
 # Build Checklist — Stage 1
 
 **Companion to** PRD v1.0 · SCREEN-INVENTORY.md v1.0 · DELIVERY-PLAN.md
-**Updated** 2026-09-14 · reflects the codebase as it stands, verified rather than assumed.
+**Updated** 2026-09-23 · reflects the codebase as it stands, verified rather than assumed.
 
 Grouped by feature, not by delivery phase, so a feature can be judged complete in one place.
 Every item carries its requirement ID (`FR-`), business rule (`BR-`) or screen ID so it ties back to
@@ -42,22 +42,22 @@ non-deferred item in its section is complete, including its non-functional items
 | B · Outlets | 10 | 8 done, 1 partial, 1 deferred | 7 done, 2 partial, 1 deferred |
 | C · Product catalogue | 17 | 15 done, 1 partial, 1 deferred | 15 done, 2 deferred |
 | D · Units & conversions | 8 | 8 done | 8 done |
-| E · Pricing | 10 | 8 done, 2 partial | 10 done |
-| F · Inventory | 15 | 10 done, 2 partial, 1 deferred, 2 n/a | 11 done, 1 partial, 1 open, 2 deferred |
-| G · Point of sale | 25 | 18 done, 3 partial, 2 open, 2 n/a | 13 done, 1 partial, 1 open, 10 n/a |
+| E · Pricing | 10 | 10 done | 10 done |
+| F · Inventory | 15 | 10 done, 2 partial, 1 deferred, 2 n/a | 12 done, 1 open, 2 deferred |
+| G · Point of sale | 25 | 19 done, 2 partial, 2 open, 2 n/a | 14 done, 1 partial, 10 n/a |
 | H · Payments | 11 | 8 done, 1 partial, 2 n/a | 10 done, 1 n/a |
 | I · Receipts & printing | 13 | 7 done, 3 partial, 2 open, 1 deferred | 7 done, 1 partial, 4 open, 1 deferred |
 | J · Shifts & cash | 12 | 10 done, 1 partial, 1 n/a | 10 done, 2 partial |
 | K · Suppliers & goods receipt | 11 | 8 done, 1 partial, 2 deferred | 9 done, 2 deferred |
-| L · Customers | 8 | 7 done, 1 partial | 6 done, 1 partial, 1 n/a |
-| M · Users, roles & permissions | 12 | 10 done, 1 partial, 1 n/a | 11 done, 1 n/a |
-| N · Audit | 6 | 4 done, 1 partial, 1 n/a | 5 done, 1 n/a |
-| O · Reports & dashboard | 10 | 7 done, 1 partial, 1 deferred, 1 n/a | 7 done, 1 deferred, 2 n/a |
-| P · Settings | 39 | 31 done, 3 partial, 5 n/a | 33 done, 2 partial, 1 open, 3 n/a |
+| L · Customers | 8 | 8 done | 7 done, 1 n/a |
+| M · Users, roles & permissions | 12 | 11 done, 1 n/a | 11 done, 1 n/a |
+| N · Audit | 6 | 5 done, 1 n/a | 5 done, 1 n/a |
+| O · Reports & dashboard | 10 | 8 done, 1 deferred, 1 n/a | 7 done, 1 deferred, 2 n/a |
+| P · Settings | 39 | 33 done, 1 partial, 5 n/a | 35 done, 1 partial, 3 n/a |
 | Q · Connectivity & resilience | 13 | 5 done, 2 partial, 1 deferred, 5 n/a | 5 done, 1 open, 1 deferred, 6 n/a |
 | R · Cross-cutting non-functional | 22 | 9 done, 4 partial, 4 open, 5 n/a | 9 done, 3 partial, 5 open, 5 n/a |
 
-**258 items · 209 complete** — both halves done, or done on the half that exists. Counted from the boxes below by `docs/glance.py`, not maintained by hand: the table drifted far enough at one point to claim the whole receipts feature was unbuilt.
+**258 items · 219 complete** — both halves done, or done on the half that exists. Counted from the boxes below by `docs/glance.py`, not maintained by hand: the table drifted far enough at one point to claim the whole receipts feature was unbuilt.
 
 ### Where the backend stands
 
@@ -205,10 +205,10 @@ and how to reverse it are on `Permission.isFutureStage()`.
 ### Functional
 - [x][x] Cost, retail and trade price per product — FR-PRICE-01 · `D-07` *(cost is the weighted average per outlet — BR-4)*
 - [x][x] Floor price below which approval is required — FR-PRICE-02 · BR-10 *(server refuses without an approver; approver recorded on the line)*
-- [~][x] Per-outlet price override — FR-PRICE-03 *(stored level by level, and it is the branch's floor the till is held to — BR-10. The API and the sale path are done; there is no control on the product screen yet)*
+- [x][x] Per-outlet price override — FR-PRICE-03 *(stored level by level, and it is the branch's floor the till is held to — BR-10. The branch-prices control is on the product row; clearing an override removes it rather than storing one that overrides nothing)*
 - [x][x] Customer type determines the price level automatically — FR-PRICE-04 *(decided by the server. The screen tested the type by hand in three places and missed `company`, charging every company retail)*
 - [x][x] Customer-specific fixed discount or agreed price — FR-PRICE-05 *(applied at the counter, and it raises the FR-POS-10 ceiling rather than bypassing it — past the deal it is still refused)*
-- [~][x] Price changes versioned with effective date and user — FR-PRICE-06 *(readable now, newest first, with who set each price; no history panel on the product screen yet)*
+- [x][x] Price changes versioned with effective date and user — FR-PRICE-06 *(the history panel sits under the branch prices on the product row, newest first, with who set each price)*
 - [x][x] Cost and margin visible only with `price.view_cost` — FR-PRICE-07 *(**was a real hole**: `/api/stock/*` returned cost to anyone with `stock.view`, which every cashier has. Stripped at the edge now, and removed rather than zeroed)*
 - [x][x] Accounting margin and replacement margin shown side by side — FR-PRICE-08 *(the weighted average says what the sale earned; the latest receipt says whether the price still works. A loss reads as a loss instead of being floored at zero)*
 
@@ -229,7 +229,7 @@ and how to reverse it are on `Permission.isFutureStage()`.
 - [~][ ] Adjustments above the value threshold require `stock.approve_adjustment` — FR-INV-06 · `E-08` *(threshold lives in settings, which is P; gate not wired either side)*
 - [x][x] Weighted average cost recalculated per outlet on every receipt — FR-INV-07 · BR-4
 - [x][x] Low stock flagged at or below reorder level, per outlet — FR-INV-08 · `E-10`
-- [x][~] Valuation at weighted average cost, per outlet and combined — FR-INV-09 · `E-11` *(levels carry the average; no valuation report endpoint — that is O)*
+- [x][x] Valuation at weighted average cost, per outlet and combined — FR-INV-09 · `E-11` *(the inventory valuation report is on the reports screen behind `price.view_cost` — the valuation *is* the cost, so the permission gates the report rather than a column of it)*
 - [x][x] Exceptions view: oversells, large adjustments, write-offs — FR-INV-10 · `E-12`
 - [~][-] Stock count: generate sheet, enter counts, review variance, approve, post as one batch — FR-INV-11 · `E-14` *(Stage 2; entry works, does not post)*
 - [-][-] Quarantine state for faulty goods — FR-INV-12 *(Stage 3)*
@@ -259,7 +259,7 @@ held sales, which live only in the browser.
 - [x][x] Unrecognised barcode shows an inline strip, not a modal — FR-POS-07 · `C-19` *(`GET /api/products/barcode/{code}` 404s for an unknown code; the till resolves against its cached catalogue so scanning stays instant — FR-SYNC-01)*
 - [x][x] A product with more than one selling unit prompts for the unit — FR-POS-08 · `C-04` *(units and factors come from the catalogue)*
 - [x][x] Cart lines: quantity, unit change, price override, discount, remove — FR-POS-09 · `C-05` *(the sale stores the unit, factor, price and discount it was rung up with)*
-- [~][ ] Line and cart discounts capped by the user's `sale.discount_max` — FR-POS-10 · `C-06` *(the ceiling lives in settings, which is P; unenforced on either side)*
+- [x][x] Line and cart discounts capped by the user's `sale.discount_max` — FR-POS-10 · `C-06` *(both levels enforced server-side. The cart concession is apportioned onto the lines, so the receipt, returns and the discount report need no special case; past the ceiling the till asks for a manager's PIN rather than silently reducing the figure)*
 - [x][x] Price below floor triggers manager PIN; approver recorded on the sale — FR-POS-11 · BR-10 · `C-07` `C-08` *(PIN checked by the server; approver stored on the line that needed it)*
 - [x][~] Customer attached by phone search or created inline — FR-POS-12 · `C-09` `C-10` *(a sale stores the customer it was made to; there is no customer directory to search — needs L)*
 - [x][x] Selling beyond stock blocked unless `stock.oversell` — FR-POS-13 · BR-9 · `C-21`
@@ -303,7 +303,7 @@ held sales, which live only in the browser.
 
 ### Functional
 - [x][x] The sale is committed and persisted before any print is attempted — FR-RCPT-01
-- [~][~] Printing via ESC/POS through a local print service; no browser print dialogue — FR-RCPT-02 *(the server renders the job — init, code page 437, feed past the blade, partial cut — and hands it over as base64; `printService.ts` posts it to localhost:9100. **The Windows service itself needs the printer**)*
+- [x][x] Printing via ESC/POS through the local counter service; no browser print dialogue — FR-RCPT-02 *(the server renders init, code page 437, feed and cut bytes; the authenticated same-origin print endpoint submits them in-process through `javax.print` to the configured OS queue. Validated on the physical `POS-80` queue.)*
 - [x][x] Supports 58 mm and 80 mm — FR-RCPT-03 *(32 and 48 columns; the narrow roll gives the item name its own line rather than truncating it)*
 - [x][x] Receipt content per PRD §9 — FR-RCPT-04 *(`ReceiptLayout`, rendered from the sale as stored — a receipt built in the browser states what the till believed, not what was recorded)*
 - [x][x] A print failure never blocks or reverses the sale; a retry is offered — FR-RCPT-05 · `C-18`
@@ -315,7 +315,7 @@ held sales, which live only in the browser.
 
 ### Non-functional
 - [ ][ ] With the printer switched off the sale completes, the number is issued, stock decrements, and it prints on retry — FR-RCPT acceptance · release gate 2
-- [ ][ ] Receipt begins printing within 1 s of completion — NFR-3
+- [~][~] Receipt begins printing within 1 s of completion — NFR-3 *(the Java spooler submission is in-process and physically reaches `POS-80`; exact sale-to-paper latency still needs timing from the checkout flow)*
 - [x][x] Receipt numbers per outlet, gapless, never reused, `{OUTLET}-{TERMINAL}-{SEQ}` — BR-6
 
 ---
@@ -368,7 +368,7 @@ held sales, which live only in the browser.
 - [x][x] Customer types map to price levels — FR-CUST-04 · `G-06` *(decided by the server — a browser that decides the price level can change it)*
 - [x][x] Customers shared across both outlets — FR-CUST-05
 - [x][x] Purchase history per customer across both outlets — FR-CUST-06 · `G-05` *(computed from the sales each time, never stored; a void leaves the sale in the history and takes it out of the total)*
-- [~][~] Credit limit, balance, ageing, statements, part payments — FR-CUST-07 · `G-08` *(part payments are built — installment plans with schedules and receipts. Credit **limits**, running balances, ageing and statements are not: `credit_limit` appears nowhere in the server.)*
+- [x][x] Credit limit, balance, ageing, statements, part payments — FR-CUST-07 · `G-08` *(all five. The balance is summed on read from open plans and deliberately not stored — the same reasoning that keeps received quantity off a purchase order. A limit is enforced from the moment one is set; zero means "no limit set", because the column defaults to zero and the other reading would deny credit to every existing customer on upgrade.)*
 
 ### Non-functional
 - [x][·] Empty state explains walk-in sales need no customer — `G-07` *(what an empty list says is the screen's business)*
@@ -380,7 +380,7 @@ held sales, which live only in the browser.
 ### Functional
 - [x][x] Every person has an individual account; no shared logins — FR-USER-01 · `J-01` `J-03` *(created with a temporary password they replace on first sign-in)*
 - [x][x] Four seeded roles: Owner, Manager, Cashier, Storekeeper — FR-USER-02 · `J-05` *(the `Role` enum the server authorises with, so the matrix cannot describe rights it does not grant)*
-- [~][x] Permissions granted individually and varied per user, not only per role — FR-USER-03 · `J-07` *(granted, withheld or cleared back to the role — three states. The API is complete; the per-user matrix screen is still to build)*
+- [x][x] Permissions granted individually and varied per user, not only per role — FR-USER-03 · `J-07` *(granted, withheld or cleared back to the role — three states, and the screen shows three. Takes effect on the next request without signing out)*
 - [x][x] Permission matrix over all 31 PRD codes, grouped by area — `J-06` *(33 served, the two Stage 2/3 codes flagged `futureStage` — decision recorded on `Permission`)*
 - [x][x] Users assigned to one or more outlets — FR-USER-04
 - [x][x] No user can modify their own permissions — FR-USER-05 · BR-16 *(nor their own roles, nor deactivate themselves; editing their own name is still allowed)*
@@ -399,7 +399,7 @@ held sales, which live only in the browser.
 
 ### Functional
 - [x][x] Entries capture actor, action, entity type and ID, before and after, outlet, terminal, IP, timestamp — FR-AUDIT-01 *(the view starts empty and shows the server's entries; it used to seed invented ones and keep them if the fetch failed)*
-- [~][x] All listed actions logged: sign-in, sale, void, discount override, price change, adjustment, receipt, shift, cash movement, user and permission change, settings, reprint, export — FR-AUDIT-02 *(every action that exists now logs — shifts, cash, users, settings, customers and branch prices included. Reprint and export are the two that do not exist)*
+- [x][x] All listed actions logged: sign-in, sale, void, discount override, price change, adjustment, receipt, shift, cash movement, user and permission change, settings, reprint, export — FR-AUDIT-02 *(every one. The data export is recorded before a byte is written, and a discount override now names its approver — the id was accepted, checked and then dropped, so the log could only ever name a floor approver.)*
 - [x][x] Append-only; no application path edits or deletes an entry, including for the Owner — FR-AUDIT-03 · BR-15 *(database trigger; no write route exists, and the screen has no edit control)*
 - [x][x] Filterable by actor, action, entity, outlet and date — FR-AUDIT-04 · `J-08` `J-09`
 - [·][x] Entries retained for the life of the system — FR-AUDIT-05 *(nothing prunes them; no delete path exists)*
@@ -414,7 +414,7 @@ held sales, which live only in the browser.
 ### Functional
 - [x][x] Owner dashboard: both outlets separately and combined — FR-RPT-01 · `B-01` *(the combined line is summed from the cards sent, so it always equals what is above it. **Both charts on it were literal arrays** — a fixed twelve-bar series and three hardcoded customer segments — and are now server-fed)*
 - [x][x] Manager and cashier dashboards, scoped and operational — FR-RPT-02 · `B-02` `B-03` *(scoped by assignment on the server, not by a URL parameter)*
-- [~][x] Every report filterable by outlet, date range, category, user and payment method — FR-RPT-03 · `I-16` *(the API takes all five; the screen offers outlet and date, so category, user and method have no control yet)*
+- [x][x] Every report filterable by outlet, date range, category, user and payment method — FR-RPT-03 · `I-16` *(all five on the screen. The discount and void logs take the user filter too — "whose voids are these" is what those logs are opened to answer.)*
 - [x][x] All fifteen reports present with real data — FR-RPT-04 · `I-02`…`I-15` *(aggregated over every row, not over what the browser had loaded — which is what made a year-to-date total mean "the last hundred receipts")*
 - [x][x] Profit and cost figures only for `report.view_profit` — FR-RPT-05 *(not computed rather than not displayed: without it the field is absent from the response)*
 - [x][x] Monetary figures calculated from stored frozen costs, never current prices — FR-RPT-06 · BR-5 *(asserted: receiving stock at triple the price does not restate an old sale)*
@@ -431,14 +431,14 @@ held sales, which live only in the browser.
 
 ### Functional
 - [x][x] Business profile: legal name, trading name, contact details — FR-SET-01 · `K-02`
-- [~][~] Logo upload and persistence — FR-SET-01 *(the URL is stored and served; there is no upload endpoint, so the picture has to already live somewhere)*
+- [x][x] Logo upload and persistence — FR-SET-01 *(the bytes live in the database and the application serves them, so a restore brings the receipts back with the logo on them. Content type allowlisted — these bytes are served back to a browser.)*
 - [x][x] Per-outlet settings: name, address, phone, receipt footer, reorder defaults, receipt prefix — FR-SET-02 · `K-03` `K-04` *(the reorder default applies when a product first gets a level at that branch, and never overwrites one somebody chose)*
 - [x][x] Accent colour from a preset palette or hex, with live preview; orange default; no blue — FR-SET-03 · `K-06` *(validated as `#RRGGBB` by the schema and the request; the same Appearance section now persists a 90–130% font scale and an allowlist of five safe font stacks)*
 - [x][·] Accent applied as a CSS custom property; semantic colours fixed and unaffected — FR-SET-04 *(how a colour is applied is the browser's business; the server stores which colour)*
 - [~][~] Terminal settings: printer, paper width, test print, auto-print — FR-SET-05 · `K-07` *(paper width and auto-print are stored; the printer itself waits on the hardware — see I)*
 - [x][x] Operational thresholds: idle lock, adjustment approval, cash variance, discount ceilings — FR-SET-06 · `K-08` *(and **read by the rules**: FR-CASH-06, FR-INV-06, FR-POS-10 and FR-AUTH-05 each take their number from here)*
 - [x][x] Backup status, last successful backup, restore history — FR-SET-07 · `K-09` *(the screen reads `GET /api/backups`: live recovery point, whether the copy left the machine, and every run with its failure reason in full. "Healthy" requires off-site, so a local-only shop is told so rather than shown green)*
-- [~][ ] Data export of all business data on request — FR-SET-08 · `K-10` *(the JSON snapshot is the browser's own records; a server-side export of everything is still open)*
+- [x][x] Data export of all business data on request — FR-SET-08 · `K-10` *(server-side and streamed: JSON of every table for the archive, a zip of CSV for the accountant. Tables read from `information_schema`, so one added later is in the archive without anyone remembering. Audited before a byte is written.)*
 
 ---
 
@@ -477,6 +477,7 @@ a feature somebody can use.
 - [x][x] Profit & loss: revenue, cost of sales, gross profit, operating expenses, net profit — `report.view_pl`
 - [x][x] Installment plans with a generated schedule, persisted in full *(the customer can be handed the whole schedule on day one)*
 - [x][x] Payments apply to the oldest unpaid installment first and spill forward *(so "what is overdue" stays answerable)*
+- [x][x] Every installment collection has permanent history and an exact receipt *(amount, channel/reference, cashier and balance-after-payment survive reload; original and audited `REPRINT` copies use the same server-rendered ESC/POS path as sale receipts, never the browser print dialogue)*
 - [x][x] Outstanding balance computed, never stored *(cannot drift from the payments)*
 - [x][x] Overpayment refused, and the message says what is actually outstanding
 - [x][x] A plan written off stops accepting money — needs `settings.general` as well as `customer.credit`

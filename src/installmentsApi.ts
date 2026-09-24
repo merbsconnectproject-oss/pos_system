@@ -5,6 +5,7 @@ import type {
   OutletId,
   PaymentMethod,
 } from './types';
+import type { ReceiptWire } from './receiptsApi';
 
 /**
  * Customer installment plans — `customer.credit`.
@@ -54,6 +55,18 @@ interface InstallmentWire {
   overdue: boolean;
 }
 
+interface InstallmentPaymentWire {
+  id: string;
+  receiptNumber: string;
+  amountPesewas: number;
+  balanceAfterPesewas: number;
+  receivedOn: string;
+  paymentMethod: string;
+  reference: string | null;
+  cashierName: string;
+  createdAt: string;
+}
+
 export interface InstallmentPlanWire {
   id: string;
   planNumber: string;
@@ -84,6 +97,7 @@ export interface InstallmentPlanWire {
     lineTotalPesewas: number;
   }[];
   schedule: InstallmentWire[];
+  payments: InstallmentPaymentWire[];
 }
 
 export interface InstallmentPageWire {
@@ -135,6 +149,17 @@ export const toPlan = (wire: InstallmentPlanWire): CustomerInstallmentPlan => ({
   startDate: wire.startDate,
   status: wire.status,
   schedule: wire.schedule.map(toScheduleItem),
+  payments: (wire.payments ?? []).map((payment) => ({
+    id: payment.id,
+    receiptNumber: payment.receiptNumber,
+    amount: payment.amountPesewas / 100,
+    balanceAfter: payment.balanceAfterPesewas / 100,
+    receivedOn: payment.receivedOn,
+    paymentMethod: METHOD_FROM_WIRE[payment.paymentMethod] ?? 'cash',
+    reference: payment.reference ?? undefined,
+    cashierName: payment.cashierName,
+    createdAt: payment.createdAt,
+  })),
   notes: wire.notes ?? undefined,
   createdAt: wire.createdAt,
 });
@@ -211,6 +236,16 @@ export const installmentsApi = {
         reference: reference || null,
       }),
     }).then(toPlan),
+
+  paymentReceipt: (
+    planId: string,
+    paymentId: string,
+    width: '80mm' | '58mm' = '80mm',
+    reprint = false,
+  ) => request<ReceiptWire>(
+    `/api/installment-plans/${encodeURIComponent(planId)}/payments/${encodeURIComponent(paymentId)}/receipt${reprint ? '/reprint' : ''}?width=${width}`,
+    reprint ? { method: 'POST' } : undefined,
+  ),
 
   /** Needs `settings.general` as well — writing a debt off is the owner's call. */
   setDefaulted: (planId: string, defaulted: boolean, reason?: string) => {

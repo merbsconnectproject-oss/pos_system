@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
   TrendingUp,
   TrendingDown,
+  Activity,
   DollarSign,
   Calendar,
   Sparkles,
@@ -56,6 +57,7 @@ import {
 import { Product, Outlet, CompletedSale, Expense, CustomerInstallmentPlan, ReturnExchangeRecord } from '../types';
 import { exportToCsv } from '../utils/csvExport';
 import { InfoHint } from './InfoHint';
+import { observationsFrom, risksFrom, type TradingFigures } from '../insights';
 import {
   reportsApi,
   type DashboardView,
@@ -74,39 +76,6 @@ interface AnalyticsReportsViewProps {
   currentOutlet: Outlet;
   outlets: Outlet[];
   accentColor?: string;
-}
-
-interface ChartInference {
-  chartId: string;
-  chartTitle: string;
-  trend: 'bullish' | 'bearish' | 'neutral' | 'caution';
-  inference: string;
-  keyDriver: string;
-  suggestedAction: string;
-}
-
-interface AiInferenceData {
-  isAiGenerated: boolean;
-  modelUsed: string;
-  generatedAt: string;
-  executiveSummary: string;
-  financialHealthScore: number;
-  financialHealthGrade: string;
-  chartInferences: ChartInference[];
-  keyObservations: string[];
-  anomaliesAndRisks: Array<{
-    title: string;
-    severity: 'high' | 'medium' | 'low';
-    description: string;
-    suggestedAction: string;
-  }>;
-  strategicRecommendations: Array<{
-    priority: 'P1' | 'P2' | 'P3';
-    title: string;
-    impact: string;
-    timeline: string;
-    details: string;
-  }>;
 }
 
 const MiniSparkline: React.FC<{ data: Array<{ name: string; value: number }>; color: string }> = ({ data, color }) => (
@@ -139,57 +108,20 @@ const PAYMENT_COLORS: Record<string, string> = {
   'Bank Transfer': '#334155',
 };
 
-const ChartInferenceCallout: React.FC<{
-  id: string;
-  title: string;
-  trend: string;
-  inference: string;
-  driver: string;
-  action: string;
-  expandedId: string | null;
-  onToggle: (id: string) => void;
-  tone?: 'default' | 'danger';
-}> = ({ id, title, trend, inference, driver, action, expandedId, onToggle, tone = 'default' }) => {
-  const expanded = expandedId === id;
-  const danger = tone === 'danger';
-
+/**
+ * A short note under a chart, derived from the chart's own data — FR-RPT-04.
+ *
+ * <p>Renders nothing when there is nothing to say. Each of these used to carry
+ * a fixed sentence as its fallback — "Mobile Money (48%) is the dominant
+ * settlement rail", "15W Downlights turn over every 14 days" — shown whenever
+ * the inference call failed, which in a shipped counter was always. A chart
+ * with no note is honest; a chart with a borrowed note is not.
+ */
+const ChartNote: React.FC<{ note: string | null }> = ({ note }) => {
+  if (!note) return null;
   return (
-    <div className={`mt-4 rounded-xl border p-3.5 ${danger ? 'bg-rose-50/70 border-rose-200/80' : 'analytics-callout bg-slate-50 border-slate-200'}`}>
-      <button
-        type="button"
-        onClick={() => onToggle(id)}
-        className="w-full text-left"
-        aria-expanded={expanded}
-      >
-        <div className="flex items-center justify-between gap-3 text-xs">
-          <span className={`font-bold flex items-center gap-1.5 ${danger ? 'text-rose-950' : 'text-slate-900'}`}>
-            <Sparkles className={`w-3.5 h-3.5 ${danger ? 'text-rose-600' : 'text-accent-600'}`} /> {title}
-          </span>
-          <span className="flex items-center gap-2 shrink-0">
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${danger ? 'text-rose-800 bg-rose-100' : 'text-slate-700 bg-slate-200'}`}>
-              {trend}
-            </span>
-            <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''} ${danger ? 'text-rose-700' : 'text-slate-500'}`} />
-          </span>
-        </div>
-        {!expanded && (
-          <p className={`mt-2 text-[11px] font-semibold ${danger ? 'text-rose-800' : 'text-slate-600'}`}>
-            Click to reveal AI inference details.
-          </p>
-        )}
-      </button>
-
-      {expanded && (
-        <div className="mt-2 space-y-1.5">
-          <p className={`text-xs leading-relaxed ${danger ? 'text-rose-900/90' : 'text-slate-700'}`}>
-            {inference}
-          </p>
-          <div className={`text-[11px] font-medium pt-1 border-t flex items-center justify-between gap-3 ${danger ? 'text-rose-950/80 border-rose-200/60' : 'text-slate-600 border-slate-200'}`}>
-            <span>Driver: {driver}</span>
-            <span className={`font-bold shrink-0 ${danger ? 'text-rose-800' : 'text-accent-700'}`}>Action: {action}</span>
-          </div>
-        </div>
-      )}
+    <div className="analytics-callout mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+      <p className="text-[11px] leading-relaxed text-slate-700">{note}</p>
     </div>
   );
 };
@@ -212,16 +144,8 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
   const [activeTab, setActiveTab] = useState<'overview' | 'sales' | 'outlets' | 'categories' | 'payments' | 'inventory'>('overview');
 
   // AI Inference State
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiInferences, setAiInferences] = useState<AiInferenceData | null>(null);
-  const [customQuestion, setCustomQuestion] = useState('');
-  const [activePreset, setActivePreset] = useState<string | null>(null);
   const [activeSnapshot, setActiveSnapshot] = useState<'dailyRevenue' | 'profitMargin' | 'retentionRate' | 'aov'>('dailyRevenue');
-  const [expandedObservation, setExpandedObservation] = useState<number | null>(0);
-  const [expandedRecommendation, setExpandedRecommendation] = useState<number | null>(0);
-  const [answerPanelOpen, setAnswerPanelOpen] = useState(false);
   const [printModalOpen, setPrintModalOpen] = useState(false);
-  const [expandedChartInference, setExpandedChartInference] = useState<string | null>(null);
 
   // Sync outlet filter if currentOutlet changes
   useEffect(() => {
@@ -375,6 +299,8 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
       aov: metrics.averageOrderValue,
       profitMargin: metrics.grossMarginPct ?? 0,
       dailyTrend: `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`,
+      /** The same trend as a number, for anything that has to reason about it. */
+      changePercent: series.length === 0 ? null : change,
       // FR-SET has no daily target and nobody has set one, so there is nothing
       // to pace against. Zero reads as "no target", which is the case.
       dailyTarget: 0,
@@ -482,15 +408,52 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
   }, [paymentRows]);
 
   /**
-   * Chart 5: installment credit ageing.
+   * Chart 5: installment credit ageing — FR-CUST-07.
    *
-   * <p>Empty, and it should be. Installments are Stage 2 and nothing records
-   * one — the table that was here showed eight current plans and GH₵ 18,200
-   * outstanding for a facility the shop does not offer.
+   * <p>Built from the plans themselves, bucketed by how overdue the oldest
+   * unpaid instalment is. It was hardcoded to an empty array with a comment
+   * saying installments were Stage 2 and nothing recorded one — which stopped
+   * being true when installment plans shipped and began persisting, so the
+   * chart stayed blank for a facility the shop now offers.
+   *
+   * <p>Before that it was worse: eight literal plans and GH₵18,200 outstanding.
    */
-  const installmentAgingData = useMemo(() => [] as Array<{
-    stage: string; count: number; balance: number; color: string;
-  }>, []);
+  const installmentAgingData = useMemo(() => {
+    const now = Date.now();
+    const buckets = [
+      { stage: 'Current', color: '#15803D', max: 0 },
+      { stage: '1–30 days', color: '#B45309', max: 30 },
+      { stage: '31–60 days', color: '#C2410C', max: 60 },
+      { stage: 'Over 60 days', color: '#BE123C', max: Infinity },
+    ].map((bucket) => ({ ...bucket, count: 0, balance: 0 }));
+
+    filteredInstallments
+      .filter((plan) => plan.status !== 'COMPLETED')
+      .forEach((plan) => {
+        // The oldest unpaid instalment decides the bucket: a plan is as late as
+        // its earliest arrears, not its most recent one.
+        const unpaid = (plan.schedule || []).filter((item) => item.status !== 'PAID');
+        const oldestDue = unpaid.reduce<number | null>((oldest, item) => {
+          const due = new Date(item.dueDate).getTime();
+          if (Number.isNaN(due)) return oldest;
+          return oldest === null || due < oldest ? due : oldest;
+        }, null);
+
+        const daysLate = oldestDue === null ? 0 : Math.floor((now - oldestDue) / 86400000);
+        const bucket = daysLate <= 0
+          ? buckets[0]
+          : buckets.find((candidate) => daysLate <= candidate.max) ?? buckets[buckets.length - 1];
+
+        bucket.count += 1;
+        bucket.balance += plan.remainingBalance ?? 0;
+      });
+
+    // Empty buckets are dropped rather than drawn as zero bars, so a shop with
+    // no arrears sees three words instead of a chart of nothing.
+    return buckets
+      .filter((bucket) => bucket.count > 0)
+      .map(({ stage, count, balance, color }) => ({ stage, count, balance, color }));
+  }, [filteredInstallments]);
 
   /** Chart 6: best sellers by value. */
   const topProductsData = useMemo(
@@ -505,133 +468,118 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
     [topRows],
   );
 
-  // Trigger AI Inference via server-side route
-  const fetchAiInference = async (inquiryText?: string) => {
-    setAiLoading(true);
-    try {
-      const activeOutletName =
-        selectedOutlet === 'all'
-          ? 'All Outlets (Radiance POS Multi-Store)'
-          : outlets.find((o) => o.id === selectedOutlet)?.name || selectedOutlet;
+  /**
+   * FR-RPT-04: what the figures say, computed here from the figures.
+   *
+   * <p>This screen used to POST to `/api/analytics/ai-inference`, a route that
+   * exists only in the Vite dev server and is not part of the application the
+   * installers ship. In a real shop the call always failed, so the screen
+   * always rendered its `catch` branch — a fixed executive summary, a
+   * financial health score of 88 graded A, and a "prescriptive action plan"
+   * promising GH₵8,500 of released capital, identical on every counter in
+   * every shop regardless of what it had sold.
+   *
+   * <p>Now derived, and only from figures the server actually returned. When
+   * there is nothing to say, it says nothing — see `insights.ts`.
+   */
+  const tradingFigures = useMemo<TradingFigures>(() => ({
+    netRevenue: metrics.grossRevenue,
+    grossRevenue: num(summary?.revenue),
+    refundTotal: metrics.refundTotal,
+    refundCount: metrics.refundCount,
+    saleCount: metrics.totalTransactions,
+    averageSale: metrics.averageOrderValue,
+    discountTotal: metrics.discountTotal,
+    voidCount: metrics.voidCount,
+    voidedValue: metrics.voidedValue,
+    operatingExpenses: metrics.totalOpex,
+    outstandingCredit: metrics.activeCreditReceivables,
+    // FR-RPT-05: null rather than zero when this user may not see cost. Zero
+    // would read as "nothing cost anything" and produce a 100% margin.
+    cogs: summary?.cost == null ? null : metrics.estimatedCOGS,
+    grossProfit: summary?.profit == null ? null : metrics.grossProfit,
+    marginPercent: summary?.marginPercent == null ? null : metrics.grossMarginPct,
+    salesTrendPercent: quickSnapshot.changePercent,
+  }), [metrics, summary, quickSnapshot]);
 
-      const payload = {
-        outletName: activeOutletName,
-        metricsSummary: {
-          totalRevenue: metrics.grossRevenue,
-          cogs: metrics.estimatedCOGS,
-          grossProfit: metrics.grossProfit,
-          grossMarginPct: metrics.grossMarginPct,
-          totalOpex: metrics.totalOpex,
-          netIncome: metrics.netIncome,
-          netMarginPct: metrics.netMarginPct,
-          totalTransactions: metrics.totalTransactions,
-          averageOrderValue: metrics.averageOrderValue,
-          activeCreditReceivables: metrics.activeCreditReceivables,
-          returnRatePct: metrics.returnRatePct,
-          topCategory: 'Lighting & Lamps (Radiance)',
-        },
-        chartContext: {
-          salesVelocitySummary: salesVelocityData.slice(-5),
-          outlets: outletComparisonData,
-          categoryBreakdown: categoryData,
-          paymentDistribution: paymentChannelData,
-          installmentAging: installmentAgingData,
-        },
-        customQuestion: inquiryText || customQuestion || undefined,
-      };
+  /** FR-RPT-05: the server sends no cost at all to a reader without the right. */
+  const canViewProfit = summary?.cost != null;
 
-      const res = await fetch('/api/analytics/ai-inference', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (res.ok) {
-        const data: AiInferenceData = await res.json();
-        setAiInferences(data);
-      } else {
-        throw new Error(`Server returned ${res.status}`);
-      }
-    } catch (_err) {
-      // Graceful fallback to local deterministic smart rules engine
-      setAiInferences({
-        isAiGenerated: false,
-        modelUsed: 'Radiance POS Smart Rules Inference Engine (Deterministic Local)',
-        generatedAt: new Date().toISOString(),
-        executiveSummary: `For Radiance POS, operating revenues stand at GH₵ ${metrics.grossRevenue.toLocaleString()} with a sustained gross profit margin of ${metrics.grossMarginPct}%. Premium architectural fixtures in East Legon generate an Average Order Value of GH₵ ${metrics.averageOrderValue.toLocaleString()}, while commercial electrical cables maintain recurring trade contractor volume.`,
-        financialHealthScore: 86,
-        financialHealthGrade: 'A',
-        chartInferences: [
-          {
-            chartId: 'revenue-velocity',
-            chartTitle: 'Sales & Gross Margin Velocity',
-            trend: 'bullish',
-            inference: `Daily sales demonstrate steady velocity with gross margins consistently holding above 34%. Margin elasticity is protected by showroom architectural chandeliers.`,
-            keyDriver: 'Contractor commercial fit-outs and high-margin bespoke chandeliers',
-            suggestedAction: 'Maintain stock buffer of 24V drivers and mounting brackets to prevent installation bottlenecks.',
-          },
-          {
-            chartId: 'outlet-comparison',
-            chartTitle: 'Multi-Outlet Performance Matrix',
-            trend: 'neutral',
-            inference: `Radiance Lighting captures highest ticket value (GH₵ 1,245/order), whereas Inco Hardware leads unit turnover. Cross-selling opportunities exist between locations.`,
-            keyDriver: 'East Legon residential showroom demographics vs Tema industrial supply.',
-            suggestedAction: 'Incentivize Tema trade electricians with trade rebates on Radiance lighting collections.',
-          },
-          {
-            chartId: 'category-contribution',
-            chartTitle: 'Product Category Contribution & Margin Density',
-            trend: 'bullish',
-            inference: `Lighting & Lamps and Solar Inverters provide 58% of gross profit despite comprising only 38% of physical units sold.`,
-            keyDriver: 'High margin density on designer lighting fixtures.',
-            suggestedAction: 'Expand Nordic lighting series with complementary wall sconces.',
-          },
-        ],
-        keyObservations: [
-          `Radiance Lighting average basket size is 2.8x higher than standard hardware branches.`,
-          `Mobile Money transaction settlement represents 48% of gross turnover.`,
-          `Installment financing delinquency remains at a very low 4.3%.`,
-        ],
-        anomaliesAndRisks: [
-          {
-            title: 'Cluster of Installment Due Dates',
-            severity: 'medium',
-            description: 'Three contractor installment tranches are due within the same 48-hour window.',
-            suggestedAction: 'Dispatch automated SMS payment reminders.',
-          },
-        ],
-        strategicRecommendations: [
-          {
-            priority: 'P1',
-            title: 'Standardize Track Light Kits',
-            impact: '+6.5% Gross Margin',
-            timeline: '7 Days',
-            details: 'Pre-assemble 2-meter track light kits with power feeds and end caps for faster point-of-sale dispatch.',
-          },
-        ],
-      });
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  // Load initial inference once on mount
-  useEffect(() => {
-    fetchAiInference();
-  }, [selectedOutlet]);
+  const observations = useMemo(() => observationsFrom(tradingFigures), [tradingFigures]);
+  const risks = useMemo(() => risksFrom(tradingFigures), [tradingFigures]);
 
   // Handle preset prompt click
-  const handlePresetClick = (preset: { label: string; query: string }) => {
-    setActivePreset(preset.label);
-    setCustomQuestion(preset.query);
-    setAnswerPanelOpen(true);
-    fetchAiInference(preset.query);
-  };
+  /**
+   * FR-RPT-04: one derived sentence per chart, or none.
+   *
+   * <p>Each reads the same rows the chart above it draws. Where the rows do
+   * not support a statement — no sales, no categories, cost withheld — the
+   * note is null and nothing is rendered.
+   */
+  const chartNotes = useMemo(() => {
+    const cedis = (value: number) => `GH₵${value.toLocaleString('en-GB', {
+      minimumFractionDigits: 2, maximumFractionDigits: 2,
+    })}`;
 
-  // Helper to find specific chart inference from AI response
-  const getChartInference = (chartId: string): ChartInference | undefined => {
-    return aiInferences?.chartInferences.find((c) => c.chartId === chartId);
-  };
+    const topCategory = [...categoryData].sort((a, b) => b.revenue - a.revenue)[0];
+    const categoryTotal = categoryData.reduce((sum, row) => sum + row.revenue, 0);
+    const topPayment = [...paymentChannelData].sort((a, b) => b.amount - a.amount)[0];
+    const paymentTotal = paymentChannelData.reduce((sum, row) => sum + row.amount, 0);
+    const topProduct = topProductsData[0];
+    const busiestOutlet = [...outletComparisonData].sort((a, b) => b.revenue - a.revenue)[0];
+    const creditOutstanding = installmentAgingData.reduce((sum, row) => sum + row.balance, 0);
+
+    return {
+      revenueVelocity: metrics.totalTransactions === 0
+        ? null
+        : `${metrics.totalTransactions} sales over this period, ${cedis(metrics.grossRevenue)} net of returns`
+          + `${canViewProfit ? `, at a ${metrics.grossMarginPct}% gross margin` : ''}.`,
+
+      outletComparison: !busiestOutlet || outletComparisonData.length < 2
+        ? null
+        : `${busiestOutlet.outlet} took the most in this period, ${cedis(busiestOutlet.revenue)} `
+          + `across ${outletComparisonData.length} branches.`,
+
+      categoryContribution: !topCategory || categoryTotal <= 0
+        ? null
+        : `${topCategory.name} is the largest category at ${cedis(topCategory.revenue)}, `
+          + `${((topCategory.revenue / categoryTotal) * 100).toFixed(1)}% of the period's sales.`,
+
+      paymentChannels: !topPayment || paymentTotal <= 0
+        ? null
+        : `${topPayment.name} settled the most, ${cedis(topPayment.amount)} — `
+          + `${((topPayment.amount / paymentTotal) * 100).toFixed(1)}% of what was taken.`,
+
+      installmentCredit: installmentAgingData.length === 0
+        ? null
+        : `${cedis(creditOutstanding)} outstanding across ${filteredInstallments.length} plans.`,
+
+      inventoryTurnover: !topProduct
+        ? null
+        : `${topProduct.name} sold most by value, ${topProduct.units} units for ${cedis(topProduct.revenue)}.`,
+    };
+  }, [
+    metrics, canViewProfit, categoryData, paymentChannelData,
+    topProductsData, outletComparisonData, installmentAgingData, filteredInstallments,
+  ]);
+
+  /**
+   * FR-RPT-04: how much of the takings settled without cash.
+   *
+   * <p>Summed from the payment breakdown the server returned. The line here
+   * used to read "64% Digital • 36% Cash Float" on every shop's screen.
+   */
+  const digitalVsCash = useMemo(() => {
+    const total = paymentChannelData.reduce((sum, row) => sum + row.amount, 0);
+    if (total <= 0) return { digitalPercent: 0, cashPercent: 0 };
+    const cash = paymentChannelData
+      .filter((row) => row.name.toLowerCase().includes('cash'))
+      .reduce((sum, row) => sum + row.amount, 0);
+    return {
+      digitalPercent: ((total - cash) / total) * 100,
+      cashPercent: (cash / total) * 100,
+    };
+  }, [paymentChannelData]);
 
   // Export Analytics CSV
   const handleExportCsv = () => {
@@ -745,16 +693,6 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <button
-            onClick={() => fetchAiInference()}
-            disabled={aiLoading}
-            className="px-3.5 py-2 bg-accent-600 hover:bg-accent-700 text-white text-xs font-black rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
-            title="Re-run Gemini AI inference on active metrics"
-          >
-            <Sparkles className={`w-3.5 h-3.5 ${aiLoading ? 'animate-spin' : ''}`} />
-            <span>{aiLoading ? 'Synthesizing...' : 'Refresh AI Inference'}</span>
-          </button>
-
           <button
             onClick={() => setPrintModalOpen(true)}
             className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer transition-all"
@@ -876,298 +814,134 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
         </div>
       </div>
 
-      {/* 2. AI EXECUTIVE INFERENCE & STRATEGIC RECOMMENDATIONS PANEL */}
+      {/* 2. WHAT THE FIGURES SAY — derived, never asserted */}
       <div className="analytics-inference bg-white text-slate-800 rounded-xl p-5 sm:p-6 border border-slate-200 shadow-xs overflow-hidden">
-
         <div className="relative z-10 space-y-5">
-          {/* AI Banner Top Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-accent-50 border border-accent-200 flex items-center justify-center text-accent-600 shadow-xs">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-base sm:text-lg font-black tracking-tight text-slate-900 flex items-center gap-2">
-                    Executive Commercial Inference
-                  </h2>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-accent-50 text-accent-700 border border-accent-200 font-bold">
-                    {aiInferences?.modelUsed || 'Gemini 3.8 Flash'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  Synthesized at {aiInferences?.generatedAt ? new Date(aiInferences.generatedAt).toLocaleTimeString() : 'Just now'} • Automated diagnostic analysis
-                </p>
-              </div>
-            </div>
 
-            {/* Health Score Pill */}
-            <div className="flex items-center gap-3 self-start sm:self-auto bg-slate-50 px-4 py-2 rounded-xl border border-slate-200">
-              <div className="text-right">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Financial Health
-                </div>
-                <div className="text-xs font-bold text-slate-700">
-                  Commercial Vitality Grade
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="text-2xl font-black text-emerald-600">
-                  {aiInferences?.financialHealthScore ?? 88}
-                </div>
-                <div className="text-xs font-black bg-emerald-100 text-emerald-800 px-2 py-1 rounded-lg border border-emerald-300">
-                  {aiInferences?.financialHealthGrade ?? 'A'}
-                </div>
-              </div>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-accent-500" />
+                <span>What the figures say</span>
+              </h2>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Every line below is computed from this period&rsquo;s sales, returns, discounts and
+                expenses. Nothing is estimated.
+              </p>
             </div>
-          </div>
-
-          {/* Compact performance workspace */}
-          <div className="grid grid-cols-1 xl:grid-cols-[1.25fr_0.75fr] gap-4">
-            <div className="bg-white rounded-xl border border-slate-200 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h3 className="text-sm font-black text-slate-900">Sales vs Operating Expenses</h3>
-                  <p className="text-[11px] text-slate-500">Daily movement across the selected period</p>
-                </div>
-                <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-accent-500" /> Sales</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-500" /> OpEx</span>
-                </div>
-              </div>
-              <div className="h-44">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={operatingPerformanceData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                    <CartesianGrid stroke="#E2E8F0" strokeDasharray="0" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
-                    <Tooltip formatter={(value: number) => `GH₵ ${value.toLocaleString()}`} contentStyle={{ border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 11 }} />
-                    <Bar dataKey="sales" fill="#F97316" radius={[3, 3, 0, 0]} barSize={16} />
-                    <Line type="monotone" dataKey="expenses" stroke="#64748B" strokeWidth={2} dot={false} />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h3 className="text-sm font-black text-slate-900">Financial signals</h3>
-                  <p className="text-[11px] text-slate-500">Select a row to inspect the driver</p>
-                </div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">AI summary</span>
-              </div>
-              <div className="space-y-2">
-                {[
-                  { label: 'Margin health', value: `${metrics.grossMarginPct}%`, detail: `Gross profit is GH₵ ${metrics.grossProfit.toLocaleString()} on current sales.`, tone: 'text-emerald-700' },
-                  { label: 'Cash exposure', value: `GH₵ ${(metrics.activeCreditReceivables / 1000).toFixed(1)}k`, detail: 'Active installment receivables require regular collection follow-up.', tone: 'text-slate-900' },
-                  { label: 'Revenue pace', value: quickSnapshot.dailyTrend, detail: `Daily revenue is tracking at ${quickSnapshot.dailyTargetPace}% of the selected target.`, tone: 'text-accent-700' },
-                ].map((signal, index) => (
-                  <button key={signal.label} type="button" onClick={() => setExpandedObservation(expandedObservation === index ? null : index)} className="w-full text-left bg-white border border-slate-200 rounded-lg px-3 py-2.5 hover:border-slate-300 transition-colors">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs font-bold text-slate-700">{signal.label}</span>
-                      <span className={`text-sm font-black font-mono ${signal.tone}`}>{signal.value}</span>
-                    </div>
-                    {expandedObservation === index && <p className="text-[11px] text-slate-500 mt-1.5 pr-4">{signal.detail}</p>}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Interactive AI Prompt & Preset Chips */}
-          <div className="space-y-2.5 pt-1">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-                <Lightbulb className="w-3.5 h-3.5 text-accent-600" /> Ask AI Commercial Analyst:
+            {!canViewProfit && (
+              // FR-RPT-05: said out loud, so an empty space is not mistaken for
+              // a shop with no margin.
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                Cost and profit hidden for this account
               </span>
-              <span className="text-[10px] text-slate-400 hidden sm:inline">
-                Click a preset or enter a targeted query
-              </span>
-            </div>
-
-            {answerPanelOpen && activePreset && (
-              <div className="bg-slate-900 text-white rounded-xl p-3.5 border border-slate-800 animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="flex items-center justify-between gap-3 mb-1.5">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-accent-300">Analyst response</span>
-                  <button type="button" onClick={() => setAnswerPanelOpen(false)} className="text-slate-400 hover:text-white cursor-pointer" aria-label="Close analyst response"><X className="w-4 h-4" /></button>
-                </div>
-                <p className="text-xs leading-relaxed text-slate-200">{aiInferences?.executiveSummary || 'The analyst is preparing a response from the selected commercial signals.'}</p>
-              </div>
             )}
-
-            {/* Preset Buttons */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              {[
-                {
-                  label: 'Lighting vs Hardware Margins',
-                  query: 'Compare the gross margin density of Radiance Lighting chandeliers against standard building hardware.',
-                },
-                {
-                  label: 'Debtor & Installment Risks',
-                  query: 'Analyze our customer installment financing balance of GH₵ 18,200 and flag any credit collection risks.',
-                },
-                {
-                  label: 'Fast vs Dead Stock',
-                  query: 'Which items are experiencing high velocity and which are at risk of tying up working capital as dead stock?',
-                },
-                {
-                  label: 'Payment Method Friction',
-                  query: 'Evaluate our Mobile Money vs Cash split and recommend improvements for cashier drawer reconciliation.',
-                },
-              ].map((preset) => (
-                <button
-                  key={preset.label}
-                  onClick={() => handlePresetClick(preset)}
-                  className={`px-3 py-1.5 text-[11px] font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all border ${
-                    activePreset === preset.label
-                      ? 'bg-accent-500 text-white border-accent-500 shadow-xs'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Custom Input Bar */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (customQuestion.trim()) {
-                  fetchAiInference(customQuestion);
-                }
-              }}
-              className="flex items-center gap-2"
-            >
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={customQuestion}
-                  onChange={(e) => setCustomQuestion(e.target.value)}
-                  placeholder="Ask a specific question (e.g. 'How should we price magnetic track lights next month?')..."
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-accent-500 focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 outline-none transition-all"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={aiLoading || !customQuestion.trim()}
-                className="px-4 py-2.5 bg-accent-500 hover:bg-accent-600 disabled:opacity-40 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-xs shrink-0"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Analyze</span>
-              </button>
-            </form>
           </div>
 
-          {/* Key Observations & Strategic Priorities Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2 border-t border-slate-200">
-            {/* Left: Observations & Warnings */}
-            <div className="space-y-3">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-emerald-600" /> Key Commercial Observations
+          {/* Sales against operating expenses */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-black text-slate-900">Sales vs operating expenses</h3>
+                <p className="text-[11px] text-slate-500">Daily movement across the selected period</p>
               </div>
-              <div className="space-y-2">
-                {(aiInferences?.keyObservations || [
-                  `Radiance Lighting average basket size is 2.8x higher than standard hardware branches.`,
-                  `Mobile Money transaction settlement accounts for 48% of gross turnover.`,
-                  `Returns & swaps restock compliance remains steady at 92%.`,
-                ]).map((obs, idx) => (
-                  <button key={idx} type="button" onClick={() => setExpandedObservation(expandedObservation === idx + 3 ? null : idx + 3)} className="w-full flex items-center justify-between gap-3 text-left text-xs text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-200 hover:bg-white transition-colors">
-                    <span className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-accent-500 shrink-0 mt-1.5" /><span className="font-semibold">{obs}</span></span>
-                    <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${expandedObservation === idx + 3 ? 'rotate-180' : ''}`} />
-                  </button>
-                ))}
+              <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-accent-500" /> Sales</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-500" /> Expenses</span>
               </div>
+            </div>
+            <div className="h-44">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={operatingPerformanceData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid stroke="#E2E8F0" strokeDasharray="0" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
+                  <Tooltip formatter={(value: number) => `GH₵ ${value.toLocaleString()}`} contentStyle={{ border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 11 }} />
+                  <Bar dataKey="sales" fill="#F97316" radius={[3, 3, 0, 0]} barSize={16} />
+                  <Line type="monotone" dataKey="expenses" stroke="#64748B" strokeWidth={2} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
 
-              {/* Anomalies / Risks */}
-              {aiInferences?.anomaliesAndRisks && aiInferences.anomaliesAndRisks.length > 0 && (
-                <div className="pt-2">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-red-700 flex items-center gap-1 mb-2">
-                    <AlertTriangle className="w-3.5 h-3.5 text-red-600" /> Flagged Commercial Anomalies
-                  </div>
-                  <div className="space-y-2">
-                    {aiInferences.anomaliesAndRisks.map((risk, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-red-50 border border-red-200 p-2.5 rounded-xl text-xs space-y-1"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-red-900">{risk.title}</span>
-                          <span className="text-[9px] uppercase font-black px-1.5 py-0.2 rounded bg-red-100 text-red-800 border border-red-300">
-                            {risk.severity} severity
-                          </span>
-                        </div>
-                        <p className="text-slate-600 text-[11px]">{risk.description}</p>
-                        <p className="text-red-800 text-[11px] font-semibold pt-0.5">
-                          ↳ Action: {risk.suggestedAction}
-                        </p>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {/* Observations */}
+            <div className="space-y-2.5">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                <Activity className="w-4 h-4 text-accent-500" /> Observations
+              </div>
+              {observations.length === 0 ? (
+                <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  {metrics.totalTransactions === 0
+                    ? 'No sales in this period, so there is nothing to report.'
+                    : 'Nothing in this period stands out.'}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {observations.map((observation) => (
+                    <div
+                      key={observation.id}
+                      className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1"
+                    >
+                      <div className="flex items-center gap-2">
+                        {observation.trend === 'up' && <TrendingUp className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                        {observation.trend === 'down' && <TrendingDown className="w-3.5 h-3.5 text-red-600 shrink-0" />}
+                        <span className="text-xs font-bold text-slate-800">{observation.title}</span>
                       </div>
-                    ))}
-                  </div>
+                      <p className="text-[11px] text-slate-600">{observation.detail}</p>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* Right: Prescriptive Action Checklist */}
-            <div className="space-y-3">
+            {/* Worth attention */}
+            <div className="space-y-2.5">
               <div className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-accent-500" /> Prescriptive Action Plan
+                <AlertTriangle className="w-4 h-4 text-accent-500" /> Worth attention
               </div>
-              <div className="space-y-2.5">
-                {(aiInferences?.strategicRecommendations || [
-                  {
-                    priority: 'P1',
-                    title: 'Standardize Magnetic Track Kits',
-                    impact: '+6.5% Gross Margin',
-                    timeline: 'Next 7 Days',
-                    details: 'Bundle track rails with live feeds and end caps to accelerate showroom contractor purchases.',
-                  },
-                  {
-                    priority: 'P2',
-                    title: 'Clear Aging Outdoor Fixtures',
-                    impact: 'GH₵ 8,500 Cash Released',
-                    timeline: 'Next 14 Days',
-                    details: 'Apply 10% promotional clearance to slow-moving exterior lanterns to free working capital.',
-                  },
-                  {
-                    priority: 'P3',
-                    title: 'Contractor Trade Incentive Tiers',
-                    impact: '+18% Repeat Visits',
-                    timeline: 'Next 30 Days',
-                    details: 'Implement tiered trade discount pricing for registered electrical contractors.',
-                  },
-                ]).map((rec, idx) => (
-                  <button
-                    type="button"
-                    onClick={() => setExpandedRecommendation(expandedRecommendation === idx ? null : idx)}
-                    key={idx}
-                    className="w-full text-left bg-slate-50 border border-slate-200 p-3 rounded-lg text-xs space-y-1.5 hover:bg-white transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${
-                            rec.priority === 'P1'
-                              ? 'bg-rose-100 text-rose-700 border-rose-200'
-                              : rec.priority === 'P2'
-                              ? 'bg-slate-100 text-slate-700 border-slate-200'
-                              : 'bg-slate-100 text-slate-700 border-slate-200'
-                          }`}
-                        >
-                          {rec.priority}
+              {risks.length === 0 ? (
+                <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  Nothing in this period needs looking at.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {risks.map((risk) => (
+                    <div
+                      key={risk.id}
+                      className={`border rounded-xl p-3 space-y-1 ${
+                        risk.severity === 'high'
+                          ? 'bg-red-50 border-red-200'
+                          : risk.severity === 'medium'
+                            ? 'bg-amber-50 border-amber-200'
+                            : 'bg-slate-50 border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-xs font-bold ${
+                          risk.severity === 'high' ? 'text-red-900'
+                            : risk.severity === 'medium' ? 'text-amber-900' : 'text-slate-800'
+                        }`}>
+                          {risk.title}
                         </span>
-                        <span className="font-bold text-slate-900 text-xs">{rec.title}</span>
+                        <span className={`text-[9px] uppercase font-black px-1.5 py-0.5 rounded border ${
+                          risk.severity === 'high'
+                            ? 'bg-red-100 text-red-800 border-red-300'
+                            : risk.severity === 'medium'
+                              ? 'bg-amber-100 text-amber-800 border-amber-300'
+                              : 'bg-slate-100 text-slate-700 border-slate-300'
+                        }`}>
+                          {risk.severity}
+                        </span>
                       </div>
-                      <span className="flex items-center gap-2"><span className="text-[10px] font-mono text-emerald-700 font-bold">{rec.impact}</span><ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expandedRecommendation === idx ? 'rotate-180' : ''}`} /></span>
+                      <p className="text-[11px] text-slate-600">{risk.detail}</p>
                     </div>
-                    {expandedRecommendation === idx && <><p className="text-[11px] text-slate-600">{rec.details}</p><div className="text-[10px] text-slate-400 font-mono">Target Timeline: {rec.timeline}</div></>}
-                  </button>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
+
         </div>
       </div>
 
@@ -1194,8 +968,8 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           <div className="analytics-metric-card bg-white p-4 rounded-xl border border-slate-200 shadow-xs hover:shadow-sm transition-shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Gross Margin</span>
-            <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded font-mono font-bold">
-              Target 35%
+            <span className="text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded font-mono font-bold">
+              Net of returns
             </span>
           </div>
           <div className="text-xl font-black text-emerald-700 tracking-tight">
@@ -1253,8 +1027,12 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
             GH₵ {metrics.activeCreditReceivables.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
-            <span>3 Active Contracts</span>
-            <span className="font-bold text-slate-700">84% Current</span>
+            <span>
+              {filteredInstallments.filter((plan) => plan.status !== 'COMPLETED').length} active plans
+            </span>
+            <span className="font-bold text-slate-700">
+              {filteredInstallments.filter((plan) => plan.status === 'DEFAULTED').length} defaulted
+            </span>
           </div>
         </div>
 
@@ -1263,15 +1041,17 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
             <span>Return &amp; Swap Rate</span>
             <span className="text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded font-mono font-bold">
-              Restock 92%
+              Of sales
             </span>
           </div>
           <div className="text-xl font-black text-white tracking-tight">
             {metrics.returnRatePct}%
           </div>
           <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
-            <span>GH₵ {metrics.returnsVolume.toLocaleString()} Restocked</span>
-            <span className="font-bold text-emerald-600">Low Loss</span>
+            <span>{metrics.refundCount} returns</span>
+            <span className="font-bold text-slate-700">
+              GH₵ {metrics.refundTotal.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} refunded
+            </span>
           </div>
         </div>
       </div>
@@ -1285,9 +1065,18 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
               <div>
                 <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
                   <span>Sales &amp; Margin Velocity</span>
-                  <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-0.5">
-                    <TrendingUp className="w-3 h-3" /> +16.8%
-                  </span>
+                  {quickSnapshot.changePercent !== null && (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-0.5 ${
+                      quickSnapshot.changePercent >= 0
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-red-50 text-red-700 border-red-200'
+                    }`}>
+                      {quickSnapshot.changePercent >= 0
+                        ? <TrendingUp className="w-3 h-3" />
+                        : <TrendingDown className="w-3 h-3" />}
+                      {quickSnapshot.dailyTrend}
+                    </span>
+                  )}
                 </h3>
                 <p className="text-[11px] text-slate-400">
                   Daily gross sales (GH₵) vs Cost of Goods Sold and Margin %
@@ -1322,16 +1111,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
             </div>
           </div>
 
-          <ChartInferenceCallout
-            id="revenue-velocity"
-            title="AI Chart Inference:"
-            trend={getChartInference('revenue-velocity')?.trend || 'Bullish Pattern'}
-            inference={getChartInference('revenue-velocity')?.inference || `Gross margin has stabilized above 34% driven by premium architectural chandelier sales and bundled accessories at Radiance Lighting.`}
-            driver={getChartInference('revenue-velocity')?.keyDriver || 'Contractor commercial fit-outs and high-margin bespoke chandeliers'}
-            action="Stock 24V drivers"
-            expandedId={expandedChartInference}
-            onToggle={(id) => setExpandedChartInference(expandedChartInference === id ? null : id)}
-          />
+          <ChartNote note={chartNotes.revenueVelocity} />
         </div>
 
         {/* CHART 2: MULTI-OUTLET COMPARISON MATRIX */}
@@ -1373,16 +1153,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
             </div>
           </div>
 
-          <ChartInferenceCallout
-            id="outlet-comparison"
-            title="AI Outlet Benchmarking:"
-            trend={getChartInference('outlet-comparison')?.trend || 'Margin Divergence'}
-            inference={getChartInference('outlet-comparison')?.inference || `Radiance Lighting achieves the highest average basket size (GH₵ 1,245) and gross margin (40%), while Inco Hardware leads overall transaction volume.`}
-            driver={getChartInference('outlet-comparison')?.keyDriver || 'East Legon residential affluent fit-outs vs Tema industrial volume'}
-            action="Cross-sell downlights"
-            expandedId={expandedChartInference}
-            onToggle={(id) => setExpandedChartInference(expandedChartInference === id ? null : id)}
-          />
+          <ChartNote note={chartNotes.outletComparison} />
         </div>
 
         {/* CHART 3: PRODUCT CATEGORY CONTRIBUTION & MARGIN DENSITY */}
@@ -1450,16 +1221,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
             </div>
           </div>
 
-          <ChartInferenceCallout
-            id="category-contribution"
-            title="AI Category Analysis:"
-            trend={getChartInference('category-contribution')?.trend || 'Margin Driver'}
-            inference={getChartInference('category-contribution')?.inference || `Lighting & Lamps provides 35% of total gross turnover and generates the highest margin yield at 42.5%, outperforming raw electrical cables.`}
-            driver={getChartInference('category-contribution')?.keyDriver || 'Premium aesthetics and smart switchgear demand'}
-            action="Bundle accessories"
-            expandedId={expandedChartInference}
-            onToggle={(id) => setExpandedChartInference(expandedChartInference === id ? null : id)}
-          />
+          <ChartNote note={chartNotes.categoryContribution} />
         </div>
 
         {/* CHART 4: PAYMENT CHANNELS & SETTLEMENT VELOCITY */}
@@ -1501,23 +1263,19 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                 </div>
               ))}
 
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-300 mt-3 flex items-center justify-between text-xs">
-                <span className="text-slate-600 font-medium">Digital vs Cash Split:</span>
-                <span className="font-bold text-slate-900">64% Digital (MoMo / Card / Bank) • 36% Cash Float</span>
-              </div>
+              {paymentChannelData.length > 0 && (
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-300 mt-3 flex items-center justify-between text-xs">
+                  <span className="text-slate-600 font-medium">Digital vs cash:</span>
+                  <span className="font-bold text-slate-900">
+                    {digitalVsCash.digitalPercent.toFixed(1)}% digital &bull;{' '}
+                    {digitalVsCash.cashPercent.toFixed(1)}% cash
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
-          <ChartInferenceCallout
-            id="payment-channels"
-            title="AI Cash Flow Inference:"
-            trend={getChartInference('payment-channels')?.trend || 'Low Cash Risk'}
-            inference={getChartInference('payment-channels')?.inference || `Mobile Money (48%) is the dominant settlement rail. This significantly mitigates cashier drawer theft risks and accelerates end-of-shift blind balancing.`}
-            driver={getChartInference('payment-channels')?.keyDriver || 'Contractor on-site QR and bank wire verification'}
-            action="Pre-fund merchant floats"
-            expandedId={expandedChartInference}
-            onToggle={(id) => setExpandedChartInference(expandedChartInference === id ? null : id)}
-          />
+          <ChartNote note={chartNotes.paymentChannels} />
         </div>
 
         {/* CHART 5: CUSTOMER INSTALLMENT CREDIT AGING */}
@@ -1532,7 +1290,12 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                   </span>
                 </h3>
                 <p className="text-[11px] text-slate-400">
-                  Aging breakdown of GH₵ 18,200 funded customer financing
+                  {installmentAgingData.length === 0
+                    ? 'No customer financing outstanding'
+                    : `${filteredInstallments.filter((plan) => plan.status !== 'COMPLETED').length} active plans, `
+                      + `GH₵ ${installmentAgingData
+                        .reduce((sum, row) => sum + row.balance, 0)
+                        .toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} outstanding`}
                 </p>
               </div>
             </div>
@@ -1560,16 +1323,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
             </div>
           </div>
 
-          <ChartInferenceCallout
-            id="installment-credit"
-            title="AI Debtor Inference:"
-            trend={getChartInference('installment-credit')?.trend || 'Moderate Caution'}
-            inference={getChartInference('installment-credit')?.inference || `84% of installment plans are current. Only GH₵ 2,900 is in grace or overdue status, reflecting solid down payments (30%+) and verified contractor phones.`}
-            driver={getChartInference('installment-credit')?.keyDriver || 'Customer home renovation multi-room lighting financing'}
-            action="Trigger SMS 48h prior"
-            expandedId={expandedChartInference}
-            onToggle={(id) => setExpandedChartInference(expandedChartInference === id ? null : id)}
-          />
+          <ChartNote note={chartNotes.installmentCredit} />
         </div>
 
         {/* CHART 6: TOP SELLING PRODUCTS & INVENTORY TURNOVER */}
@@ -1617,17 +1371,7 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
             </div>
           </div>
 
-          <ChartInferenceCallout
-            id="inventory-turnover"
-            title="AI Inventory Inference:"
-            trend={getChartInference('inventory-turnover')?.trend || 'Stock Alert'}
-            inference={getChartInference('inventory-turnover')?.inference || `15W Downlights and 2.5mm cables turn over every 14 days. Linear battens are approaching minimum alert levels and require prioritized reordering.`}
-            driver={getChartInference('inventory-turnover')?.keyDriver || 'High residential installation frequency in East Legon'}
-            action="Create GRN batch"
-            expandedId={expandedChartInference}
-            onToggle={(id) => setExpandedChartInference(expandedChartInference === id ? null : id)}
-            tone="danger"
-          />
+          <ChartNote note={chartNotes.inventoryTurnover} />
         </div>
       </div>
 
@@ -1694,32 +1438,42 @@ export const AnalyticsReportsView: React.FC<AnalyticsReportsViewProps> = ({
                 </div>
               </div>
 
-              {/* AI Executive Assessment */}
+              {/* Observations — the same derived lines as the screen */}
               <div className="space-y-2">
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">
-                  2. AI Executive Diagnostic Assessment
+                  2. Observations
                 </h3>
-                <div className="p-4 bg-accent-50/70 rounded-xl border border-accent-200 text-xs text-slate-800 leading-relaxed">
-                  {aiInferences?.executiveSummary}
-                </div>
+                {observations.length === 0 ? (
+                  <p className="text-xs text-slate-500">Nothing in this period stands out.</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {observations.map((observation) => (
+                      <li key={observation.id} className="text-xs text-slate-800">
+                        <span className="font-bold">{observation.title}.</span>{' '}
+                        <span className="text-slate-600">{observation.detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
-              {/* Strategic Priorities */}
+              {/* Worth attention */}
               <div className="space-y-2">
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">
-                  3. Managerial Directives &amp; Action Plan
+                  3. Worth attention
                 </h3>
-                <div className="space-y-2">
-                  {(aiInferences?.strategicRecommendations || []).map((rec, i) => (
-                    <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-300 text-xs flex items-center justify-between">
-                      <div>
-                        <span className="font-bold text-slate-900">[{rec.priority}] {rec.title}: </span>
-                        <span className="text-slate-600">{rec.details}</span>
+                {risks.length === 0 ? (
+                  <p className="text-xs text-slate-500">Nothing in this period needs looking at.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {risks.map((risk) => (
+                      <div key={risk.id} className="p-3 bg-slate-50 rounded-xl border border-slate-300 text-xs">
+                        <span className="font-bold text-slate-900 uppercase">[{risk.severity}] {risk.title}: </span>
+                        <span className="text-slate-600">{risk.detail}</span>
                       </div>
-                      <span className="font-mono text-emerald-700 font-bold shrink-0 ml-3">{rec.impact}</span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 

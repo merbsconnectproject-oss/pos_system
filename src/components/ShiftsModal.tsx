@@ -12,6 +12,17 @@ interface ShiftsModalProps {
   currentOutlet: Outlet;
   /** FR-CASH-06: variance beyond this needs a written explanation (K-08). */
   varianceExplainThreshold: number;
+  /**
+   * Who is signed in.
+   *
+   * Only used before a shift exists. Once one is open the drawer belongs to
+   * whoever opened it, and that name is the server's — a cashier reading their
+   * own name above somebody else's drawer is how a count gets signed off by
+   * the wrong person.
+   */
+  currentUserName: string;
+  /** FR-SET-01: the configured currency, not a compiled-in one. */
+  currencySymbol: string;
 }
 
 export const ShiftsModal: React.FC<ShiftsModalProps> = ({
@@ -22,6 +33,8 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
   onStartShift,
   onCloseShift,
   currentOutlet,
+  currentUserName,
+  currencySymbol,
 }) => {
   const [openingFloat, setOpeningFloat] = useState('');
   const [countedCash, setCountedCash] = useState<string>('');
@@ -79,8 +92,30 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
         <div className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
           <div className="bg-slate-50 border border-slate-300 rounded-xl p-4 text-sm flex justify-between items-center">
             <div>
-              <div className="font-black text-slate-900">{currentOutlet.name} • Terminal #01</div>
-              <div className="text-xs text-slate-500 mt-0.5">Active Cashier: Kwame A.</div>
+              {/*
+                The open shift's own terminal and cashier, as the server
+                recorded them. Both used to be written in: every till in every
+                shop claimed terminal 01 and a cashier called Kwame A., so the
+                one screen whose job is to say whose drawer this is said the
+                same thing to everybody.
+              */}
+              <div className="font-black text-slate-900">
+                {currentOutlet.name}
+                {shiftInfo.terminalId && <> • Terminal #{shiftInfo.terminalId}</>}
+              </div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                {shiftInfo.isOpen && shiftInfo.cashier ? (
+                  <>
+                    Active cashier: <span className="font-bold text-slate-700">{shiftInfo.cashier}</span>
+                    {shiftInfo.openedAt && <> · opened {shiftInfo.openedAt}</>}
+                  </>
+                ) : (
+                  <>
+                    No shift open · signed in as{' '}
+                    <span className="font-bold text-slate-700">{currentUserName}</span>
+                  </>
+                )}
+              </div>
             </div>
             <span
               className={`px-3 py-1 rounded-full font-black text-xs ${
@@ -98,11 +133,11 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
             <div className="space-y-5">
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-800 block">
-                  Opening Float Declaration (Ghana Cedis GH₵) *
+                  Opening float declaration ({currencySymbol}) *
                 </label>
                 <div className="relative">
                   <span className="w-10 h-10 flex items-center justify-center font-bold text-slate-500 absolute left-1.5 top-1 text-lg">
-                    GH₵
+                    {currencySymbol}
                   </span>
                   <input
                     type="number"
@@ -143,7 +178,7 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
 
               <div>
                 <label className="text-sm font-bold text-slate-800 block mb-2">
-                  Total Counted Cash in Drawer (GH₵) *
+                  Total counted cash in drawer ({currencySymbol}) *
                 </label>
                 <input
                   type="number"
@@ -171,12 +206,14 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
                 <div className="flex justify-between items-center">
                   <span className="text-slate-500 text-sm">Expected Drawer Cash:</span>
                   <span className="font-bold text-base text-slate-800">
-                    GH₵ {shiftInfo.expectedCash.toFixed(2)}
+                    {formatMoney(shiftInfo.expectedCash, currencySymbol)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-slate-500 text-sm">Your Counted Cash:</span>
-                  <span className="font-bold text-base text-slate-800">GH₵ {countedNum.toFixed(2)}</span>
+                  <span className="font-bold text-base text-slate-800">
+                    {formatMoney(countedNum, currencySymbol)}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center pt-3 border-t border-slate-300 text-base font-black">
                   <span>Reconciliation Variance:</span>
@@ -189,7 +226,11 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
                         : 'text-red-600'
                     }
                   >
-                    {variance > 0 ? `+GH₵ ${variance.toFixed(2)} (Over)` : variance < 0 ? `-GH₵ ${Math.abs(variance).toFixed(2)} (Short)` : 'GH₵ 0.00 (Perfect Match)'}
+                    {variance > 0
+                      ? `+${formatMoney(variance, currencySymbol)} (over)`
+                      : variance < 0
+                      ? `-${formatMoney(Math.abs(variance), currencySymbol)} (short)`
+                      : `${formatMoney(0, currencySymbol)} (perfect match)`}
                   </span>
                 </div>
               </div>
@@ -200,11 +241,13 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
                     Variance explanation{' '}
                     {explanationRequired ? (
                       <span className="text-rose-600">
-                        (required — variance exceeds {formatMoney(varianceExplainThreshold)})
+                        (required — variance exceeds{' '}
+                        {formatMoney(varianceExplainThreshold, currencySymbol)})
                       </span>
                     ) : (
                       <span className="font-normal text-slate-500">
-                        (optional — within the {formatMoney(varianceExplainThreshold)} threshold)
+                        (optional — within the{' '}
+                        {formatMoney(varianceExplainThreshold, currencySymbol)} threshold)
                       </span>
                     )}
                   </label>

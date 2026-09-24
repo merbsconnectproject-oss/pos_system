@@ -33,7 +33,8 @@ export interface SaleWire {
     productId: string; productName: string; sku: string; selectedUnit: string;
     conversionFactor: number; quantity: number; quantityBase: number;
     unitPrice: number; discount: number; lineTotal: number;
-    frozenCostPrice: number; belowFloor: boolean;
+    /** FR-RPT-05: null when the reader may not see cost. */
+    frozenCostPrice: number | null; belowFloor: boolean;
   }[];
   payments: { id: string; method: PaymentEntry['method']; amount: number; provider?: string | null; reference?: string | null }[];
 }
@@ -86,6 +87,16 @@ export interface SaleDraft {
   customerName?: string;
   customerPhone?: string;
   cart: CartItem[];
+  /**
+   * FR-POS-10: a concession off the whole bill, as a percentage.
+   *
+   * Sent as the percentage the cashier chose rather than as the cedis it came
+   * to, so the server resolves it against its own subtotal. A pre-computed
+   * amount would be the browser deciding the total again by another route.
+   */
+  cartDiscountPercent?: number;
+  /** FR-POS-10: the approver, when the concession passed the seller's ceiling. */
+  cartDiscountApproverId?: string;
   payments: PaymentEntry[];
 }
 
@@ -131,7 +142,10 @@ export const cartFromWire = (wire: SaleWire, catalogue: Product[]): CartItem[] =
       unitPrice: line.unitPrice,
       // BR-5: the cost as it was at the moment of sale, so a reprinted
       // receipt and a past margin both stay true after stock is repriced.
-      frozenCostPrice: line.frozenCostPrice,
+      // Zero, not null, on the cart line the screen renders: a reader without
+      // `price.view_cost` sees no cost anywhere, and every margin computed from
+      // it is therefore zero rather than the whole sale.
+      frozenCostPrice: line.frozenCostPrice ?? 0,
       discount: toMajor(line.discount),
       lineTotal: toMajor(line.lineTotal),
       floorPriceApproved: line.belowFloor || undefined,
@@ -163,6 +177,16 @@ export const salesApi = {
         floorApprovedBy: item.floorPriceApproverId || undefined,
         discountApprovedBy: item.discountApproverId || undefined,
       })),
+      // FR-POS-10: the cart concession travels as its own field. It used to
+      // travel nowhere at all — the till reduced the total, took payment for
+      // the reduced figure, and sent the server only the line discounts, so
+      // every discounted bill arrived short and was refused as a payment
+      // mismatch. The cashier saw "payments do not settle" for a discount the
+      // screen had already applied.
+      cartDiscountPercent: draft.cartDiscountPercent && draft.cartDiscountPercent > 0
+        ? draft.cartDiscountPercent
+        : undefined,
+      cartDiscountApprovedBy: draft.cartDiscountApproverId || undefined,
       payments: draft.payments.map((payment) => ({
         id: crypto.randomUUID(),
         method: payment.method,

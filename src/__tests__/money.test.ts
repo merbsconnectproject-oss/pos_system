@@ -7,6 +7,7 @@ import {
   moneyEquals,
   roundMoney,
   roundQuantity,
+  settleCash,
   sumMoney,
   toPesewas,
 } from '../money';
@@ -69,6 +70,19 @@ describe('money — BR-11', () => {
     const total = lineTotal(3, 18.335, 0); // 55.01
     const tendered = 60;
     expect(roundMoney(tendered - total)).toBe(4.99);
+  });
+
+  it('keeps the full cash tendered so an overpayment survives onto the receipt', () => {
+    expect(settleCash(35, 50)).toEqual({
+      amount: 50,
+      changeDue: 15,
+      sufficient: true,
+    });
+    expect(settleCash(35, 30)).toEqual({
+      amount: 30,
+      changeDue: 0,
+      sufficient: false,
+    });
   });
 
   it('keeps quantities at three decimals, for cable sold by the metre', () => {

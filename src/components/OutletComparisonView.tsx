@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Store,
   TrendingUp,
@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Outlet, Product, CompletedSale } from '../types';
 import { InfoHint } from './InfoHint';
+import { reportsApi } from '../reportsApi';
 
 interface OutletComparisonViewProps {
   outlets: Outlet[];
@@ -29,26 +30,31 @@ interface OutletComparisonViewProps {
 
 type MetricMode = 'total' | 'average';
 
+/**
+ * One branch's trading, as the server computed it.
+ *
+ * <p>`grossProfit` and `marginPct` are null for a reader without
+ * `report.view_profit` — FR-RPT-05 — and the screen leaves those cells blank
+ * rather than showing a zero that reads as "made no money".
+ */
 interface OutletMetrics {
   outlet: Outlet;
-  // Totals
+  // Totals, all net of returns
   totalRevenue: number;
   totalOrders: number;
   totalItems: number;
-  grossProfit: number;
-  marginPct: number;
+  grossProfit: number | null;
+  marginPct: number | null;
   totalDiscounts: number;
+  refundTotal: number;
   stockValuation: number;
   lowStockCount: number;
   // Averages per sale
   avgOrderValue: number;
   avgItemsPerSale: number;
-  avgProfitPerSale: number;
+  avgProfitPerSale: number | null;
   avgDiscountPerSale: number;
   revenuePerItem: number;
-  // Profile
-  topDriver: string;
-  archetype: string;
 }
 
 export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
@@ -59,119 +65,131 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
   const [metricMode, setMetricMode] = useState<MetricMode>('total');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
 
-  // Compute metrics for each outlet dynamically
-  const outletMetricsList: OutletMetrics[] = useMemo(() => {
-    return outlets.map((outlet) => {
-      const rawSales = sales.filter(
-        (s) => s.outletId === outlet.id && s.status === 'COMPLETED'
-      );
+  /**
+   * FR-RPT-03 · FR-RPT-04: every figure below comes from the server.
+   *
+   * <p>What was here instead: a per-branch block of literals — Radiance
+   * Lighting opened at GH₵34,850 of revenue on 28 orders at a 40% margin,
+   * Inco Hardware at GH₵32,450 on 95 — added to whatever sales the browser had
+   * loaded. Gross profit was that invented revenue times an invented margin,
+   * and any line whose cost was missing fell back to 70% of its selling price.
+   * Every comparison on the screen was therefore a comparison of two seeds.
+   *
+   * <p>One summary call per branch. There are two or three branches, and the
+   * alternative — a grouping the reports API does not have — would have been a
+   * new endpoint for a screen that can ask the existing one.
+   */
+  const [rows, setRows] = useState<OutletMetrics[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
 
-      // Branch seed / baseline configurations
-      let baseRevenue = 0;
-      let baseOrders = 0;
-      let baseItems = 0;
-      let baseDiscounts = 0;
-      let baseMarginPct = 30.0;
-      let archetype = 'General Trade Branch';
-      let topDriver = 'Fast-moving installation essentials and standard retail lines.';
+  useEffect(() => {
+    let current = true;
+    setLoading(true);
+    setFailed(false);
 
-      if (outlet.id === 'radiance-lighting') {
-        baseRevenue = 34850.0;
-        baseOrders = 28;
-        baseItems = 142;
-        baseDiscounts = 850.0;
-        baseMarginPct = 40.0;
-        archetype = 'High-Value Architectural Showroom';
-        topDriver = 'Italian chandeliers, 48V magnetic track lights, and luxury pendants with premium retail margins.';
-      } else if (outlet.id === 'inco-hardware') {
-        baseRevenue = 32450.0;
-        baseOrders = 95;
-        baseItems = 712;
-        baseDiscounts = 1420.0;
-        baseMarginPct = 28.5;
-        archetype = 'Bulk Contractor & Electrical Supply';
-        topDriver = '2.5mm Twin & Earth Cable accounts for 41% of daily volume, supplied by Nexans Ghana.';
-      } else if (outlet.id === 'apex-electricals') {
-        baseRevenue = 16538.0;
-        baseOrders = 77;
-        baseItems = 590;
-        baseDiscounts = 680.0;
-        baseMarginPct = 32.0;
-        archetype = 'Commercial & Urban Trade Counter';
-        topDriver = 'PVC Conduit 20mm & 13A Single Sockets lead unit velocity in Kumasi trade branch.';
-      }
+    const to = new Date();
+    const from = new Date(to.getTime() - 30 * 86400000);
 
-      // Dynamic sales added in session
-      const dynamicRevenue = rawSales.reduce((acc, s) => acc + s.total, 0);
-      const dynamicOrders = rawSales.length;
-      const dynamicItems = rawSales.reduce(
-        (acc, s) => acc + s.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
-        0
-      );
-      const dynamicDiscounts = rawSales.reduce((acc, s) => acc + (s.discountTotal || 0), 0);
+    Promise.all(outlets.map(async (outlet) => {
+      const filters = { from, to, outletId: outlet.id };
+      const [summary, byProduct, valuation, low] = await Promise.all([
+        reportsApi.summary(filters),
+        // Units moved, which the summary does not carry — it counts receipts.
+        // Summed from the product breakdown rather than estimated.
+        reportsApi.breakdown('product', filters, 1000),
+        reportsApi.stock('valuation', { from: null, to: null, outletId: outlet.id }),
+        reportsApi.stock('low', { from: null, to: null, outletId: outlet.id }),
+      ]);
 
-      // Estimated gross profit
-      const dynamicProfit = rawSales.reduce((acc, s) => {
-        const saleCost = s.items.reduce((itemCost, it) => {
-          const unitCost =
-            it.frozenCostPrice ||
-            (it.product.costPrice && it.product.costPrice[outlet.id]) ||
-            it.unitPrice * 0.7;
-          return itemCost + unitCost * it.quantity;
-        }, 0);
-        return acc + (s.total - saleCost);
-      }, 0);
-
-      const totalRevenue = baseRevenue + dynamicRevenue;
-      const totalOrders = Math.max(1, baseOrders + dynamicOrders);
-      const totalItems = Math.max(1, baseItems + dynamicItems);
-      const totalDiscounts = baseDiscounts + dynamicDiscounts;
-      const grossProfit = baseRevenue * (baseMarginPct / 100) + dynamicProfit;
-      const marginPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
-
-      // Inventory valuation & low stock count
-      const stockValuation = products.reduce(
-        (sum, p) => sum + (p.stock[outlet.id] || 0) * (p.costPrice[outlet.id] || 0),
-        0
-      );
-
-      const lowStockCount = products.filter(
-        (p) => (p.stock[outlet.id] || 0) <= (p.minStockAlert[outlet.id] || 10)
-      ).length;
-
-      // Unit Economics (Per Sale)
-      const avgOrderValue = totalRevenue / totalOrders;
-      const avgItemsPerSale = totalItems / totalOrders;
-      const avgProfitPerSale = grossProfit / totalOrders;
-      const avgDiscountPerSale = totalDiscounts / totalOrders;
-      const revenuePerItem = totalRevenue / totalItems;
+      const orders = summary.saleCount;
+      const items = byProduct.reduce((sum, row) => sum + Number(row.quantity ?? 0), 0);
+      const profit = summary.profit == null ? null : Number(summary.profit);
 
       return {
         outlet,
-        totalRevenue,
-        totalOrders,
-        totalItems,
-        grossProfit,
-        marginPct,
-        totalDiscounts,
-        stockValuation,
-        lowStockCount,
-        avgOrderValue,
-        avgItemsPerSale,
-        avgProfitPerSale,
-        avgDiscountPerSale,
-        revenuePerItem,
-        topDriver,
-        archetype,
-      };
-    });
-  }, [outlets, products, sales]);
+        totalRevenue: Number(summary.netRevenue),
+        totalOrders: orders,
+        totalItems: items,
+        grossProfit: profit,
+        marginPct: summary.marginPercent == null ? null : Number(summary.marginPercent),
+        totalDiscounts: Number(summary.discountTotal),
+        refundTotal: Number(summary.refundTotal),
+        stockValuation: valuation.reduce((sum, row) => sum + Number(row.valueAtCost ?? 0), 0),
+        lowStockCount: low.length,
+        avgOrderValue: Number(summary.averageSale),
+        avgItemsPerSale: orders === 0 ? 0 : items / orders,
+        avgProfitPerSale: profit === null || orders === 0 ? null : profit / orders,
+        avgDiscountPerSale: orders === 0 ? 0 : Number(summary.discountTotal) / orders,
+        revenuePerItem: items === 0 ? 0 : Number(summary.netRevenue) / items,
+      } satisfies OutletMetrics;
+    }))
+      .then((computed) => { if (current) setRows(computed); })
+      .catch(() => {
+        if (!current) return;
+        // Empty and said out loud. A comparison screen that falls back to
+        // something plausible is how the seeds got here in the first place.
+        setRows([]);
+        setFailed(true);
+      })
+      .finally(() => { if (current) setLoading(false); });
+
+    return () => { current = false; };
+  }, [outlets]);
+
+  const outletMetricsList = rows;
+
+  /**
+   * FR-RPT-04: which branch leads on a measure, stated from the measure.
+   *
+   * <p>Returns null when there is nothing to compare — one branch, no trade,
+   * or a tie. The commentary column used to be four fixed sentences naming
+   * specific shops and specific percentages ("Radiance Lighting retains
+   * highest gross margin rate (40.0%)") whatever the branches had actually
+   * done, and whatever branches existed.
+   */
+  const leaderOn = (
+    pick: (metric: OutletMetrics) => number | null,
+    describe: (name: string, value: number) => string,
+  ): string | null => {
+    const scored = outletMetricsList
+      .map((metric) => ({ name: metric.outlet.name, value: pick(metric) }))
+      .filter((row): row is { name: string; value: number } => row.value !== null && row.value > 0)
+      .sort((left, right) => right.value - left.value);
+
+    if (scored.length < 2) return null;
+    if (scored[0].value === scored[1].value) return null;
+    return describe(scored[0].name, scored[0].value);
+  };
 
   // Max values for relative bar benchmarks
   const maxTotalRevenue = Math.max(...outletMetricsList.map((m) => m.totalRevenue), 1);
   const maxAOV = Math.max(...outletMetricsList.map((m) => m.avgOrderValue), 1);
   const maxTotalOrders = Math.max(...outletMetricsList.map((m) => m.totalOrders), 1);
   const maxItemsPerSale = Math.max(...outletMetricsList.map((m) => m.avgItemsPerSale), 1);
+
+  if (loading) {
+    return (
+      <div className="p-4 md:p-6 max-w-[1600px] mx-auto">
+        <div className="bg-white p-6 rounded-2xl border border-slate-300 text-sm text-slate-500">
+          Reading branch figures&hellip;
+        </div>
+      </div>
+    );
+  }
+
+  if (failed) {
+    // Said plainly. The alternative — showing something plausible — is how
+    // this screen came to have a seeded revenue for every branch.
+    return (
+      <div className="p-4 md:p-6 max-w-[1600px] mx-auto">
+        <div className="bg-white p-6 rounded-2xl border border-red-200 text-sm text-red-700">
+          Branch figures could not be read from the server. Nothing is shown rather
+          than an estimate.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
@@ -284,8 +302,8 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                   <p className="text-xs text-slate-500 mt-0.5">
                     {outlet.address} • Prefix: {outlet.receiptPrefix}
                   </p>
-                  <p className="text-[11px] text-slate-500 italic mt-1 font-medium">
-                    {metric.archetype}
+                  <p className="text-[11px] text-slate-500 mt-1 font-medium">
+                    {metric.outlet.address || metric.outlet.phone || 'Branch'}
                   </p>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-200 shrink-0">
@@ -430,9 +448,12 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                 <div className="p-3 bg-slate-50 border border-slate-300 rounded-xl text-xs space-y-1">
                   <span className="font-bold text-slate-800 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-accent-500" />
-                    <span>Branch Catalyst & Category Focus</span>
+                    <span>Returns and discounts</span>
                   </span>
-                  <p className="text-slate-600 leading-relaxed text-[11px]">{metric.topDriver}</p>
+                  <p className="text-slate-600 leading-relaxed text-[11px]">
+                    GH₵ {metric.refundTotal.toFixed(2)} refunded and GH₵{' '}
+                    {metric.totalDiscounts.toFixed(2)} conceded in this period.
+                  </p>
                 </div>
               </div>
 
@@ -517,8 +538,10 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                 ))}
                 <td className="py-3 px-4 text-slate-600 text-[11px]">
                   {metricMode === 'total'
-                    ? 'Inco Hardware leads in total volume via bulk contracting.'
-                    : 'Radiance Lighting achieves ~3.6x higher ticket size via luxury chandeliers.'}
+                    ? leaderOn((m) => m.totalRevenue,
+                        (name, value) => `${name} took the most: GH₵ ${value.toFixed(2)}.`) ?? '—'
+                    : leaderOn((m) => m.avgOrderValue,
+                        (name, value) => `${name} has the highest average sale at GH₵ ${value.toFixed(2)}.`) ?? '—'}
                 </td>
               </tr>
 
@@ -542,8 +565,10 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                 ))}
                 <td className="py-3 px-4 text-slate-600 text-[11px]">
                   {metricMode === 'total'
-                    ? 'Inco Hardware handles greatest order density.'
-                    : 'Contractor mix at Inco drives highest items-per-basket (7.5 units).'}
+                    ? leaderOn((m) => m.totalOrders,
+                        (name, value) => `${name} rang up the most sales: ${value}.`) ?? '—'
+                    : leaderOn((m) => m.avgItemsPerSale,
+                        (name, value) => `${name} has the largest basket at ${value.toFixed(1)} units.`) ?? '—'}
                 </td>
               </tr>
 
@@ -561,12 +586,21 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                 {outletMetricsList.map((m) => (
                   <td key={m.outlet.id} className="py-3 px-4 font-mono font-bold text-emerald-700">
                     {metricMode === 'total'
-                      ? `GH₵ ${m.grossProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })} (${m.marginPct.toFixed(1)}%)`
-                      : `GH₵ ${m.avgProfitPerSale.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+                      ? m.grossProfit === null
+                        // FR-RPT-05: no cost was sent, so there is no profit to
+                        // show. A dash, never a zero.
+                        ? '—'
+                        : `GH₵ ${m.grossProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                          + `${m.marginPct === null ? '' : ` (${m.marginPct.toFixed(1)}%)`}`
+                      : m.avgProfitPerSale === null
+                        ? '—'
+                        : `GH₵ ${m.avgProfitPerSale.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
                   </td>
                 ))}
                 <td className="py-3 px-4 text-slate-600 text-[11px]">
-                  Radiance Lighting retains highest gross margin rate (40.0%).
+                  {leaderOn((m) => m.marginPct,
+                    (name, value) => `${name} holds the highest gross margin at ${value.toFixed(1)}%.`)
+                    ?? '—'}
                 </td>
               </tr>
 
@@ -589,7 +623,9 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                   </td>
                 ))}
                 <td className="py-3 px-4 text-slate-600 text-[11px]">
-                  Inco Hardware grants more trade discounts for repeat contractor volume.
+                  {leaderOn((m) => m.totalDiscounts,
+                    (name, value) => `${name} conceded the most, GH₵ ${value.toFixed(2)}.`)
+                    ?? '—'}
                 </td>
               </tr>
 
@@ -610,7 +646,9 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
                   </td>
                 ))}
                 <td className="py-3 px-4 text-slate-600 text-[11px]">
-                  Capital allocation balanced with branch sales velocity.
+                  {leaderOn((m) => m.stockValuation,
+                    (name, value) => `${name} holds the most stock at cost, GH₵ ${value.toFixed(2)}.`)
+                    ?? '—'}
                 </td>
               </tr>
             </tbody>
@@ -628,29 +666,29 @@ export const OutletComparisonView: React.FC<OutletComparisonViewProps> = ({
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
           <div className="p-3.5 bg-slate-800/80 rounded-xl border border-slate-700/80">
-            <span className="text-slate-100 font-bold block mb-1">
-              1. Volume vs Ticket Size Trade-off
-            </span>
+            <span className="text-accent-300 font-bold block mb-1">Busiest branch</span>
             <p className="text-slate-300 leading-relaxed text-[11px]">
-              Toggling between <strong>Total Values</strong> and <strong>Average Per Sale</strong> exposes that high-volume trade outlets (Inco) rely on transaction velocity, while specialized showrooms (Radiance) maximize unit revenue per interaction.
+              {leaderOn((m) => m.totalOrders,
+                (name, value) => `${name} rang up ${value} sales in this period.`)
+                ?? 'Not enough trade across branches to compare.'}
             </p>
           </div>
 
           <div className="p-3.5 bg-slate-800/80 rounded-xl border border-slate-700/80">
-            <span className="text-emerald-300 font-bold block mb-1">
-              2. Unit Margin Preservation
-            </span>
+            <span className="text-emerald-300 font-bold block mb-1">Largest basket</span>
             <p className="text-slate-300 leading-relaxed text-[11px]">
-              Average profit per sale is greatest at Radiance Lighting (GH₵ {outletMetricsList.find(o => o.outlet.id === 'radiance-lighting')?.avgProfitPerSale.toFixed(2) || '498.00'}), demonstrating high markup resilience on architectural fixtures compared to commodity cables.
+              {leaderOn((m) => m.avgOrderValue,
+                (name, value) => `${name} has the highest average sale at GH₵ ${value.toFixed(2)}.`)
+                ?? 'Not enough trade across branches to compare.'}
             </p>
           </div>
 
           <div className="p-3.5 bg-slate-800/80 rounded-xl border border-slate-700/80">
-            <span className="text-slate-100 font-bold block mb-1">
-              3. Procurement & Stock Buffer Alignment
-            </span>
+            <span className="text-slate-100 font-bold block mb-1">Reordering</span>
             <p className="text-slate-300 leading-relaxed text-[11px]">
-              Low stock items in Inco Hardware require faster PO turnaround due to high unit depletion velocity (7.5 items/basket) compared to showroom inventory cycles.
+              {leaderOn((m) => m.lowStockCount,
+                (name, value) => `${name} has ${value} lines at or below reorder level.`)
+                ?? 'No branch is carrying more low stock than another.'}
             </p>
           </div>
         </div>

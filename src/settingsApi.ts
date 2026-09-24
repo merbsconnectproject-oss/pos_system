@@ -1,4 +1,4 @@
-import { request } from './apiClient';
+import { csrfHeader, errorMessage, request } from './apiClient';
 import type { GeneralSettings, UserRole } from './types';
 
 /**
@@ -71,6 +71,7 @@ const ceilings = (byRole: Record<string, number>): Record<UserRole, number> => (
 
 export const toGeneralSettings = (wire: SettingsWire): GeneralSettings => ({
   companyName: wire.companyName ?? '',
+  logoUrl: wire.logoUrl ?? null,
   taxRegistrationNumber: wire.taxRegistrationNumber ?? '',
   taxEnabled: wire.taxEnabled,
   taxRatePercent: Number(wire.taxRatePercent ?? 0),
@@ -136,6 +137,40 @@ export const settingsApi = {
       method: 'PUT',
       body: JSON.stringify(toWire(settings)),
     }).then(toGeneralSettings),
+
+  /**
+   * FR-SET-01: upload the business logo.
+   *
+   * <p>The bytes, not a link to them. `logoUrl` used to be the only field, so
+   * the shop's logo had to already live somewhere on the internet — on a
+   * counter whose connection cannot be relied on to make a sale.
+   *
+   * <p>Multipart, and no `Content-Type` is set by hand: the browser has to add
+   * the multipart boundary, and setting the header manually omits it.
+   */
+  uploadLogo: async (file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+    const response = await fetch('/api/settings/logo', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: await csrfHeader(),
+      body,
+    });
+    if (!response.ok) throw new Error(await errorMessage(response, 'The logo could not be saved.'));
+    return toGeneralSettings(await response.json());
+  },
+
+  /** FR-SET-01: back to no logo on the receipt. */
+  removeLogo: async () => {
+    const response = await fetch('/api/settings/logo', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: await csrfHeader(),
+    });
+    if (!response.ok) throw new Error(await errorMessage(response, 'The logo could not be removed.'));
+    return toGeneralSettings(await response.json());
+  },
 
   saveAppearance: (settings: Pick<GeneralSettings, 'accentColor' | 'fontFamily' | 'fontScalePercent'>) =>
     request<SettingsWire>('/api/settings/appearance', {

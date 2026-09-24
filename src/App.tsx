@@ -13,6 +13,7 @@ import { GoodsReceiptModal } from './components/GoodsReceiptModal';
 import { StockAdjustmentModal } from './components/StockAdjustmentModal';
 import { StockMovementsView } from './components/StockMovementsView';
 import { SalesHistoryView } from './components/SalesHistoryView';
+import { receiptBranding } from './components/ThermalReceiptSlip';
 import { OutletComparisonView } from './components/OutletComparisonView';
 import { CustomersView } from './components/CustomersView';
 import { SuppliersView } from './components/SuppliersView';
@@ -50,7 +51,7 @@ import {
   CustomerInstallmentPlan,
   ReturnExchangeRecord,
 } from './types';
-import { canAccessTab, resolvePermissions } from './permissions';
+import { canAccessTab, resolvePermissions, type PermissionCode } from './permissions';
 import { roundMoney } from './money';
 import { DEFAULT_ACCENT, applyAccent } from './accent';
 import { applyTypography } from './typography';
@@ -423,6 +424,16 @@ export default function App() {
   const [accentColor, setAccentColor] = useState<string>(DEFAULT_ACCENT);
 
   const currentOutlet = outlets.find((o) => o.id === currentOutletId) || outlets[0];
+
+  /**
+   * FR-SET-01, FR-SET-02: the header every receipt in the app carries.
+   *
+   * Built once, here, from the business profile and the branch that is trading
+   * — and handed to both the till and the history screen. Two screens each
+   * assembling their own header is how one shop ended up handing over a slip
+   * that looked nothing like the copy it reprinted.
+   */
+  const slipBranding = receiptBranding(generalSettings, currentOutlet);
   const roleBaseline = rolesPermissions.find((item) => item.role === currentUser?.role)?.permissions;
   const permissions = resolvePermissions(
     currentUser?.effectivePermissions || roleBaseline || [],
@@ -596,6 +607,10 @@ export default function App() {
         customerName: sale.customerName,
         customerPhone: sale.customerPhone,
         cart: sale.items,
+        // FR-POS-10: the bill-level concession. Dropping it here is what made
+        // every discounted sale arrive short at the server.
+        cartDiscountPercent: sale.cartDiscountPercent,
+        cartDiscountApproverId: sale.cartDiscountApproverId,
         payments: sale.payments,
       });
 
@@ -689,32 +704,35 @@ export default function App() {
    * server decides which installments it settles — oldest first — because
    * crediting a later one while an earlier stays open makes "overdue" meaningless.
    */
-  const handleUpdateInstallmentPlan = async (updatedPlan: CustomerInstallmentPlan) => {
-    const known = installmentPlans.find((plan) => plan.id === updatedPlan.id);
-    const paidNow = updatedPlan.schedule.reduce((sum, item) => sum + (item.paidAmount || 0), 0);
-    const paidBefore = known
-      ? known.schedule.reduce((sum, item) => sum + (item.paidAmount || 0), 0)
-      : 0;
-    const received = Number((paidNow - paidBefore).toFixed(2));
+  /**
+   * FR-CUST-07: write a plan off as defaulted, or bring it back.
+   *
+   * <p>The server answers with the whole plan, so the list takes its state from
+   * that rather than assuming what the change did. A plan that stops being
+   * active also stops counting towards receivables, which is the point.
+   */
+  const handleSetPlanDefaulted = async (planId: string, defaulted: boolean, reason?: string) => {
+    const updated = await installmentsApi.setDefaulted(planId, defaulted, reason);
+    setInstallmentPlans((previous) =>
+      previous.map((plan) => (plan.id === planId ? updated : plan)));
+  };
 
-    if (received <= 0) {
-      // Nothing was collected — a note or a status edit. There is no endpoint for
-      // those yet, so the plan is re-read rather than the screen keeping a
-      // version the server never saw.
-      const fresh = await installmentsApi.list(currentOutletId).catch(() => null);
-      if (fresh) setInstallmentPlans(fresh.plans);
-      return;
-    }
-
-    const paidItem = updatedPlan.schedule.find((item) => item.paidDate);
+  const handleRecordInstallmentPayment = async (
+    planId: string,
+    received: number,
+    receivedOn: string,
+    method: import('./types').PaymentMethod,
+    reference?: string,
+  ) => {
     const saved = await installmentsApi.pay(
-      updatedPlan.id,
+      planId,
       received,
-      paidItem?.paidDate || new Date().toISOString().slice(0, 10),
-      paidItem?.paymentMethod || 'cash',
-      paidItem?.reference,
+      receivedOn,
+      method,
+      reference,
     );
     setInstallmentPlans((prev) => prev.map((plan) => (plan.id === saved.id ? saved : plan)));
+    return saved;
   };
 
   /**
@@ -1422,6 +1440,28 @@ export default function App() {
   };
 
   /**
+   * FR-USER-03 · BR-16: grant, withhold or clear one permission for one person.
+   *
+   * <p>`granted` undefined clears the override and returns them to their role
+   * baseline — three states, not two. The server answers with the whole person,
+   * so the list is refreshed from that rather than patched here; a screen that
+   * patches its own copy is a screen that can disagree with what was stored.
+   *
+   * <p>If the change lands on the person who is signed in, their own resolved
+   * permissions are updated too, so the revocation takes effect on this screen
+   * in the same moment it takes effect on the server (AT-A1-04).
+   */
+  const handleSetUserPermission = async (
+    userId: string,
+    code: PermissionCode,
+    granted?: boolean,
+  ) => {
+    const updated = await usersApi.setPermission(userId, code, granted);
+    setUsers((previous) => previous.map((person) => (person.id === userId ? updated : person)));
+    if (currentUser?.id === userId) setCurrentUser(updated);
+  };
+
+  /**
    * FR-USER-01 · FR-USER-04 · FR-USER-07: the staff screen hands back the whole
    * list, so the change is found by comparing it with what is held.
    *
@@ -1981,6 +2021,7 @@ export default function App() {
             <SalesHistoryView
               sales={sales}
               currentOutlet={currentOutlet}
+              receiptBranding={slipBranding}
               onVoidSale={handleVoidSale}
             />
           )}
@@ -1994,6 +2035,7 @@ export default function App() {
               onAddCustomer={handleAddCustomer}
               onUpdateCustomer={handleUpdateCustomer}
               onSetCustomerActive={handleSetCustomerActive}
+              canSetCredit={permissions.has('customer.credit')}
             />
           )}
 
@@ -2042,12 +2084,14 @@ export default function App() {
               plans={installmentPlans}
               installmentPlans={installmentPlans}
               onAddPlan={handleAddInstallmentPlan}
-              onUpdatePlan={handleUpdateInstallmentPlan}
+              onRecordPayment={handleRecordInstallmentPayment}
               products={products}
               customers={customers}
               currentOutlet={currentOutlet}
               outlets={outlets}
               accentColor={accentColor}
+              canWriteOff={permissions.has('settings.general')}
+              onSetDefaulted={handleSetPlanDefaulted}
             />
           )}
 
@@ -2075,6 +2119,7 @@ export default function App() {
               currentUser={currentUser}
               users={users}
               onUpdateUsers={handleUpdateUsers}
+              onSetUserPermission={handleSetUserPermission}
               onCreateUser={handleCreateUser}
               rolesPermissions={rolesPermissions}
               onUpdateRolesPermissions={handleUpdateRolesPermissions}
@@ -2265,6 +2310,7 @@ export default function App() {
         onSaleCompleted={handleSaleCompleted}
         currencyCode={generalSettings.currencyCode}
         currencySymbol={generalSettings.currencySymbol}
+        receiptBranding={slipBranding}
         currentUserName={currentUser.fullName}
       />
 
@@ -2277,6 +2323,8 @@ export default function App() {
         onStartShift={handleStartShift}
         onCloseShift={handleCloseShift}
         currentOutlet={currentOutlet}
+        currentUserName={currentUser.fullName}
+        currencySymbol={generalSettings.currencySymbol}
       />
 
       {/* Goods Receipt (GRN) Modal (BR-4 Weighted Average Costing) */}

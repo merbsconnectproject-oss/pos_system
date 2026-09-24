@@ -19,6 +19,8 @@ export interface CustomerWire {
   customerType: Customer['customerType'];
   priceLevel: 'RETAIL' | 'TRADE';
   discountRate: number;
+  /** FR-CUST-07: the most they may owe. Zero means no credit. */
+  creditLimit: number;
   notes: string | null;
   active: boolean;
   totalPurchased: number;
@@ -34,6 +36,7 @@ export const toCustomer = (wire: CustomerWire): Customer => ({
   totalPurchased: Number(wire.totalPurchased ?? 0),
   salesCount: wire.salesCount ?? 0,
   discountRate: Number(wire.discountRate ?? 0),
+  creditLimit: Number(wire.creditLimit ?? 0),
   notes: wire.notes ?? '',
   email: wire.email ?? '',
   address: wire.address ?? '',
@@ -50,8 +53,40 @@ const toWire = (customer: Customer) => ({
   // Sent explicitly, including zero. Omitting it would hand the customer back
   // their type's default rate and silently undo an agreed one.
   discountRate: customer.discountRate ?? null,
+  // FR-CUST-07: null leaves the limit alone, so a screen that does not offer
+  // the field cannot withdraw somebody's credit by saving their phone number.
+  creditLimit: customer.creditLimit ?? null,
   notes: customer.notes || null,
 });
+
+/** FR-CUST-07: what a customer owes, how old it is, and on which plans. */
+export interface CustomerStatement {
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  creditLimit: number;
+  balance: number;
+  available: number;
+  overLimit: boolean;
+  ageing: {
+    current: number;
+    upTo30Days: number;
+    upTo60Days: number;
+    over60Days: number;
+  };
+  plans: Array<{
+    planId: string;
+    planNumber: string;
+    status: string;
+    total: number;
+    paid: number;
+    outstanding: number;
+    oldestUnpaidDue: string | null;
+    daysLate: number;
+    createdAt: string;
+  }>;
+  asOf: string;
+}
 
 export const customersApi = {
   list: (query?: string, includeInactive = false) =>
@@ -69,6 +104,15 @@ export const customersApi = {
   byPhone: (phone: string) =>
     request<CustomerWire | null>(`/api/customers/by-phone?phone=${encodeURIComponent(phone)}`)
       .then((wire) => (wire ? toCustomer(wire) : null)),
+
+  /**
+   * FR-CUST-07: their statement — balance, ageing and the plans behind it.
+   *
+   * <p>Behind `customer.credit` on the server. How far behind somebody is with
+   * their payments is not something a cashier needs in order to serve them.
+   */
+  statement: (customerId: string) =>
+    request<CustomerStatement>(`/api/customers/${encodeURIComponent(customerId)}/statement`),
 
   create: (customer: Customer) =>
     request<CustomerWire>('/api/customers', {

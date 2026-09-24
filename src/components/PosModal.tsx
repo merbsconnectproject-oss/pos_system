@@ -54,9 +54,16 @@ import { useScanner } from '../useScanner';
 import { createBlock, issueReceiptNumber, remainingInBlock } from '../receiptSequence';
 import { receiptsApi } from '../receiptsApi';
 import { ThermalReceiptSlip } from './ThermalReceiptSlip';
+import type { ReceiptBranding } from './ThermalReceiptSlip';
 import { printReceipt } from '../printService';
-import { formatQuantity, lineTotal, moneyEquals, roundMoney, roundQuantity, sumMoney } from '../money';
+import { formatQuantity, lineTotal, moneyEquals, roundMoney, roundQuantity, settleCash, sumMoney } from '../money';
 import { ManagerPinModal } from './ManagerPinModal';
+import {
+  cartDiscountAmount,
+  clampLineDiscount,
+  needsApproval,
+  unitPriceFor,
+} from '../discounts';
 import { heldSalesApi, type HeldSaleWire } from '../heldSalesApi';
 import { catalogueApi, type CatalogueListItem } from '../catalogueApi';
 
@@ -123,6 +130,14 @@ interface PosModalProps {
   currencyCode: string;
   currencySymbol: string;
   /**
+   * FR-SET-01, FR-SET-02: whose shop is on the slip handed over.
+   *
+   * Assembled once by the app from Settings and the outlet, so the receipt the
+   * customer is given and the one reprinted from the history carry the same
+   * header. This screen used to have no idea what the business was called.
+   */
+  receiptBranding: ReceiptBranding;
+  /**
    * Who is signed in. The shift's cashier is the authority for the title bar
    * (the drawer belongs to whoever opened it); this is the fallback for the
    * moment before the shift record has loaded.
@@ -145,6 +160,7 @@ export const PosModal: React.FC<PosModalProps> = ({
   onLockSession,
   currencyCode,
   currencySymbol,
+  receiptBranding,
   currentUserName,
 }) => {
   const canOversell = permissions.has('stock.oversell');
@@ -176,6 +192,11 @@ export const PosModal: React.FC<PosModalProps> = ({
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerSearchPhone, setCustomerSearchPhone] = useState('');
   const [cartDiscountPercent, setCartDiscountPercent] = useState<number>(0);
+  /** FR-POS-10: set when the bill concession passed the seller's own ceiling. */
+  const [cartDiscountApproverId, setCartDiscountApproverId] = useState<string | undefined>();
+  const [cartDiscountApprover, setCartDiscountApprover] = useState<string | undefined>();
+  /** The concession waiting on a manager's PIN, if one is. */
+  const [pendingCartDiscount, setPendingCartDiscount] = useState<number | null>(null);
   const [discountDraft, setDiscountDraft] = useState('0');
   const [heldCarts, setHeldCarts] = useState<Array<{ id: string; label: string; items: CartItem[]; customer: Customer | null; total: number; heldAt: string }>>([]);
   const [holdLabel, setHoldLabel] = useState('');
@@ -325,10 +346,12 @@ export const PosModal: React.FC<PosModalProps> = ({
 
   // Calculate totals
   const subtotal = sumMoney(cart.map((item) => item.lineTotal));
-  const discountTotal = roundMoney((subtotal * cartDiscountPercent) / 100);
+  // FR-POS-10: after the line discounts, which is how the server resolves it.
+  const discountTotal = cartDiscountAmount(subtotal, cartDiscountPercent);
   const total = Math.max(0, roundMoney(subtotal - discountTotal));
   const cashTenderedNum = parseFloat(cashTendered) || 0;
-  const changeDue = Math.max(0, roundMoney(cashTenderedNum - total));
+  const cashSettlement = settleCash(total, cashTenderedNum);
+  const changeDue = cashSettlement.changeDue;
   const splitTotal = sumMoney(splitParts.map((part) => part.amount));
   const splitRemaining = roundMoney(total - splitTotal);
 
@@ -588,8 +611,7 @@ export const PosModal: React.FC<PosModalProps> = ({
       prev.map((item) => {
         if (item.product.id !== productId || item.selectedUnit !== unitName) return item;
         const gross = roundMoney(item.quantity * item.unitPrice);
-        const ceiling = roundMoney((gross * discountCeilingPercent) / 100);
-        const capped = Math.min(Math.max(0, roundMoney(amount)), ceiling, gross);
+        const capped = clampLineDiscount(gross, amount, discountCeilingPercent);
         return { ...item, discount: capped, lineTotal: lineTotal(item.quantity, item.unitPrice, capped) };
       }),
     );
@@ -667,22 +689,44 @@ export const PosModal: React.FC<PosModalProps> = ({
     setCart((prev) => prev.filter((i) => !(i.product.id === productId && i.selectedUnit === unitName)));
   };
 
+  /**
+   * FR-PRICE-04 · FR-PRICE-05: attach or detach a customer, and re-price the cart.
+   *
+   * <p>One function because there are four ways to attach a customer — typing a
+   * phone number, picking from the list, creating one at the till, resuming a
+   * held sale — and only the first of them used to re-price. A contractor
+   * created at the counter, or chosen from the list rather than found by
+   * phone, was charged retail: their trade level and their agreed rate were
+   * both on the record and neither reached the line.
+   *
+   * <p>Detaching re-prices too. The comment here has always claimed it did,
+   * and it did not: clearing the customer left their trade prices in the cart,
+   * so the next walk-in bought at contractor rates.
+   */
+  const attachCustomer = (customer: Customer | null) => {
+    setSelectedCustomer(customer);
+    setCart((prev) =>
+      prev.map((item) => {
+        const price = priceFor(item.product, { conversionFactor: item.conversionFactor }, customer);
+        // A line discount set against the old price may be larger than the new
+        // line. Clamped rather than carried, so re-pricing can never hand the
+        // customer a line worth less than nothing.
+        const gross = roundMoney(item.quantity * price);
+        const discount = Math.min(item.discount || 0, gross);
+        return {
+          ...item,
+          unitPrice: price,
+          discount,
+          lineTotal: lineTotal(item.quantity, price, discount),
+        };
+      }),
+    );
+  };
+
   const handleCustomerPhoneLookup = (phone: string) => {
     setCustomerSearchPhone(phone);
     const found = customers.find((c) => c.phone.includes(phone));
-    if (found) {
-      setSelectedCustomer(found);
-      // FR-PRICE-04: attaching a customer re-prices what is already rung up.
-      // Every line, not only the trade ones — a customer attached by mistake
-      // and then removed has to go back to retail too.
-      setCart((prev) =>
-        prev.map((item) => {
-          const price = priceFor(item.product,
-            { conversionFactor: item.conversionFactor }, found);
-          return { ...item, unitPrice: price, lineTotal: lineTotal(item.quantity, price, item.discount) };
-        }),
-      );
-    }
+    if (found) attachCustomer(found);
   };
 
   const handleHoldCart = async () => {
@@ -700,6 +744,9 @@ export const PosModal: React.FC<PosModalProps> = ({
     }
     setCart([]);
     setSelectedCustomer(null);
+    setCartDiscountPercent(0);
+    setCartDiscountApproverId(undefined);
+    setCartDiscountApprover(undefined);
     setHoldLabel('');
     setHoldModalOpen(false);
     setInlineNotice({
@@ -716,6 +763,9 @@ export const PosModal: React.FC<PosModalProps> = ({
       return;
     }
     setCart(selected.items);
+    // Deliberately not attachCustomer: a held sale keeps the prices it was
+    // held at. Re-pricing here would silently move a quote the customer has
+    // already been given.
     setSelectedCustomer(selected.customer);
     setHeldCarts(heldCarts.filter((_, i) => i !== index));
     setHeldDrawerOpen(false);
@@ -758,47 +808,58 @@ export const PosModal: React.FC<PosModalProps> = ({
     }
   };
 
+  /**
+   * FR-POS-10: a concession off the whole bill.
+   *
+   * <p>Past the seller's own ceiling this asks for a manager rather than
+   * quietly reducing the figure to what the cashier may give. Clamping was
+   * worse than refusing: the cashier typed 20, the screen showed 10, and the
+   * customer was told a number nobody had agreed to. The server refuses
+   * anything past the ceiling without a verified approver regardless.
+   */
   const handleApplyDiscount = () => {
-    // FR-POS-10: the configured ceiling for this role, not a literal.
-    const nextDiscount = Math.min(discountCeilingPercent, Math.max(0, Number(discountDraft) || 0));
-    setCartDiscountPercent(nextDiscount);
+    const asked = Math.max(0, Number(discountDraft) || 0);
+    if (asked > 100) {
+      setInlineNotice({
+        type: 'error',
+        title: 'Discount too large',
+        message: 'A discount cannot be more than 100% of the bill.',
+      });
+      return;
+    }
+    if (needsApproval(asked, discountCeilingPercent)) {
+      setPendingCartDiscount(asked);
+      setDiscountModalOpen(false);
+      return;
+    }
+    setCartDiscountPercent(asked);
+    setCartDiscountApproverId(undefined);
+    setCartDiscountApprover(undefined);
     setDiscountModalOpen(false);
   };
 
-  /**
-   * FR-PRICE-04: which price level this customer buys at.
-   *
-   * <p>The server decides it from the customer type and sends it on the
-   * record. This screen used to test `type === 'electrician' || 'contractor'`
-   * in three separate places — which quietly charged a **company** retail,
-   * because that case was never in the list.
-   */
-  const priceLevel = (customer: Customer | null): 'RETAIL' | 'TRADE' => {
-    if (!customer) return 'RETAIL';
-    if (customer.priceLevel) return customer.priceLevel;
-    // Only reached for a customer created in this tab before the save returns.
-    return customer.customerType === 'retail' ? 'RETAIL' : 'TRADE';
+  /** FR-POS-10: the manager who signed for a concession past the ceiling. */
+  const handleCartDiscountPinSuccess = (approverName: string, approverId: string) => {
+    if (pendingCartDiscount === null) return;
+    setCartDiscountPercent(pendingCartDiscount);
+    setCartDiscountApproverId(approverId);
+    setCartDiscountApprover(approverName);
+    setPendingCartDiscount(null);
   };
 
   /**
    * FR-PRICE-04 · FR-PRICE-05: the price this customer pays for this unit.
    *
-   * <p>The level first, then their agreed rate on top. The server allows a
-   * discount up to that rate without counting it against the cashier's own
-   * ceiling, so the two have to agree about what the rate means.
+   * <p>The rule itself lives in `discounts.ts`, where it is tested and where
+   * every caller reaches the same answer. It used to be written out here, and
+   * the level test — `type === 'electrician' || 'contractor'` — appeared three
+   * times and omitted `company` in all three, so a firm was charged retail.
    */
   const priceFor = (
     product: Product,
     unit: { price?: number; tradePrice?: number; conversionFactor: number },
     customer: Customer | null,
-  ) => {
-    const base = priceLevel(customer) === 'TRADE'
-      ? unit.tradePrice ?? product.tradePrice * unit.conversionFactor
-      : unit.price ?? product.retailPrice * unit.conversionFactor;
-
-    const rate = customer?.discountRate ?? 0;
-    return rate > 0 ? roundMoney(base * (1 - rate / 100)) : base;
-  };
+  ) => unitPriceFor(product, unit, customer);
 
   /**
    * BR-5: what this line cost, frozen.
@@ -827,7 +888,7 @@ export const PosModal: React.FC<PosModalProps> = ({
         totalPurchased: 0,
         salesCount: 0,
       });
-      setSelectedCustomer(saved);
+      attachCustomer(saved);
       setCustomerSearchPhone(saved.phone);
       setNewCustomerName('');
       setNewCustomerPhone('');
@@ -843,13 +904,49 @@ export const PosModal: React.FC<PosModalProps> = ({
   };
 
   // Complete Payment and Sale
+  const sendCompletedReceipt = async (sale: CompletedSale, reprint: boolean) => {
+    setPrintFailed(false);
+    setReceiptPrintStatus('ready');
+    try {
+      const receipt = reprint
+        ? await receiptsApi.reprint(sale.id, '80mm')
+        : await receiptsApi.forSale(sale.id, '80mm');
+      const result = await printReceipt({
+        receiptNumber: receipt.receiptNumber,
+        paperWidth: receipt.width,
+        isReprint: reprint,
+        payload: receipt.escPos,
+      });
+      if (!result.ok) {
+        setPrintFailed(true);
+        setReceiptPrintStatus('failed');
+        return;
+      }
+      setReceiptReprint(reprint);
+      setReceiptPrintStatus('sent');
+    } catch {
+      setPrintFailed(true);
+      setReceiptPrintStatus('failed');
+    }
+  };
+
   const handleFinalizeSale = () => {
     const payments: PaymentSplit[] = [];
 
     if (activePaymentTab === 'cash') {
+      if (!cashSettlement.sufficient) {
+        setInlineNotice({
+          type: 'error',
+          title: 'Cash is short',
+          message: `${formatMoney(roundMoney(total - cashSettlement.amount))} is still due. Enter the full amount received before completing the sale.`,
+        });
+        return;
+      }
       payments.push({
         method: 'cash',
-        amount: total,
+        // Persist what was actually handed over. The server derives and stores
+        // change from this figure, and the printer renders that stored result.
+        amount: cashSettlement.amount,
       });
     } else if (activePaymentTab === 'momo') {
       if (!momoReference.trim()) {
@@ -943,6 +1040,10 @@ export const PosModal: React.FC<PosModalProps> = ({
       items: [...cart],
       subtotal,
       discountTotal,
+      // FR-POS-10: the percentage, so the server can resolve the concession
+      // against its own subtotal rather than trusting the cedis computed here.
+      cartDiscountPercent: cartDiscountPercent > 0 ? cartDiscountPercent : undefined,
+      cartDiscountApproverId: cartDiscountPercent > 0 ? cartDiscountApproverId : undefined,
       total,
       payments,
       changeDue: activePaymentTab === 'cash' ? changeDue : 0,
@@ -971,19 +1072,17 @@ export const PosModal: React.FC<PosModalProps> = ({
       // receipt *number* as the whole payload, so the printer received
       // "INC-01-000123" and nothing else — no items, no totals. The server
       // renders the real receipt from the sale it just stored.
-      void receiptsApi.forSale(committed.id, '80mm')
-        .then((receipt) => printReceipt({
-          receiptNumber: receipt.receiptNumber,
-          paperWidth: receipt.width,
-          payload: receipt.escPos,
-        }))
-        .then((result) => {
-          if (!result.ok) setPrintFailed(true);
-        })
-        .catch(() => setPrintFailed(true));
+      void sendCompletedReceipt(committed, false);
       setPaymentModalOpen(false);
       setCart([]);
       setSelectedCustomer(null);
+      // FR-POS-10: the concession belonged to that bill. Left standing, the
+      // next customer in the queue silently got the same discount — and the
+      // one after that, until somebody noticed at the cash-up.
+      setCartDiscountPercent(0);
+      setCartDiscountApproverId(undefined);
+      setCartDiscountApprover(undefined);
+      setDiscountDraft('0');
       setCashTendered('');
       setMomoReference('');
       setMomoVerified(false);
@@ -1557,7 +1656,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                 </span>
                 {selectedCustomer && (
                   <button
-                    onClick={() => setSelectedCustomer(null)}
+                    onClick={() => attachCustomer(null)}
                     className="text-[11px] text-red-500 font-bold hover:underline"
                   >
                     Clear
@@ -1772,6 +1871,13 @@ export const PosModal: React.FC<PosModalProps> = ({
                     <span className="font-mono">- {formatMoney(discountTotal)}</span>
                   </div>
                 )}
+                {cartDiscountApprover && (
+                  // FR-POS-10: named on the screen because the cashier is
+                  // accountable for who they fetched, and it is on the sale.
+                  <div className="text-[11px] text-slate-500">
+                    Approved by {cartDiscountApprover}
+                  </div>
+                )}
                 <div className="flex justify-between text-base font-black text-slate-900 pt-1 border-t border-slate-300">
                   <span>TOTAL DUE:</span>
                   <span className="text-accent-600 font-mono text-xl">{formatMoney(total)}</span>
@@ -1806,6 +1912,8 @@ export const PosModal: React.FC<PosModalProps> = ({
                   setCart([]);
                   setSelectedCustomer(null);
                   setCartDiscountPercent(0);
+                  setCartDiscountApproverId(undefined);
+                  setCartDiscountApprover(undefined);
                 }}
                 disabled={cart.length === 0}
                 className="w-full py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-40"
@@ -2372,7 +2480,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                         key={customer.id}
                         type="button"
                         onClick={() => {
-                          setSelectedCustomer(customer);
+                          attachCustomer(customer);
                           setCustomerSearchPhone(customer.phone);
                           setCustomerModalOpen(false);
                         }}
@@ -2391,7 +2499,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setSelectedCustomer(null);
+                    attachCustomer(null);
                     setCustomerModalOpen(false);
                   }}
                   className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50"
@@ -2553,7 +2661,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                 <div className="mt-3 flex gap-2">
                   <button
                     type="button"
-                    onClick={() => setPrintFailed(false)}
+                    onClick={() => void sendCompletedReceipt(completedSale, false)}
                     className="rounded-lg bg-slate-900 hover:bg-black px-3 py-1.5 text-xs font-bold text-white cursor-pointer"
                   >
                     Retry print
@@ -2607,12 +2715,9 @@ export const PosModal: React.FC<PosModalProps> = ({
             <div className="flex justify-center">
               <ThermalReceiptSlip
                 sale={completedSale}
+                branding={receiptBranding}
                 isReprint={receiptReprint}
                 paperWidth="80mm"
-                outletAddress={{
-                  address: currentOutlet.address || '',
-                  tel: currentOutlet.phone || '',
-                }}
               />
             </div>
 
@@ -2630,15 +2735,10 @@ export const PosModal: React.FC<PosModalProps> = ({
                 Email / Skip
               </button>
               <button
-                onClick={() => {
-                  setReceiptReprint(true);
-                  try {
-                    window.print();
-                    setReceiptPrintStatus('sent');
-                  } catch {
-                    setReceiptPrintStatus('failed');
-                  }
-                }}
+                onClick={() => void sendCompletedReceipt(
+                  completedSale,
+                  receiptPrintStatus === 'sent',
+                )}
                 className="sm:w-1/3 bg-slate-900 hover:bg-black text-white py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-xs"
               >
                 <Printer className="w-5 h-5" />
@@ -2657,6 +2757,18 @@ export const PosModal: React.FC<PosModalProps> = ({
         description="Cashier entered a price below the minimum floor price threshold. Manager authorization PIN required to proceed."
         permission="sale.approve_below_floor"
         onSuccess={handleFloorPinSuccess}
+      />
+
+      {/* FR-POS-10: a bill discount past the cashier's ceiling. */}
+      <ManagerPinModal
+        isOpen={pendingCartDiscount !== null}
+        onClose={() => setPendingCartDiscount(null)}
+        title="Manager Approval: Bill Discount"
+        description={pendingCartDiscount === null
+          ? ''
+          : `A ${pendingCartDiscount}% discount on the whole bill is past the ${discountCeilingPercent}% this account may give. A manager's PIN authorises it.`}
+        permission="sale.discount"
+        onSuccess={handleCartDiscountPinSuccess}
       />
     </div>
   );

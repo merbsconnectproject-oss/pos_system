@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ClipboardList,
   Plus,
+  Pencil,
   Send,
   Trash2,
   Truck,
@@ -91,6 +92,16 @@ export const PurchaseOrdersView: React.FC<PurchaseOrdersViewProps> = ({
   const [pageSize, setPageSize] = useState(10);
 
   const [raising, setRaising] = useState(false);
+  /**
+   * FR-SUP-08: the draft being amended, if any.
+   *
+   * <p>Drafts only, and the server enforces that: once an order is sent, the
+   * supplier holds a copy, and a delivery variance measured against an order
+   * somebody edited afterwards is not a variance. `purchaseOrdersApi.amend`
+   * had no caller, so a draft with a wrong quantity had to be cancelled and
+   * raised again under a new number.
+   */
+  const [amending, setAmending] = useState<PurchaseOrder | null>(null);
   const [supplierId, setSupplierId] = useState('');
   const [expectedOn, setExpectedOn] = useState('');
   const [note, setNote] = useState('');
@@ -178,6 +189,32 @@ export const PurchaseOrdersView: React.FC<PurchaseOrdersViewProps> = ({
     }
   };
 
+  /** Open the raise form with a draft's own lines in it. */
+  const startAmend = (order: PurchaseOrder) => {
+    setAmending(order);
+    setSupplierId(order.supplierId);
+    setExpectedOn(order.expectedOn ? order.expectedOn.slice(0, 10) : '');
+    setNote(order.note || '');
+    setLines(order.lines.map((line, index) => ({
+      id: `amend-${index}`,
+      productId: line.productId,
+      purchaseUnit: line.purchaseUnit,
+      conversionFactor: String(line.conversionFactor),
+      quantity: String(line.orderedQuantity),
+      unitCost: String(line.unitCost),
+    })));
+    setRaising(true);
+  };
+
+  const cancelForm = () => {
+    setRaising(false);
+    setAmending(null);
+    setSupplierId('');
+    setExpectedOn('');
+    setNote('');
+    setLines([blankLine()]);
+  };
+
   const raise = async () => {
     const usable = lines.filter((line) => line.productId && Number(line.quantity) > 0);
     if (!supplierId || usable.length === 0) {
@@ -185,25 +222,24 @@ export const PurchaseOrdersView: React.FC<PurchaseOrdersViewProps> = ({
       return;
     }
 
-    await run('raise', async () => {
-      await purchaseOrdersApi.raise({
-        outletId: currentOutlet.id,
-        supplierId,
-        expectedOn: expectedOn || null,
-        note: note.trim() || null,
-        lines: usable.map((line) => ({
-          productId: line.productId,
-          purchaseUnit: line.purchaseUnit.trim() || 'pcs',
-          conversionFactor: line.conversionFactor || '1',
-          quantity: line.quantity,
-          unitCost: line.unitCost || '0',
-        })),
-      });
-      setRaising(false);
-      setSupplierId('');
-      setExpectedOn('');
-      setNote('');
-      setLines([blankLine()]);
+    const draft = {
+      outletId: currentOutlet.id,
+      supplierId,
+      expectedOn: expectedOn || null,
+      note: note.trim() || null,
+      lines: usable.map((line) => ({
+        productId: line.productId,
+        purchaseUnit: line.purchaseUnit.trim() || 'pcs',
+        conversionFactor: line.conversionFactor || '1',
+        quantity: line.quantity,
+        unitCost: line.unitCost || '0',
+      })),
+    };
+
+    await run(amending ? 'amend' : 'raise', async () => {
+      if (amending) await purchaseOrdersApi.amend(amending.id, draft);
+      else await purchaseOrdersApi.raise(draft);
+      cancelForm();
     });
   };
 
@@ -251,7 +287,7 @@ export const PurchaseOrdersView: React.FC<PurchaseOrdersViewProps> = ({
               "Add Supplier" and "Add Customer" buttons on the sibling screens.
               Orange stays for the act on an order itself — sending it. */}
           <button
-            onClick={() => setRaising((open) => !open)}
+            onClick={() => (raising ? cancelForm() : setRaising(true))}
             className="flex items-center gap-1.5 bg-slate-900 hover:bg-black text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4" /> {raising ? 'Close the form' : 'Raise an Order'}
@@ -352,7 +388,9 @@ export const PurchaseOrdersView: React.FC<PurchaseOrdersViewProps> = ({
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
             <ClipboardList className="w-5 h-5 text-accent-600" />
             <div>
-              <h2 className="text-sm font-black text-slate-900">New order</h2>
+              <h2 className="text-sm font-black text-slate-900">
+                {amending ? `Amend ${amending.number}` : 'New order'}
+              </h2>
               <p className="text-xs text-slate-500">
                 Saved as a draft — nothing reaches the supplier until you send it.
               </p>
@@ -540,10 +578,12 @@ export const PurchaseOrdersView: React.FC<PurchaseOrdersViewProps> = ({
               </div>
               <button
                 onClick={() => void raise()}
-                disabled={busy === 'raise'}
+                disabled={busy === 'raise' || busy === 'amend'}
                 className="rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50 cursor-pointer"
               >
-                {busy === 'raise' ? 'Saving…' : 'Save as draft'}
+                {busy === 'raise' || busy === 'amend'
+                  ? 'Saving…'
+                  : amending ? 'Save the amendment' : 'Save as draft'}
               </button>
             </div>
           </div>
@@ -665,6 +705,15 @@ export const PurchaseOrdersView: React.FC<PurchaseOrdersViewProps> = ({
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1.5">
+                          {order.status === 'DRAFT' && (
+                            <button
+                              onClick={() => startAmend(order)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                            >
+                              <Pencil className="h-3 w-3" /> Amend
+                            </button>
+                          )}
+
                           {order.status === 'DRAFT' && (
                             <button
                               onClick={() =>

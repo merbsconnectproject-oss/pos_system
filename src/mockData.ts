@@ -1626,6 +1626,8 @@ export const INITIAL_SHIFT_RECORDS: ShiftRecord[] = [
  */
 export const INITIAL_SETTINGS: GeneralSettings = {
   companyName: '',
+  // FR-SET-01: no logo until one is uploaded.
+  logoUrl: null,
   taxRegistrationNumber: '',
   taxEnabled: false,
   taxRatePercent: 0,
@@ -1895,6 +1897,7 @@ export const INITIAL_INSTALLMENT_PLANS: CustomerInstallmentPlan[] = [
         status: 'PENDING',
       },
     ],
+    payments: [],
   },
   {
     id: 'inst-002',
@@ -1957,6 +1960,7 @@ export const INITIAL_INSTALLMENT_PLANS: CustomerInstallmentPlan[] = [
         status: 'PENDING',
       },
     ],
+    payments: [],
   },
   {
     id: 'inst-003',
@@ -2016,6 +2020,7 @@ export const INITIAL_INSTALLMENT_PLANS: CustomerInstallmentPlan[] = [
         receiptNumber: 'RAD-INST-003-02',
       },
     ],
+    payments: [],
   },
 ];
 

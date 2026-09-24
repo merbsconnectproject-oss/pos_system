@@ -10,6 +10,8 @@ import type { GeneralSettings } from './types';
  */
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   companyName: '',
+  // FR-SET-01: no logo until one is uploaded.
+  logoUrl: null,
   taxRegistrationNumber: '',
   taxEnabled: false,
   taxRatePercent: 0,
