@@ -457,6 +457,68 @@ class SaleControllerTest {
         }
 
         @Test
+        @DisplayName("a discount may not walk a line under the floor unapproved — BR-10")
+        void aDiscountCannotSlipUnderTheFloor() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Floor via discount " + run, "pcs", "60.00", "20");
+
+            // Retail 60.00, floor 50.00. The line is rung at the full 60 — which
+            // passes any check made against the submitted price — and then 20.00
+            // is taken off it, settling at 40.00. That is ten cedis under the
+            // floor with nobody asked.
+            //
+            // The floor used to be checked against unit_price *before* the
+            // discount was subtracted, so this was the way around BR-10: stay at
+            // list price and discount to wherever you liked, up to your ceiling.
+            saveCeilings(session, Map.of("owner", 100, "manager", 25, "cashier", 10, "storekeeper", 0));
+
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(sale(
+                                    line(productId, "pcs", "1", "1", "60.00", 2_000L, null),
+                                    cash(4000L)))))
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.code").value("BELOW_FLOOR_PRICE"));
+        }
+
+        @Test
+        @DisplayName("nor may a cart discount — BR-10, FR-POS-10")
+        void aCartDiscountCannotSlipUnderTheFloorEither() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Floor via cart " + run, "pcs", "60.00", "20");
+
+            saveCeilings(session, Map.of("owner", 100, "manager", 25, "cashier", 10, "storekeeper", 0));
+
+            // 25% off GH₵60 is GH₵45 — under the GH₵50 floor.
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(saleWithCart(
+                                    List.of(line(productId, "pcs", "1", "1", "60.00", null, null)),
+                                    Map.of("cartDiscountPercent", "25"),
+                                    cash(4500L)))))
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.code").value("BELOW_FLOOR_PRICE"));
+        }
+
+        @Test
+        @DisplayName("a discount under the floor goes through once approved — BR-10")
+        void underTheFloorWithApprovalIsAllowed() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Floor discount ok " + run, "pcs", "60.00", "20");
+
+            saveCeilings(session, Map.of("owner", 100, "manager", 25, "cashier", 10, "storekeeper", 0));
+
+            Map<String, Object> item = line(productId, "pcs", "1", "1", "60.00", 2_000L, null);
+            item.put("floorApprovedBy", ownerId.toString());
+
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(sale(item, cash(4000L)))))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.total").value(4000));
+        }
+
+        @Test
         @DisplayName("is allowed with one, and the approver is recorded — BR-10")
         void allowedWithApproverRecorded() throws Exception {
             Session session = signIn();
@@ -567,6 +629,255 @@ class SaleControllerTest {
                             .content(json.writeValueAsString(sale(item, cash(4000L)))))
                     .andExpect(status().isUnprocessableEntity())
                     .andExpect(jsonPath("$.code").value("DISCOUNT_ABOVE_CEILING"));
+        }
+    }
+
+    @Nested
+    @DisplayName("cart discounts")
+    class CartDiscounts {
+
+        @AfterEach
+        void restoreCeilings() throws Exception {
+            saveCeilings(signIn(), Map.of("owner", 100, "manager", 25, "cashier", 10, "storekeeper", 0));
+        }
+
+        @Test
+        @DisplayName("a percentage off the cart reaches the total — FR-POS-10")
+        void percentageOffTheCart() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Cart pct " + run, "pcs", "100.00", "20");
+
+            // The whole point: the till showed GH₵90 due and the customer paid
+            // GH₵90. Before this, the server priced the sale at GH₵100, found
+            // the payment 10 short, and refused a sale the cashier had already
+            // taken the money for.
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(saleWithCart(
+                                    List.of(line(productId, "pcs", "1", "1", "100.00", null, null)),
+                                    Map.of("cartDiscountPercent", "10"),
+                                    cash(9000L)))))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.subtotal").value(10000))
+                    .andExpect(jsonPath("$.discountTotal").value(1000))
+                    .andExpect(jsonPath("$.cartDiscount").value(1000))
+                    .andExpect(jsonPath("$.total").value(9000));
+        }
+
+        @Test
+        @DisplayName("an amount off the cart does the same — FR-POS-10")
+        void amountOffTheCart() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Cart amt " + run, "pcs", "100.00", "20");
+
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(saleWithCart(
+                                    List.of(line(productId, "pcs", "1", "1", "100.00", null, null)),
+                                    Map.of("cartDiscount", 500L),
+                                    cash(9500L)))))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.cartDiscount").value(500))
+                    .andExpect(jsonPath("$.total").value(9500));
+        }
+
+        @Test
+        @DisplayName("it is spread over the lines so the pesewas still add up — BR-11")
+        void apportionedWithoutLosingAPesewa() throws Exception {
+            Session session = signIn();
+            String first = stockedProduct(session, "Split A " + run, "pcs", "10.00", "20");
+            String second = stockedProduct(session, "Split B " + run, "pcs", "10.00", "20");
+            String third = stockedProduct(session, "Split C " + run, "pcs", "10.00", "20");
+
+            // GH₵30 less 10% is GH₵27: three lines of GH₵10 sharing 300
+            // pesewas. 300/3 divides evenly, but the line discounts must still
+            // sum to exactly the concession rather than to 299 or 301.
+            String body = json.writeValueAsString(saleWithCart(
+                    List.of(line(first, "pcs", "1", "1", "10.00", null, null),
+                            line(second, "pcs", "1", "1", "10.00", null, null),
+                            line(third, "pcs", "1", "1", "10.00", null, null)),
+                    Map.of("cartDiscountPercent", "10"),
+                    cash(2700L)));
+
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.total").value(2700))
+                    .andExpect(jsonPath("$.discountTotal").value(300))
+                    .andExpect(jsonPath("$.items[0].discount").value(100))
+                    .andExpect(jsonPath("$.items[1].discount").value(100))
+                    .andExpect(jsonPath("$.items[2].discount").value(100));
+        }
+
+        @Test
+        @DisplayName("an indivisible concession still sums to exactly what was given — BR-11")
+        void remainderGoesSomewhereRatherThanNowhere() throws Exception {
+            Session session = signIn();
+            String first = stockedProduct(session, "Odd A " + run, "pcs", "10.00", "20");
+            String second = stockedProduct(session, "Odd B " + run, "pcs", "10.00", "20");
+            String third = stockedProduct(session, "Odd C " + run, "pcs", "10.00", "20");
+
+            // 100 pesewas across three equal lines: 33, 33, 34 — never 99.
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(saleWithCart(
+                                    List.of(line(first, "pcs", "1", "1", "10.00", null, null),
+                                            line(second, "pcs", "1", "1", "10.00", null, null),
+                                            line(third, "pcs", "1", "1", "10.00", null, null)),
+                                    Map.of("cartDiscount", 100L),
+                                    cash(2900L)))))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.discountTotal").value(100))
+                    .andExpect(jsonPath("$.total").value(2900));
+        }
+
+        @Test
+        @DisplayName("past the seller's ceiling it is refused like any other discount — FR-POS-10")
+        void aboveTheCeilingIsRefused() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Cart ceiling " + run, "pcs", "100.00", "20");
+
+            saveCeilings(session, Map.of("owner", 5, "manager", 25, "cashier", 10, "storekeeper", 0));
+
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(saleWithCart(
+                                    List.of(line(productId, "pcs", "1", "1", "100.00", null, null)),
+                                    Map.of("cartDiscountPercent", "40"),
+                                    cash(6000L)))))
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.code").value("DISCOUNT_ABOVE_CEILING"));
+        }
+
+        @Test
+        @DisplayName("more off than the cart holds is refused, not clamped — FR-POS-10")
+        void moreThanTheCartIsRefused() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Cart over " + run, "pcs", "100.00", "20");
+
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(saleWithCart(
+                                    List.of(line(productId, "pcs", "1", "1", "100.00", null, null)),
+                                    Map.of("cartDiscount", 20_000L),
+                                    cash(100L)))))
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.code").value("CART_DISCOUNT_EXCEEDS_CART"));
+        }
+
+        @Test
+        @DisplayName("stated as both a percentage and an amount it is refused — FR-POS-10")
+        void statedTwiceIsRefused() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Cart twice " + run, "pcs", "100.00", "20");
+
+            Map<String, Object> both = new LinkedHashMap<>();
+            both.put("cartDiscountPercent", "10");
+            both.put("cartDiscount", 500L);
+
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(saleWithCart(
+                                    List.of(line(productId, "pcs", "1", "1", "100.00", null, null)),
+                                    both, cash(9000L)))))
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.code").value("CART_DISCOUNT_STATED_TWICE"));
+        }
+
+        @Test
+        @DisplayName("a percentage is taken after line discounts, as the till quotes it — FR-POS-10")
+        void percentageFollowsTheLineDiscount() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Cart after line " + run, "pcs", "100.00", "20");
+
+            saveCeilings(session, Map.of("owner", 50, "manager", 25, "cashier", 10, "storekeeper", 0));
+
+            // GH₵100 less GH₵20 on the line is GH₵80; 10% off that is GH₵8,
+            // not GH₵10. The customer is quoted 10% off what they were about to
+            // pay, which is the number on the screen in front of them.
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(saleWithCart(
+                                    List.of(line(productId, "pcs", "1", "1", "100.00", 2_000L, null)),
+                                    Map.of("cartDiscountPercent", "10"),
+                                    cash(7200L)))))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.cartDiscount").value(800))
+                    .andExpect(jsonPath("$.discountTotal").value(2800))
+                    .andExpect(jsonPath("$.total").value(7200));
+        }
+    }
+
+    @Nested
+    @DisplayName("cost never reaches a reader who may not see it — FR-RPT-05")
+    class CostRedaction {
+
+        @Test
+        @DisplayName("an owner reads the frozen cost on the line")
+        void ownerSeesCost() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Costed " + run, "pcs", "100.00", "20");
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(sale(
+                                    line(productId, "pcs", "1", "100.00"), cash(10000L)))))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.items[0].frozenCostPrice").exists());
+        }
+
+        @Test
+        @DisplayName("a cashier reading the same sale back does not")
+        void cashierSeesNoCost() throws Exception {
+            Session owner = signIn();
+            String productId = stockedProduct(owner, "Hidden cost " + run, "pcs", "100.00", "20");
+
+            MvcResult created = mvc.perform(owner.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(sale(
+                                    line(productId, "pcs", "1", "100.00"), cash(10000L)))))
+                    .andExpect(status().isCreated()).andReturn();
+            String saleId = json.readTree(created.getResponse().getContentAsString()).get("id").asText();
+
+            String clerkName = "seller-" + run.toLowerCase();
+            User clerk = new User(clerkName, "Test Seller", passwords.encode(PASSWORD));
+            clerk.assignRole(Role.CASHIER);
+            clerk.assignOutlet(outletId);
+            users.save(clerk);
+            loginAttempts.recordSuccess(clerkName);
+
+            // Release gate 7. The cost was on every line of every sale returned
+            // to anybody holding pos.sell, which is every cashier — and the
+            // dashboard then computed a profit figure out of it.
+            mvc.perform(signInAs(clerkName).authorise(get("/api/sales/" + saleId)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items[0].frozenCostPrice").doesNotExist())
+                    // Everything the cashier does need is still there.
+                    .andExpect(jsonPath("$.items[0].unitPrice").exists())
+                    .andExpect(jsonPath("$.receiptNumber").exists());
+        }
+
+        @Test
+        @DisplayName("nor on the sales they list back")
+        void cashierSeesNoCostInHistory() throws Exception {
+            Session owner = signIn();
+            String productId = stockedProduct(owner, "Hidden history " + run, "pcs", "100.00", "20");
+            mvc.perform(owner.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(sale(
+                                    line(productId, "pcs", "1", "100.00"), cash(10000L)))))
+                    .andExpect(status().isCreated());
+
+            String clerkName = "lister-" + run.toLowerCase();
+            User clerk = new User(clerkName, "Test Lister", passwords.encode(PASSWORD));
+            clerk.assignRole(Role.CASHIER);
+            clerk.assignOutlet(outletId);
+            users.save(clerk);
+            loginAttempts.recordSuccess(clerkName);
+
+            mvc.perform(signInAs(clerkName).authorise(get("/api/sales")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].items[0].frozenCostPrice").doesNotExist());
         }
     }
 
@@ -773,6 +1084,7 @@ class SaleControllerTest {
         return new SaleRequest(UUID.randomUUID(), outletId, terminalId, null, null, null,
                 List.of(new SaleRequest.Line(productId, unit, BigDecimal.ONE, new BigDecimal(quantity),
                         new BigDecimal(price), 0L, null, null)),
+                null, null, null,
                 List.of(new SaleRequest.PaymentLine(UUID.randomUUID(), PaymentMethod.cash, paid, null, null)));
     }
 
@@ -846,6 +1158,21 @@ class SaleControllerTest {
         body.put("outletId", outletId.toString());
         body.put("terminalId", terminalId.toString());
         body.put("items", List.of(item));
+        body.put("payments", List.of(payments));
+        return body;
+    }
+
+    /** FR-POS-10: a sale carrying a cart-level concession. */
+    @SafeVarargs
+    private Map<String, Object> saleWithCart(List<Map<String, Object>> items,
+                                             Map<String, Object> cartFields,
+                                             Map<String, Object>... payments) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("id", UUID.randomUUID().toString());
+        body.put("outletId", outletId.toString());
+        body.put("terminalId", terminalId.toString());
+        body.put("items", items);
+        body.putAll(cartFields);
         body.put("payments", List.of(payments));
         return body;
     }

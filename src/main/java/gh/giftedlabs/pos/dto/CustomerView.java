@@ -24,6 +24,8 @@ public record CustomerView(
         /** FR-CUST-04: which of the product's prices applies to them. */
         String priceLevel,
         BigDecimal discountRate,
+        /** FR-CUST-07: the most they may owe. Zero means no credit. */
+        BigDecimal creditLimit,
         String notes,
         boolean active,
         BigDecimal totalPurchased,
@@ -40,6 +42,7 @@ public record CustomerView(
                 customer.getType().key(),
                 customer.getType().priceLevel().name(),
                 customer.getDiscountRate(),
+                customer.getCreditLimit(),
                 customer.getNotes(),
                 customer.isActive(),
                 BigDecimal.valueOf(totalPesewas).movePointLeft(2),

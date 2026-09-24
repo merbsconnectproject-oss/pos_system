@@ -59,6 +59,23 @@ New-Item -ItemType Directory -Force (Join-Path $Stage 'app'), (Join-Path $Stage 
 Copy-Item $jar.FullName (Join-Path $Stage 'app\pos-api.jar')
 Copy-Item (Join-Path $PSScriptRoot 'service\RadiancePosService.xml') (Join-Path $Stage 'service\RadiancePosService.xml')
 Copy-Item (Join-Path $PSScriptRoot 'tools\*') (Join-Path $Stage 'tools')
+
+# Every shortcut goes through the console-free shim, so a stage without it
+# installs a Start menu whose entries do nothing. Checked here rather than
+# discovered on a counter.
+foreach ($tool in 'launch.vbs', 'open-pos.ps1', 'onboard.ps1', 'diagnostics.ps1', 'restore-backup.ps1', 'uninstall-services.ps1') {
+    if (-not (Test-Path (Join-Path $Stage "tools\$tool"))) { throw "Staged tools are missing $tool." }
+}
+
+# A script that does not parse is a shortcut that flashes and vanishes. The
+# diagnostics tool shipped broken this way once; the build now refuses instead.
+Get-ChildItem (Join-Path $Stage 'tools') -Filter *.ps1 | ForEach-Object {
+    $parseErrors = $null
+    [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$parseErrors) | Out-Null
+    if ($parseErrors.Count) {
+        throw "$($_.Name) has $($parseErrors.Count) parse error(s): $($parseErrors[0].Message)"
+    }
+}
 Copy-Item (Join-Path $BackendRoot 'LICENSE') $Stage
 Copy-Item (Join-Path $PSScriptRoot 'THIRD-PARTY-NOTICES.txt') $Stage
 

@@ -82,6 +82,10 @@ public class InstallmentPlan {
     @OneToMany(mappedBy = "plan", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<InstallmentPlanItem> items = new ArrayList<>();
 
+    @OneToMany(mappedBy = "plan", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("createdAt desc")
+    private List<InstallmentPayment> payments = new ArrayList<>();
+
     protected InstallmentPlan() { }
 
     public InstallmentPlan(String planNumber, UUID customerId, UUID outletId, long totalPesewas,
@@ -117,6 +121,7 @@ public class InstallmentPlan {
     public Instant getUpdatedAt() { return updatedAt; }
     public List<InstallmentScheduleItem> getSchedule() { return schedule; }
     public List<InstallmentPlanItem> getItems() { return items; }
+    public List<InstallmentPayment> getPayments() { return payments; }
 
     public void setSaleId(UUID value) { this.saleId = value; }
     public void setNotes(String value) { this.notes = value; }
@@ -130,6 +135,11 @@ public class InstallmentPlan {
     public void addItem(InstallmentPlanItem item) {
         item.attachTo(this);
         items.add(item);
+    }
+
+    public void addPayment(InstallmentPayment payment) {
+        payment.attachTo(this);
+        payments.add(payment);
     }
 
     /** What the schedule has received. */

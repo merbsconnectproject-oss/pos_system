@@ -189,6 +189,52 @@ class InstallmentControllerTest {
         }
 
         @Test
+        @DisplayName("a payment remains visible after reopening and its receipt reprints through ESC/POS")
+        void paymentHistoryAndReceiptPersist() throws Exception {
+            Session session = signIn(ownerName);
+            String id = create(session, planBody(100_000, 10_000, 3));
+
+            MvcResult paid = mvc.perform(session.authorise(
+                            post("/api/installment-plans/" + id + "/payments"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(payment(45_000))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.payments.length()").value(1))
+                    .andExpect(jsonPath("$.payments[0].amountPesewas").value(45_000))
+                    .andExpect(jsonPath("$.payments[0].balanceAfterPesewas").value(45_000))
+                    .andExpect(jsonPath("$.payments[0].receiptNumber")
+                            .value(org.hamcrest.Matchers.containsString("-IP-")))
+                    .andReturn();
+            String paymentId = json.readTree(paid.getResponse().getContentAsString())
+                    .get("payments").get(0).get("id").asText();
+
+            // A fresh request still has the individual collection, not only an
+            // aggregate paid amount on the schedule.
+            mvc.perform(session.authorise(get("/api/installment-plans/" + id)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.payments[0].id").value(paymentId))
+                    .andExpect(jsonPath("$.outstandingPesewas").value(45_000));
+
+            MvcResult original = mvc.perform(session.authorise(get(
+                            "/api/installment-plans/" + id + "/payments/" + paymentId + "/receipt")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.reprint").value(false))
+                    .andReturn();
+            String originalText = receiptText(original);
+            assertTrue(originalText.contains("INSTALLMENT PAYMENT RECEIPT"), originalText);
+            assertTrue(originalText.contains("GHS 450.00"), originalText);
+            assertTrue(originalText.contains("Remaining balance: GHS 450.00"), originalText);
+
+            MvcResult reprint = mvc.perform(session.authorise(post(
+                            "/api/installment-plans/" + id + "/payments/" + paymentId
+                                    + "/receipt/reprint")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.reprint").value(true))
+                    .andReturn();
+            assertTrue(receiptText(reprint).contains("*** REPRINT ***"));
+        }
+
+        @Test
         @DisplayName("settling the balance completes the plan even with rows still pending")
         void completesOnBalance() throws Exception {
             Session session = signIn(ownerName);
@@ -313,6 +359,13 @@ class InstallmentControllerTest {
                         .content(json.writeValueAsString(body)))
                 .andExpect(status().isCreated()).andReturn();
         return json.readTree(result.getResponse().getContentAsString()).get("id").asText();
+    }
+
+    private String receiptText(MvcResult result) throws Exception {
+        StringBuilder text = new StringBuilder();
+        json.readTree(result.getResponse().getContentAsString()).get("lines")
+                .forEach(line -> text.append(line.asText()).append('\n'));
+        return text.toString();
     }
 
     private Session signIn(String identifier) throws Exception {

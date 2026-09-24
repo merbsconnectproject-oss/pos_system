@@ -105,9 +105,10 @@ public class SaleServiceImpl implements SaleService {
         Customer customer = resolveCustomer(request);
         List<PricedLine> priced = priceLines(request, actor, customer);
 
-        long subtotal = priced.stream().mapToLong(line -> line.gross).sum();
-        long discountTotal = priced.stream().mapToLong(line -> line.discount).sum();
-        long total = priced.stream().mapToLong(line -> line.net).sum();
+        long subtotal = priced.stream().mapToLong(PricedLine::gross).sum();
+        long discountTotal = priced.stream().mapToLong(PricedLine::totalDiscount).sum();
+        long cartDiscount = priced.stream().mapToLong(PricedLine::cartShare).sum();
+        long total = priced.stream().mapToLong(PricedLine::net).sum();
 
         validatePayments(request);
         long paid = request.payments().stream().mapToLong(SaleRequest.PaymentLine::amount).sum();
@@ -115,6 +116,7 @@ public class SaleServiceImpl implements SaleService {
 
         Sale sale = new Sale(request.id(), receiptNumber, request.outletId(), terminal.getId(),
                 actor.userId(), subtotal, discountTotal, total, changeDue, clock.instant());
+        sale.recordCartDiscount(cartDiscount);
         attachCustomer(sale, request, customer);
         sale.assignShift(shiftId);
 
@@ -131,8 +133,8 @@ public class SaleServiceImpl implements SaleService {
         // on it either.
         for (PricedLine line : priced) {
             inventory.record(new MovementRequest(
-                    line.productId, request.outletId(), MovementType.SALE,
-                    line.quantityBase, line.costAtSale, null, receiptNumber,
+                    line.productId(), request.outletId(), MovementType.SALE,
+                    line.quantityBase(), line.costAtSale(), null, receiptNumber,
                     SOURCE, saved.getId()), actor, mayOversell, clientIp);
         }
 
@@ -268,24 +270,6 @@ public class SaleServiceImpl implements SaleService {
             Product product = products.findById(line.productId())
                     .orElseThrow(() -> new ProductNotFoundException(line.productId()));
 
-            // FR-PRICE-03 · BR-10: the floor is this branch's, not the
-            // product's. A branch that lowered its floor lowered the price its
-            // cashiers may reach without asking anybody.
-            BigDecimal floor = pricing.effective(product.getId(), request.outletId()).floor();
-
-            // BR-10: below the floor needs an approver, recorded on the line —
-            // and the approver is checked, not taken on the client's word. An
-            // id arrives in the request body, so an unverified one would let
-            // the browser name anybody, the cashier themselves included.
-            if (line.unitPrice().compareTo(floor) < 0) {
-                if (line.floorApprovedBy() == null) {
-                    throw SaleException.belowFloor(product.getName(), line.unitPrice(), floor);
-                }
-                if (!staff.holdsPermission(line.floorApprovedBy(), Permission.SALE_APPROVE_BELOW_FLOOR)) {
-                    throw SaleException.approverNotPermitted(product.getName());
-                }
-            }
-
             // FR-UOM-03: the catalogue's factor, not the browser's. What the
             // request claimed is compared and refused if it disagrees, because a
             // stale unit would move the wrong quantity of stock silently.
@@ -299,10 +283,6 @@ public class SaleServiceImpl implements SaleService {
             // BR-11: rounded per line, and the sale total is the sum of the
             // rounded lines rather than a rounded sum.
             Money gross = Money.lineTotal(quantity, line.unitPrice(), BigDecimal.ZERO);
-            long net = Math.max(0L, gross.pesewas() - discount);
-
-            requireDiscountAllowed(product.getName(), discount, gross.pesewas(),
-                    line.discountApprovedBy(), actor, customer);
 
             // BR-5: the weighted average at this outlet, right now, frozen.
             BigDecimal costAtSale = levels
@@ -310,11 +290,130 @@ public class SaleServiceImpl implements SaleService {
                     .map(StockLevel::getAverageCost)
                     .orElse(BigDecimal.ZERO);
 
-            priced.add(new PricedLine(product.getId(), line.selectedUnit().trim(), factor,
-                    quantity.amount(), quantityBase.amount(), line.unitPrice(), discount,
-                    gross.pesewas(), net, costAtSale, line.floorApprovedBy()));
+            // FR-PRICE-03 · BR-10: the floor is this branch's, not the
+            // product's. A branch that lowered its floor lowered the price its
+            // cashiers may reach without asking anybody.
+            BigDecimal floor = pricing.effective(product.getId(), request.outletId()).floor();
+
+            // Cart share is zero here; applyCartDiscount settles it once the
+            // whole cart is known, which is the only point it can be known.
+            priced.add(new PricedLine(product.getId(), product.getName(), line.selectedUnit().trim(),
+                    factor, quantity.amount(), quantityBase.amount(), line.unitPrice(), discount,
+                    0L, gross.pesewas(), costAtSale, floor,
+                    line.floorApprovedBy(), line.discountApprovedBy()));
         }
-        return priced;
+
+        // The cart concession lands on the lines before anything is checked, so
+        // the floor and the ceiling both measure what the customer was actually
+        // charged rather than what the line said before the cart was discounted.
+        List<PricedLine> settled = applyCartDiscount(request, priced);
+
+        for (PricedLine line : settled) {
+            // The ceiling first, deliberately. When a discount breaks both
+            // rules, "that is more than you may give" is the answer the cashier
+            // can act on; the floor only becomes the question once somebody has
+            // agreed to the concession at all.
+            requireDiscountAllowed(line, request.cartDiscountApprovedBy(), actor, customer);
+            requireAtOrAboveFloor(line, actor);
+        }
+        return settled;
+    }
+
+    /**
+     * FR-POS-10: spread a discount taken against the whole cart over its lines.
+     *
+     * <p>Apportioned rather than held on the sale alone, and that is the whole
+     * design. A cart discount that lived only on the header would have to be
+     * remembered by every reader of a line — the receipt, a partial return, the
+     * discount report, the margin on a product — and the first one to forget
+     * would refund a customer more than they paid. Spread onto the lines, the
+     * arithmetic everywhere downstream is unchanged and already tested.
+     *
+     * <p>Distributed by each line's share of the cart, largest remainder first,
+     * so the pesewas add back to exactly the concession given. A proportional
+     * split with independent rounding loses or invents a pesewa, and BR-11 does
+     * not have a tolerance.
+     */
+    private List<PricedLine> applyCartDiscount(SaleRequest request, List<PricedLine> priced) {
+        long asked = resolveCartDiscount(request, priced);
+        if (asked <= 0) return priced;
+
+        long base = priced.stream().mapToLong(PricedLine::net).sum();
+        if (asked > base) throw SaleException.cartDiscountExceedsCart(asked, base);
+        if (base <= 0) return priced;
+
+        long[] share = new long[priced.size()];
+        long[] remainder = new long[priced.size()];
+        long allocated = 0;
+        for (int index = 0; index < priced.size(); index++) {
+            long numerator = priced.get(index).net() * asked;
+            share[index] = numerator / base;
+            remainder[index] = numerator % base;
+            allocated += share[index];
+        }
+
+        // The pesewas left over by integer division go to the lines with the
+        // largest remainders — the standard largest-remainder apportionment.
+        List<Integer> order = new ArrayList<>();
+        for (int index = 0; index < priced.size(); index++) order.add(index);
+        order.sort((left, right) -> Long.compare(remainder[right], remainder[left]));
+        for (int seat = 0; allocated < asked; seat++, allocated++) {
+            share[order.get(seat % order.size())]++;
+        }
+
+        List<PricedLine> settled = new ArrayList<>(priced.size());
+        for (int index = 0; index < priced.size(); index++) {
+            settled.add(priced.get(index).withCartShare(share[index]));
+        }
+        return settled;
+    }
+
+    /**
+     * The cart concession in pesewas, however it was stated.
+     *
+     * <p>A percentage is resolved against the cart <em>after</em> line
+     * discounts, which is what "10% off" means at a till where one line has
+     * already been marked down: the customer sees 10% off what they were about
+     * to pay, not 10% off a subtotal nobody quoted.
+     */
+    private long resolveCartDiscount(SaleRequest request, List<PricedLine> priced) {
+        BigDecimal percent = request.cartDiscountPercent();
+        Long amount = request.cartDiscount();
+
+        boolean hasPercent = percent != null && percent.signum() > 0;
+        boolean hasAmount = amount != null && amount > 0;
+        if (hasPercent && hasAmount) throw SaleException.cartDiscountStatedTwice();
+
+        if (hasAmount) return amount;
+        if (!hasPercent) return 0L;
+
+        long base = priced.stream().mapToLong(PricedLine::net).sum();
+        return Money.percentageOf(base, percent);
+    }
+
+    /**
+     * BR-10: nothing is sold below this branch's floor without an approver.
+     *
+     * <p>Measured against the price after every discount, which it was not
+     * before. The floor was checked against the submitted unit price and the
+     * discount subtracted afterwards, so a cashier could ring a line at exactly
+     * the floor, take their permitted discount off it, and settle below the
+     * floor with nobody asked — the one thing the rule exists to prevent.
+     */
+    private void requireAtOrAboveFloor(PricedLine line, PosPrincipal actor) {
+        BigDecimal effective = line.effectiveUnitPrice();
+        if (effective.compareTo(line.floor()) >= 0) return;
+
+        UUID approver = line.floorApprovedBy();
+        // BR-10: the approver is checked, not taken on the client's word. An id
+        // arrives in the request body, so an unverified one would let the
+        // browser name anybody, the cashier themselves included.
+        if (approver == null) {
+            throw SaleException.belowFloor(line.productName(), effective, line.floor());
+        }
+        if (!staff.holdsPermission(approver, Permission.SALE_APPROVE_BELOW_FLOOR)) {
+            throw SaleException.approverNotPermitted(line.productName());
+        }
     }
 
     /**
@@ -326,8 +425,16 @@ public class SaleServiceImpl implements SaleService {
      * so a manager capped at 25% cannot wave through 60% — and the message says
      * what the cap is rather than only that it was passed.
      */
-    private void requireDiscountAllowed(String productName, long discount, long gross,
-                                        UUID approvedBy, PosPrincipal actor, Customer customer) {
+    private void requireDiscountAllowed(PricedLine line, UUID cartApprovedBy,
+                                        PosPrincipal actor, Customer customer) {
+        long discount = line.totalDiscount();
+        long gross = line.gross();
+        String productName = line.productName();
+        // Either approver can carry the line: the cart concession and the line
+        // concession are one number by the time it reaches the customer, so the
+        // more senior of the two people who signed for it is what matters.
+        UUID approvedBy = line.discountApprovedBy() != null ? line.discountApprovedBy() : cartApprovedBy;
+
         if (discount <= 0) return;
 
         BigDecimal percent = gross <= 0
@@ -461,7 +568,8 @@ public class SaleServiceImpl implements SaleService {
 
         return new SaleView(sale.getId(), sale.getReceiptNumber(), sale.getOutletId(), sale.getTerminalId(),
                 userName(sale.getCashierId()), sale.getCustomerId(), sale.getCustomerName(),
-                sale.getCustomerPhone(), sale.getSubtotal(), sale.getDiscountTotal(), sale.getTotal(),
+                sale.getCustomerPhone(), sale.getSubtotal(), sale.getDiscountTotal(),
+                sale.getCartDiscount(), sale.getTotal(),
                 sale.getChangeDue(), sale.getStatus().name(), sale.getVoidReason(),
                 sale.getVoidedBy() == null ? null : userName(sale.getVoidedBy()),
                 sale.getVoidedAt(), sale.getCreatedAt(), lines, payments);
@@ -477,15 +585,50 @@ public class SaleServiceImpl implements SaleService {
         return clean.isEmpty() ? null : clean;
     }
 
-    /** A line after the server has priced it. */
-    private record PricedLine(UUID productId, String selectedUnit, BigDecimal conversionFactor,
-                              BigDecimal quantity, BigDecimal quantityBase, BigDecimal unitPrice,
-                              long discount, long gross, long net, BigDecimal costAtSale,
-                              UUID floorApprovedBy) {
+    /**
+     * A line after the server has priced it.
+     *
+     * @param discount  what was taken off this line on its own
+     * @param cartShare this line's portion of a discount taken off the whole
+     *                  cart. Held apart from {@code discount} only so the two
+     *                  can be reported separately; every arithmetic use is the
+     *                  sum of them
+     */
+    private record PricedLine(UUID productId, String productName, String selectedUnit,
+                              BigDecimal conversionFactor, BigDecimal quantity, BigDecimal quantityBase,
+                              BigDecimal unitPrice, long discount, long cartShare, long gross,
+                              BigDecimal costAtSale, BigDecimal floor,
+                              UUID floorApprovedBy, UUID discountApprovedBy) {
+
+        PricedLine withCartShare(long share) {
+            return new PricedLine(productId, productName, selectedUnit, conversionFactor, quantity,
+                    quantityBase, unitPrice, discount, share, gross, costAtSale, floor,
+                    floorApprovedBy, discountApprovedBy);
+        }
+
+        long totalDiscount() {
+            return discount + cartShare;
+        }
+
+        /** What the customer actually pays for this line. */
+        long net() {
+            return Math.max(0L, gross - totalDiscount());
+        }
+
+        /**
+         * The per-unit price the customer really paid, which is what BR-10
+         * measures. A discount is money off the line; spread back over the
+         * quantity it is money off the unit price.
+         */
+        BigDecimal effectiveUnitPrice() {
+            if (quantity.signum() <= 0) return unitPrice;
+            return Money.major(net()).divide(quantity, 4, java.math.RoundingMode.HALF_UP);
+        }
 
         SaleItem toItem() {
             return new SaleItem(productId, selectedUnit, conversionFactor, quantity, quantityBase,
-                    unitPrice, discount, net, costAtSale, floorApprovedBy);
+                    unitPrice, totalDiscount(), net(), costAtSale, floorApprovedBy, discountApprovedBy,
+                    cartShare);
         }
     }
 }

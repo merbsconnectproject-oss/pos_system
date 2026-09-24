@@ -8,9 +8,16 @@ import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.SettingsService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.io.IOException;
 
 /**
  * Business settings — FR-SET.
@@ -52,6 +59,56 @@ public class SettingsController {
                                          @AuthenticationPrincipal PosPrincipal actor,
                                          HttpServletRequest request) {
         return settings.updateAppearance(body, actor, clientIp(request));
+    }
+
+    /**
+     * FR-SET-01: upload the business logo.
+     *
+     * <p>Multipart rather than a base64 field, because a logo is a file and a
+     * 512 KB base64 string in a JSON settings body would also have to survive
+     * every other settings save.
+     */
+    @PostMapping("/logo")
+    @PreAuthorize("hasAuthority('" + Permission.Codes.SETTINGS_GENERAL + "')")
+    public SettingsView uploadLogo(@RequestParam("file") MultipartFile file,
+                                   @AuthenticationPrincipal PosPrincipal actor,
+                                   HttpServletRequest request) throws IOException {
+        if (file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose a logo file");
+        }
+        return settings.storeLogo(file.getBytes(), file.getContentType(), actor, clientIp(request));
+    }
+
+    /** FR-SET-01: remove it, going back to no logo on the receipt. */
+    @DeleteMapping("/logo")
+    @PreAuthorize("hasAuthority('" + Permission.Codes.SETTINGS_GENERAL + "')")
+    public SettingsView removeLogo(@AuthenticationPrincipal PosPrincipal actor,
+                                   HttpServletRequest request) {
+        return settings.storeLogo(null, null, actor, clientIp(request));
+    }
+
+    /**
+     * FR-SET-01: serve the logo.
+     *
+     * <p>Open to any signed-in user, like the rest of the settings read: the
+     * receipt preview and every screen header show it.
+     *
+     * <p>Served with {@code Content-Disposition: inline} and a nosniff header,
+     * and only ever with the content type the upload allowlisted. An SVG is an
+     * executable document in a browser, so it is served as an attachment-safe
+     * type rather than rendered in this origin's context.
+     */
+    @GetMapping("/logo")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<byte[]> logo() {
+        return settings.logo()
+                .map(stored -> ResponseEntity.ok()
+                        .header(HttpHeaders.CONTENT_TYPE, stored.contentType())
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                        .header("X-Content-Type-Options", "nosniff")
+                        .header(HttpHeaders.CACHE_CONTROL, "private, max-age=60")
+                        .body(stored.bytes()))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     private String clientIp(HttpServletRequest request) {

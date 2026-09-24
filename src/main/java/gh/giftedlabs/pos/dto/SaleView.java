@@ -23,6 +23,14 @@ public record SaleView(
         String customerPhone,
         long subtotal,
         long discountTotal,
+        /**
+         * FR-POS-10: the part of {@code discountTotal} taken off the whole cart.
+         *
+         * <p>Carried so the receipt can show a bill-level concession as one
+         * line rather than as an unexplained reduction spread across every
+         * item, which is how a customer is told about it at the counter.
+         */
+        long cartDiscount,
         long total,
         long changeDue,
         String status,
@@ -52,8 +60,33 @@ public record SaleView(
              */
             BigDecimal frozenCostPrice,
             boolean belowFloor) {
+
+        /** FR-RPT-05: null, not zero. Zero is a claim that it cost nothing. */
+        Line withoutCost() {
+            return new Line(productId, productName, sku, selectedUnit, conversionFactor, quantity,
+                    quantityBase, unitPrice, discount, lineTotal, null, belowFloor);
+        }
     }
 
     public record PaymentLine(UUID id, String method, long amount, String provider, String reference) {
+    }
+
+    /**
+     * The same sale with the cost taken out — FR-RPT-05, release gate 7.
+     *
+     * <p>A cashier may read back the sale they just rang up; they may not read
+     * what the goods cost the shop. The cost was on every line of every sale
+     * returned to anyone holding {@code pos.sell}, which is every cashier —
+     * and the dashboard then computed a profit figure out of it for people the
+     * reports were carefully withholding profit from.
+     *
+     * <p>Removed here rather than hidden by the screen. A cost that reaches the
+     * browser has left the building.
+     */
+    public SaleView withoutCost() {
+        return new SaleView(id, receiptNumber, outletId, terminalId, cashierName, customerId,
+                customerName, customerPhone, subtotal, discountTotal, cartDiscount, total, changeDue,
+                status, voidReason, voidedBy, voidedAt, createdAt,
+                items.stream().map(Line::withoutCost).toList(), payments);
     }
 }

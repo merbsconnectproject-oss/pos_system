@@ -19,6 +19,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -32,6 +33,7 @@ import java.util.UUID;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 
 /**
  * Settings over HTTP — FR-SET.
@@ -433,6 +435,100 @@ class SettingsControllerTest {
         return mvc.perform(session.authorise(post("/api/shifts/" + shiftId + "/close"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("countedCash", counted))));
+    }
+
+    @Nested
+    @DisplayName("the business logo — FR-SET-01")
+    class Logo {
+
+        /** A one-pixel PNG. Real bytes, so the content type is not the only check. */
+        private static final byte[] PNG = java.util.Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8AAAwAB/AF+AaMAAAAASUVORK5CYII=");
+
+        @Test
+        @DisplayName("an owner uploads one and it is served back")
+        void uploadAndServe() throws Exception {
+            Session session = signIn(ownerName);
+
+            mvc.perform(multipart("/api/settings/logo")
+                            .file(new MockMultipartFile("file", "logo.png", "image/png", PNG))
+                            .session(session.http())
+                            .header("X-XSRF-TOKEN", session.csrfToken())
+                            .cookie(new Cookie("XSRF-TOKEN", session.csrfToken())))
+                    .andExpect(status().isOk())
+                    // The URL points at this application, so every reader keeps
+                    // using the one field it already reads.
+                    .andExpect(jsonPath("$.logoUrl").value("/api/settings/logo"));
+
+            mvc.perform(session.authorise(get("/api/settings/logo")))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string("Content-Type", "image/png"))
+                    .andExpect(header().string("X-Content-Type-Options", "nosniff"));
+        }
+
+        @Test
+        @DisplayName("an empty multipart request is reported as a bad request")
+        void missingFileIsBadRequest() throws Exception {
+            Session session = signIn(ownerName);
+
+            mvc.perform(multipart("/api/settings/logo")
+                            .session(session.http())
+                            .header("X-XSRF-TOKEN", session.csrfToken())
+                            .cookie(new Cookie("XSRF-TOKEN", session.csrfToken())))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("MISSING_FILE"))
+                    .andExpect(jsonPath("$.details.part").value("file"));
+        }
+
+        @Test
+        @DisplayName("a file that is not an image is refused rather than stored and served back")
+        void refusesNonImages() throws Exception {
+            Session session = signIn(ownerName);
+
+            // These bytes are served back with the type they arrived with. A file
+            // claiming to be HTML and served as such is stored XSS on the shop's
+            // own origin.
+            mvc.perform(multipart("/api/settings/logo")
+                            .file(new MockMultipartFile("file", "x.html", "text/html",
+                                    "<script>alert(1)</script>".getBytes()))
+                            .session(session.http())
+                            .header("X-XSRF-TOKEN", session.csrfToken())
+                            .cookie(new Cookie("XSRF-TOKEN", session.csrfToken())))
+                    .andExpect(status().isUnsupportedMediaType());
+        }
+
+        @Test
+        @DisplayName("a cashier cannot change the shop's logo")
+        void cashierIsRefused() throws Exception {
+            Session session = signIn(cashierName);
+
+            mvc.perform(multipart("/api/settings/logo")
+                            .file(new MockMultipartFile("file", "logo.png", "image/png", PNG))
+                            .session(session.http())
+                            .header("X-XSRF-TOKEN", session.csrfToken())
+                            .cookie(new Cookie("XSRF-TOKEN", session.csrfToken())))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("removing it leaves no logo rather than a broken link")
+        void removeClearsTheUrlToo() throws Exception {
+            Session session = signIn(ownerName);
+
+            mvc.perform(multipart("/api/settings/logo")
+                            .file(new MockMultipartFile("file", "logo.png", "image/png", PNG))
+                            .session(session.http())
+                            .header("X-XSRF-TOKEN", session.csrfToken())
+                            .cookie(new Cookie("XSRF-TOKEN", session.csrfToken())))
+                    .andExpect(status().isOk());
+
+            mvc.perform(session.authorise(delete("/api/settings/logo")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.logoUrl").doesNotExist());
+
+            mvc.perform(session.authorise(get("/api/settings/logo")))
+                    .andExpect(status().isNotFound());
+        }
     }
 
     private Session signIn(String identifier) throws Exception {

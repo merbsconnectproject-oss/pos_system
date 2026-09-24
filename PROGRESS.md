@@ -1,6 +1,6 @@
 # Progress
 
-**Updated** 2026-09-18 · **Tests** full backend + frontend acceptance suites green · **DB** connected to `pos_system`, V1–V30 applied
+**Updated** 2026-09-24 · **Tests** 560 backend (3 skipped) + 95 frontend green · **DB** migrations V1–V34 validated
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (258 items, dual checkbox).
@@ -195,6 +195,7 @@ the customer kept the goods.
 |---|---|
 | `expense` table, void-not-delete | `V18__expenses.sql` |
 | `installment_plan` + schedule + lines | `V19__installment_plans.sql` |
+| Immutable payment history + receipt facts | `V34__installment_payment_receipts.sql` |
 | Expenses CRUD, period totals by category | `ExpenseController` behind `expense.view` / `expense.manage` |
 | Plans, payments, write-off | `InstallmentController` behind `customer.credit` |
 | P&L: revenue, COGS, gross, opex, net | `GET /api/reports/profit-and-loss` behind `report.view_pl` |
@@ -223,6 +224,14 @@ the *first* installment: a customer who pays every instalment as quoted and stil
 owes a penny is a support call, one who pays a penny more at the start never
 notices. Overdue is computed from today's date rather than stored, because a
 stored flag is wrong every morning until something runs.
+
+**Installment receipts now survive the dialog.** Each collection has its own
+database row, unique receipt number, amount, channel/reference, cashier and the
+balance immediately after that payment. Reopening a plan shows those rows in
+Payment History & Receipts, including legacy collections reconstructed from the
+old schedule aggregates. Original prints and audited, visibly marked reprints
+are rendered from the stored row and sent through the same in-process ESC/POS
+endpoint as sale receipts; `window.print()` is no longer in this workflow.
 
 **Four defects found on the way.**
 
@@ -298,7 +307,7 @@ named approver was trusted from the request body; it is now verified against
 
 ---
 
-## I · Receipts and printing — 90%
+## I · Receipts and printing — 98%
 
 | Requirement | Status |
 |---|---|
@@ -307,9 +316,19 @@ named approver was trusted from the request body; it is now verified against
 | FR-RCPT-04 content per PRD §9 | ✅ `ReceiptLayout`, rendered from the sale **as stored** |
 | FR-RCPT-06 reprints marked and logged | ✅ band above the receipt details; `RECEIPT_REPRINTED` audited before the render |
 | FR-RCPT-09 previewable at both widths | ✅ through the same layout the printer uses, so a preview cannot drift from the output |
-| **The Windows print service** | ❌ **needs the printer.** The seam exists on both sides — `printService.ts` posts to `localhost:9100`, and the server hands it base64 ESC/POS |
+| In-process local printing | ✅ Authenticated `/api/printing/receipt` submits server-rendered ESC/POS through `javax.print` to the configured OS queue; physically validated on `POS-80` with text, graphics, feed and cut |
 
-**The layout is asserted character by character without hardware** — 10 tests on
+**No browser printing for receipts.** Sale completion, retry, audited reprints and
+credit notes all use the same-origin endpoint. Printer-offline and missing-queue
+failures return a retryable error after the sale remains committed. The queue is
+selected with `POS_PRINTER_NAME` (default `POS-80`).
+
+**Cash overpayment survives onto the paper.** Checkout persists the amount the
+customer actually handed over rather than replacing it with the bill total. The
+server stores the difference, and the receipt spells the two figures out as
+`Cash tendered` and `Change due`.
+
+**The layout is asserted character by character without hardware** — 11 tests on
 column width, right-aligned money, two decimals, trimmed quantities, the REPRINT
 band's position, long names wrapping rather than being dropped. That is the only
 way to test a receipt before the roll exists, and it is also where the fiddly part
@@ -651,3 +670,180 @@ hidden behind the tick.
   from every branch.
 
 **496 backend tests, 40 frontend, all green.**
+
+---
+
+## Reports, discounts and the last of the unreachable APIs — 2026-09-23
+
+Seven things were built or repaired. Three of them were defects a client
+demonstration would have hit, and two of those had been reported as done.
+
+### The cart discount never reached the server
+
+`PosModal` offered a discount on the whole bill, reduced the total it asked the
+customer to pay, and took the money. `salesApi.complete` then sent the server
+only the *line* discounts. The server priced the sale from the lines, found the
+payment short of its own total, and refused the sale — so every discounted bill
+failed with "payments do not settle", naming a problem the cashier did not have.
+
+The concession now travels as its own field and is **apportioned across the
+lines**, largest remainder first, so the pesewas add back to exactly what was
+given. Apportioning rather than holding it on the header is the whole design:
+the receipt, a partial return, the discount report and the margin on a product
+all read the line, and the first reader to forget a header-level discount would
+refund a customer more than they paid. `sale.cart_discount` and
+`sale_item.cart_discount_share` (V31, V32) record where it came from so the
+discount report can still tell a cashier marking one item down from a manager
+taking a figure off the bill.
+
+Past the seller's ceiling the till now asks for a manager's PIN rather than
+silently reducing the figure to what they may give — the cashier typed 20, the
+screen showed 10, and the customer was told a number nobody had agreed to.
+
+### A discount could walk a line under the floor
+
+BR-10 was checked against the price as entered, and the discount subtracted
+afterwards. So the way around the floor was to ring the line at list price and
+discount to wherever you liked: at a 100% owner ceiling, anywhere at all, with
+nobody asked. The floor is now measured against the price the customer actually
+pays. One existing test had been quietly relying on the hole — it asked for a
+60% discount on a line whose floor was half the list price, and had been
+asserting only the ceiling error.
+
+The ceiling is checked before the floor, deliberately: when a discount breaks
+both, "that is more than you may give" is the answer a cashier can act on.
+
+### Customer discounts applied on one path in four
+
+`priceFor` was correct and `handleCustomerPhoneLookup` called it. The other
+three ways to attach a customer — picking from the list, creating one at the
+till, continuing without one — set the customer and left the cart at retail. So
+a contractor created at the counter paid retail, and a trade customer detached
+afterwards left *their* prices behind for the next walk-in. One
+`attachCustomer` now does both halves everywhere. The bill discount is also
+cleared after a sale; it used to stand until somebody noticed at the cash-up.
+
+The rules moved to `discounts.ts` with 20 tests. A rule about money that only
+one call site obeys is not a rule.
+
+### The analytics screen stated things it could not know
+
+`AnalyticsReportsView` posted to `/api/analytics/ai-inference`, a route that
+exists only in `pos-system/server.ts` — the Vite dev server, which the
+installers do not ship. In a real shop the call always failed and the screen
+always rendered its `catch` branch: a financial health score of **88, graded
+A**, "Radiance Lighting captures highest ticket value (GH₵ 1,245/order)", an
+ageing panel captioned "GH₵ 18,200 funded customer financing", and an action
+plan promising "GH₵ 8,500 Cash Released". Identical on every counter in every
+shop. The charts beside it carried real server figures, which made the invented
+half impossible to pick out rather than easy.
+
+Replaced by `insights.ts`: every sentence derived from a figure the server
+returned, nothing emitted when the figures do not support it, and no
+cost-derived observation at all for a reader without `report.view_profit`. 13
+tests. The Gemini endpoint and the `@google/genai` dependency are gone — an
+offline-first till had no business holding either.
+
+`OutletComparisonView` was worse and less obvious: each branch was **seeded**
+with a literal revenue, order count and margin — Radiance Lighting opened at
+GH₵34,850 on 28 orders at 40% — and the session's real sales were added to it.
+Any line without a recorded cost fell back to 70% of its selling price. Every
+comparison on the screen was therefore a comparison of two seeds. It now reads
+`reports/summary`, `breakdown`, and `stock` per branch, and the commentary
+column names whichever branch actually leads, or says nothing.
+
+### FR-RPT-03 had three of its five filters unreachable
+
+The reports API has taken outlet, date, category, user and payment method since
+it was written. The screen offered two, so a manager could not ask what one
+cashier sold or what went through MoMo. All five are now on the screen, and the
+discount and void logs take the user filter too — "whose voids are these" being
+the question those logs are opened to answer.
+
+Three FR-RPT-04 reports had no tab despite being on the API: **inventory
+valuation**, **low stock** and **end of day**.
+
+### Cost was reaching every cashier
+
+`frozenCostPrice` was on every line of every sale returned to anyone holding
+`pos.sell`. Release gate 7 is "a cashier sees no cost or profit". The reports
+withheld cost carefully and the sales endpoint handed it over; the dashboard
+then computed a profit figure out of it for exactly the people the reports were
+protecting. Redacted at the controller, where the caller's rights are known.
+
+### Built, not repaired
+
+- **FR-SET-08 data export.** Server-side, streamed, read from
+  `information_schema` so a table added later is in the archive without anyone
+  remembering — JSON for the whole business, a zip of CSV for the accountant.
+  Live password-reset tokens are excluded; password hashes are not, because an
+  archive that cannot restore its own users is not an archive. Audited before a
+  byte is written.
+- **FR-USER-03 per-user permissions.** The API was complete and had no caller,
+  so AT-A1-04 could not be demonstrated at all. Three states on the screen,
+  because "withheld" and "the role never had it" are different facts.
+- **FR-PRICE-03 / FR-PRICE-06.** Branch prices and price history had no control
+  either; a branch floor could be stored and enforced with no way to set or read it.
+- **FR-SET-01 logo upload.** The field held a URL, so the logo had to already
+  live on the internet — on a counter whose connection cannot be relied on to
+  sell. Bytes in the database now, carried by the backup.
+- **FR-CUST-07 credit limits, balances, ageing, statements.** `credit_limit`
+  appeared nowhere in the server. The balance is *derived* from open plans and
+  deliberately not stored, for the same reason a purchase order does not store
+  received quantity.
+- **FR-SUP-08 amend, FR-CUST-07 write-off, FR-RCPT-09 server-rendered preview** —
+  three more APIs that had no caller. The settings receipt preview was a
+  hand-built mock-up in JSX, a second renderer free to disagree with the printer.
+
+**A limit that would have stranded the client.** The first version of the credit
+check read a zero limit as "no credit". Nine installment tests failed, which is
+the clearest possible statement of what it would have done to a shop on
+upgrade: the column defaults to zero, so every existing customer would have been
+refused credit until somebody set a limit for each of them by hand. Zero now
+means "no limit set".
+
+**Three migrations:** V31 cart discount and discount approver, V32 the per-line
+cart share, V33 logo bytes and credit limit.
+
+**560 backend tests (3 skipped — the live R2 checks), 95 frontend, all green.**
+Up from 514 and 54. Maven's own summary, not a count assembled from the reports
+directory — that one reads stale files from a partial run and had me reporting 8
+failures against a green build.
+
+### The migrations ran in the tests and not on the machine
+
+Both suites were green and the backend would not start. Testcontainers builds
+the schema from nothing as the owner of everything, so it never exercises the
+one thing that was wrong: what the application role is *allowed* to do against a
+database it did not create.
+
+Two failures, one cause. The Ubuntu `.deb` adopts an existing `pos_system` with
+`ALTER DATABASE ... OWNER TO radiance_pos`. Since PostgreSQL 15 the `public`
+schema belongs to the implicit role `pg_database_owner`, so that one statement
+moves `CREATE`-on-public to the new owner and leaves every table with the old
+one:
+
+- `./run.sh`, as `giftedlabs`, still owned the tables — so `ALTER TABLE` worked
+  and V31's `CREATE INDEX` did not: *permission denied for schema public*. The
+  first migration in months to create anything was the first to notice.
+- the packaged service, as `radiance_pos`, owned the database and none of its
+  contents: *permission denied for table flyway_schema_history*. It had been
+  stuck in `activating` since the package was installed, failing at V30, with
+  nothing to do with this session's work.
+
+**Both indexes are gone rather than the privilege granted.** Neither was
+measured — one would have served "what did this manager approve", which the
+discount report already answers from lines already filtered by date and outlet;
+the other saved a lookup over the handful of plans a customer has. This project
+learned once already that an index added on a guess is a guess somebody later
+mistakes for a finding. Dropping them is also what makes the migration run as an
+ordinary table owner, which is the privilege the application should need.
+
+**`postinst` now moves ownership as one piece** — schema, tables, sequences and
+`flyway_schema_history` together, with `REASSIGN OWNED` when the old role is
+still there. A machine that already took the half-move cannot be repaired by
+reinstalling, because the database block only runs when `pos.env` is absent, so
+`radiance-pos-repair-database` does it once.
+
+V31–V33 were edited in place, which is safe exactly once: no database anywhere
+had applied them, so there is no checksum to invalidate.

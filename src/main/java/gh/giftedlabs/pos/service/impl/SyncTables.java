@@ -193,6 +193,8 @@ final class SyncTables {
                     "plan_id in (select id from installment_plan where synced_at is null)", null),
             new Spec("installment_schedule_item", "id", true,
                     "plan_id in (select id from installment_plan where synced_at is null)", null),
+            new Spec("installment_payment", "id", true,
+                    sinceWatermark("installment_payment"), WATERMARK, "created_at"),
 
             // BR-15. Append-only at both ends: the trigger on the owner's copy
             // refuses an update, so the combined log is as tamper-evident as

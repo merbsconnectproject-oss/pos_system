@@ -68,6 +68,18 @@ public class Sale {
     @Column(name = "discount_total", nullable = false, updatable = false)
     private long discountTotal;
 
+    /**
+     * FR-POS-10: the part of {@link #discountTotal} conceded against the whole
+     * cart rather than one line.
+     *
+     * <p>The concession is apportioned onto the lines, so this changes no
+     * arithmetic — it is here so the discount report can say whether a cashier
+     * marked down one item or took a figure off the bill, which are different
+     * decisions by different people for different reasons.
+     */
+    @Column(name = "cart_discount", nullable = false, updatable = false)
+    private long cartDiscount;
+
     @Column(name = "total", nullable = false, updatable = false)
     private long total;
 
@@ -131,6 +143,10 @@ public class Sale {
     public String getCustomerPhone() { return customerPhone; }
     public long getSubtotal() { return subtotal; }
     public long getDiscountTotal() { return discountTotal; }
+    public long getCartDiscount() { return cartDiscount; }
+
+    /** Set once, by the service that priced the sale. */
+    public void recordCartDiscount(long pesewas) { this.cartDiscount = pesewas; }
     public long getTotal() { return total; }
     public long getChangeDue() { return changeDue; }
     public Status getStatus() { return status; }

@@ -86,6 +86,28 @@ public class SaleException extends RuntimeException {
                 Map.of("product", productName, "percent", percent, "ceiling", ceiling));
     }
 
+    /**
+     * FR-POS-10: a cart discount larger than the cart it is taken off.
+     *
+     * <p>Refused rather than clamped to the cart. A till that quietly turned
+     * "GH₵500 off" into "everything off" would settle a sale nobody agreed to,
+     * and the cashier would find out from the drawer rather than the screen.
+     */
+    public static SaleException cartDiscountExceedsCart(long discount, long cart) {
+        return new SaleException("CART_DISCOUNT_EXCEEDS_CART",
+                "A discount of %s is more than the %s in the cart."
+                        .formatted(gh.giftedlabs.pos.rules.Money.ofPesewas(discount),
+                                gh.giftedlabs.pos.rules.Money.ofPesewas(cart)),
+                Map.of("discount", discount, "cart", cart));
+    }
+
+    /** FR-POS-10: the cart discount given as both a percentage and an amount. */
+    public static SaleException cartDiscountStatedTwice() {
+        return new SaleException("CART_DISCOUNT_STATED_TWICE",
+                "Give the cart discount as a percentage or as an amount, not both.",
+                Map.of());
+    }
+
     /** BR-6: the terminal has used every number it was given. */
     public static SaleException receiptBlockExhausted(String terminalCode) {
         return new SaleException("RECEIPT_BLOCK_EXHAUSTED",

@@ -53,6 +53,23 @@ public class BusinessSettings {
     @Column(name = "logo_url")
     private String logoUrl;
 
+    /**
+     * FR-SET-01: the logo itself, not a link to it.
+     *
+     * <p>A URL was all this held, which meant the shop's logo had to already
+     * live somewhere on the internet — on a counter whose connection cannot be
+     * relied on to make a sale. Held in the database so a restore brings the
+     * receipts back with the logo on them.
+     */
+    @Column(name = "logo_bytes")
+    private byte[] logoBytes;
+
+    @Column(name = "logo_content_type")
+    private String logoContentType;
+
+    @Column(name = "logo_updated_at")
+    private Instant logoUpdatedAt;
+
     @Column(name = "tax_enabled", nullable = false)
     private boolean taxEnabled;
 
@@ -164,6 +181,17 @@ public class BusinessSettings {
     public void setEmail(String value) { this.email = value; }
     public void setAddress(String value) { this.address = value; }
     public void setLogoUrl(String value) { this.logoUrl = value; }
+
+    public byte[] getLogoBytes() { return logoBytes; }
+    public String getLogoContentType() { return logoContentType; }
+    public Instant getLogoUpdatedAt() { return logoUpdatedAt; }
+
+    /** Both together, or neither — the schema has a constraint saying so. */
+    public void setLogo(byte[] bytes, String contentType, Instant at) {
+        this.logoBytes = bytes;
+        this.logoContentType = contentType;
+        this.logoUpdatedAt = bytes == null ? null : at;
+    }
     public void setTaxEnabled(boolean value) { this.taxEnabled = value; }
     public void setTaxRatePercent(BigDecimal value) { this.taxRatePercent = value; }
     public void setCurrencyCode(String value) { this.currencyCode = value; }

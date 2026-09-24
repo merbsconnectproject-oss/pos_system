@@ -57,11 +57,31 @@ public class SaleItem {
     @Column(name = "floor_approved_by", updatable = false)
     private UUID floorApprovedBy;
 
+    /**
+     * FR-POS-10: how much of {@link #discount} came from a concession given
+     * against the whole cart rather than against this line.
+     *
+     * <p>The remainder was given on this line alone. Both are needed to report
+     * honestly: a cashier marking one item down and a manager taking a figure
+     * off the bill are different decisions, and the discount log should not
+     * have to guess which it is looking at.
+     */
+    @Column(name = "cart_discount_share", nullable = false, updatable = false)
+    private long cartDiscountShare;
+
+    /**
+     * FR-POS-10 · FR-AUDIT-02: who authorised a discount past the seller's own
+     * ceiling. Null when the discount was within it and needed nobody.
+     */
+    @Column(name = "discount_approved_by", updatable = false)
+    private UUID discountApprovedBy;
+
     protected SaleItem() { }
 
     public SaleItem(UUID productId, String selectedUnit, BigDecimal conversionFactor, BigDecimal quantity,
                     BigDecimal quantityBase, BigDecimal unitPrice, long discount, long lineTotal,
-                    BigDecimal frozenCostPrice, UUID floorApprovedBy) {
+                    BigDecimal frozenCostPrice, UUID floorApprovedBy, UUID discountApprovedBy,
+                    long cartDiscountShare) {
         this.productId = productId;
         this.selectedUnit = selectedUnit;
         this.conversionFactor = conversionFactor;
@@ -72,6 +92,8 @@ public class SaleItem {
         this.lineTotal = lineTotal;
         this.frozenCostPrice = frozenCostPrice;
         this.floorApprovedBy = floorApprovedBy;
+        this.discountApprovedBy = discountApprovedBy;
+        this.cartDiscountShare = cartDiscountShare;
     }
 
     void attachTo(Sale sale) { this.sale = sale; }
@@ -88,4 +110,6 @@ public class SaleItem {
     public long getLineTotal() { return lineTotal; }
     public BigDecimal getFrozenCostPrice() { return frozenCostPrice; }
     public UUID getFloorApprovedBy() { return floorApprovedBy; }
+    public UUID getDiscountApprovedBy() { return discountApprovedBy; }
+    public long getCartDiscountShare() { return cartDiscountShare; }
 }

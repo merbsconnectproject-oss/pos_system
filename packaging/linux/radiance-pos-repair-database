@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Repair a pos_system database that two roles each half-own.
+#
+#   sudo radiance-pos-repair-database
+#
+# Why this exists
+# ---------------
+# The package used to adopt an existing `pos_system` with a single
+# `ALTER DATABASE ... OWNER TO radiance_pos`. That is not enough, and on its own
+# it is worse than nothing:
+#
+#   * Since PostgreSQL 15 the `public` schema belongs to the implicit role
+#     `pg_database_owner`, so changing the database owner moves CREATE-on-public
+#     with it. The previous role — `giftedlabs`, from the Windows-style setup or
+#     a developer machine — keeps every table and loses the right to create
+#     anything, so its next migration dies on a CREATE INDEX with
+#     "permission denied for schema public".
+#   * Meanwhile the tables and `flyway_schema_history` still belong to that old
+#     role, so `radiance_pos` cannot migrate them either. It fails sooner:
+#     "permission denied for table flyway_schema_history", and the service sits
+#     in `activating` for ever.
+#
+# The result is a database neither role can migrate. `postinst` now moves
+# ownership as one piece, but a machine that already took the half-move needs
+# this once — reinstalling will not redo it, because the DB block only runs when
+# /etc/radiance-pos/pos.env is absent.
+#
+# This grants and reassigns. It creates nothing, drops nothing and touches no
+# row of business data.
+set -euo pipefail
+
+DB=${DB:-pos_system}
+APP_ROLE=${APP_ROLE:-radiance_pos}
+FORMER_ROLE=${FORMER_ROLE:-giftedlabs}
+
+if [[ $EUID -ne 0 ]]; then
+  echo "Run this with sudo: sudo $0" >&2
+  exit 1
+fi
+
+as_postgres() { runuser -u postgres -- psql -v ON_ERROR_STOP=1 "$@"; }
+
+if ! as_postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$DB'" | grep -q 1; then
+  echo "No database called $DB — nothing to repair." >&2
+  exit 1
+fi
+
+echo "Repairing $DB so $APP_ROLE owns it outright."
+
+as_postgres -c "ALTER DATABASE $DB OWNER TO $APP_ROLE"
+as_postgres -d "$DB" -c "ALTER SCHEMA public OWNER TO pg_database_owner"
+
+if as_postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='$FORMER_ROLE'" | grep -q 1; then
+  echo "Moving objects still owned by $FORMER_ROLE."
+  as_postgres -d "$DB" -c "REASSIGN OWNED BY $FORMER_ROLE TO $APP_ROLE"
+else
+  echo "No $FORMER_ROLE role on this machine; nothing to move."
+fi
+
+as_postgres -d "$DB" -c "GRANT ALL ON SCHEMA public TO $APP_ROLE"
+as_postgres -d "$DB" -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO $APP_ROLE"
+as_postgres -d "$DB" -c "GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO $APP_ROLE"
+
+echo
+echo "Done. Checking that $APP_ROLE can read the migration history:"
+if as_postgres -d "$DB" -tAc \
+    "SELECT 'ok, at version ' || max(version) FROM flyway_schema_history" >/dev/null 2>&1; then
+  as_postgres -d "$DB" -tAc "SELECT 'schema is at V' || max(version) FROM flyway_schema_history"
+fi
+
+echo
+echo "Now restart the service:  sudo systemctl restart radiance-pos"
+echo "and watch it come up:     journalctl -u radiance-pos -f"

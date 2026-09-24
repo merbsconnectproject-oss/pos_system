@@ -33,6 +33,19 @@ import java.util.*;
 @Service
 public class SettingsServiceImpl implements SettingsService {
 
+    /**
+     * FR-SET-01: what a logo may be.
+     *
+     * <p>An allowlist, not a denylist. These bytes are served back with the
+     * content type they arrived with, so anything not on this list is a file
+     * the browser might execute.
+     */
+    private static final List<String> ALLOWED_LOGO_TYPES = List.of(
+            "image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml");
+
+    /** A receipt header, not a photograph. 512 KB is generous for a shop logo. */
+    private static final int MAX_LOGO_BYTES = 512 * 1024;
+
     private static final Duration SNAPSHOT_TTL = Duration.ofSeconds(30);
 
     private final BusinessSettingsRepository settings;
@@ -129,6 +142,62 @@ public class SettingsServiceImpl implements SettingsService {
         audit.record(actor.userId(), "SETTINGS_CHANGED", "settings", null,
                 before, fields(row, ceilingsByRole), actor.outletId(), null, clientIp);
         return SettingsView.of(row, ceilingsByRole);
+    }
+
+    /**
+     * FR-SET-01: store the logo bytes.
+     *
+     * <p>The content type is checked against an allowlist rather than trusted:
+     * these bytes are served back to a browser later, and a file that arrives
+     * claiming to be {@code text/html} and is served as such is stored XSS on
+     * the shop's own domain.
+     *
+     * <p>`logo_url` is set to the endpoint that serves it, so every reader —
+     * the receipt renderer included — keeps using the one field it already
+     * reads and none of them needs to know the bytes moved.
+     */
+    @Override
+    @Transactional
+    public SettingsView storeLogo(byte[] bytes, String contentType, PosPrincipal actor, String clientIp) {
+        BusinessSettings row = row();
+        Map<String, BigDecimal> ceilingsByRole = ceilingMap();
+        Map<String, Object> before = fields(row, ceilingsByRole);
+
+        if (bytes == null || bytes.length == 0) {
+            row.setLogo(null, null, null);
+            row.setLogoUrl(null);
+        } else {
+            String clean = ALLOWED_LOGO_TYPES.stream()
+                    .filter(allowed -> allowed.equalsIgnoreCase(
+                            contentType == null ? "" : contentType.trim()))
+                    .findFirst()
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                            "A logo must be a PNG, JPEG, WebP, GIF or SVG image"));
+
+            if (bytes.length > MAX_LOGO_BYTES) {
+                throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
+                        "A logo must be smaller than %d KB".formatted(MAX_LOGO_BYTES / 1024));
+            }
+
+            row.setLogo(bytes, clean, clock.instant());
+            row.setLogoUrl("/api/settings/logo");
+        }
+
+        row.touch(actor.userId(), clock.instant());
+        settings.saveAndFlush(row);
+
+        audit.record(actor.userId(), "SETTINGS_LOGO_CHANGED", "settings", null,
+                before, fields(row, ceilingsByRole), actor.outletId(), null, clientIp);
+        return SettingsView.of(row, ceilingsByRole);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<StoredLogo> logo() {
+        BusinessSettings row = row();
+        if (row.getLogoBytes() == null || row.getLogoContentType() == null) return Optional.empty();
+        return Optional.of(new StoredLogo(
+                row.getLogoBytes(), row.getLogoContentType(), row.getLogoUpdatedAt()));
     }
 
     @Override

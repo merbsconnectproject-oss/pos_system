@@ -669,18 +669,28 @@ public class ReportServiceImpl implements ReportService {
                    and (cast(:from as timestamptz) is null or s.voided_at >= cast(:from as timestamptz))
                    and (cast(:to   as timestamptz) is null or s.voided_at <= cast(:to   as timestamptz))
                    and (cast(:outletId as uuid) is null or s.outlet_id = cast(:outletId as uuid))
+                   -- FR-RPT-03: "whose voids are these" is the question this log
+                   -- is opened to answer, so it takes the user filter too.
+                   and (cast(:userId as uuid) is null or s.cashier_id = cast(:userId as uuid))
                  order by s.voided_at desc
                  limit :limit
                 """ : """
                 select s.created_at as at, s.receipt_number, s.outlet_id::text as outlet_id,
                        o.name as outlet_name, p.name as product_name,
                        case when i.floor_approved_by is not null then 'Below floor price'
+                            when i.cart_discount_share > 0 and i.discount > i.cart_discount_share
+                                 then 'Line and cart discount'
+                            when i.cart_discount_share > 0 then 'Cart discount'
                             else 'Line discount' end as detail,
                        case when i.floor_approved_by is not null
                             then round((p.floor_price * i.conversion_factor - i.unit_price) * i.quantity * 100)
                             else i.discount end as amount,
                        coalesce(c.full_name, c.username) as actor,
-                       coalesce(a.full_name, a.username) as approver,
+                       -- FR-AUDIT-02: whoever signed for it. The discount
+                       -- approver was accepted, checked and then dropped, so
+                       -- this column could only ever name a floor approver.
+                       coalesce(coalesce(a.full_name, a.username),
+                                coalesce(d.full_name, d.username)) as approver,
                        null as reason
                   from sale_item i
                   join sale s on s.id = i.sale_id
@@ -688,10 +698,18 @@ public class ReportServiceImpl implements ReportService {
                   join product p on p.id = i.product_id
                   left join app_user c on c.id = s.cashier_id
                   left join app_user a on a.id = i.floor_approved_by
+                  left join app_user d on d.id = i.discount_approved_by
                  where (i.discount > 0 or i.floor_approved_by is not null)
                    and (cast(:from as timestamptz) is null or s.created_at >= cast(:from as timestamptz))
                    and (cast(:to   as timestamptz) is null or s.created_at <= cast(:to   as timestamptz))
                    and (cast(:outletId as uuid) is null or s.outlet_id = cast(:outletId as uuid))
+                   -- FR-RPT-03: matches whoever is named on the line — the
+                   -- cashier who gave the concession or the manager who signed
+                   -- for it. Either is a reason to be looking at this log.
+                   and (cast(:userId as uuid) is null
+                        or s.cashier_id = cast(:userId as uuid)
+                        or i.floor_approved_by = cast(:userId as uuid)
+                        or i.discount_approved_by = cast(:userId as uuid))
                  order by s.created_at desc
                  limit :limit
                 """;

@@ -189,7 +189,10 @@ function Get-InteractiveConfiguration {
         $form.DialogResult = [Windows.Forms.DialogResult]::OK
         $form.Close()
     })
-    if ($form.ShowDialog() -ne [Windows.Forms.DialogResult]::OK) { throw 'Setup was cancelled.' }
+    # Null, not an exception. Cancelling is a decision, and reporting it back as
+    # a setup failure put an error dialog in front of somebody who had just said
+    # "not now".
+    if ($form.ShowDialog() -ne [Windows.Forms.DialogResult]::OK) { return $null }
     return $form.Tag
 }
 
@@ -338,19 +341,56 @@ function Install-ApplicationService {
     Wait-ServiceReady RadiancePos
 }
 
-if (-not (Test-Administrator)) { throw 'Run setup as an administrator.' }
-$configuration = if ($ConfigFile) { Get-Content -Raw $ConfigFile | ConvertFrom-Json } else { Get-InteractiveConfiguration }
-Assert-Configuration $configuration
-if ($ValidateOnly) { Write-Host 'Onboarding configuration is valid.'; exit 0 }
+function Show-SetupFailure([string]$Message) {
+    if ($script:ProgressForm) { try { $script:ProgressForm.Close() } catch { } }
+    if ($ConfigFile) { Write-Error $Message; return }
+    Add-Type -AssemblyName PresentationFramework
+    [System.Windows.MessageBox]::Show(
+        "$Message`n`nYour sales data was not deleted. Run 'Configure or repair Radiance POS' from the Start menu to try again.`n`nA full log is at $script:LogPath",
+        'Radiance POS setup', 'OK', 'Error') | Out-Null
+}
 
-$databasePassword = New-RandomSecret
-$postgresPassword = if (Test-Path $PostgresAdminSecretPath) {
-    (Get-Content -Raw $PostgresAdminSecretPath).Trim()
-} else { New-RandomSecret }
-$backupEncryptionKey = if (Test-Path $BackupEncryptionSecretPath) {
-    (Get-Content -Raw $BackupEncryptionSecretPath).Trim()
-} else { New-BackupEncryptionKey }
+# Everything below runs with no console attached — the shortcuts launch this
+# through wscript so nothing flashes on the counter screen. That makes an
+# unhandled error completely invisible: setup appeared to do nothing at all.
+# So every step is inside one try, every failure puts up a dialog, and the whole
+# run is transcribed to a file the diagnostics tool can pick up.
+$script:LogPath = Join-Path $DataRoot ('logs\onboarding-{0:yyyyMMdd-HHmmss}.log' -f (Get-Date))
 try {
+    New-Item -ItemType Directory -Force (Split-Path $script:LogPath -Parent) | Out-Null
+    Start-Transcript -Path $script:LogPath -Force | Out-Null
+} catch { }
+
+try {
+    if (-not (Test-Administrator)) {
+        throw 'Radiance POS setup must run as a Windows administrator. Right-click the Start-menu entry and choose Run as administrator.'
+    }
+
+    $configuration = if ($ConfigFile) {
+        if (-not (Test-Path $ConfigFile)) { throw "The onboarding response file was not found at $ConfigFile." }
+        Get-Content -Raw $ConfigFile | ConvertFrom-Json
+    } else {
+        Get-InteractiveConfiguration
+    }
+    # A cancelled wizard is not a failure. Nothing has been written yet, so it
+    # leaves quietly rather than accusing the operator of an error.
+    if ($null -eq $configuration) { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null; exit 0 }
+
+    Assert-Configuration $configuration
+    if ($ValidateOnly) {
+        Write-Host 'Onboarding configuration is valid.'
+        Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
+        exit 0
+    }
+
+    $databasePassword = New-RandomSecret
+    $postgresPassword = if (Test-Path $PostgresAdminSecretPath) {
+        (Get-Content -Raw $PostgresAdminSecretPath).Trim()
+    } else { New-RandomSecret }
+    $backupEncryptionKey = if (Test-Path $BackupEncryptionSecretPath) {
+        (Get-Content -Raw $BackupEncryptionSecretPath).Trim()
+    } else { New-BackupEncryptionKey }
+
     Start-SetupProgress
     Set-SetupStatus 'Initializing the private database...'
     Initialize-Database $postgresPassword $databasePassword
@@ -382,16 +422,16 @@ try {
     $state | ConvertTo-Json | Set-Content (Join-Path $DataRoot 'install-state.json') -Encoding UTF8
     if ($script:ProgressForm) { $script:ProgressForm.Close() }
     if (-not $NoLaunch) {
-        Start-Process 'powershell.exe' -ArgumentList @(
-            '-NoProfile', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass',
-            '-File', (Join-Path $InstallRoot 'tools\open-pos.ps1')
+        # Through the same console-free shim the shortcuts use.
+        Start-Process 'wscript.exe' -ArgumentList @(
+            (Join-Path $InstallRoot 'tools\launch.vbs'), 'open-pos.ps1'
         )
     }
     Add-Type -AssemblyName PresentationFramework
     [System.Windows.MessageBox]::Show('Radiance POS is installed, protected, and ready to use.', 'Setup complete', 'OK', 'Information') | Out-Null
+    Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
 } catch {
-    if ($script:ProgressForm) { $script:ProgressForm.Close() }
-    Add-Type -AssemblyName PresentationFramework
-    [System.Windows.MessageBox]::Show("Setup could not finish.`n`n$($_.Exception.Message)`n`nYour sales data was not deleted. You can run Configure Radiance POS again from the Start menu.", 'Radiance POS setup', 'OK', 'Error') | Out-Null
-    throw
+    Show-SetupFailure "Setup could not finish.`n`n$($_.Exception.Message)"
+    Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
+    exit 1
 }

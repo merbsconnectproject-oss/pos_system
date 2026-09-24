@@ -93,6 +93,26 @@ public record Money(long pesewas) implements Comparable<Money> {
         return ofMajor(gross.subtract(discount == null ? BigDecimal.ZERO : discount));
     }
 
+    /**
+     * A percentage of an amount, in pesewas — FR-POS-10.
+     *
+     * <p>Rounded HALF_UP like every other money decision here, so a 7.5%
+     * discount on GH₵1.00 is 8 pesewas rather than 7. Rounding a concession
+     * down would be the shop keeping a pesewa it said it was giving away.
+     */
+    public static long percentageOf(long pesewas, BigDecimal percent) {
+        if (percent == null || percent.signum() <= 0 || pesewas == 0) return 0L;
+        return BigDecimal.valueOf(pesewas)
+                .multiply(percent)
+                .divide(BigDecimal.valueOf(100), 0, ROUNDING)
+                .longValueExact();
+    }
+
+    /** Major units from pesewas, without first wrapping in a {@code Money}. */
+    public static BigDecimal major(long pesewas) {
+        return ofPesewas(pesewas).toMajor();
+    }
+
     /** Major units for display, and for arithmetic that must leave the pesewa grid. */
     public BigDecimal toMajor() {
         return BigDecimal.valueOf(pesewas).movePointLeft(MINOR_SCALE).setScale(MINOR_SCALE, ROUNDING);

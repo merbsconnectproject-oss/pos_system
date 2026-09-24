@@ -17,6 +17,7 @@ TimeoutStopSec=30
 SuccessExitStatus=143
 NoNewPrivileges=true
 PrivateTmp=true
+# Printing is submitted to the CUPS spooler, not opened as a raw USB device.
 PrivateDevices=true
 ProtectSystem=strict
 ProtectHome=true

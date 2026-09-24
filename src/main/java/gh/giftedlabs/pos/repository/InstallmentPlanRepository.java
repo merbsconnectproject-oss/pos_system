@@ -50,4 +50,8 @@ public interface InstallmentPlanRepository extends JpaRepository<InstallmentPlan
     /** Plan numbers come from a sequence, not from max()+1 over this table. */
     @Query(value = "select nextval('installment_plan_number_seq')", nativeQuery = true)
     long nextPlanNumber();
+
+    /** Payment receipt numbers also come from a sequence, never max()+1. */
+    @Query(value = "select nextval('installment_payment_receipt_seq')", nativeQuery = true)
+    long nextPaymentReceiptNumber();
 }

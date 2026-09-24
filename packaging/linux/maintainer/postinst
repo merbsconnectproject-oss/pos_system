@@ -29,7 +29,36 @@ if [[ ! -f /etc/radiance-pos/pos.env ]]; then
   if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname='pos_system'" | grep -q 1; then
     runuser -u postgres -- createdb --owner=radiance_pos pos_system
   else
+    # Adopting a database somebody else created — an evaluation install, a
+    # developer machine, or the Windows-style setup, all of which use the role
+    # `giftedlabs`. Taking the database is not enough and taking only the
+    # database is actively harmful:
+    #
+    #   * Since PostgreSQL 15 the `public` schema is owned by the implicit role
+    #     `pg_database_owner`, so changing the database owner silently moves
+    #     CREATE-on-public to the new owner. The old role keeps its tables and
+    #     loses the ability to create anything — so its next migration fails on
+    #     the first CREATE INDEX, with "permission denied for schema public".
+    #   * The tables, sequences and `flyway_schema_history` still belong to the
+    #     old role, so the new one cannot migrate them either. It fails earlier
+    #     and more bluntly: "permission denied for table flyway_schema_history".
+    #
+    # The result was a database neither role could migrate, and a service stuck
+    # in `activating` with a stack trace nobody would connect to having
+    # installed a .deb. Ownership therefore moves as one piece.
     runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "ALTER DATABASE pos_system OWNER TO radiance_pos"
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -d pos_system -c "ALTER SCHEMA public OWNER TO pg_database_owner"
+    # REASSIGN OWNED needs the source role to exist; it is the Windows-style
+    # role this package may be taking over from. Missing is the ordinary case.
+    if runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='giftedlabs'" | grep -q 1; then
+      runuser -u postgres -- psql -v ON_ERROR_STOP=1 -d pos_system \
+        -c "REASSIGN OWNED BY giftedlabs TO radiance_pos"
+    fi
+    # Whatever else is in there — objects made by a superuser, say — the
+    # application role still has to be able to read and write it.
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -d pos_system -c "GRANT ALL ON SCHEMA public TO radiance_pos"
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -d pos_system -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO radiance_pos"
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -d pos_system -c "GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO radiance_pos"
   fi
   cat >/etc/radiance-pos/pos.env <<EOF
 SPRING_PROFILES_ACTIVE=counter
@@ -38,6 +67,7 @@ DB_USERNAME="radiance_pos"
 DB_PASSWORD="$DB_PASSWORD"
 PORT=8080
 POS_BIND_ADDRESS="127.0.0.1"
+POS_PRINTER_NAME="POS-80"
 OUTLET_CODE="RAD"
 TERMINAL_CODE="01"
 POS_BACKUP_DIRECTORY="/var/lib/radiance-pos/backups"

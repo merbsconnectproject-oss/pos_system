@@ -3,7 +3,9 @@ package gh.giftedlabs.pos.controller;
 import gh.giftedlabs.pos.dto.InstallmentPaymentRequest;
 import gh.giftedlabs.pos.dto.InstallmentPlanRequest;
 import gh.giftedlabs.pos.dto.InstallmentPlanView;
+import gh.giftedlabs.pos.dto.ReceiptView;
 import gh.giftedlabs.pos.rules.Permission;
+import gh.giftedlabs.pos.rules.ReceiptWidth;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.InstallmentService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,6 +16,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Customer installment plans — {@code customer.credit}.
@@ -69,6 +72,25 @@ public class InstallmentController {
         return installments.recordPayment(id, body, actor, clientIp(request));
     }
 
+    @GetMapping("/{id}/payments/{paymentId}/receipt")
+    @PreAuthorize("hasAuthority('" + Permission.Codes.CUSTOMER_CREDIT + "')")
+    public ReceiptView paymentReceipt(@PathVariable UUID id, @PathVariable UUID paymentId,
+                                      @RequestParam(defaultValue = "80mm") String width,
+                                      @AuthenticationPrincipal PosPrincipal actor,
+                                      HttpServletRequest request) {
+        return installments.paymentReceipt(id, paymentId, width(width), false, actor, clientIp(request));
+    }
+
+    /** A second copy is visibly marked and audited before its bytes are returned. */
+    @PostMapping("/{id}/payments/{paymentId}/receipt/reprint")
+    @PreAuthorize("hasAuthority('" + Permission.Codes.CUSTOMER_CREDIT + "')")
+    public ReceiptView reprintPaymentReceipt(@PathVariable UUID id, @PathVariable UUID paymentId,
+                                             @RequestParam(defaultValue = "80mm") String width,
+                                             @AuthenticationPrincipal PosPrincipal actor,
+                                             HttpServletRequest request) {
+        return installments.paymentReceipt(id, paymentId, width(width), true, actor, clientIp(request));
+    }
+
     /**
      * Write a plan off, or bring it back.
      *
@@ -90,5 +112,10 @@ public class InstallmentController {
     private String clientIp(HttpServletRequest request) {
         String forwarded = request.getHeader("X-Forwarded-For");
         return forwarded == null || forwarded.isBlank() ? request.getRemoteAddr() : forwarded.split(",")[0].trim();
+    }
+
+    private ReceiptWidth width(String label) {
+        return ReceiptWidth.ofLabel(label).orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.BAD_REQUEST, "Paper width is 80mm or 58mm"));
     }
 }

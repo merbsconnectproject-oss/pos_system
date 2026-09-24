@@ -39,5 +39,15 @@ public record CustomerRequest(
         @DecimalMax(value = "100", message = "A discount cannot exceed 100%")
         BigDecimal discountRate,
 
+        /**
+         * FR-CUST-07: the most this customer may owe across open plans.
+         *
+         * <p>Null leaves whatever is already set — the same rule as the discount
+         * rate, so a save from a screen that does not offer the field cannot
+         * quietly withdraw somebody's credit.
+         */
+        @DecimalMin(value = "0", message = "A credit limit cannot be negative")
+        BigDecimal creditLimit,
+
         @Size(max = 1000) String notes) {
 }

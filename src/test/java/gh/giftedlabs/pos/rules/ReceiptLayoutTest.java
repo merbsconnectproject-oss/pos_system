@@ -18,16 +18,24 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("Receipt layout — PRD §9")
 class ReceiptLayoutTest {
 
+    private static final ReceiptLayout.Branding BRANDING = new ReceiptLayout.Branding(
+            "Radiance Electricals",
+            "Inco Hardware - Koforidua",
+            "12 Main Street, Koforidua",
+            "Tel: 024 000 0000",
+            "VAT / TIN: C0012345678",
+            null);
+
     private static ReceiptLayout.Receipt receipt(boolean reprint) {
         return new ReceiptLayout.Receipt(
-                "INCO HARDWARE",
-                "12 Main Street, Koforidua",
-                "Tel: 024 000 0000",
-                null,
+                BRANDING,
+                "Sales Receipt",
                 "INC-01-004312",
                 "05/09/2026  14:32",
                 "Kwame A.",
+                "TILL-01",
                 "Yaw Mensah (Electrician)",
+                null,
                 List.of(
                         new ReceiptLayout.Item("2.5mm T&E Cable", new BigDecimal("12.000"), "m",
                                 new BigDecimal("18.50"), new BigDecimal("222.00")),
@@ -37,9 +45,9 @@ class ReceiptLayoutTest {
                 new BigDecimal("12.00"),
                 BigDecimal.ZERO,
                 new BigDecimal("310.00"),
-                List.of(new ReceiptLayout.Tender("Cash", new BigDecimal("200.00"), null),
+                List.of(new ReceiptLayout.Tender("Cash tendered", new BigDecimal("220.00"), null),
                         new ReceiptLayout.Tender("Mobile Money", new BigDecimal("110.00"), "MM8842219")),
-                BigDecimal.ZERO,
+                new BigDecimal("20.00"),
                 "Goods returnable within 7 days with this receipt.",
                 reprint,
                 "GHS");
@@ -151,10 +159,22 @@ class ReceiptLayoutTest {
     }
 
     @Test
+    @DisplayName("cash overpayment prints both the amount received and the change due")
+    void cashOverpaymentIsExplicit() {
+        List<String> lines = ReceiptLayout.render(receipt(false), ReceiptWidth.MM80);
+
+        assertTrue(lines.stream().anyMatch(line -> line.startsWith("Cash tendered")
+                && line.endsWith("GHS 220.00")), String.join("\n", lines));
+        assertTrue(lines.stream().anyMatch(line -> line.startsWith("Change due")
+                && line.endsWith("GHS 20.00")), String.join("\n", lines));
+    }
+
+    @Test
     @DisplayName("a name longer than the roll is broken, never dropped")
     void longNamesSurvive() {
         ReceiptLayout.Receipt long_ = new ReceiptLayout.Receipt(
-                "SHOP", null, null, null, "INC-01-000001", "05/09/2026", "A", null,
+                new ReceiptLayout.Branding("SHOP", null, null, null, null, null),
+                null, "INC-01-000001", "05/09/2026", "A", null, null, null,
                 List.of(new ReceiptLayout.Item(
                         "Heavy Duty Galvanised Steel Cable Tray 300mm Perforated Three Metre Length",
                         BigDecimal.ONE, "pc", new BigDecimal("450.00"), new BigDecimal("450.00"))),
@@ -169,9 +189,107 @@ class ReceiptLayoutTest {
     }
 
     @Test
+    @DisplayName("the header names the shop before it says anything about the sale")
+    void headerComesFirst() {
+        List<String> lines = ReceiptLayout.render(receipt(false), ReceiptWidth.MM80);
+
+        // Whose shop, which branch, where, and the number to ring — in that
+        // order, above the receipt number. A slip that opens with a receipt
+        // number is one a customer cannot place.
+        int company = indexOfContaining(lines, "Radiance Electricals");
+        int outlet = indexOfContaining(lines, "Inco Hardware - Koforidua");
+        int address = indexOfContaining(lines, "12 Main Street");
+        int phone = indexOfContaining(lines, "Tel: 024 000 0000");
+        int number = indexOfContaining(lines, "Receipt : INC-01-004312");
+
+        assertTrue(company >= 0 && outlet > company && address > outlet && phone > address,
+                String.join("\n", lines));
+        assertTrue(phone < number, "the header belongs above the transaction");
+    }
+
+    @Test
+    @DisplayName("a logo is printed but has no text, so a text preview skips it")
+    void logoPrintsWithoutText() {
+        ReceiptLayout.Logo mark = new ReceiptLayout.Logo(8, 2, new byte[] {(byte) 0xFF, 0x18});
+        ReceiptLayout.Receipt withLogo = new ReceiptLayout.Receipt(
+                new ReceiptLayout.Branding("Radiance Electricals", null, null, null, null, mark),
+                null, "INC-01-000001", "05/09/2026", "A", null, null, null,
+                List.of(new ReceiptLayout.Item("Clip", BigDecimal.ONE, "pc",
+                        new BigDecimal("3.00"), new BigDecimal("3.00"))),
+                new BigDecimal("3.00"), BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("3.00"),
+                List.of(new ReceiptLayout.Tender("Cash", new BigDecimal("3.00"), null)),
+                BigDecimal.ZERO, null, false, "GHS");
+
+        assertEquals(ReceiptLayout.Style.LOGO,
+                ReceiptLayout.renderStyled(withLogo, ReceiptWidth.MM80).get(0).style(),
+                "the mark goes above everything");
+        // Nothing blank is left behind in the text where the bitmap was.
+        assertFalse(ReceiptLayout.render(withLogo, ReceiptWidth.MM80).get(0).isBlank());
+
+        // And the bytes actually carry the raster command — GS v 0.
+        byte[] job = EscPos.job(ReceiptLayout.renderStyled(withLogo, ReceiptWidth.MM80));
+        assertTrue(contains(job, new byte[] {0x1D, 'v', '0'}), "the logo must reach the printer");
+    }
+
+    @Test
+    @DisplayName("the receipt number is barcoded at the foot, and readable under the bars")
+    void barcodeClosesTheSlip() {
+        List<ReceiptLayout.Line> styled =
+                ReceiptLayout.renderStyled(receipt(false), ReceiptWidth.MM80);
+
+        ReceiptLayout.Line last = styled.get(styled.size() - 1);
+        assertEquals(ReceiptLayout.Style.BARCODE, last.style(), "a scanner looks at the bottom");
+        assertEquals("INC-01-004312", last.data());
+        // Printed under the bars too: a smudged barcode still has to be keyable.
+        assertTrue(last.text().contains("INC-01-004312"), last.text());
+
+        // GS k 73 — Code 128, opened with the subset selector.
+        byte[] job = EscPos.job(styled);
+        assertTrue(contains(job, new byte[] {0x1D, 'k', 73}), "the bars must reach the printer");
+        assertTrue(contains(job, "{BINC-01-004312".getBytes(java.nio.charset.StandardCharsets.US_ASCII)),
+                "Code 128 subset B carries letters as well as digits");
+    }
+
+    @Test
+    @DisplayName("emphasis is always turned off again on the line that turned it on")
+    void emphasisNeverLeaks() {
+        byte[] job = EscPos.job(ReceiptLayout.renderStyled(receipt(true), ReceiptWidth.MM80));
+
+        // A printer keeps what it was last told. One line that forgets to reset
+        // would embolden — or invert — the whole rest of the roll.
+        assertEquals(count(job, new byte[] {0x1B, 'E', 1}), count(job, new byte[] {0x1B, 'E', 0}),
+                "bold on and bold off must balance");
+        assertEquals(count(job, new byte[] {0x1D, 'B', 1}), count(job, new byte[] {0x1D, 'B', 0}),
+                "inverted text must be turned back off");
+    }
+
+    private static int indexOfContaining(List<String> lines, String fragment) {
+        for (int i = 0; i < lines.size(); i++) {
+            if (lines.get(i).contains(fragment)) return i;
+        }
+        return -1;
+    }
+
+    private static boolean contains(byte[] haystack, byte[] needle) {
+        return count(haystack, needle) > 0;
+    }
+
+    private static int count(byte[] haystack, byte[] needle) {
+        int found = 0;
+        for (int i = 0; i + needle.length <= haystack.length; i++) {
+            boolean match = true;
+            for (int j = 0; j < needle.length && match; j++) {
+                match = haystack[i + j] == needle[j];
+            }
+            if (match) found++;
+        }
+        return found;
+    }
+
+    @Test
     @DisplayName("the job initialises and cuts, and never sends multi-byte characters")
     void escPosJob() {
-        byte[] job = EscPos.job(ReceiptLayout.render(receipt(false), ReceiptWidth.MM80));
+        byte[] job = EscPos.job(ReceiptLayout.renderStyled(receipt(false), ReceiptWidth.MM80));
 
         assertEquals(0x1B, job[0]);
         assertEquals('@', job[1]);
@@ -179,6 +297,7 @@ class ReceiptLayoutTest {
         assertEquals(0x1D, job[job.length - 4]);
         assertEquals('V', job[job.length - 3]);
 
-        assertFalse(EscPos.encoded(ReceiptLayout.render(receipt(false), ReceiptWidth.MM58)).isBlank());
+        assertFalse(EscPos.encoded(
+                ReceiptLayout.renderStyled(receipt(false), ReceiptWidth.MM58)).isBlank());
     }
 }

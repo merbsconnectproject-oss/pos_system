@@ -26,6 +26,23 @@ public interface SettingsService {
 
     SettingsView updateAppearance(AppearanceSettingsRequest request, PosPrincipal actor, String clientIp);
 
+    /**
+     * FR-SET-01: store the business logo.
+     *
+     * <p>The bytes, not a link to them. Passing null clears it.
+     *
+     * @param contentType checked against an allowlist of raster and SVG image
+     *                    types; anything else is refused rather than stored and
+     *                    served back to a browser later
+     */
+    SettingsView storeLogo(byte[] bytes, String contentType, PosPrincipal actor, String clientIp);
+
+    /** FR-SET-01: the stored logo, or empty when none has been uploaded. */
+    java.util.Optional<StoredLogo> logo();
+
+    /** The logo as stored, for serving. */
+    record StoredLogo(byte[] bytes, String contentType, java.time.Instant updatedAt) { }
+
     /** FR-CASH-06: variance past this needs a written explanation. */
     long cashVarianceThreshold();
 

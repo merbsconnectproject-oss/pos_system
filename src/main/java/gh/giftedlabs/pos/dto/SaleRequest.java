@@ -18,6 +18,11 @@ import java.util.UUID;
  * <p>Line totals are <em>not</em> accepted from the client. The server prices
  * the sale from the catalogue and its own arithmetic, because a total the
  * browser computed is a total the browser could have got wrong — or changed.
+ *
+ * <p>Discounts arrive at two levels, which FR-POS-10 asks for separately: off
+ * one line, and off the whole cart. The cart concession is stated once here
+ * rather than pre-spread by the browser, so the server decides how it lands on
+ * the lines and the ceiling is measured against what was actually conceded.
  */
 public record SaleRequest(
 
@@ -31,6 +36,22 @@ public record SaleRequest(
 
         @NotEmpty(message = "A sale needs at least one line")
         @Valid List<Line> items,
+
+        /**
+         * FR-POS-10: a concession off the whole cart, as a percentage.
+         *
+         * <p>Mutually exclusive with {@link #cartDiscount}. Sending both is
+         * refused rather than reconciled — two statements of the same
+         * concession that disagree have no correct interpretation.
+         */
+        @PositiveOrZero @DecimalMax(value = "100.00", message = "A cart discount cannot exceed 100%")
+        BigDecimal cartDiscountPercent,
+
+        /** FR-POS-10: the same concession stated as pesewas off the cart. */
+        @PositiveOrZero Long cartDiscount,
+
+        /** FR-POS-10: required when the cart discount passes the seller's ceiling. */
+        UUID cartDiscountApprovedBy,
 
         @NotEmpty(message = "A sale needs at least one payment")
         @Valid List<PaymentLine> payments) {

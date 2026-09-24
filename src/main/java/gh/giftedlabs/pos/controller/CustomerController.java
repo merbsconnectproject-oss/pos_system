@@ -1,10 +1,12 @@
 package gh.giftedlabs.pos.controller;
 
 import gh.giftedlabs.pos.dto.CustomerRequest;
+import gh.giftedlabs.pos.dto.CustomerStatement;
 import gh.giftedlabs.pos.dto.CustomerView;
 import gh.giftedlabs.pos.dto.SaleView;
 import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.security.PosPrincipal;
+import gh.giftedlabs.pos.service.CustomerCreditService;
 import gh.giftedlabs.pos.service.CustomerService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -30,9 +32,11 @@ import java.util.UUID;
 public class CustomerController {
 
     private final CustomerService customers;
+    private final CustomerCreditService credit;
 
-    public CustomerController(CustomerService customers) {
+    public CustomerController(CustomerService customers, CustomerCreditService credit) {
         this.customers = customers;
+        this.credit = credit;
     }
 
     @GetMapping
@@ -61,6 +65,20 @@ public class CustomerController {
     @PreAuthorize("isAuthenticated()")
     public CustomerView get(@PathVariable UUID id) {
         return customers.get(id);
+    }
+
+    /**
+     * FR-CUST-07: what this customer owes, how old it is, and on which plans.
+     *
+     * <p>Behind {@code customer.credit} rather than open to any signed-in user.
+     * How far behind somebody is with their payments is not something a cashier
+     * needs to serve them, and it is exactly the sort of thing that gets
+     * repeated across a counter.
+     */
+    @GetMapping("/{id}/statement")
+    @PreAuthorize("hasAuthority('" + Permission.Codes.CUSTOMER_CREDIT + "')")
+    public CustomerStatement statement(@PathVariable UUID id) {
+        return credit.statement(id);
     }
 
     /** FR-CUST-06 · FR-CUST-05 · `G-05`: across every branch. */

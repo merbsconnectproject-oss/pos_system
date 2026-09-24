@@ -89,6 +89,9 @@ logging:
     gh.giftedlabs.pos: ${LOG_LEVEL:INFO}
 
 pos:
+  printer:
+    # Exact operating-system queue name. Blank uses the system default.
+    name: ${POS_PRINTER_NAME:POS-80}
   bootstrap:
     enabled: ${POS_BOOTSTRAP_ADMIN_ENABLED:false}
     username: ${POS_BOOTSTRAP_ADMIN_USERNAME:admin}

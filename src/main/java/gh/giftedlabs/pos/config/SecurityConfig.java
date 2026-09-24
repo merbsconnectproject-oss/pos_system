@@ -50,7 +50,7 @@ import java.util.List;
  * changes no existing authentication.
  */
 @Configuration
-@EnableConfigurationProperties({PosProperties.class, BootstrapProperties.class})
+@EnableConfigurationProperties({PosProperties.class, BootstrapProperties.class, PrinterProperties.class})
 @EnableMethodSecurity   // NFR-9: @PreAuthorize on every mutating endpoint
 public class SecurityConfig {
 

@@ -34,6 +34,31 @@ Application data and local backups live in `/var/lib/radiance-pos`. Runtime
 configuration is in `/etc/radiance-pos/pos.env`. Removing or upgrading the
 package does not delete the PostgreSQL database or these directories.
 
+### The service sits in `activating` and the log says "permission denied"
+
+Two roles each own half the database. It happens on a machine where
+`pos_system` already existed — an evaluation install, a developer box, or the
+Windows-style setup, all of which use the role `giftedlabs`. Earlier versions of
+this package adopted such a database with a bare
+`ALTER DATABASE ... OWNER TO radiance_pos`, which hands over the database and
+the `public` schema but leaves every table behind:
+
+- `radiance_pos` cannot read `flyway_schema_history` — it does not own it;
+- `giftedlabs` can still alter its own tables but can no longer create
+  anything, because since PostgreSQL 15 `CREATE` on `public` follows the
+  database owner.
+
+Neither role can migrate. Repair it once with:
+
+```bash
+sudo radiance-pos-repair-database
+sudo systemctl restart radiance-pos
+```
+
+`postinst` now moves ownership as one piece, so a fresh install cannot land in
+this state. Reinstalling will not repair an existing one — the database block
+only runs when `/etc/radiance-pos/pos.env` is absent.
+
 ## Build
 
 From `pos-api` with Java 25, Node.js and `dpkg-deb` installed:

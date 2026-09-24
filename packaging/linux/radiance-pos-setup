@@ -74,6 +74,7 @@ DB_USERNAME="radiance_pos"
 DB_PASSWORD=$(quote_env "$DB_PASSWORD")
 PORT=8080
 POS_BIND_ADDRESS="127.0.0.1"
+POS_PRINTER_NAME="POS-80"
 OUTLET_CODE=$(quote_env "$OUTLET_CODE")
 TERMINAL_CODE=$(quote_env "$TERMINAL_CODE")
 POS_BACKUP_DIRECTORY="/var/lib/radiance-pos/backups"

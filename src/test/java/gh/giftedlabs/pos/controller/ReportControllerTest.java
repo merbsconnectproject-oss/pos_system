@@ -405,6 +405,138 @@ class ReportControllerTest {
     }
 
     @Nested
+    @DisplayName("every filter FR-RPT-03 names")
+    class Filters {
+
+        @Test
+        @DisplayName("a payment-method filter narrows the summary to that method")
+        void byPaymentMethod() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Filter pay " + run, "10.00");
+
+            Map<String, Object> split = saleBody(productId, "1", "40.00");
+            split.put("payments", List.of(payment("cash", 1500L), payment("momo", 2500L)));
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(split)))
+                    .andExpect(status().isCreated());
+
+            // The filter reaches the query rather than being accepted and
+            // ignored — which is what "the screen offers no control" hid.
+            mvc.perform(session.authorise(get("/api/reports/breakdown")
+                            .param("by", "payment")
+                            .param("outletId", outletId.toString())
+                            .param("paymentMethod", "momo")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(1))
+                    .andExpect(jsonPath("$[0].key").value("momo"));
+        }
+
+        @Test
+        @DisplayName("a user filter narrows the summary to that cashier")
+        void byUser() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Filter user " + run, "10.00");
+            sell(session, productId, "1", "40.00");
+
+            mvc.perform(session.authorise(get("/api/reports/summary")
+                            .param("outletId", outletId.toString())
+                            .param("userId", ownerId.toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.saleCount").value(org.hamcrest.Matchers.greaterThan(0)));
+
+            // Somebody who sold nothing has sold nothing, rather than seeing
+            // the shop's figures because the filter was dropped.
+            mvc.perform(session.authorise(get("/api/reports/summary")
+                            .param("outletId", outletId.toString())
+                            .param("userId", UUID.randomUUID().toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.saleCount").value(0));
+        }
+
+        @Test
+        @DisplayName("the discount log takes a user filter — FR-RPT-03")
+        void discountLogByUser() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Filter disc " + run, "10.00");
+
+            Map<String, Object> body = saleBody(productId, "1", "40.00");
+            ((Map<String, Object>) ((List<?>) body.get("items")).get(0)).put("discount", 500L);
+            body.put("payments", List.of(payment("cash", 3500L)));
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(body)))
+                    .andExpect(status().isCreated());
+
+            mvc.perform(session.authorise(get("/api/reports/exceptions")
+                            .param("log", "discount")
+                            .param("outletId", outletId.toString())
+                            .param("userId", ownerId.toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(org.hamcrest.Matchers.greaterThan(0)));
+
+            mvc.perform(session.authorise(get("/api/reports/exceptions")
+                            .param("log", "discount")
+                            .param("outletId", outletId.toString())
+                            .param("userId", UUID.randomUUID().toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(0));
+        }
+
+        @Test
+        @DisplayName("a cart discount reaches the discount log — FR-POS-10, FR-RPT-04")
+        void cartDiscountIsLogged() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Filter cart " + run, "10.00");
+
+            Map<String, Object> body = saleBody(productId, "1", "40.00");
+            body.put("cartDiscountPercent", "10");
+            body.put("payments", List.of(payment("cash", 3600L)));
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(body)))
+                    .andExpect(status().isCreated());
+
+            // Apportioned onto the line, so the log that reads sale_item.discount
+            // sees it without needing to know a cart discount exists.
+            MvcResult result = mvc.perform(session.authorise(get("/api/reports/exceptions")
+                            .param("log", "discount")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isOk()).andReturn();
+            String log = result.getResponse().getContentAsString();
+            org.junit.jupiter.api.Assertions.assertTrue(log.contains("Cart discount"),
+                    "the cart concession should be named as one: " + log);
+        }
+
+        @Test
+        @DisplayName("inventory valuation and low stock answer, and withhold cost — FR-RPT-04, FR-RPT-05")
+        void stockViews() throws Exception {
+            Session session = signIn(ownerName);
+            stockedProduct(session, "Valued " + run, "10.00");
+
+            mvc.perform(session.authorise(get("/api/reports/stock")
+                            .param("view", "VALUATION").param("outletId", outletId.toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].valueAtCost").exists());
+
+            mvc.perform(session.authorise(get("/api/reports/stock")
+                            .param("view", "LOW").param("outletId", outletId.toString())))
+                    .andExpect(status().isOk());
+
+            // A cashier holds no report.view at all, so the stock report is
+            // refused outright rather than answered with the cost removed.
+            // FR-RPT-05's redaction is covered by the Profit tests.
+            mvc.perform(signIn(cashierName).authorise(get("/api/reports/stock")
+                            .param("view", "ON_HAND").param("outletId", outletId.toString())))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Nested
     @DisplayName("the dashboard chart's series")
     class Series {
 

@@ -34,19 +34,26 @@ Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs c
 Name: "{commonappdata}\GiftedLabs\Radiance POS"; Permissions: admins-full system-full
 
 [Icons]
-Name: "{group}\Open Radiance POS"; Filename: "powershell.exe"; Parameters: "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\tools\open-pos.ps1"""; WorkingDir: "{app}"
-Name: "{group}\Configure or repair Radiance POS"; Filename: "powershell.exe"; Parameters: "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\tools\onboard.ps1"""; WorkingDir: "{app}"
-Name: "{group}\Radiance POS Diagnostics"; Filename: "powershell.exe"; Parameters: "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\tools\diagnostics.ps1"""; WorkingDir: "{app}"
-Name: "{group}\Restore a Radiance POS backup"; Filename: "powershell.exe"; Parameters: "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\tools\restore-backup.ps1"""; WorkingDir: "{app}"
-Name: "{commondesktop}\Radiance POS"; Filename: "powershell.exe"; Parameters: "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\tools\open-pos.ps1"""; WorkingDir: "{app}"; Tasks: desktopicon
+; Through wscript + launch.vbs rather than powershell.exe directly. PowerShell
+; applies -WindowStyle after it already owns a console, so every shortcut
+; flashed a black window on the counter screen before anything else happened.
+Name: "{group}\Open Radiance POS"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" open-pos.ps1"; WorkingDir: "{app}"
+Name: "{group}\Configure or repair Radiance POS"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" onboard.ps1"; WorkingDir: "{app}"
+Name: "{group}\Radiance POS Diagnostics"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" diagnostics.ps1"; WorkingDir: "{app}"
+Name: "{group}\Restore a Radiance POS backup"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" restore-backup.ps1"; WorkingDir: "{app}"
+Name: "{commondesktop}\Radiance POS"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" open-pos.ps1"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: checkedonce
 
 [Run]
-Filename: "powershell.exe"; Parameters: "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\tools\onboard.ps1"""; Description: "Configure this counter and start Radiance POS"; Flags: postinstall waituntilterminated; Check: NeedsOnboarding and not WizardSilent
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\tools\onboard.ps1"" -ConfigFile ""{code:GetOnboardingConfig}"" -NoLaunch"; Flags: runhidden waituntilterminated; Check: NeedsOnboarding and WizardSilent
+Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" onboard.ps1"; Description: "Configure this counter and start Radiance POS"; Flags: postinstall waituntilterminated; Check: NeedsOnboarding and not WizardSilent
+Filename: "powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\tools\onboard.ps1"" -ConfigFile ""{code:GetOnboardingConfig}"" -NoLaunch"; Flags: runhidden waituntilterminated; Check: NeedsOnboarding and WizardSilent
 Filename: "{app}\service\RadiancePosService.exe"; Parameters: "start"; Flags: runhidden waituntilterminated; Check: not NeedsOnboarding
+; An upgrade over a configured counter has nothing to onboard, so nothing would
+; otherwise open the POS. Without this the installer finished on a machine that
+; showed the operator nothing at all.
+Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" open-pos.ps1"; Description: "Open Radiance POS"; Flags: postinstall nowait; Check: not NeedsOnboarding and not WizardSilent
 
 [UninstallRun]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\tools\uninstall-services.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: "StopRadianceServices"

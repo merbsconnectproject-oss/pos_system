@@ -145,9 +145,11 @@ public class ReportController {
                                                     @RequestParam(required = false) Instant from,
                                                     @RequestParam(required = false) Instant to,
                                                     @RequestParam(required = false) UUID outletId,
+                                                    @RequestParam(required = false) UUID userId,
                                                     @RequestParam(defaultValue = "200") int limit) {
         return reports.exceptions(parse(ReportService.ExceptionLog.class, log, "log"),
-                ReportFilter.of(from, to, outletId), Math.clamp(limit, 1, 1000));
+                new ReportFilter(from, to, outletId, null, userId, null),
+                Math.clamp(limit, 1, 1000));
     }
 
     /**

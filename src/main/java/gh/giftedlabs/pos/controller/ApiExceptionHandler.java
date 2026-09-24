@@ -13,6 +13,7 @@ import gh.giftedlabs.pos.exception.ApprovalRequiredException;
 import gh.giftedlabs.pos.exception.CustomerPhoneTakenException;
 import gh.giftedlabs.pos.exception.InsufficientStockException;
 import gh.giftedlabs.pos.exception.ProductNotFoundException;
+import gh.giftedlabs.pos.exception.PrinterException;
 import gh.giftedlabs.pos.exception.SaleException;
 import gh.giftedlabs.pos.exception.ShiftException;
 import gh.giftedlabs.pos.exception.InvalidResetTokenException;
@@ -29,6 +30,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -46,6 +48,13 @@ import java.util.Map;
 public class ApiExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
+
+    /** FR-RCPT-05: report the device failure without touching the completed sale. */
+    @ExceptionHandler(PrinterException.class)
+    public ResponseEntity<ApiError> onPrinter(PrinterException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ApiError(ex.getCode(), ex.getMessage(), ex.getDetails()));
+    }
 
     /**
      * FR-AUTH-06, FR-AUTH-08.
@@ -237,6 +246,14 @@ public class ApiExceptionHandler {
 
         return ResponseEntity.badRequest()
                 .body(new ApiError("VALIDATION_FAILED", "Check the highlighted fields", fields));
+    }
+
+    /** A multipart form without its required file is a bad request, not a server failure. */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ApiError> onMissingRequestPart(MissingServletRequestPartException ex) {
+        return ResponseEntity.badRequest()
+                .body(new ApiError("MISSING_FILE",
+                        "Choose a file to upload.", Map.of("part", ex.getRequestPartName())));
     }
 
     /**

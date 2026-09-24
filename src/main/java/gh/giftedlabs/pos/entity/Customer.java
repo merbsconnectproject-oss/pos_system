@@ -47,6 +47,23 @@ public class Customer {
     @Column(name = "discount_rate", nullable = false, precision = 5, scale = 2)
     private BigDecimal discountRate = BigDecimal.ZERO;
 
+    /**
+     * FR-CUST-07: the most this customer may owe across open plans.
+     *
+     * <p>Zero means <em>no limit set</em>, not no credit. The column defaults to
+     * zero, so reading it as a refusal would have the upgrade that introduced
+     * it deny credit to every customer a shop already serves. A limit does its
+     * job from the moment somebody sets one.
+     *
+     * <p>The *balance* is not here and not stored anywhere. It is summed on
+     * read from the customer's open plans; a stored copy would be a second
+     * record of the same money, and the first payment posted outside the one
+     * path that maintained it would have the shop refusing credit to somebody
+     * who had already paid.
+     */
+    @Column(name = "credit_limit", nullable = false, precision = 12, scale = 2)
+    private BigDecimal creditLimit = BigDecimal.ZERO;
+
     @Column(name = "notes")
     private String notes;
 
@@ -82,6 +99,11 @@ public class Customer {
     public String getAddress() { return address; }
     public CustomerType getType() { return CustomerType.fromKey(type); }
     public BigDecimal getDiscountRate() { return discountRate; }
+    public BigDecimal getCreditLimit() { return creditLimit; }
+    public void setCreditLimit(BigDecimal value) {
+        this.creditLimit = value == null ? BigDecimal.ZERO : value;
+    }
+
     public String getNotes() { return notes; }
     public boolean isActive() { return active; }
     public Instant getCreatedAt() { return createdAt; }

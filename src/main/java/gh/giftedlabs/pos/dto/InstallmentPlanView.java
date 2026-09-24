@@ -41,7 +41,8 @@ public record InstallmentPlanView(
         String notes,
         Instant createdAt,
         List<Line> items,
-        List<Installment> schedule) {
+        List<Installment> schedule,
+        List<Payment> payments) {
 
     public record Line(
             UUID productId,
@@ -77,6 +78,26 @@ public record InstallmentPlanView(
         }
     }
 
+    /** One collection event; unlike a schedule total, this can be receipted again. */
+    public record Payment(
+            UUID id,
+            String receiptNumber,
+            long amountPesewas,
+            long balanceAfterPesewas,
+            LocalDate receivedOn,
+            String paymentMethod,
+            String reference,
+            String cashierName,
+            Instant createdAt) {
+
+        static Payment of(gh.giftedlabs.pos.entity.InstallmentPayment payment) {
+            return new Payment(payment.getId(), payment.getReceiptNumber(),
+                    payment.getAmountPesewas(), payment.getBalanceAfterPesewas(),
+                    payment.getReceivedOn(), payment.getPaymentMethod(), payment.getReference(),
+                    payment.getCashierName(), payment.getCreatedAt());
+        }
+    }
+
     public static InstallmentPlanView of(InstallmentPlan plan, String customerName,
                                          String customerPhone, String outletName, LocalDate today) {
         List<Installment> schedule = plan.getSchedule().stream()
@@ -101,7 +122,11 @@ public record InstallmentPlanView(
                 plan.getStartDate(), plan.getStatus().name(), overdue > 0, overdue, nextDue,
                 plan.getNotes(), plan.getCreatedAt(),
                 plan.getItems().stream().map(Line::of).toList(),
-                schedule);
+                schedule,
+                plan.getPayments().stream()
+                        .sorted(java.util.Comparator.comparing(
+                                gh.giftedlabs.pos.entity.InstallmentPayment::getCreatedAt).reversed())
+                        .map(Payment::of).toList());
     }
 
     /**

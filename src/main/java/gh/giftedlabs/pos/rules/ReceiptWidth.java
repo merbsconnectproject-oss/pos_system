@@ -13,15 +13,17 @@ import java.util.Optional;
  */
 public enum ReceiptWidth {
 
-    MM80("80mm", 48),
-    MM58("58mm", 32);
+    MM80("80mm", 48, 576),
+    MM58("58mm", 32, 384);
 
     private final String label;
     private final int columns;
+    private final int dots;
 
-    ReceiptWidth(String label, int columns) {
+    ReceiptWidth(String label, int columns, int dots) {
         this.label = label;
         this.columns = columns;
+        this.dots = dots;
     }
 
     public String label() {
@@ -30,6 +32,28 @@ public enum ReceiptWidth {
 
     public int columns() {
         return columns;
+    }
+
+    /**
+     * The printable width in dots — 576 on an 80mm roll, 384 on a 58mm one.
+     *
+     * <p>Characters are the grid for text; a bitmap is not on that grid. A logo
+     * scaled to a number of columns would be scaled to the font, and would change
+     * size the moment anybody changed the font.
+     */
+    public int dots() {
+        return dots;
+    }
+
+    /**
+     * How wide a logo may be printed.
+     *
+     * <p>Short of the full width on purpose. A mark that runs edge to edge reads
+     * as a printing fault rather than as a letterhead, and the margin is what
+     * makes the block beneath it look deliberate.
+     */
+    public int logoDots() {
+        return (dots * 3) / 4;
     }
 
     /**

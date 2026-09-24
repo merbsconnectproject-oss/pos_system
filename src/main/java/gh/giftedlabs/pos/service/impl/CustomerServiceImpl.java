@@ -203,6 +203,10 @@ public class CustomerServiceImpl implements CustomerService {
         customer.setDiscountRate(request.discountRate() == null
                 ? type.defaultDiscountRate()
                 : request.discountRate());
+        // FR-CUST-07: null leaves the limit alone. A screen that does not offer
+        // the field must not be able to withdraw somebody's credit by saving
+        // their phone number.
+        if (request.creditLimit() != null) customer.setCreditLimit(request.creditLimit());
     }
 
     /** FR-CUST-06: totals for the whole page in one query, not one per row. */

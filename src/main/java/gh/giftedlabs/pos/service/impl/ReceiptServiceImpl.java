@@ -6,9 +6,12 @@ import gh.giftedlabs.pos.dto.SaleView;
 import gh.giftedlabs.pos.entity.BusinessSettings;
 import gh.giftedlabs.pos.entity.Outlet;
 import gh.giftedlabs.pos.repository.BusinessSettingsRepository;
+import gh.giftedlabs.pos.entity.Terminal;
 import gh.giftedlabs.pos.repository.OutletRepository;
+import gh.giftedlabs.pos.repository.TerminalRepository;
 import gh.giftedlabs.pos.rules.EscPos;
 import gh.giftedlabs.pos.rules.ReceiptLayout;
+import gh.giftedlabs.pos.rules.ReceiptLogo;
 import gh.giftedlabs.pos.rules.ReceiptWidth;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.ReceiptService;
@@ -45,15 +48,17 @@ public class ReceiptServiceImpl implements ReceiptService {
     private final SaleService sales;
     private final gh.giftedlabs.pos.service.ReturnService returns;
     private final OutletRepository outlets;
+    private final TerminalRepository terminals;
     private final BusinessSettingsRepository settings;
     private final Clock clock;
 
     public ReceiptServiceImpl(SaleService sales, gh.giftedlabs.pos.service.ReturnService returns,
-                              OutletRepository outlets,
+                              OutletRepository outlets, TerminalRepository terminals,
                               BusinessSettingsRepository settings, Clock clock) {
         this.sales = sales;
         this.returns = returns;
         this.outlets = outlets;
+        this.terminals = terminals;
         this.settings = settings;
         this.clock = clock;
     }
@@ -76,18 +81,18 @@ public class ReceiptServiceImpl implements ReceiptService {
 
         List<ReceiptLayout.Tender> tenders = sale.payments().stream()
                 .map(payment -> new ReceiptLayout.Tender(
-                        tenderLabel(payment.method()), major(payment.amount()), payment.reference()))
+                        saleTenderLabel(payment.method()), major(payment.amount()), payment.reference()))
                 .toList();
 
         ReceiptLayout.Receipt receipt = new ReceiptLayout.Receipt(
-                shopName(outlet, profile),
-                addressLine(outlet, profile),
-                phoneLine(outlet, profile),
-                null,
+                branding(outlet, profile, width),
+                "Sales Receipt",
                 sale.receiptNumber(),
                 STAMP.format(sale.createdAt().atZone(ZoneId.systemDefault())),
                 sale.cashierName(),
+                terminalLabel(sale.terminalId()),
                 sale.customerName(),
+                voidNotice(sale),
                 items,
                 major(sale.subtotal()),
                 major(sale.discountTotal()),
@@ -140,14 +145,14 @@ public class ReceiptServiceImpl implements ReceiptService {
         }
 
         ReceiptLayout.Receipt note = new ReceiptLayout.Receipt(
-                shopName(outlet, profile),
-                addressLine(outlet, profile),
-                phoneLine(outlet, profile),
+                branding(outlet, profile, width),
                 "EXCHANGE".equals(credit.kind()) ? "Exchange Note" : "Credit Note",
                 credit.returnNumber(),
                 STAMP.format(credit.createdAt().atZone(ZoneId.systemDefault())),
                 credit.cashierName(),
+                null,
                 credit.customerName(),
+                null,
                 items,
                 refunded, BigDecimal.ZERO, BigDecimal.ZERO, refunded,
                 tenders,
@@ -175,14 +180,14 @@ public class ReceiptServiceImpl implements ReceiptService {
         BusinessSettings profile = settings.findById((short) 1).orElse(null);
 
         ReceiptLayout.Receipt sample = new ReceiptLayout.Receipt(
-                shopName(outlet, profile),
-                addressLine(outlet, profile),
-                phoneLine(outlet, profile),
-                null,
+                branding(outlet, profile, width),
+                "Sales Receipt",
                 "%s-01-000000".formatted(outlet == null ? "XXX" : outlet.getCode()),
                 STAMP.format(clock.instant().atZone(ZoneId.systemDefault())),
                 actor.username(),
+                "TILL-01",
                 "Sample Customer",
+                null,
                 List.of(
                         new ReceiptLayout.Item("2.5mm Twin & Earth Cable", new BigDecimal("12.000"),
                                 "m", new BigDecimal("18.50"), new BigDecimal("222.00")),
@@ -203,18 +208,62 @@ public class ReceiptServiceImpl implements ReceiptService {
 
     private ReceiptView view(ReceiptLayout.Receipt receipt, ReceiptWidth width,
                              String number, boolean reprint) {
-        List<String> lines = ReceiptLayout.render(receipt, width);
+        // Two renderings of one layout: the text a preview shows, and the same
+        // lines with their styles intact for the printer. Not two layouts — the
+        // styled pass is the source, and the text is it with the emphasis
+        // dropped, so a preview cannot show a section the roll does not have.
         return new ReceiptView(number, width.label(), width.columns(), reprint,
-                lines, EscPos.encoded(lines));
+                ReceiptLayout.render(receipt, width),
+                EscPos.encoded(ReceiptLayout.renderStyled(receipt, width)));
+    }
+
+    /**
+     * The block at the top of the slip — FR-SET-01, FR-SET-02.
+     *
+     * <p>The business above the branch, because that is the order a customer
+     * reads them in: whose shop, then which one. Where the two names are the
+     * same — a single-branch business — only one is printed; the same word
+     * twice in two sizes is noise.
+     */
+    private ReceiptLayout.Branding branding(Outlet outlet, BusinessSettings profile,
+                                            ReceiptWidth width) {
+        String company = companyName(profile);
+        String shop = shopName(outlet, profile);
+        if (present(company) && company.equalsIgnoreCase(shop)) shop = null;
+        if (!present(company)) {
+            // No business profile yet. The branch takes the top line rather than
+            // the receipt opening with an address and no name at all.
+            company = shop;
+            shop = null;
+        }
+
+        return new ReceiptLayout.Branding(
+                company,
+                shop,
+                addressLine(outlet, profile),
+                phoneLine(outlet, profile),
+                taxLine(profile),
+                logo(profile, width));
+    }
+
+    /** The business, which owns the branches. */
+    private String companyName(BusinessSettings profile) {
+        if (profile == null) return null;
+        if (present(profile.getTradingName())) return profile.getTradingName();
+        return profile.getCompanyName();
     }
 
     /** The shop's own name where it has one — FR-SET-02. */
     private String shopName(Outlet outlet, BusinessSettings profile) {
-        if (outlet != null && present(outlet.getTradingName())) return outlet.getTradingName();
-        if (outlet != null && present(outlet.getName())) return outlet.getName();
-        if (profile != null && present(profile.getTradingName())) return profile.getTradingName();
-        if (profile != null && present(profile.getCompanyName())) return profile.getCompanyName();
-        return "";
+        if (outlet == null) return null;
+        String name = present(outlet.getTradingName()) ? outlet.getTradingName() : outlet.getName();
+        if (!present(name)) return null;
+        // The town, where it is not already in the name. Two branches of one
+        // business are told apart by where they are, not by their code.
+        return present(outlet.getTown()) && !name.toLowerCase(java.util.Locale.ROOT)
+                .contains(outlet.getTown().toLowerCase(java.util.Locale.ROOT))
+                ? "%s - %s".formatted(name, outlet.getTown())
+                : name;
     }
 
     private String addressLine(Outlet outlet, BusinessSettings profile) {
@@ -229,10 +278,62 @@ public class ReceiptServiceImpl implements ReceiptService {
         return present(phone) ? "Tel: " + phone : null;
     }
 
+    /** The VAT registration, where the business has one. Nothing invented. */
+    private String taxLine(BusinessSettings profile) {
+        return profile == null || !present(profile.getTaxRegistrationNumber()) ? null
+                : "VAT / TIN: " + profile.getTaxRegistrationNumber();
+    }
+
+    /**
+     * The mark, scaled for this roll.
+     *
+     * <p>Converted per width because 58mm has two thirds of the dots: one bitmap
+     * sized for the wide roll would run off the narrow one.
+     */
+    private ReceiptLayout.Logo logo(BusinessSettings profile, ReceiptWidth width) {
+        return profile == null ? null
+                : ReceiptLogo.from(profile.getLogoBytes(), width).orElse(null);
+    }
+
+    /**
+     * Which till, as the counter names it.
+     *
+     * <p>The terminal's code, never its id. A customer asking about a sale is
+     * pointed at "TILL-02", and nobody at a counter can match a UUID to a
+     * machine.
+     */
+    private String terminalLabel(java.util.UUID terminalId) {
+        if (terminalId == null) return null;
+        return terminals.findById(terminalId)
+                .map(Terminal::getCode)
+                .filter(ReceiptServiceImpl::present)
+                .map("TILL-%s"::formatted)
+                .orElse(null);
+    }
+
     /** The branch's own returns policy where it has one, else the business's. */
     private String footer(Outlet outlet, BusinessSettings profile) {
         if (outlet != null && present(outlet.getReceiptFooter())) return outlet.getReceiptFooter();
         return profile == null ? null : profile.getReceiptFooterPolicy();
+    }
+
+    /**
+     * BR-3: what a voided slip says about itself.
+     *
+     * <p>The reason and who authorised it, because a reversal nobody can account
+     * for is the thing the approval was for. Null on a live sale, which is the
+     * only receipt that carries no notice.
+     */
+    private String voidNotice(SaleView sale) {
+        if (!"VOIDED".equalsIgnoreCase(sale.status())) return null;
+        String reason = present(sale.voidReason()) ? sale.voidReason() : "No reason recorded";
+        return present(sale.voidedBy()) ? "%s (approved by %s)".formatted(reason, sale.voidedBy())
+                : reason;
+    }
+
+    /** What a customer calls the tender, not what the database calls it. */
+    private String saleTenderLabel(String method) {
+        return "cash".equalsIgnoreCase(method) ? "Cash tendered" : tenderLabel(method);
     }
 
     /** What a customer calls the tender, not what the database calls it. */
