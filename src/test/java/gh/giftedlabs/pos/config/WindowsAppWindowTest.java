@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -61,8 +63,92 @@ class WindowsAppWindowTest {
             }
         }
 
-        // 0 is the hidden window style; anything else draws one.
-        assertTrue(shim.contains("shell.Run(command, 0, True)"),
-                "the shim must start PowerShell with no window");
+        // The everyday launcher still opens with no window at all.
+        assertTrue(shim.contains("If visible Then style = 1 Else style = 0"),
+                "the shim must be able to start PowerShell with no window");
+    }
+
+    /**
+     * Setup must raise its own UAC prompt and must be watchable.
+     *
+     * <p>Relying on somebody right-clicking and choosing "Run as administrator"
+     * put the whole of onboarding behind a step nobody is told about, and
+     * running it hidden meant that when it did fail the operator saw a shortcut
+     * that did nothing at all. Both are asserted because both were reported from
+     * a real counter.
+     */
+    @Test
+    @DisplayName("setup elevates itself and runs where it can be watched")
+    void setupElevatesAndIsVisible() throws IOException {
+        String installer = Files.readString(Path.of("packaging/windows/RadiancePOS.iss"));
+        String shim = Files.readString(Path.of("packaging/windows/tools/launch.vbs"));
+
+        for (String entry : new String[] {"Configure or repair", "Restore a Radiance POS backup"}) {
+            String line = installer.lines()
+                    .filter(text -> text.contains(entry))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("no shortcut for " + entry));
+            assertTrue(line.contains("/elevate"), entry + " must raise its own UAC prompt: " + line);
+            assertTrue(line.contains("/show"), entry + " must be visible while it runs: " + line);
+        }
+
+        // ShellExecute raises the prompt; Run cannot, which is why a tool that
+        // needed administrator rights could only ever fail and say so.
+        assertTrue(shim.contains("\"runas\""), "elevation must go through ShellExecute runas");
+        // A host told it may not interact cannot show the setup wizard. Asserted
+        // against the line that builds the arguments, not the whole file — the
+        // comment above it names the switch precisely to explain its absence.
+        String psArgs = shim.lines()
+                .filter(line -> line.trim().startsWith("psArgs ="))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("the shim must build a PowerShell argument list"));
+        assertFalse(psArgs.contains("-NonInteractive"),
+                "the wizard is a WinForms dialog and needs an interactive host: " + psArgs);
+        // A crash before a tool's own error handling must still reach the operator.
+        assertTrue(shim.contains("Exit code: "), "a non-zero exit must be reported");
+    }
+
+    /**
+     * A tool that has already spoken must not be spoken over.
+     *
+     * <p>The shim reports every unexpected exit, so a death before a tool's own
+     * error handling still reaches the counter. That leaves one rule to keep:
+     * a tool that has already put a dialog on screen exits 64, or the operator
+     * is told the same thing twice — once usefully, once as an exit code.
+     */
+    @Test
+    @DisplayName("a tool that showed its own dialog exits 64")
+    void handledFailuresUseTheAgreedCode() throws IOException {
+        String shim = Files.readString(Path.of("packaging/windows/tools/launch.vbs"));
+
+        // Run takes one command line, so the host has to be named inside it.
+        // Without this every shortcut that does not elevate — the desktop icon
+        // among them — starts nothing at all.
+        assertTrue(shim.contains("shell.Run(\"powershell.exe \" & psArgs"),
+                "the shim must name the host it runs");
+        assertTrue(shim.contains("If code <> 0 And code <> 64 Then"),
+                "only 0 and the agreed handled-failure code may pass without a dialog");
+
+        Pattern exitCode = Pattern.compile("\\bexit (\\d+)");
+        for (String tool : new String[] {"open-pos.ps1", "onboard.ps1", "diagnostics.ps1", "restore-backup.ps1"}) {
+            Matcher found = exitCode.matcher(Files.readString(Path.of("packaging/windows/tools/" + tool)));
+            while (found.find()) {
+                String code = found.group(1);
+                assertTrue(code.equals("0") || code.equals("64"),
+                        tool + " exits " + code + "; a handled failure must exit 64 and success 0");
+            }
+        }
+    }
+
+    /** A support call that starts with "which build is this?" has already lost. */
+    @Test
+    @DisplayName("the build stamps a version the counter can read back")
+    void buildStampsAVersion() throws IOException {
+        String build = Files.readString(Path.of("packaging/windows/build-installer.ps1"));
+        String diagnostics = Files.readString(Path.of("packaging/windows/tools/diagnostics.ps1"));
+
+        assertTrue(build.contains("VERSION.txt"), "the stage must carry a version stamp");
+        assertTrue(build.contains("rev-parse"), "the stamp must name the commit it was built from");
+        assertTrue(diagnostics.contains("VERSION.txt"), "diagnostics must read it back");
     }
 }

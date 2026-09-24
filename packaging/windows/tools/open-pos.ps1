@@ -100,13 +100,13 @@ try {
     $service = Get-Service RadiancePos -ErrorAction SilentlyContinue
     if (-not $service) {
         Show-Problem 'Radiance POS is not installed on this computer yet. Run "Configure or repair Radiance POS" from the Start menu.'
-        exit 2
+        exit 64
     }
     if ($service.Status -ne 'Running') {
         Write-Log "Service is $($service.Status); starting it."
         try { Start-Service RadiancePos } catch {
             Show-Problem "The Radiance POS service could not be started.`n`n$($_.Exception.Message)`n`nYou may need to run this from an administrator account."
-            exit 3
+            exit 64
         }
     }
 
@@ -123,8 +123,9 @@ try {
     }
 
     Show-Problem 'Radiance POS did not become ready within three minutes.'
-    exit 1
+    exit 64
 } catch {
     Show-Problem "Radiance POS could not be opened.`n`n$($_.Exception.Message)"
-    exit 1
+    # 64: the dialog above is the explanation, so the shim adds nothing.
+    exit 64
 }

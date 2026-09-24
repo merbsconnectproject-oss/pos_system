@@ -76,6 +76,23 @@ Get-ChildItem (Join-Path $Stage 'tools') -Filter *.ps1 | ForEach-Object {
         throw "$($_.Name) has $($parseErrors.Count) parse error(s): $($parseErrors[0].Message)"
     }
 }
+# Stamped so a counter can always answer "which build is this?". Diagnosing a
+# broken install without knowing what is installed wastes a support call before
+# it starts.
+# Wrapped because $ErrorActionPreference is Stop: on a build machine without
+# git, an unguarded call would abort the whole run here, after the frontend and
+# the backend have already been built, over a line of text.
+$commit = 'unknown'
+try {
+    $described = & git -C $BackendRoot rev-parse --short HEAD 2>$null
+    if ($LASTEXITCODE -eq 0 -and $described) { $commit = $described }
+} catch { }
+Set-Content (Join-Path $Stage 'VERSION.txt') @(
+    "Radiance POS $Version"
+    "commit  $commit"
+    "built   $((Get-Date).ToUniversalTime().ToString('u'))"
+) -Encoding ascii
+
 Copy-Item (Join-Path $BackendRoot 'LICENSE') $Stage
 Copy-Item (Join-Path $PSScriptRoot 'THIRD-PARTY-NOTICES.txt') $Stage
 

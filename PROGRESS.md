@@ -847,3 +847,69 @@ reinstalling, because the database block only runs when `pos.env` is absent, so
 
 V31–V33 were edited in place, which is safe exactly once: no database anywhere
 had applied them, so there is no checksum to invalidate.
+
+## The Start-menu entry that refused and explained — 2026-09-24
+
+**"Configure or repair Radiance POS" could never have worked.** The shortcut ran
+`wscript launch.vbs onboard.ps1`, and nothing anywhere in that chain asked
+Windows for administrator rights. Under UAC even an administrator account runs
+with a filtered token unless a process requests the real one, so
+`Test-Administrator` was false on the first line inside the try and setup threw
+before touching anything. The counter saw the shortcut fail and then explain
+itself — "must run as a Windows administrator; right-click the Start-menu entry
+and choose Run as administrator" — which is a remedy nobody is told about at
+install time, and an unreliable one: the shortcut targets `wscript.exe`, where
+right-click *Run as administrator* is not consistently offered once the entry is
+pinned or reached from search.
+
+`launch.vbs` now takes `/elevate` and raises the prompt itself through
+`ShellExecute ... "runas"`, which `Run` cannot do. Setup and restore both use it,
+so the rights arrive by asking rather than by the operator knowing. The message
+changed with the mechanism: answer Yes to the Windows prompt, not right-click
+the icon.
+
+**Setup also ran where it could not be watched.** `/show` keeps the console
+visible for onboarding and diagnostics, because during setup an error nobody can
+see is worse than a window nobody wanted. The everyday launcher still opens with
+no window at all — that was the original point of the shim and it is unchanged.
+
+**`-NonInteractive` is gone.** The wizard is a WinForms `ShowDialog`, and a host
+told it may not interact has no business showing one. It was not what broke the
+shortcut, which is exactly why it was worth removing before it was.
+
+**The transcript now opens before anything can throw.** It used to start below
+the function definitions, so a failure above that line left nothing to read —
+and reading nothing is how this was diagnosed twice.
+
+### Two defects in the repair itself
+
+The rewrite that did all of the above shipped neither.
+
+**The shim stopped naming what it ran.** `ShellExecute` takes the executable and
+its arguments separately; `Run` takes one command line. The new code built the
+argument string for the first and handed it to the second, so every shortcut
+that does *not* elevate — the desktop icon, "Open Radiance POS", and the
+post-install onboarding step — would have tried to launch a program called
+`-NoProfile`. The fix for an icon that did nothing would have been an icon that
+did nothing, on the path a cashier uses every morning.
+
+**A handled failure was reported twice.** The shim reports any unexpected exit so
+a death before a tool's own error handling still reaches the operator. But
+`open-pos.ps1` exits 2 and 3 *after* putting its own dialog up, and only 1 was
+exempt — so a stopped service would have produced the real explanation followed
+by a box reading "Exit code: 2". There is a convention now: **64 means the
+operator has already been told**, used by all four tools, and the shim speaks for
+everything else. That distinction matters because a blocked execution policy and
+a host that will not start also exit 1, and those are precisely the failures
+nothing else can report.
+
+**A version the counter can read back.** The build writes `VERSION.txt` — version,
+commit, build time — and diagnostics reports it with the PowerShell version. A
+support call that opens with "which build is this?" has already lost. The
+`git rev-parse` behind it is wrapped, because under `$ErrorActionPreference =
+'Stop'` a build machine without git would otherwise abort the run after the
+frontend and backend were built, over one line of text.
+
+Five packaging assertions in `WindowsAppWindowTest`, which is all that can be
+asserted about PowerShell and Inno from Linux CI. The shim naming its host is one
+of them.

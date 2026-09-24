@@ -45,7 +45,30 @@ and WinSW and pass `-PostgresArchive`, `-PostgresSha256`, `-WinSwPath` and
 
 The build runs the frontend checks and backend suite, builds the Vite-only web
 output, embeds it in the JAR, checks that `static/index.html` is present, creates
-a private runtime with `jlink`, and compiles the installer.
+a private runtime with `jlink`, and compiles the installer. It also refuses to
+ship a tool script that does not parse, and writes `VERSION.txt` next to the
+application — version, commit and build time — so a support call can start with
+what is actually installed rather than with a guess.
+
+## How the shortcuts run
+
+Every Start-menu and desktop entry goes through `tools\launch.vbs` rather than
+`powershell.exe` directly, because PowerShell applies `-WindowStyle Hidden` only
+after the host already owns a console, so each launch drew a black window first.
+
+```
+wscript launch.vbs [/elevate] [/show] <tool.ps1> [arguments...]
+```
+
+- `/elevate` raises the UAC prompt itself, so setup and restore never depend on
+  somebody remembering to right-click and choose *Run as administrator*.
+- `/show` keeps the console visible, used where an unseen error is worse than an
+  unwanted window.
+
+A tool that has already shown the operator a dialog exits **64**. The shim
+reports every other non-zero exit itself, so a failure before a tool's own error
+handling — a blocked execution policy, a host that will not start — still
+reaches the counter instead of leaving an icon that appears to do nothing.
 
 ## Interactive install
 
@@ -81,8 +104,9 @@ file after setup. Upgrades do not need it and preserve the database/config.
 - **Restore a Radiance POS backup** first saves the current database, decrypts
   `.dump.enc` objects when necessary, restores in one transaction, and restarts
   and health-checks the application.
-- **Diagnostics** writes service state, health, disk space and the latest log
-  tail to a text file on the current user's desktop. It does not copy secrets.
+- **Diagnostics** writes the installed version and commit, service state,
+  health, disk space and the latest log tail to a text file on the current
+  user's desktop. It does not copy secrets.
 - Local backups are written every 15 minutes. Cloud Sync's trading-upload
   interval is independently configurable in Settings from 15 minutes to 24
   hours. Disk-loss protection requires

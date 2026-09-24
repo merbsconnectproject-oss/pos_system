@@ -6,10 +6,20 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# The transcript opens before anything else can throw — including before strict
+# mode is armed. Setup has now twice failed in a way that left nothing behind to
+# read, and a log that starts on line three cannot record a failure on line two.
+$DataRoot = Join-Path $env:ProgramData 'GiftedLabs\Radiance POS'
+$script:LogPath = Join-Path $DataRoot ('logs\onboarding-{0:yyyyMMdd-HHmmss}.log' -f (Get-Date))
+try {
+    New-Item -ItemType Directory -Force (Split-Path $script:LogPath -Parent) | Out-Null
+    Start-Transcript -Path $script:LogPath -Force | Out-Null
+} catch { }
+
 Set-StrictMode -Version Latest
 
 $InstallRoot = Split-Path $PSScriptRoot -Parent
-$DataRoot = Join-Path $env:ProgramData 'GiftedLabs\Radiance POS'
 $ConfigRoot = Join-Path $DataRoot 'config'
 $ConfigPath = Join-Path $ConfigRoot 'application.properties'
 $SecretsRoot = Join-Path $DataRoot 'secrets'
@@ -355,15 +365,9 @@ function Show-SetupFailure([string]$Message) {
 # unhandled error completely invisible: setup appeared to do nothing at all.
 # So every step is inside one try, every failure puts up a dialog, and the whole
 # run is transcribed to a file the diagnostics tool can pick up.
-$script:LogPath = Join-Path $DataRoot ('logs\onboarding-{0:yyyyMMdd-HHmmss}.log' -f (Get-Date))
-try {
-    New-Item -ItemType Directory -Force (Split-Path $script:LogPath -Parent) | Out-Null
-    Start-Transcript -Path $script:LogPath -Force | Out-Null
-} catch { }
-
 try {
     if (-not (Test-Administrator)) {
-        throw 'Radiance POS setup must run as a Windows administrator. Right-click the Start-menu entry and choose Run as administrator.'
+        throw 'Radiance POS setup did not receive administrator rights. Answer Yes to the Windows permission prompt when it appears, or sign in to an administrator account.'
     }
 
     $configuration = if ($ConfigFile) {
@@ -433,5 +437,7 @@ try {
 } catch {
     Show-SetupFailure "Setup could not finish.`n`n$($_.Exception.Message)"
     Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
-    exit 1
+    # 64 tells launch.vbs the operator has already been shown the reason, so it
+    # does not follow this dialog with a second one carrying an exit code.
+    exit 64
 }

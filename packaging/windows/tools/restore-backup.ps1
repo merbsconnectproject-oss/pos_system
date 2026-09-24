@@ -59,7 +59,9 @@ try {
 } catch {
     Start-Service RadiancePos -ErrorAction SilentlyContinue
     [System.Windows.MessageBox]::Show($_.Exception.Message, 'Radiance POS restore failed', 'OK', 'Error') | Out-Null
-    throw
+    # 64 rather than a rethrow: the message is already on screen, and the finally
+    # block below still runs.
+    exit 64
 } finally {
     if ($temporary) { Remove-Item $temporary -Force -ErrorAction SilentlyContinue }
 }

@@ -7,13 +7,16 @@ trap {
     [System.Windows.MessageBox]::Show(
         "Diagnostics could not finish.`n`n$($_.Exception.Message)",
         'Radiance POS', 'OK', 'Error') | Out-Null
-    exit 1
+    exit 64
 }
 
 $dataRoot = Join-Path $env:ProgramData 'GiftedLabs\Radiance POS'
 $report = @()
 $report += "Radiance POS diagnostics - $(Get-Date -Format o)"
 $report += "Windows: $([Environment]::OSVersion.VersionString)"
+$report += "PowerShell: $($PSVersionTable.PSVersion)"
+$versionFile = Join-Path (Split-Path $PSScriptRoot -Parent) 'VERSION.txt'
+$report += if (Test-Path $versionFile) { Get-Content $versionFile } else { 'Version: VERSION.txt missing (installed before the build stamp)' }
 $report += "Install: $((Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Radiance POS_is1' -ErrorAction SilentlyContinue).InstallLocation)"
 foreach ($name in 'RadiancePosPostgreSQL', 'RadiancePos') {
     $service = Get-Service -Name $name -ErrorAction SilentlyContinue

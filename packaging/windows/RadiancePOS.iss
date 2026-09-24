@@ -38,16 +38,16 @@ Name: "{commonappdata}\GiftedLabs\Radiance POS"; Permissions: admins-full system
 ; applies -WindowStyle after it already owns a console, so every shortcut
 ; flashed a black window on the counter screen before anything else happened.
 Name: "{group}\Open Radiance POS"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" open-pos.ps1"; WorkingDir: "{app}"
-Name: "{group}\Configure or repair Radiance POS"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" onboard.ps1"; WorkingDir: "{app}"
-Name: "{group}\Radiance POS Diagnostics"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" diagnostics.ps1"; WorkingDir: "{app}"
-Name: "{group}\Restore a Radiance POS backup"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" restore-backup.ps1"; WorkingDir: "{app}"
+Name: "{group}\Configure or repair Radiance POS"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" /elevate /show onboard.ps1"; WorkingDir: "{app}"
+Name: "{group}\Radiance POS Diagnostics"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" /show diagnostics.ps1"; WorkingDir: "{app}"
+Name: "{group}\Restore a Radiance POS backup"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" /elevate /show restore-backup.ps1"; WorkingDir: "{app}"
 Name: "{commondesktop}\Radiance POS"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" open-pos.ps1"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: checkedonce
 
 [Run]
-Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" onboard.ps1"; Description: "Configure this counter and start Radiance POS"; Flags: postinstall waituntilterminated; Check: NeedsOnboarding and not WizardSilent
+Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" /show onboard.ps1"; Description: "Configure this counter and start Radiance POS"; Flags: postinstall waituntilterminated; Check: NeedsOnboarding and not WizardSilent
 Filename: "powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\tools\onboard.ps1"" -ConfigFile ""{code:GetOnboardingConfig}"" -NoLaunch"; Flags: runhidden waituntilterminated; Check: NeedsOnboarding and WizardSilent
 Filename: "{app}\service\RadiancePosService.exe"; Parameters: "start"; Flags: runhidden waituntilterminated; Check: not NeedsOnboarding
 ; An upgrade over a configured counter has nothing to onboard, so nothing would
