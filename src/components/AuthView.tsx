@@ -170,6 +170,28 @@ export function AuthView({ companyName, accentColor, onAuthenticated }: AuthView
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-slate-800 lg:grid lg:grid-cols-2">
       <section className="relative hidden overflow-hidden bg-slate-950 p-12 text-white lg:flex lg:flex-col lg:justify-between">
+        {/*
+          A real counter behind the drawing, so the panel has somewhere to be.
+          Blurred and dimmed in the asset itself rather than only in CSS: it
+          keeps the file at 66 KB for an installer that ships offline, and it
+          means no shop's branding and nobody's face is legible on a screen
+          that is not theirs.
+
+          Swap `counter-bg.jpg` for a photograph of your own shop and nothing
+          else here needs to change.
+        */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-cover opacity-[0.55]"
+          style={{
+            backgroundImage: 'url(/assets/counter-bg.jpg)',
+            // Off-centre on purpose: the tills are on the right of the frame,
+            // and a panel this narrow crops a landscape photo to its middle.
+            backgroundPosition: '68% 45%',
+          }}
+        />
+        {/* Grounds the photo in the panel and keeps the copy legible over it. */}
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/35 via-slate-950/70 to-slate-950/96" />
         <div className="absolute inset-0 opacity-30" style={{ background: `radial-gradient(circle at 20% 20%, ${accentColor}, transparent 45%)` }} />
         <div className="relative flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ backgroundColor: accentColor }}><Store className="h-6 w-6" /></div>
@@ -182,7 +204,10 @@ export function AuthView({ companyName, accentColor, onAuthenticated }: AuthView
           quietly say this system is for one trade.
         */}
         <div className="relative my-8 flex justify-center">
-          <PosTerminalArt accentColor={accentColor} className="h-auto w-full max-w-[420px] text-white" />
+          <PosTerminalArt
+            accentColor={accentColor}
+            className="h-auto w-full max-w-[420px] text-white [filter:drop-shadow(0_18px_38px_rgba(2,6,23,0.75))]"
+          />
         </div>
 
         <div className="relative max-w-lg">
