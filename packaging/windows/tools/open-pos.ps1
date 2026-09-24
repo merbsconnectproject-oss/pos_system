@@ -1,4 +1,9 @@
-# Opens the POS as a dedicated window on the counter screen.
+# Opens the POS on the counter screen.
+#
+# Two ways, chosen by the launch mode: a dedicated app window with no browser
+# chrome (what a till should look like), or the machine's ordinary default
+# browser. The installer stamps a default and a counter can override it without
+# reinstalling, which is also how the two are compared side by side.
 #
 # Launched with no console attached (see launch.vbs), so anything this script
 # fails to say in a dialog, it does not say at all. Clicking the icon and
@@ -54,6 +59,26 @@ function Find-AppBrowser {
     return $null
 }
 
+function Get-LaunchMode {
+    # The per-counter file wins, then whatever the build stamped, then the app
+    # window. An unreadable or unknown value is not worth failing a sale over:
+    # it is logged and the default stands.
+    foreach ($candidate in @(
+        (Join-Path $dataRoot 'config\launch-mode.txt'),
+        (Join-Path (Split-Path $PSScriptRoot -Parent) 'LAUNCH-MODE.txt')
+    )) {
+        try {
+            if (-not (Test-Path $candidate)) { continue }
+            $value = (Get-Content -Raw $candidate).Trim()
+            if ($value -eq 'AppWindow' -or $value -eq 'Browser') { return $value }
+            if ($value) { Write-Log "Ignoring unknown launch mode '$value' in $candidate." }
+        } catch {
+            Write-Log "Could not read $candidate ($($_.Exception.Message)); using the default."
+        }
+    }
+    return 'AppWindow'
+}
+
 function Open-AppWindow {
     $browser = Find-AppBrowser
     if (-not $browser) {
@@ -83,6 +108,16 @@ function Open-AppWindow {
     }
 }
 
+function Open-Pos {
+    $mode = Get-LaunchMode
+    if ($mode -eq 'Browser') {
+        Write-Log "Opening $appUrl in the default browser."
+        Start-Process $appUrl
+        return
+    }
+    Open-AppWindow
+}
+
 function Test-Healthy {
     try {
         return (Invoke-RestMethod -Uri $health -TimeoutSec 3).status -eq 'UP'
@@ -92,7 +127,7 @@ function Test-Healthy {
 try {
     Write-Log 'Open Radiance POS requested.'
 
-    if (Test-Healthy) { Open-AppWindow; exit 0 }
+    if (Test-Healthy) { Open-Pos; exit 0 }
 
     # Not up yet. The service is delayed-start, so on a cold boot this is the
     # ordinary case rather than a fault — but a stopped service never starts by
@@ -116,7 +151,7 @@ try {
     for ($attempt = 0; $attempt -lt 90; $attempt++) {
         if (Test-Healthy) {
             Write-Log "Healthy after $attempt attempts."
-            Open-AppWindow
+            Open-Pos
             exit 0
         }
         Start-Sleep -Seconds 2

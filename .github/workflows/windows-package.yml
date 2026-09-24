@@ -23,6 +23,15 @@ jobs:
     permissions:
       contents: read
 
+    # Two artifacts from one commit: the dedicated app window a till should have,
+    # and the same application in the machine's ordinary browser. They install
+    # over each other — same AppId, same services, same ports — so they are for
+    # comparing on one counter at a time, not for running side by side.
+    strategy:
+      fail-fast: false
+      matrix:
+        launch: [AppWindow, Browser]
+
     steps:
       - name: Check out backend
         uses: actions/checkout@v7
@@ -76,15 +85,15 @@ jobs:
         working-directory: pos-system
         run: npm ci; npm run check
 
-      - name: Build offline installer
+      - name: Build offline installer (${{ matrix.launch }})
         working-directory: pos-api
         shell: powershell
-        run: .\packaging\windows\build-installer.ps1 -Version '${{ steps.version.outputs.value }}' -SkipTests
+        run: .\packaging\windows\build-installer.ps1 -Version '${{ steps.version.outputs.value }}' -LaunchMode '${{ matrix.launch }}' -SkipTests
 
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
-          name: radiance-pos-windows-${{ steps.version.outputs.value }}
+          name: radiance-pos-windows-${{ steps.version.outputs.value }}-${{ matrix.launch }}
           path: |
             pos-api/dist/Radiance-POS-Setup-*.exe
             pos-api/dist/Radiance-POS-Setup-*.sha256

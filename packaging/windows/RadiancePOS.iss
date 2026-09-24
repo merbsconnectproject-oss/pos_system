@@ -4,6 +4,9 @@
 #ifndef StageDir
   #define StageDir "stage"
 #endif
+#ifndef VariantSuffix
+  #define VariantSuffix ""
+#endif
 
 [Setup]
 AppId={{42A61CD0-F7D4-4C9F-A59C-688C2CE694A8}
@@ -20,7 +23,7 @@ Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 OutputDir=..\..\dist
-OutputBaseFilename=Radiance-POS-Setup-{#MyAppVersion}-x64
+OutputBaseFilename=Radiance-POS-Setup-{#MyAppVersion}-x64{#VariantSuffix}
 SetupLogging=yes
 UninstallDisplayName=Radiance POS
 CloseApplications=force

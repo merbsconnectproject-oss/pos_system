@@ -140,6 +140,43 @@ class WindowsAppWindowTest {
         }
     }
 
+    /**
+     * Two builds, one codebase.
+     *
+     * <p>The app window is what a till should look like; the ordinary browser is
+     * the same application without the window dressing. Which one a counter gets
+     * is stamped by the build and overridable on the machine, because the only
+     * way to settle which belongs on a counter is to run both on real hardware.
+     */
+    @Test
+    @DisplayName("the launch mode is a build variant the counter can override")
+    void launchModeIsABuildVariant() throws IOException {
+        String build = Files.readString(Path.of("packaging/windows/build-installer.ps1"));
+        String installer = Files.readString(Path.of("packaging/windows/RadiancePOS.iss"));
+        String launcher = Files.readString(Path.of("packaging/windows/tools/open-pos.ps1"));
+
+        assertTrue(build.contains("[ValidateSet('AppWindow', 'Browser')]"),
+                "the build must refuse a mode the launcher cannot read");
+        assertTrue(build.contains("LAUNCH-MODE.txt"), "the build must stamp the mode it built");
+        // Two artifacts that cannot be told apart are one artifact.
+        assertTrue(build.contains("'-browser'"), "the browser build must be named differently");
+        assertTrue(installer.contains("OutputBaseFilename=Radiance-POS-Setup-{#MyAppVersion}-x64{#VariantSuffix}"),
+                "the suffix must reach the file Inno writes");
+
+        assertTrue(launcher.contains("config\\launch-mode.txt"),
+                "a counter must be able to switch mode without reinstalling");
+        assertTrue(launcher.contains("Start-Process $appUrl"),
+                "browser mode must open the same URL in the default browser");
+
+        // Every path that opens the POS goes through the mode. Calling
+        // Open-AppWindow directly is how one of them would quietly ignore the
+        // build it came from.
+        assertFalse(launcher.contains("Open-AppWindow; exit 0"),
+                "the ready path must honour the launch mode");
+        assertTrue(launcher.contains("Open-Pos; exit 0"),
+                "the ready path must go through the launch mode");
+    }
+
     /** A support call that starts with "which build is this?" has already lost. */
     @Test
     @DisplayName("the build stamps a version the counter can read back")

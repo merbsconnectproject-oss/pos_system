@@ -20,8 +20,9 @@ PostgreSQL 18, and WinSW. The installed application binds only to
 7. Removes the plaintext bootstrap password and PIN, restarts the application,
    and verifies health again before opening the POS.
 8. Adds Start-menu entries for opening, repairing and diagnosing the install.
-   The POS opens through Edge or Chrome's installed-app mode as a dedicated,
-   maximized Radiance POS window without an address bar or browser tabs.
+   By default the POS opens through Edge or Chrome's installed-app mode as a
+   dedicated, maximized Radiance POS window without an address bar or browser
+   tabs; a build may instead open the default browser (see *Two builds*).
 
 Runtime data is under `%ProgramData%\GiftedLabs\Radiance POS`. ACLs separate
 the PostgreSQL administrator secret from the lower-privilege application
@@ -36,6 +37,41 @@ Run from an x64 Windows build machine with JDK 25, Node 22 and Inno Setup 6:
 Set-ExecutionPolicy -Scope Process Bypass
 .\packaging\windows\build-installer.ps1 -Version 0.1.0
 ```
+
+## Two builds: app window or browser
+
+The installed POS opens one of two ways, fixed by `-LaunchMode` at build time:
+
+| `-LaunchMode` | Output file | How the counter opens |
+| --- | --- | --- |
+| `AppWindow` (default) | `Radiance-POS-Setup-<version>-x64.exe` | A dedicated maximized window through Edge or Chrome's installed-app mode: no address bar, no tabs, no browser chrome. Falls back to the default browser on a machine with neither. |
+| `Browser` | `Radiance-POS-Setup-<version>-x64-browser.exe` | The machine's default browser, ordinary window and toolbar. |
+
+```powershell
+.\packaging\windows\build-installer.ps1 -Version 0.1.0                       # app window
+.\packaging\windows\build-installer.ps1 -Version 0.1.0 -LaunchMode Browser   # browser
+```
+
+The **Windows package** workflow builds both on every run and uploads them as
+separate artifacts.
+
+**They install over each other.** Same `AppId`, same two services, same ports —
+so compare them one at a time on a counter, not side by side.
+
+**Switching without reinstalling.** The build stamps its choice in
+`LAUNCH-MODE.txt` beside the application; a counter overrides it by writing
+`AppWindow` or `Browser` into:
+
+```
+%ProgramData%\GiftedLabs\Radiance POS\config\launch-mode.txt
+```
+
+The next launch reads it — no reinstall, no service restart. One installer is
+therefore enough to see both, and Diagnostics reports the override when it is
+present. An unreadable or unrecognised value is logged and ignored rather than
+failing the launch.
+
+## Build options
 
 The frontend is expected in the sibling `pos-system` directory. Override it
 with `-FrontendRoot`. For reproducible/offline builds, pre-download PostgreSQL

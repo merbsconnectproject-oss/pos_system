@@ -913,3 +913,23 @@ frontend and backend were built, over one line of text.
 Five packaging assertions in `WindowsAppWindowTest`, which is all that can be
 asserted about PowerShell and Inno from Linux CI. The shim naming its host is one
 of them.
+
+### Two builds, so the window question is answered on hardware
+
+The counter opens the POS either as a dedicated app window through Edge or
+Chrome — no address bar, no tabs — or in the machine's ordinary browser.
+`-LaunchMode` picks one at build time and the browser build carries a `-browser`
+suffix, because two artifacts that cannot be told apart are one artifact. The
+Windows workflow now builds both on every run.
+
+They install over each other on purpose: same `AppId`, same services, same
+ports. Comparing them means one counter at a time, which is honest about what
+is actually being compared.
+
+The mode is also a file. `LAUNCH-MODE.txt` holds what the build chose and
+`config\launch-mode.txt` in ProgramData overrides it, so a counter switches on
+the next launch with no reinstall and no service restart — and one installer is
+enough to see both. Kept separate from `VERSION.txt` deliberately: a stamp for
+people to read and a setting for a script to read are different things, and only
+one of them is allowed to change. An unreadable or unknown value is logged and
+the default stands; a till does not stop selling over a preference.

@@ -9,6 +9,11 @@ param(
     [string]$WinSwUrl = 'https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe',
     [string]$WinSwSha256,
     [string]$InnoCompiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+    # How the installed counter opens the POS. AppWindow is what a till should
+    # look like; Browser is the same application in the machine's ordinary
+    # browser, built as a separate artifact so the two can be compared on real
+    # hardware rather than argued about.
+    [ValidateSet('AppWindow', 'Browser')][string]$LaunchMode = 'AppWindow',
     [switch]$SkipTests
 )
 
@@ -91,7 +96,14 @@ Set-Content (Join-Path $Stage 'VERSION.txt') @(
     "Radiance POS $Version"
     "commit  $commit"
     "built   $((Get-Date).ToUniversalTime().ToString('u'))"
+    "launch  $LaunchMode"
 ) -Encoding ascii
+
+# Read by open-pos.ps1, which a counter may override in ProgramData without
+# reinstalling. Kept as its own file rather than parsed back out of VERSION.txt:
+# a stamp for people to read and a setting for a script to read are different
+# things, and one of them is allowed to change.
+Set-Content (Join-Path $Stage 'LAUNCH-MODE.txt') $LaunchMode -Encoding ascii
 
 Copy-Item (Join-Path $BackendRoot 'LICENSE') $Stage
 Copy-Item (Join-Path $PSScriptRoot 'THIRD-PARTY-NOTICES.txt') $Stage
@@ -129,10 +141,14 @@ if (-not $initdb) { throw 'PostgreSQL archive does not contain initdb.exe.' }
 $pgRoot = Split-Path (Split-Path $initdb.FullName -Parent) -Parent
 Copy-Item $pgRoot (Join-Path $Stage 'postgresql') -Recurse
 
-Invoke-Checked $InnoCompiler @("/DMyAppVersion=$Version", "/DStageDir=$Stage", (Join-Path $PSScriptRoot 'RadiancePOS.iss'))
-$installer = Join-Path $BackendRoot "dist\Radiance-POS-Setup-$Version-x64.exe"
+# The two variants install over each other by design — same AppId, same services,
+# same ports — so the suffix is about telling the files apart, not about running
+# both at once.
+$suffix = if ($LaunchMode -eq 'Browser') { '-browser' } else { '' }
+Invoke-Checked $InnoCompiler @("/DMyAppVersion=$Version", "/DStageDir=$Stage", "/DVariantSuffix=$suffix", (Join-Path $PSScriptRoot 'RadiancePOS.iss'))
+$installer = Join-Path $BackendRoot "dist\Radiance-POS-Setup-$Version-x64$suffix.exe"
 if (-not (Test-Path $installer)) { throw 'Inno Setup did not produce the expected installer.' }
 $hash = (Get-FileHash $installer -Algorithm SHA256).Hash
 Set-Content "$installer.sha256" "$hash  $([IO.Path]::GetFileName($installer))" -Encoding ascii
-Write-Host "Built $installer"
+Write-Host "Built $installer ($LaunchMode)"
 Write-Host "SHA256 $hash"

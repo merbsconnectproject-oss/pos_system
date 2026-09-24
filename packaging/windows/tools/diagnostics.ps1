@@ -17,6 +17,12 @@ $report += "Windows: $([Environment]::OSVersion.VersionString)"
 $report += "PowerShell: $($PSVersionTable.PSVersion)"
 $versionFile = Join-Path (Split-Path $PSScriptRoot -Parent) 'VERSION.txt'
 $report += if (Test-Path $versionFile) { Get-Content $versionFile } else { 'Version: VERSION.txt missing (installed before the build stamp)' }
+# VERSION.txt carries the mode the build stamped; this is the one the counter
+# is actually using, which is the question when two variants are being compared.
+$overrideFile = Join-Path $dataRoot 'config\launch-mode.txt'
+if (Test-Path $overrideFile) {
+    $report += "Launch mode: $((Get-Content -Raw $overrideFile).Trim()) (per-counter override)"
+}
 $report += "Install: $((Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Radiance POS_is1' -ErrorAction SilentlyContinue).InstallLocation)"
 foreach ($name in 'RadiancePosPostgreSQL', 'RadiancePos') {
     $service = Get-Service -Name $name -ErrorAction SilentlyContinue
