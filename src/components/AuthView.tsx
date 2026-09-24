@@ -4,6 +4,7 @@ import {
   KeyRound, Lock, MailCheck, MapPin, RotateCcw, ShieldCheck, Store, User,
 } from 'lucide-react';
 import { authApi, AuthApiError, type AuthSession } from '../authApi';
+import { PosTerminalArt } from './PosTerminalArt';
 
 type AuthScreen =
   | 'sign-in'
@@ -174,19 +175,40 @@ export function AuthView({ companyName, accentColor, onAuthenticated }: AuthView
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ backgroundColor: accentColor }}><Store className="h-6 w-6" /></div>
           <div><div className="font-black">Radiance POS</div><div className="text-xs text-slate-400">Multi-outlet retail system</div></div>
         </div>
+
+        {/*
+          The counter, drawn. A shop being sold a till wants to see a till —
+          and one that is recognisably any shop's, so the screen does not
+          quietly say this system is for one trade.
+        */}
+        <div className="relative my-8 flex justify-center">
+          <PosTerminalArt accentColor={accentColor} className="h-auto w-full max-w-[420px] text-white" />
+        </div>
+
         <div className="relative max-w-lg">
-          <ShieldCheck className="mb-5 h-10 w-10" style={{ color: accentColor }} />
           <h1 className="text-4xl font-black tracking-tight">Secure access at every counter.</h1>
           <p className="mt-4 text-sm leading-7 text-slate-300">Sessions, permissions, screen locking, and password recovery are enforced by the local POS server.</p>
+          <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-semibold text-slate-400">
+            <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4" style={{ color: accentColor }} />Runs on the counter, offline</span>
+            <span className="inline-flex items-center gap-1.5"><Store className="h-4 w-4" style={{ color: accentColor }} />Any trade, any outlet</span>
+          </div>
         </div>
+
         <div className="relative text-xs text-slate-500">{companyName}</div>
       </section>
 
       <main className="flex min-h-screen items-center justify-center p-5 sm:p-8">
         <div className="w-full max-w-md">
-          <div className="mb-6 flex items-center gap-3 lg:hidden">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl text-white" style={{ backgroundColor: accentColor }}><Store className="h-5 w-5" /></div>
-            <div><div className="font-black text-slate-900">Radiance POS</div><div className="text-xs text-slate-500">Secure terminal access</div></div>
+          {/* The side panel is desktop-only, so a tablet at the counter would
+              otherwise get a form and no sign of what it belongs to. */}
+          <div className="mb-6 lg:hidden">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl text-white" style={{ backgroundColor: accentColor }}><Store className="h-5 w-5" /></div>
+              <div><div className="font-black text-slate-900">Radiance POS</div><div className="text-xs text-slate-500">Secure terminal access</div></div>
+            </div>
+            <div className="mt-5 flex justify-center rounded-2xl border border-slate-200 bg-white px-4 py-5">
+              <PosTerminalArt accentColor={accentColor} className="h-auto w-full max-w-[260px] text-slate-500" />
+            </div>
           </div>
 
           {screen === 'sign-in' && (

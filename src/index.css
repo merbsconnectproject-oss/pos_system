@@ -188,10 +188,17 @@ body {
 @layer utilities {
   /* Modal bars use a dark/blue surface. Keep semantic heading defaults from
      turning their titles dark (the global h1-h4 scale otherwise wins in some
-     browsers and makes the title disappear into the bar). */
+     browsers and makes the title disappear into the bar).
+
+     bg-slate-950 is listed separately because the substring match on
+     "bg-slate-900" does not cover it — which left the sign-in page's headline
+     rendered in #0f172a on a #020617 panel, effectively invisible. */
   [class*="bg-slate-900"] h1,
   [class*="bg-slate-900"] h2,
   [class*="bg-slate-900"] h3,
+  [class*="bg-slate-950"] h1,
+  [class*="bg-slate-950"] h2,
+  [class*="bg-slate-950"] h3,
   [class*="bg-blue-"] h1,
   [class*="bg-blue-"] h2,
   [class*="bg-blue-"] h3 {
