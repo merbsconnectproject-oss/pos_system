@@ -93,6 +93,23 @@ export const ProductBarcodeSvg: React.FC<{
     }
   }, [value, format, width, height, displayValue, fontSize]);
 
+  // An empty value used to render an empty <svg> — a label that printed blank
+  // and a preview that looked broken, with nothing anywhere saying the product
+  // simply has no code. Say so instead.
+  if (!value) {
+    return (
+      <div
+        className={`mx-auto flex flex-col items-center justify-center gap-0.5 border border-dashed border-current/50 px-3 py-2 text-center ${className}`}
+        style={{ minHeight: height }}
+        role="img"
+        aria-label="This product has no barcode"
+      >
+        <span className="text-[9px] font-bold uppercase tracking-wider">No barcode</span>
+        <span className="text-[8px] leading-tight opacity-80">Products &rsaquo; edit &rsaquo; Generate</span>
+      </div>
+    );
+  }
+
   return (
     <svg
       ref={svgRef}
@@ -264,6 +281,12 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
       expandedLabels.push(item.product);
     }
   });
+
+  // FR-PROD-04: printing a sheet of blank stickers wastes a roll and is only
+  // discovered at the shelf. Name the products that cannot print before it does.
+  const withoutBarcode = Array.from(
+    new Map(expandedLabels.filter((p) => !primaryBarcode(p)).map((p) => [p.id, p])).values(),
+  );
 
   return (
     <>
@@ -664,19 +687,39 @@ export const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({
                 </div>
               </div>
 
-              {/* Print Summary Footer */}
-              <div className="mt-auto pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                <div>
-                  Ready to print: <strong className="text-white">{expandedLabels.length} {expandedLabels.length === 1 ? 'sticker' : 'stickers'}</strong> on {labelSize.startsWith('roll') ? 'thermal continuous roll' : 'A4 sheet'}.
+              {/* The warning and the footer are pinned to the bottom together, so
+                  the warning keeps the full width of the panel. Inside the footer
+                  row it shared a flex cell with the sticker count and was drawn
+                  as a narrow column beside the print button. */}
+              <div className="mt-auto">
+                {withoutBarcode.length > 0 && (
+                  <div
+                    role="alert"
+                    className="mb-3 rounded-lg border border-amber-700/70 bg-amber-950/50 px-3 py-2.5 text-[11px] leading-relaxed text-amber-200"
+                  >
+                    <strong className="font-bold">
+                      {withoutBarcode.length} {withoutBarcode.length === 1 ? 'product has' : 'products have'} no barcode
+                    </strong>{' '}
+                    and will print a blank label: {withoutBarcode.slice(0, 4).map((p) => p.name).join(', ')}
+                    {withoutBarcode.length > 4 ? `, and ${withoutBarcode.length - 4} more` : ''}.
+                    {' '}Give each one a code in Products &rsaquo; edit &rsaquo; <strong>Generate</strong>, then print.
+                  </div>
+                )}
+
+                {/* Print Summary Footer */}
+                <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                  <div>
+                    Ready to print: <strong className="text-white">{expandedLabels.length} {expandedLabels.length === 1 ? 'sticker' : 'stickers'}</strong> on {labelSize.startsWith('roll') ? 'thermal continuous roll' : 'A4 sheet'}.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handlePrint}
+                    className="flex items-center gap-1.5 bg-accent-600 hover:bg-accent-500 text-white font-bold px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Send to Printer</span>
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handlePrint}
-                  className="flex items-center gap-1.5 bg-accent-600 hover:bg-accent-500 text-white font-bold px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Send to Printer</span>
-                </button>
               </div>
             </div>
           </div>

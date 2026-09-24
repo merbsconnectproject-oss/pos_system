@@ -30,7 +30,9 @@ import {
 import { Outlet, Product, Supplier } from '../types';
 import { pricingApi, productsApi, type CostHistoryWire, type PriceHistoryWire, type PurchaseHistoryWire } from '../productsApi';
 import type { PermissionSet } from '../permissions';
-import { allBarcodes, barcodeForUnit, makeBarcodes, primaryBarcode } from '../catalogue';
+import {
+  allBarcodes, barcodeForUnit, generateInternalBarcode, isValidEan13, makeBarcodes, primaryBarcode,
+} from '../catalogue';
 import {
   IMPORT_FIELDS,
   buildErrorCsv,
@@ -1307,7 +1309,47 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               </div>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <label className="text-xs font-bold text-slate-700">SKU<input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} placeholder="Leave blank to generate" className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono uppercase text-slate-800 focus:outline-accent-500" /></label>
-                <label className="text-xs font-bold text-slate-700">Primary barcode<input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono text-slate-800 focus:outline-accent-500" /></label>
+                {/*
+                  FR-PROD-04: goods that arrive without a barcode still have to
+                  scan. The field was free text and nothing else, so a product
+                  saved without one went to the shelf with a blank label and the
+                  label screen drew an empty box. Generate mints an in-store
+                  EAN-13 in the 20-29 range, which no manufacturer is issued.
+                */}
+                <div className="text-xs font-bold text-slate-700">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <label htmlFor="product-barcode">Primary barcode</label>
+                    <button
+                      type="button"
+                      onClick={() => setForm({
+                        ...form,
+                        barcode: generateInternalBarcode(
+                          form.sku.trim() || form.name.trim(),
+                          products.flatMap(allBarcodes),
+                        ),
+                      })}
+                      className="font-bold text-accent-600 hover:text-accent-700 hover:underline cursor-pointer"
+                    >
+                      Generate
+                    </button>
+                  </div>
+                  <input
+                    id="product-barcode"
+                    value={form.barcode}
+                    onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+                    placeholder="Scan, type, or generate"
+                    className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-mono text-slate-800 focus:outline-accent-500"
+                  />
+                  {form.barcode.trim() && (
+                    <p className={`mt-1 font-mono text-[10px] font-normal ${
+                      isValidEan13(form.barcode.trim()) ? 'text-emerald-700' : 'text-slate-500'
+                    }`}>
+                      {isValidEan13(form.barcode.trim())
+                        ? 'Valid EAN-13'
+                        : 'Saved as typed — not an EAN-13 check digit'}
+                    </p>
+                  )}
+                </div>
                 <label className="text-xs font-bold text-slate-700">Category<select required value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as Product['category'] | '' })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm bg-white text-slate-800 focus:outline-accent-500"><option value="" disabled>Select category</option>{setupValues.categories.map((category) => <option key={category.id}>{category.name}</option>)}</select></label>
                 <label className="text-xs font-bold text-slate-700">Brand<input list="known-brands" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" />
                   {/* Still free text — a new brand is created by naming it — but
