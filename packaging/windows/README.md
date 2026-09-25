@@ -32,9 +32,10 @@ owns a cluster's files to be the account that runs the server, and the
 administrator who runs `initdb` can never be a built-in service account — so
 granting LocalSystem or NetworkService access to the data directory does not
 satisfy it, and a clean Windows machine refuses to start the service. The
-account cannot sign in interactively and is a member of no group; it is granted
-read access to the program files and the right to run as a service, and nothing
-else. Uninstall leaves it in place alongside the retained database.
+account cannot sign in interactively. It is a member of `Users` only — without
+that it holds nothing on `C:\ProgramData` or the folders above the cluster, and
+PostgreSQL cannot reach its own configuration file — and it is granted the right
+to run as a service plus ownership of the cluster, and nothing else. Uninstall leaves it in place alongside the retained database.
 
 Runtime data is under `%ProgramData%\GiftedLabs\Radiance POS`. ACLs separate
 the PostgreSQL administrator secret from the lower-privilege application

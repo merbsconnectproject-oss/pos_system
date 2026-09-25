@@ -360,6 +360,18 @@ function Initialize-DatabaseAccount {
     }
     Save-Secret $DbAccountSecretPath $password
 
+    # New-LocalUser puts the account in no group at all, so it holds nothing on
+    # C:\ProgramData or the GiftedLabs folder above the cluster - and postgres
+    # failed its first stat() of postgresql.conf with a plain permission denied.
+    # Users is the baseline every Windows service account runs with; the SID is
+    # used because the group's name is localised.
+    try {
+        Add-LocalGroupMember -SID 'S-1-5-32-545' -Member $DbAccount -ErrorAction Stop
+    } catch {
+        # Already a member is the ordinary case on every run after the first.
+        if ($_.FullyQualifiedErrorId -notmatch 'MemberExists') { throw }
+    }
+
     $script:DbAccountSid = (Get-LocalUser -Name $DbAccount).SID.Value
     Grant-ServiceLogonRight $script:DbAccountSid
     # The cluster binaries live under Program Files, and New-LocalUser puts this
@@ -463,6 +475,14 @@ function Start-PostgresService {
             Select-Object -First 5
         foreach ($event in $events) { $detail += "[$($event.ProviderName)] $($event.Message)" }
     } catch { }
+    # The permissions themselves, because every theory about them so far has
+    # been wrong and the message is the only place they can be checked.
+    foreach ($subject in $PgData, (Join-Path $PgData 'postgresql.conf'), $DataRoot) {
+        if (Test-Path $subject) {
+            $detail += "--- icacls $subject ---"
+            $detail += (& icacls.exe $subject 2>&1 | ForEach-Object { "$_" })
+        }
+    }
     $stray = Join-Path $PgData 'postmaster.pid'
     if (Test-Path $stray) {
         $detail += "A lock file from an earlier run is still present: $stray"
@@ -521,9 +541,17 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
     # it has no say over — one counter reported 305 of 1288 files refused.
     & takeown.exe /F $PgData /R /A /D Y 2>&1 | Out-Null
     Invoke-IcaclsChecked 'the PostgreSQL cluster owner' @($PgData, '/setowner', "*$dbSid", '/T', '/C')
-    Invoke-IcaclsChecked 'the PostgreSQL cluster' @($PgData, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', "*$($dbSid):(OI)(CI)F", '/T', '/C')
-    # Traverse the protected data root, and write the collector log.
+    # Set the folder's ACL, then let every child re-inherit it. Stamping
+    # (OI)(CI) onto files with /T writes inheritance flags onto leaf objects,
+    # which is not what those flags mean and not how the tree is meant to be
+    # granted; /reset makes each child take the parent's entries cleanly.
+    Invoke-IcaclsChecked 'the PostgreSQL cluster' @($PgData, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', "*$($dbSid):(OI)(CI)F", '/C')
+    # The wildcard matters: /reset on $PgData itself would replace the ACL set
+    # on the line above with whatever it inherits, undoing the grant.
+    Invoke-IcaclsChecked 'the PostgreSQL cluster contents' @((Join-Path $PgData '*'), '/reset', '/T', '/C')
+    # Traverse every folder between the cluster and the drive that setup owns.
     Invoke-IcaclsChecked 'the Radiance POS data directory' @($DataRoot, '/grant:r', "*$($dbSid):RX", '/C')
+    Invoke-IcaclsChecked 'the GiftedLabs data folder' @((Split-Path $DataRoot -Parent), '/grant:r', "*$($dbSid):RX", '/C')
     Invoke-IcaclsChecked 'the PostgreSQL log directory' @((Join-Path $DataRoot 'logs'), '/grant:r', "*$($dbSid):(OI)(CI)M", '/T', '/C')
 
     # A registration left by an earlier install points at whatever data directory
