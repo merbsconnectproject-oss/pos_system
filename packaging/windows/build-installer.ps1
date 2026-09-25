@@ -68,7 +68,7 @@ Copy-Item (Join-Path $PSScriptRoot 'tools\*') (Join-Path $Stage 'tools')
 # Every shortcut goes through the console-free shim, so a stage without it
 # installs a Start menu whose entries do nothing. Checked here rather than
 # discovered on a counter.
-foreach ($tool in 'launch.vbs', 'open-pos.ps1', 'onboard.ps1', 'diagnostics.ps1', 'restore-backup.ps1', 'uninstall-services.ps1') {
+foreach ($tool in 'launch.vbs', 'open-pos.ps1', 'onboard.ps1', 'diagnostics.ps1', 'restore-backup.ps1', 'uninstall-services.ps1', 'reset-counter.ps1') {
     if (-not (Test-Path (Join-Path $Stage "tools\$tool"))) { throw "Staged tools are missing $tool." }
 }
 

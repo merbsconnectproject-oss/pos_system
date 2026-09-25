@@ -44,6 +44,10 @@ Name: "{group}\Open Radiance POS"; Filename: "{sys}\wscript.exe"; Parameters: ""
 Name: "{group}\Configure or repair Radiance POS"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" /elevate /show onboard.ps1"; WorkingDir: "{app}"
 Name: "{group}\Radiance POS Diagnostics"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" /show diagnostics.ps1"; WorkingDir: "{app}"
 Name: "{group}\Restore a Radiance POS backup"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" /elevate /show restore-backup.ps1"; WorkingDir: "{app}"
+; Only useful before a counter has traded, which is exactly when onboarding is
+; still being fought with. It deletes the database, so it says so and it is not
+; on the desktop.
+Name: "{group}\Reset this counter before setup"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" /elevate /show reset-counter.ps1"; WorkingDir: "{app}"
 Name: "{commondesktop}\Radiance POS"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" open-pos.ps1"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Tasks]
