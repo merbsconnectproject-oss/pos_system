@@ -272,6 +272,28 @@ function Set-DataPermissions {
     Invoke-Checked icacls.exe @($SecretsRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '/T', '/C')
 }
 
+function Read-Secret([string]$Path, [string]$Name) {
+    # Returns $null when there is nothing to reuse, and throws only when there
+    # is something there that cannot be read. Those are different situations and
+    # the second one used to arrive as a bare "access is denied" from whichever
+    # cmdlet hit it first, with nothing saying which file or what to do.
+    if (-not (Test-Path $Path)) { return $null }
+    if (Test-Path $Path -PathType Container) {
+        throw ("$Path is a folder, and the $Name belongs in a file of that name. " +
+               "Run 'Reset this counter before setup' from the Start menu, then set up again.")
+    }
+    try {
+        try { Set-ItemProperty -LiteralPath $Path -Name Attributes -Value 'Normal' } catch { }
+        return (Get-Content -Raw -LiteralPath $Path).Trim()
+    } catch {
+        throw ("Setup cannot read the $Name it saved on an earlier attempt: $Path`n`n" +
+               "$($_.Exception.Message)`n`n" +
+               "The database it belongs to cannot be opened without it, so this counter has " +
+               "to start over. Run 'Reset this counter before setup' from the Start menu, " +
+               'then set up again. No sales have been recorded yet.')
+    }
+}
+
 function Save-Secret([string]$Path, [string]$Value) {
     # Setup runs elevated and is the only writer here, so a denial means
     # something left the file or its folder in a state an administrator cannot
@@ -424,12 +446,12 @@ try {
     }
 
     $databasePassword = New-RandomSecret
-    $postgresPassword = if (Test-Path $PostgresAdminSecretPath) {
-        (Get-Content -Raw $PostgresAdminSecretPath).Trim()
-    } else { New-RandomSecret }
-    $backupEncryptionKey = if (Test-Path $BackupEncryptionSecretPath) {
-        (Get-Content -Raw $BackupEncryptionSecretPath).Trim()
-    } else { New-BackupEncryptionKey }
+    # Reused when an earlier attempt already saved them: the cluster was
+    # initialised with that superuser password and cannot be opened with another.
+    $existingPostgres = Read-Secret $PostgresAdminSecretPath 'PostgreSQL administrator password'
+    $postgresPassword = if ($existingPostgres) { $existingPostgres } else { New-RandomSecret }
+    $existingBackupKey = Read-Secret $BackupEncryptionSecretPath 'backup encryption key'
+    $backupEncryptionKey = if ($existingBackupKey) { $existingBackupKey } else { New-BackupEncryptionKey }
 
     Start-SetupProgress
     Set-SetupStatus 'Initializing the private database...'

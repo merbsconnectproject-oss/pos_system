@@ -155,6 +155,14 @@ class WindowsAppWindowTest {
         String onboarding = Files.readString(Path.of("packaging/windows/tools/onboard.ps1"));
 
         assertTrue(onboarding.contains("function Save-Secret"), "secret writes must go through one guarded path");
+        // The read runs first. Guarding only the write left the failure that was
+        // actually reported from a counter arriving from Get-Content, before any
+        // of the repair below could run.
+        assertTrue(onboarding.contains("function Read-Secret"), "secret reads must be guarded too");
+        assertFalse(onboarding.contains("(Get-Content -Raw $PostgresAdminSecretPath)"),
+                "the superuser password must not be read unguarded");
+        assertFalse(onboarding.contains("(Get-Content -Raw $BackupEncryptionSecretPath)"),
+                "the backup key must not be read unguarded");
         assertFalse(onboarding.contains("[IO.File]::WriteAllText($PostgresAdminSecretPath"),
                 "the superuser password must not be written unguarded");
         assertFalse(onboarding.contains("[IO.File]::WriteAllText($BackupEncryptionSecretPath"),
