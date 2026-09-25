@@ -261,7 +261,11 @@ function Wait-ServiceReady([string]$Name, [int]$Seconds = 60) {
     throw "Windows service $Name did not start within $Seconds seconds."
 }
 
-function Wait-Application([int]$Seconds = 120) {
+# Five minutes, not two. The first start of a counter applies every migration
+# before it answers a health check, and the launcher already learned this the
+# expensive way: ninety seconds expired in the middle of a migration run and
+# told the operator the till was broken.
+function Wait-Application([int]$Seconds = 300) {
     $deadline = (Get-Date).AddSeconds($Seconds)
     do {
         try {
@@ -513,9 +517,43 @@ function Write-ApplicationConfiguration($Config, [string]$DatabasePassword, [str
 
 function Install-ApplicationService {
     if (-not (Test-Path $ServiceExe)) { throw 'Radiance POS service wrapper is missing.' }
-    if (-not (Get-Service RadiancePos -ErrorAction SilentlyContinue)) { Invoke-Checked $ServiceExe @('install') }
+
+    # The same hole the PostgreSQL service had: setup kept whatever registration
+    # it found. One left by an earlier install points at the wrapper that
+    # installed it, and one left disabled — which is how a failed attempt is
+    # normally cleared — refuses to start with nothing saying why.
+    $existing = Get-Service RadiancePos -ErrorAction SilentlyContinue
+    if ($existing) {
+        $binary = (Get-CimInstance Win32_Service -Filter "Name='RadiancePos'").PathName
+        if ($binary -notlike "*$ServiceExe*") {
+            Write-Host 'The Radiance POS service points at a different install; re-registering it.'
+            Stop-Service RadiancePos -Force -ErrorAction SilentlyContinue
+            & $ServiceExe uninstall 2>&1 | Out-Null
+            Start-Sleep 2
+            $existing = $null
+        } elseif ($existing.StartType -eq 'Disabled') {
+            Write-Host 'The Radiance POS service was disabled; setting it back to automatic.'
+            Set-Service RadiancePos -StartupType Automatic
+        }
+    }
+    if (-not $existing) { Invoke-Checked $ServiceExe @('install') }
+
     Start-Service RadiancePos
     Wait-ServiceReady RadiancePos
+}
+
+function Assert-PortAvailable {
+    # The application binds 8080 and nothing else on the counter may hold it.
+    # Without this the only symptom is "did not become healthy" five minutes
+    # later, which describes every other cause equally well.
+    $held = Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if (-not $held) { return }
+    $owner = Get-Process -Id $held.OwningProcess -ErrorAction SilentlyContinue
+    if ($owner -and $owner.Path -like "*Radiance POS*") { return }
+    throw ("Another program is already using port 8080 on this computer: " +
+           "$(if ($owner) { "$($owner.ProcessName) (process $($held.OwningProcess))" } else { "process $($held.OwningProcess)" }).`n`n" +
+           'Radiance POS needs that port. Close that program and run setup again.')
 }
 
 function Show-SetupFailure([string]$Message) {
@@ -567,6 +605,7 @@ try {
     Initialize-Database $postgresPassword $databasePassword
     Save-Secret $PostgresAdminSecretPath $postgresPassword
     Save-Secret $BackupEncryptionSecretPath $backupEncryptionKey
+    Assert-PortAvailable
     Set-SetupStatus 'Securing configuration and creating the Windows service...'
     Write-ApplicationConfiguration $configuration $databasePassword $backupEncryptionKey $true
     Install-ApplicationService
