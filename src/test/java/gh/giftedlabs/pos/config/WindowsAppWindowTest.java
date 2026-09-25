@@ -179,6 +179,26 @@ class WindowsAppWindowTest {
                 "multi-line icacls output must be parsed without PowerShell's scalar-only $Matches variable");
         assertFalse(onboarding.contains("$granted -match"),
                 "using -match on native-command output leaves $Matches unset under StrictMode");
+        assertTrue(onboarding.contains("function Invoke-IcaclsChecked"),
+                "every final ACL operation must detect icacls partial failures");
+        assertFalse(onboarding.contains("Invoke-Checked icacls.exe"),
+                "generic exit-code checking misses icacls files it failed while continuing");
+    }
+
+    @Test
+    @DisplayName("PostgreSQL is owned and run by one low-privilege identity")
+    void postgresServiceOwnsItsClusterAndLogsItsFailures() throws IOException {
+        String onboarding = Files.readString(Path.of("packaging/windows/tools/onboard.ps1"));
+
+        assertTrue(onboarding.contains("'/setowner' '*S-1-5-20'"),
+                "NetworkService must own the cluster before its first start");
+        assertTrue(onboarding.contains("'-U', 'NT AUTHORITY\\NetworkService'"),
+                "PostgreSQL must run as the identity that owns its cluster");
+        assertTrue(onboarding.contains("logging_collector = on")
+                        && onboarding.contains("log_filename = 'postgresql.log'"),
+                "service startup must leave a readable PostgreSQL log");
+        assertFalse(onboarding.contains("'-S', 'auto', '-l'"),
+                "pg_ctl ignores -l in Windows register mode");
     }
 
     /**

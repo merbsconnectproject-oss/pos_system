@@ -241,6 +241,16 @@ function Invoke-Checked([string]$File, [string[]]$Arguments, [hashtable]$Environ
     if ($LASTEXITCODE -ne 0) { throw "$File failed with exit code $LASTEXITCODE." }
 }
 
+function Invoke-IcaclsChecked([string]$Context, [string[]]$Arguments) {
+    $output = & icacls.exe @Arguments 2>&1
+    $exitCode = $LASTEXITCODE
+    $summary = [regex]::Match(($output -join "`n"), 'Failed processing (\d+) files')
+    if ($exitCode -ne 0 -or ($summary.Success -and $summary.Groups[1].Value -ne '0')) {
+        $failed = if ($summary.Success) { $summary.Groups[1].Value } else { 'one or more' }
+        throw "Setup could not apply Windows permissions to $failed item(s) in $Context."
+    }
+}
+
 function Wait-ServiceReady([string]$Name, [int]$Seconds = 60) {
     $deadline = (Get-Date).AddSeconds($Seconds)
     do {
@@ -264,13 +274,13 @@ function Wait-Application([int]$Seconds = 120) {
 }
 
 function Set-DataPermissions {
-    Invoke-Checked icacls.exe @($DataRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:RX', '/C')
-    Invoke-Checked icacls.exe @($ConfigRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:(OI)(CI)RX', '/T', '/C')
+    Invoke-IcaclsChecked 'the Radiance POS data directory' @($DataRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:RX', '*S-1-5-20:RX', '/C')
+    Invoke-IcaclsChecked 'the application configuration' @($ConfigRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:(OI)(CI)RX', '/T', '/C')
     foreach ($writable in (Join-Path $DataRoot 'backups'), (Join-Path $DataRoot 'logs')) {
-        Invoke-Checked icacls.exe @($writable, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:(OI)(CI)M', '/T', '/C')
+        Invoke-IcaclsChecked $writable @($writable, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:(OI)(CI)M', '*S-1-5-20:(OI)(CI)M', '/T', '/C')
     }
-    Invoke-Checked icacls.exe @($PgData, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '/T', '/C')
-    Invoke-Checked icacls.exe @($SecretsRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '/T', '/C')
+    Invoke-IcaclsChecked 'the PostgreSQL cluster' @($PgData, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-20:(OI)(CI)F', '/T', '/C')
+    Invoke-IcaclsChecked 'the protected secrets directory' @($SecretsRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '/T', '/C')
 }
 
 function Read-Secret([string]$Path, [string]$Name) {
@@ -364,7 +374,7 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
     foreach ($tool in 'initdb.exe', 'pg_ctl.exe', 'psql.exe', 'createdb.exe') {
         if (-not (Test-Path (Join-Path $PgBin $tool))) { throw "PostgreSQL tool is missing: $tool" }
     }
-    New-Item -ItemType Directory -Force $DataRoot | Out-Null
+    New-Item -ItemType Directory -Force $DataRoot, (Join-Path $DataRoot 'logs') | Out-Null
     if (-not (Test-Path (Join-Path $PgData 'PG_VERSION'))) {
         New-Item -ItemType Directory -Force $PgData | Out-Null
         $passwordFile = Join-Path $env:TEMP ("radiance-pg-{0}.txt" -f [guid]::NewGuid())
@@ -374,6 +384,10 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
         } finally { Remove-Item $passwordFile -Force -ErrorAction SilentlyContinue }
         Add-Content (Join-Path $PgData 'postgresql.conf') "`nlisten_addresses = '127.0.0.1'`nport = $PgPort`npassword_encryption = 'scram-sha-256'`n"
     }
+    $postgresConfig = Join-Path $PgData 'postgresql.conf'
+    if (-not (Select-String -LiteralPath $postgresConfig -SimpleMatch '# Radiance POS managed logging' -Quiet)) {
+        Add-Content $postgresConfig "`n# Radiance POS managed logging`nlogging_collector = on`nlog_destination = 'stderr'`nlog_directory = '../logs'`nlog_filename = 'postgresql.log'`n"
+    }
     # The cluster is opened by the service a few lines below, and
     # Set-DataPermissions does not run until the configuration is written — so
     # until now the data directory was started with whatever it happened to
@@ -382,25 +396,38 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
     # own postmaster.pid. The grant belongs with the cluster that needs it, not
     # at the end of setup.
     #
-    # Ownership first: a cluster left by an earlier attempt can be owned by
-    # another account, and icacls cannot rewrite an ACL it has no say over. One
-    # counter reported 305 of 1288 files refused, which left the grant half
-    # applied and the service still unable to start.
+    # PostgreSQL must run as the account that owns its cluster. The interactive
+    # administrator necessarily runs initdb, but the long-lived service uses the
+    # built-in, low-privilege NetworkService identity. Transfer ownership before
+    # the first service start and retain Administrators for repair operations.
+    # LocalSystem used to be granted access without becoming the owner; that is
+    # not the ownership model PostgreSQL requires and failed on clean counters.
     & takeown.exe /F $PgData /R /A /D Y 2>&1 | Out-Null
-    $granted = & icacls.exe $PgData '/inheritance:r' '/grant:r' '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '/T' '/C' 2>&1
+    $owned = & icacls.exe $PgData '/setowner' '*S-1-5-20' '/T' '/C' 2>&1
+    $ownerExit = $LASTEXITCODE
+    $ownerSummary = [regex]::Match(($owned -join "`n"), 'Failed processing (\d+) files')
+    if ($ownerExit -ne 0 -or ($ownerSummary.Success -and $ownerSummary.Groups[1].Value -ne '0')) {
+        throw 'Setup could not assign the database cluster to its Windows service account. Run Reset this counter before setup, then try again.'
+    }
+    $granted = & icacls.exe $PgData '/inheritance:r' '/grant:r' '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-20:(OI)(CI)F' '/T' '/C' 2>&1
+    $grantExit = $LASTEXITCODE
     # Native-command output is an array of lines. PowerShell only fills its
     # automatic $Matches variable when the left side of -match is a scalar, so
     # using it here fails under StrictMode before setup can report the ACL
     # result. Parse the joined output explicitly instead.
     $grantSummary = [regex]::Match(($granted -join "`n"), 'Failed processing (\d+) files')
-    if ($grantSummary.Success -and $grantSummary.Groups[1].Value -ne '0') {
-        $failedFiles = $grantSummary.Groups[1].Value
+    if ($grantExit -ne 0 -or ($grantSummary.Success -and $grantSummary.Groups[1].Value -ne '0')) {
+        $failedFiles = if ($grantSummary.Success) { $grantSummary.Groups[1].Value } else { 'one or more' }
         throw ("Setup could not set permissions on $failedFiles files in the database directory, " +
                "so PostgreSQL would not be able to open it.`n`n" +
                "This cluster was created by a different Windows account and cannot be repaired from here. " +
                "Run 'Reset this counter before setup' from the Start menu, then set up again. " +
                'No sales have been recorded yet.')
     }
+    # NetworkService must also be able to traverse the protected data root and
+    # create the collector log before PostgreSQL starts for the first time.
+    Invoke-IcaclsChecked 'the Radiance POS data directory' @($DataRoot, '/grant:r', '*S-1-5-20:RX', '/C')
+    Invoke-IcaclsChecked 'the PostgreSQL log directory' @((Join-Path $DataRoot 'logs'), '/grant:r', '*S-1-5-20:(OI)(CI)M', '/T', '/C')
 
     # A registration left by an earlier install points at whatever data directory
     # it was given then. Setup used to keep any service it found, so a stale or
@@ -408,9 +435,11 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
     # said about why. Re-register unless the existing one is this cluster.
     $existing = Get-Service RadiancePosPostgreSQL -ErrorAction SilentlyContinue
     if ($existing) {
-        $binary = (Get-CimInstance Win32_Service -Filter "Name='RadiancePosPostgreSQL'").PathName
-        if ($binary -notlike "*$PgData*") {
-            Write-Host 'The PostgreSQL service points at a different data directory; re-registering it.'
+        $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='RadiancePosPostgreSQL'"
+        $binary = $serviceInfo.PathName
+        $wrongAccount = $serviceInfo.StartName -notmatch '(?i)^NT AUTHORITY\\Network ?Service$'
+        if ($binary -notlike "*$PgData*" -or $wrongAccount) {
+            Write-Host 'The PostgreSQL service has stale settings; re-registering it.'
             Stop-Service RadiancePosPostgreSQL -Force -ErrorAction SilentlyContinue
             & (Join-Path $PgBin 'pg_ctl.exe') unregister -N RadiancePosPostgreSQL 2>&1 | Out-Null
             $existing = $null
@@ -422,9 +451,10 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
         }
     }
     if (-not $existing) {
-        # -l gives the cluster somewhere to write the reason it would not start.
-        # Without it the only record is an event-log entry nobody reads.
-        Invoke-Checked (Join-Path $PgBin 'pg_ctl.exe') @('register', '-N', 'RadiancePosPostgreSQL', '-D', $PgData, '-S', 'auto', '-l', $PgLog)
+        # -l is ignored by pg_ctl's Windows register mode. PostgreSQL's logging
+        # collector above writes the durable file, while -e gives very-early
+        # service failures a distinct Windows event source.
+        Invoke-Checked (Join-Path $PgBin 'pg_ctl.exe') @('register', '-N', 'RadiancePosPostgreSQL', '-D', $PgData, '-S', 'auto', '-U', 'NT AUTHORITY\NetworkService', '-e', 'RadiancePosPostgreSQL')
     }
     Start-PostgresService
     Wait-ServiceReady RadiancePosPostgreSQL

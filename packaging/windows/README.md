@@ -11,7 +11,8 @@ PostgreSQL 18, and WinSW. The installed application binds only to
 2. Collects and validates the first owner, password, approval PIN, outlet and
    terminal. Off-site S3-compatible backup is optional during setup.
 3. Initializes a private PostgreSQL cluster on port `54329`, reachable only on
-   loopback, and registers it as `RadiancePosPostgreSQL`.
+   loopback, assigns it to the low-privilege Windows `NetworkService` identity,
+   and registers it as `RadiancePosPostgreSQL`.
 4. Creates the application database and a random application-only credential.
 5. Registers `RadiancePos` as a delayed, restart-on-failure Windows service
    running as `LocalService`.
