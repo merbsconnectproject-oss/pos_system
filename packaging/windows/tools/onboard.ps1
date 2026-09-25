@@ -26,6 +26,7 @@ $SecretsRoot = Join-Path $DataRoot 'secrets'
 $PostgresAdminSecretPath = Join-Path $SecretsRoot 'postgres-admin.secret'
 $BackupEncryptionSecretPath = Join-Path $SecretsRoot 'backup-encryption.secret'
 $PgData = Join-Path $DataRoot 'postgres-data'
+$PgLog = Join-Path $DataRoot 'logs\postgresql.log'
 $PgBin = Join-Path $InstallRoot 'postgresql\bin'
 $ServiceExe = Join-Path $InstallRoot 'service\RadiancePosService.exe'
 $HealthUrl = 'http://127.0.0.1:8080/actuator/health'
@@ -330,6 +331,35 @@ function Save-Secret([string]$Path, [string]$Value) {
     }
 }
 
+function Start-PostgresService {
+    try {
+        Start-Service RadiancePosPostgreSQL
+        return
+    } catch {
+        $reason = $_.Exception.Message
+    }
+
+    # "Failed to start service" is everything Start-Service knows and nothing an
+    # operator can act on. PostgreSQL writes the actual reason — a port already
+    # taken, a data directory it cannot read, a lock file from a crash — to its
+    # own log, so that is what goes in the message.
+    $detail = @()
+    if (Test-Path $PgLog) { $detail += (Get-Content -Tail 15 $PgLog) }
+    $stray = Join-Path $PgData 'postmaster.pid'
+    if (Test-Path $stray) {
+        $detail += "A lock file from an earlier run is still present: $stray"
+    }
+    $listener = Get-NetTCPConnection -LocalPort $PgPort -State Listen -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($listener) {
+        $owner = (Get-Process -Id $listener.OwningProcess -ErrorAction SilentlyContinue).ProcessName
+        $detail += "Port $PgPort is already in use by $owner (process $($listener.OwningProcess))."
+    }
+
+    throw ("The private PostgreSQL service would not start.`n`n$reason`n`n" +
+           $(if ($detail) { ($detail -join "`n") } else { "Nothing was written to $PgLog." }))
+}
+
 function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) {
     foreach ($tool in 'initdb.exe', 'pg_ctl.exe', 'psql.exe', 'createdb.exe') {
         if (-not (Test-Path (Join-Path $PgBin $tool))) { throw "PostgreSQL tool is missing: $tool" }
@@ -344,10 +374,31 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
         } finally { Remove-Item $passwordFile -Force -ErrorAction SilentlyContinue }
         Add-Content (Join-Path $PgData 'postgresql.conf') "`nlisten_addresses = '127.0.0.1'`nport = $PgPort`npassword_encryption = 'scram-sha-256'`n"
     }
-    if (-not (Get-Service RadiancePosPostgreSQL -ErrorAction SilentlyContinue)) {
-        Invoke-Checked (Join-Path $PgBin 'pg_ctl.exe') @('register', '-N', 'RadiancePosPostgreSQL', '-D', $PgData, '-S', 'auto')
+    # A registration left by an earlier install points at whatever data directory
+    # it was given then. Setup used to keep any service it found, so a stale or
+    # disabled one was inherited silently and then failed to start with nothing
+    # said about why. Re-register unless the existing one is this cluster.
+    $existing = Get-Service RadiancePosPostgreSQL -ErrorAction SilentlyContinue
+    if ($existing) {
+        $binary = (Get-CimInstance Win32_Service -Filter "Name='RadiancePosPostgreSQL'").PathName
+        if ($binary -notlike "*$PgData*") {
+            Write-Host 'The PostgreSQL service points at a different data directory; re-registering it.'
+            Stop-Service RadiancePosPostgreSQL -Force -ErrorAction SilentlyContinue
+            & (Join-Path $PgBin 'pg_ctl.exe') unregister -N RadiancePosPostgreSQL 2>&1 | Out-Null
+            $existing = $null
+        } elseif ($existing.StartType -eq 'Disabled') {
+            # Disabling these is the standard way to clear a failed attempt, and
+            # a disabled service refuses to start however healthy the cluster is.
+            Write-Host 'The PostgreSQL service was disabled; setting it back to automatic.'
+            Set-Service RadiancePosPostgreSQL -StartupType Automatic
+        }
     }
-    Start-Service RadiancePosPostgreSQL
+    if (-not $existing) {
+        # -l gives the cluster somewhere to write the reason it would not start.
+        # Without it the only record is an event-log entry nobody reads.
+        Invoke-Checked (Join-Path $PgBin 'pg_ctl.exe') @('register', '-N', 'RadiancePosPostgreSQL', '-D', $PgData, '-S', 'auto', '-l', $PgLog)
+    }
+    Start-PostgresService
     Wait-ServiceReady RadiancePosPostgreSQL
     $pgEnv = @{ PGPASSWORD = $SuperPassword }
     $env:PGPASSWORD = $SuperPassword
