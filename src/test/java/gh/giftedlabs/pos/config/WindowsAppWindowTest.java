@@ -141,6 +141,35 @@ class WindowsAppWindowTest {
     }
 
     /**
+     * Setup must not be stopped by a folder an earlier attempt left behind.
+     *
+     * <p>Writing the generated PostgreSQL superuser password is the first thing
+     * setup puts on disk, and it happens before setup has hardened any
+     * permissions of its own. A counter reported it denied, which ends
+     * onboarding with the database already initialised and no password stored
+     * for it — the one state the operator cannot talk their way out of.
+     */
+    @Test
+    @DisplayName("a secret that cannot be written is repaired, not surrendered to")
+    void secretWritesRepairTheirOwnFolder() throws IOException {
+        String onboarding = Files.readString(Path.of("packaging/windows/tools/onboard.ps1"));
+
+        assertTrue(onboarding.contains("function Save-Secret"), "secret writes must go through one guarded path");
+        assertFalse(onboarding.contains("[IO.File]::WriteAllText($PostgresAdminSecretPath"),
+                "the superuser password must not be written unguarded");
+        assertFalse(onboarding.contains("[IO.File]::WriteAllText($BackupEncryptionSecretPath"),
+                "the backup key must not be written unguarded");
+        assertTrue(onboarding.contains("catch [System.UnauthorizedAccessException]"),
+                "a denial must be caught rather than thrown at the operator");
+        assertTrue(onboarding.contains("takeown.exe") && onboarding.contains("icacls.exe"),
+                "setup must be able to repair a folder it cannot write");
+        // A folder where a file belongs cannot be fixed by an ACL, and saying so
+        // is the difference between a five-minute fix and a reinstall.
+        assertTrue(onboarding.contains("is a folder where a file belongs"),
+                "the folder-not-file case must name itself");
+    }
+
+    /**
      * Two builds, one codebase.
      *
      * <p>The app window is what a till should look like; the ordinary browser is

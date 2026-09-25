@@ -272,6 +272,42 @@ function Set-DataPermissions {
     Invoke-Checked icacls.exe @($SecretsRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '/T', '/C')
 }
 
+function Save-Secret([string]$Path, [string]$Value) {
+    # Setup runs elevated and is the only writer here, so a denial means
+    # something left the file or its folder in a state an administrator cannot
+    # write to: a read-only attribute, a folder where a file belongs, or an ACL
+    # from an interrupted attempt that no longer carries Administrators. Setup
+    # can repair all three, and a shop should not be stopped at the counter by
+    # any of them.
+    $folder = Split-Path $Path -Parent
+    New-Item -ItemType Directory -Force $folder | Out-Null
+    try {
+        [IO.File]::WriteAllText($Path, $Value, [Text.UTF8Encoding]::new($false))
+        return
+    } catch [System.UnauthorizedAccessException] {
+        Write-Host "Windows refused to write $Path. Repairing its permissions and trying once more."
+    }
+
+    if (Test-Path $Path -PathType Container) {
+        throw "$Path is a folder where a file belongs. Delete it and run 'Configure or repair Radiance POS' again."
+    }
+    # Errors are swallowed on purpose: the retry below is the real test of
+    # whether this worked, and its message is the one worth reading.
+    try { & takeown.exe /F $folder /R /D Y 2>&1 | Out-Null } catch { }
+    try { & icacls.exe $folder '/grant' '*S-1-5-32-544:(OI)(CI)F' '/T' '/C' 2>&1 | Out-Null } catch { }
+    if (Test-Path $Path) {
+        try { Set-ItemProperty -LiteralPath $Path -Name IsReadOnly -Value $false } catch { }
+    }
+
+    try {
+        [IO.File]::WriteAllText($Path, $Value, [Text.UTF8Encoding]::new($false))
+    } catch [System.UnauthorizedAccessException] {
+        throw ("Windows refused to write $Path even after setup repaired the folder's permissions. " +
+               'Anti-virus or ransomware protection blocking the folder is the usual cause. ' +
+               "Allow $folder, or delete it, and run 'Configure or repair Radiance POS' again.")
+    }
+}
+
 function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) {
     foreach ($tool in 'initdb.exe', 'pg_ctl.exe', 'psql.exe', 'createdb.exe') {
         if (-not (Test-Path (Join-Path $PgBin $tool))) { throw "PostgreSQL tool is missing: $tool" }
@@ -398,9 +434,8 @@ try {
     Start-SetupProgress
     Set-SetupStatus 'Initializing the private database...'
     Initialize-Database $postgresPassword $databasePassword
-    New-Item -ItemType Directory -Force $SecretsRoot | Out-Null
-    [IO.File]::WriteAllText($PostgresAdminSecretPath, $postgresPassword, [Text.UTF8Encoding]::new($false))
-    [IO.File]::WriteAllText($BackupEncryptionSecretPath, $backupEncryptionKey, [Text.UTF8Encoding]::new($false))
+    Save-Secret $PostgresAdminSecretPath $postgresPassword
+    Save-Secret $BackupEncryptionSecretPath $backupEncryptionKey
     Set-SetupStatus 'Securing configuration and creating the Windows service...'
     Write-ApplicationConfiguration $configuration $databasePassword $backupEncryptionKey $true
     Install-ApplicationService
