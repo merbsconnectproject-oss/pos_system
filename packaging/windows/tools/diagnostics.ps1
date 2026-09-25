@@ -23,7 +23,11 @@ $overrideFile = Join-Path $dataRoot 'config\launch-mode.txt'
 if (Test-Path $overrideFile) {
     $report += "Launch mode: $((Get-Content -Raw $overrideFile).Trim()) (per-counter override)"
 }
-$report += "Install: $((Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Radiance POS_is1' -ErrorAction SilentlyContinue).InstallLocation)"
+# Inno keys the uninstall entry by AppId, not by AppName. Reading the wrong key
+# is why this line was blank on every machine it has ever run on.
+$uninstallKey = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{42A61CD0-F7D4-4C9F-A59C-688C2CE694A8}_is1'
+$installed = Get-ItemProperty $uninstallKey -ErrorAction SilentlyContinue
+$report += "Install: $(if ($installed) { "$($installed.InstallLocation) ($($installed.DisplayVersion))" } else { 'not registered' })"
 foreach ($name in 'RadiancePosPostgreSQL', 'RadiancePos') {
     $service = Get-Service -Name $name -ErrorAction SilentlyContinue
     # ${name}, not $name, before a colon. PowerShell reads "$name:" as a scope
@@ -31,6 +35,19 @@ foreach ($name in 'RadiancePosPostgreSQL', 'RadiancePos') {
     # and the Start-menu diagnostics entry could only ever flash and vanish.
     $report += if ($service) { "Service ${name}: $($service.Status) / $($service.StartType)" } else { "Service ${name}: MISSING" }
 }
+# The service runs as LOCAL SERVICE and must be able to read its own
+# configuration. When onboarding does not reach the step that grants it, the
+# service starts, is refused the file, and the only evidence is a Java stack
+# trace at the bottom of a log. Asked and answered here instead.
+$configFile = Join-Path $dataRoot 'config\application.properties'
+if (Test-Path $configFile) {
+    $rights = (& icacls.exe $configFile 2>$null) -join ' '
+    $readable = $rights -match 'LOCAL SERVICE' -or $rights -match 'S-1-5-19'
+    $report += "Config readable by the service: $(if ($readable) { 'yes' } else { 'NO - LOCAL SERVICE has no rights to application.properties' })"
+} else {
+    $report += 'Config readable by the service: no application.properties - onboarding never completed'
+}
+
 try {
     $health = Invoke-RestMethod 'http://127.0.0.1:8080/actuator/health' -TimeoutSec 5
     $report += "Health: $($health.status)"
