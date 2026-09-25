@@ -90,6 +90,70 @@ jobs:
         shell: powershell
         run: .\packaging\windows\build-installer.ps1 -Version '${{ steps.version.outputs.value }}' -LaunchMode '${{ matrix.launch }}' -SkipTests
 
+      # Building an EXE proves only that Inno Setup accepted it. Install and
+      # configure it on the clean Windows runner so service accounts, ACLs,
+      # PostgreSQL startup and the Java health endpoint are release gates too.
+      - name: Smoke-test installed counter (${{ matrix.launch }})
+        shell: powershell
+        run: |
+          $response = Join-Path $env:RUNNER_TEMP 'radiance-onboarding.json'
+          @{
+            ownerUsername = 'ci-owner'
+            ownerName = 'CI Owner'
+            ownerEmail = 'ci@example.invalid'
+            ownerPassword = 'Temporary-CI-Password-4827'
+            ownerPasswordConfirm = 'Temporary-CI-Password-4827'
+            ownerPin = '4827'
+            ownerPinConfirm = '4827'
+            outletCode = 'CI'
+            outletName = 'Installer smoke test'
+            terminalCode = '01'
+            offsiteEnabled = $false
+            offsiteEndpoint = ''
+            offsiteBucket = ''
+            offsiteAccessKey = ''
+            offsiteSecretKey = ''
+            offsiteRegion = 'auto'
+            offsitePrefix = ''
+          } | ConvertTo-Json | Set-Content -LiteralPath $response -Encoding UTF8
+
+          $installer = Get-ChildItem 'pos-api\dist\Radiance-POS-Setup-*.exe' | Select-Object -First 1
+          $install = Start-Process $installer.FullName -ArgumentList @(
+            '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/ONBOARDING=$response"
+          ) -Wait -PassThru
+
+          $healthy = $false
+          if ($install.ExitCode -eq 0) {
+            $deadline = (Get-Date).AddMinutes(3)
+            do {
+              try {
+                $health = Invoke-RestMethod 'http://127.0.0.1:8080/actuator/health' -TimeoutSec 3
+                if ($health.status -eq 'UP') { $healthy = $true; break }
+              } catch { }
+              Start-Sleep 2
+            } while ((Get-Date) -lt $deadline)
+          }
+
+          if (-not $healthy) {
+            Get-Service RadiancePosPostgreSQL, RadiancePos -ErrorAction SilentlyContinue |
+              Format-List Name, Status, StartType
+            $logs = Join-Path $env:ProgramData 'GiftedLabs\Radiance POS\logs'
+            Get-ChildItem $logs -File -ErrorAction SilentlyContinue |
+              Sort-Object LastWriteTime |
+              ForEach-Object {
+                Write-Host "`n===== $($_.FullName) ====="
+                Get-Content $_.FullName -Tail 120 -ErrorAction SilentlyContinue
+              }
+            throw "Installed counter failed its health check (installer exit $($install.ExitCode))."
+          }
+
+          $postgres = Get-Service RadiancePosPostgreSQL
+          $application = Get-Service RadiancePos
+          if ($postgres.Status -ne 'Running' -or $application.Status -ne 'Running') {
+            throw "Health was UP but one or more Windows services were not running."
+          }
+          Write-Host 'Installed counter is healthy and both services are running.'
+
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
