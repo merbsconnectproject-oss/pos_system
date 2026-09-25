@@ -37,6 +37,7 @@ $PgLog = Join-Path $DataRoot 'logs\postgresql.log'
 $DbAccount = 'RadiancePosDb'
 $DbAccountSecretPath = Join-Path $SecretsRoot 'db-service-account.secret'
 $script:DbAccountSid = $null
+$script:DbPasswordIsNew = $false
 $PgBin = Join-Path $InstallRoot 'postgresql\bin'
 $ServiceExe = Join-Path $InstallRoot 'service\RadiancePosService.exe'
 $HealthUrl = 'http://127.0.0.1:8080/actuator/health'
@@ -337,6 +338,12 @@ function Initialize-DatabaseAccount {
     # cluster's files are owned by this account and a counter that loses it
     # cannot start its own database.
     $password = Read-Secret $DbAccountSecretPath 'database service account password'
+    # A counter that lost its secrets gets a new password, and the Windows
+    # service still holds the old one - which fails to log on, which is the
+    # failure that reports nothing anywhere. The registration has to be replaced
+    # whenever the password is, and clearing the secrets is exactly what the
+    # reset tool does.
+    $script:DbPasswordIsNew = -not $password
     if (-not $password) {
         # The suffix guarantees the mix a local complexity policy may demand;
         # New-RandomSecret is deliberately alphanumeric so it survives quoting.
@@ -348,16 +355,19 @@ function Initialize-DatabaseAccount {
         Set-LocalUser -Name $DbAccount -Password $secure -PasswordNeverExpires $true
     } else {
         New-LocalUser -Name $DbAccount -Password $secure -FullName 'Radiance POS database' `
-            -Description 'Runs and owns the Radiance POS PostgreSQL cluster. Not for sign-in.' `
+            -Description 'Owns and runs the Radiance POS database' `
             -PasswordNeverExpires -UserMayNotChangePassword -AccountNeverExpires | Out-Null
     }
     Save-Secret $DbAccountSecretPath $password
 
     $script:DbAccountSid = (Get-LocalUser -Name $DbAccount).SID.Value
     Grant-ServiceLogonRight $script:DbAccountSid
-    # The cluster binaries live under Program Files, and this account is in no
-    # group that is granted anything there.
-    Invoke-IcaclsChecked 'the Radiance POS program files' @($InstallRoot, '/grant:r', "*$($script:DbAccountSid):(OI)(CI)RX", '/T', '/C')
+    # The cluster binaries live under Program Files, and New-LocalUser puts this
+    # account in no group, so it is granted nothing there by default. No /T: an
+    # inheritable ACE at the root reaches every file the installer wrote, while
+    # walking a few thousand of them invites one locked file to fail the whole
+    # grant - and Invoke-IcaclsChecked treats a partial failure as fatal.
+    Invoke-IcaclsChecked 'the Radiance POS program files' @($InstallRoot, '/grant:r', "*$($script:DbAccountSid):(OI)(CI)RX", '/C')
     return $password
 }
 
@@ -524,8 +534,10 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
     if ($existing) {
         $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='RadiancePosPostgreSQL'"
         $binary = $serviceInfo.PathName
-        $wrongAccount = $serviceInfo.StartName -notmatch "(?i)^(\.\\)?$([regex]::Escape($DbAccount))$"
-        if ($binary -notlike "*$PgData*" -or $wrongAccount) {
+        # Windows may report the account as .\name or MACHINE\name depending on
+        # how it was registered, and neither is wrong.
+        $wrongAccount = $serviceInfo.StartName -notmatch "(?i)^(.*\\)?$([regex]::Escape($DbAccount))$"
+        if ($binary -notlike "*$PgData*" -or $wrongAccount -or $script:DbPasswordIsNew) {
             Write-Host 'The PostgreSQL service has stale settings; re-registering it.'
             Stop-Service RadiancePosPostgreSQL -Force -ErrorAction SilentlyContinue
             & (Join-Path $PgBin 'pg_ctl.exe') unregister -N RadiancePosPostgreSQL 2>&1 | Out-Null

@@ -207,6 +207,15 @@ class WindowsAppWindowTest {
         String onboarding = Files.readString(Path.of("packaging/windows/tools/onboard.ps1"));
 
         assertTrue(onboarding.contains("New-LocalUser"), "setup must create the account that owns the cluster");
+        // Windows rejects a local account description over 48 characters, and
+        // New-LocalUser validates it before doing anything — so an over-long one
+        // ends setup after initdb has already built the cluster. It cost a full
+        // CI cycle to learn, which is more than an assertion costs.
+        Matcher description = Pattern.compile("-Description '([^']*)'").matcher(onboarding);
+        assertTrue(description.find(), "the account must carry a description");
+        assertTrue(description.group(1).length() <= 48,
+                "Windows caps a local account description at 48 characters, and this is "
+                        + description.group(1).length() + ": " + description.group(1));
         assertTrue(onboarding.contains("'/setowner'"), "that account must own the cluster before its first start");
         assertTrue(onboarding.contains("'-U', \".\\$DbAccount\", '-P', $dbPassword"),
                 "PostgreSQL must run as the identity that owns its cluster");
