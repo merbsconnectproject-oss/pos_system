@@ -381,7 +381,20 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
     # down by an earlier attempt, that is how PostgreSQL came to be refused its
     # own postmaster.pid. The grant belongs with the cluster that needs it, not
     # at the end of setup.
-    Invoke-Checked icacls.exe @($PgData, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '/T', '/C')
+    #
+    # Ownership first: a cluster left by an earlier attempt can be owned by
+    # another account, and icacls cannot rewrite an ACL it has no say over. One
+    # counter reported 305 of 1288 files refused, which left the grant half
+    # applied and the service still unable to start.
+    & takeown.exe /F $PgData /R /A /D Y 2>&1 | Out-Null
+    $granted = & icacls.exe $PgData '/inheritance:r' '/grant:r' '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '/T' '/C' 2>&1
+    if ($granted -match 'Failed processing (\d+) files' -and $Matches[1] -ne '0') {
+        throw ("Setup could not set permissions on $($Matches[1]) files in the database directory, " +
+               "so PostgreSQL would not be able to open it.`n`n" +
+               "This cluster was created by a different Windows account and cannot be repaired from here. " +
+               "Run 'Reset this counter before setup' from the Start menu, then set up again. " +
+               'No sales have been recorded yet.')
+    }
 
     # A registration left by an earlier install points at whatever data directory
     # it was given then. Setup used to keep any service it found, so a stale or
