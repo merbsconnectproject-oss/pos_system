@@ -288,18 +288,36 @@ function Wait-Application([int]$Seconds = 300) {
     throw 'Radiance POS did not become healthy. Run Radiance POS Diagnostics from the Start menu.'
 }
 
+function Set-FolderAccess([string]$Context, [string]$Path, [string[]]$Grants) {
+    # Inheritance flags describe what a container hands to its children. On a
+    # leaf they describe nothing, so applying them to files with /T wrote ACEs
+    # that granted those files nothing at all — which is how the service account
+    # came to be refused application.properties while holding full control of
+    # the folder containing it. Set the folder once, then let its contents take
+    # those entries by inheritance.
+    Invoke-IcaclsChecked $Context (@($Path, '/inheritance:r', '/grant:r') + $Grants + @('/C'))
+    if (Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue) {
+        # The wildcard matters: /reset on $Path itself would replace what was
+        # just granted with whatever it inherits.
+        Invoke-IcaclsChecked "$Context contents" @((Join-Path $Path '*'), '/reset', '/T', '/C')
+    }
+}
+
 function Set-DataPermissions {
     $dbSid = Get-DbAccountSid
-    Invoke-IcaclsChecked 'the Radiance POS data directory' @($DataRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:RX', "*$($dbSid):RX", '/C')
-    Invoke-IcaclsChecked 'the application configuration' @($ConfigRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:(OI)(CI)RX', '/T', '/C')
-    foreach ($writable in (Join-Path $DataRoot 'backups'), (Join-Path $DataRoot 'logs')) {
-        Invoke-IcaclsChecked $writable @($writable, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:(OI)(CI)M', "*$($dbSid):(OI)(CI)M", '/T', '/C')
-    }
-    # /grant:r replaces, so the cluster's own account has to be named here too
-    # or the final pass takes the database away from the service running it.
-    $dbSid = Get-DbAccountSid
-    Invoke-IcaclsChecked 'the PostgreSQL cluster' @($PgData, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', "*$($dbSid):(OI)(CI)F", '/T', '/C')
-    Invoke-IcaclsChecked 'the protected secrets directory' @($SecretsRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '/T', '/C')
+    $system = '*S-1-5-18:(OI)(CI)F'
+    $admins = '*S-1-5-32-544:(OI)(CI)F'
+
+    # The data root keeps non-inheritable traverse entries for the two service
+    # accounts, and its children are deliberately not reset: each one below sets
+    # its own, and the cluster's was set before PostgreSQL first started.
+    Invoke-IcaclsChecked 'the Radiance POS data directory' @($DataRoot, '/inheritance:r', '/grant:r', $system, $admins, '*S-1-5-19:RX', "*$($dbSid):RX", '/C')
+
+    Set-FolderAccess 'the application configuration' $ConfigRoot @($system, $admins, '*S-1-5-19:(OI)(CI)RX')
+    Set-FolderAccess 'the backup directory' (Join-Path $DataRoot 'backups') @($system, $admins, '*S-1-5-19:(OI)(CI)M', "*$($dbSid):(OI)(CI)M")
+    Set-FolderAccess 'the log directory' (Join-Path $DataRoot 'logs') @($system, $admins, '*S-1-5-19:(OI)(CI)M', "*$($dbSid):(OI)(CI)M")
+    Set-FolderAccess 'the PostgreSQL cluster' $PgData @($system, $admins, "*$($dbSid):(OI)(CI)F")
+    Set-FolderAccess 'the protected secrets directory' $SecretsRoot @($system, $admins)
 }
 
 function Grant-ServiceLogonRight([string]$Sid) {
@@ -386,7 +404,10 @@ function Initialize-DatabaseAccount {
 function Get-DbAccountSid {
     if ($script:DbAccountSid) { return $script:DbAccountSid }
     $user = Get-LocalUser -Name $DbAccount -ErrorAction SilentlyContinue
-    if ($user) { $script:DbAccountSid = $user.SID.Value }
+    if (-not $user) {
+        throw "The $DbAccount Windows account is missing. Run 'Reset this counter before setup' from the Start menu, then set up again."
+    }
+    $script:DbAccountSid = $user.SID.Value
     return $script:DbAccountSid
 }
 
@@ -434,7 +455,10 @@ function Save-Secret([string]$Path, [string]$Value) {
     # Errors are swallowed on purpose: the retry below is the real test of
     # whether this worked, and its message is the one worth reading.
     try { & takeown.exe /F $folder /R /D Y 2>&1 | Out-Null } catch { }
-    try { & icacls.exe $folder '/grant' '*S-1-5-32-544:(OI)(CI)F' '/T' '/C' 2>&1 | Out-Null } catch { }
+    # Inheritance flags on the folder, a plain grant on what is already in it —
+    # the same distinction that had files carrying ACEs which granted nothing.
+    try { & icacls.exe $folder '/grant' '*S-1-5-32-544:(OI)(CI)F' '/C' 2>&1 | Out-Null } catch { }
+    try { & icacls.exe (Join-Path $folder '*') '/grant' '*S-1-5-32-544:F' '/T' '/C' 2>&1 | Out-Null } catch { }
     if (Test-Path $Path) {
         try { Set-ItemProperty -LiteralPath $Path -Name IsReadOnly -Value $false } catch { }
     }
@@ -552,7 +576,7 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
     # Traverse every folder between the cluster and the drive that setup owns.
     Invoke-IcaclsChecked 'the Radiance POS data directory' @($DataRoot, '/grant:r', "*$($dbSid):RX", '/C')
     Invoke-IcaclsChecked 'the GiftedLabs data folder' @((Split-Path $DataRoot -Parent), '/grant:r', "*$($dbSid):RX", '/C')
-    Invoke-IcaclsChecked 'the PostgreSQL log directory' @((Join-Path $DataRoot 'logs'), '/grant:r', "*$($dbSid):(OI)(CI)M", '/T', '/C')
+    Invoke-IcaclsChecked 'the PostgreSQL log directory' @((Join-Path $DataRoot 'logs'), '/grant:r', "*$($dbSid):(OI)(CI)M", '/C')
 
     # A registration left by an earlier install points at whatever data directory
     # it was given then. Setup used to keep any service it found, so a stale or
