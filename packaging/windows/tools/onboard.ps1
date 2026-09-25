@@ -388,8 +388,14 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
     # applied and the service still unable to start.
     & takeown.exe /F $PgData /R /A /D Y 2>&1 | Out-Null
     $granted = & icacls.exe $PgData '/inheritance:r' '/grant:r' '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '/T' '/C' 2>&1
-    if ($granted -match 'Failed processing (\d+) files' -and $Matches[1] -ne '0') {
-        throw ("Setup could not set permissions on $($Matches[1]) files in the database directory, " +
+    # Native-command output is an array of lines. PowerShell only fills its
+    # automatic $Matches variable when the left side of -match is a scalar, so
+    # using it here fails under StrictMode before setup can report the ACL
+    # result. Parse the joined output explicitly instead.
+    $grantSummary = [regex]::Match(($granted -join "`n"), 'Failed processing (\d+) files')
+    if ($grantSummary.Success -and $grantSummary.Groups[1].Value -ne '0') {
+        $failedFiles = $grantSummary.Groups[1].Value
+        throw ("Setup could not set permissions on $failedFiles files in the database directory, " +
                "so PostgreSQL would not be able to open it.`n`n" +
                "This cluster was created by a different Windows account and cannot be repaired from here. " +
                "Run 'Reset this counter before setup' from the Start menu, then set up again. " +

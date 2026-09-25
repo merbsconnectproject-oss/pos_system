@@ -175,6 +175,10 @@ class WindowsAppWindowTest {
         // is the difference between a five-minute fix and a reinstall.
         assertTrue(onboarding.contains("is a folder where a file belongs"),
                 "the folder-not-file case must name itself");
+        assertTrue(onboarding.contains("[regex]::Match(($granted -join"),
+                "multi-line icacls output must be parsed without PowerShell's scalar-only $Matches variable");
+        assertFalse(onboarding.contains("$granted -match"),
+                "using -match on native-command output leaves $Matches unset under StrictMode");
     }
 
     /**
