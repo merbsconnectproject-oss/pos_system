@@ -48,3 +48,9 @@ Radiance-POS-Acceptance-Testing-Checklist.docx
 build_acceptance_checklist.py
 build_acceptance_docx.py
 docs/radiance-pos-acceptance-testing-checklist.html
+
+# Editor swap files. One was committed by an "add -A" during a support session;
+# a swap file of .env would have carried credentials had it been saved later.
+*.swp
+*.swo
+*~
