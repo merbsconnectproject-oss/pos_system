@@ -374,6 +374,15 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
         } finally { Remove-Item $passwordFile -Force -ErrorAction SilentlyContinue }
         Add-Content (Join-Path $PgData 'postgresql.conf') "`nlisten_addresses = '127.0.0.1'`nport = $PgPort`npassword_encryption = 'scram-sha-256'`n"
     }
+    # The cluster is opened by the service a few lines below, and
+    # Set-DataPermissions does not run until the configuration is written — so
+    # until now the data directory was started with whatever it happened to
+    # inherit from ProgramData. On a counter whose data root was already locked
+    # down by an earlier attempt, that is how PostgreSQL came to be refused its
+    # own postmaster.pid. The grant belongs with the cluster that needs it, not
+    # at the end of setup.
+    Invoke-Checked icacls.exe @($PgData, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '/T', '/C')
+
     # A registration left by an earlier install points at whatever data directory
     # it was given then. Setup used to keep any service it found, so a stale or
     # disabled one was inherited silently and then failed to start with nothing
