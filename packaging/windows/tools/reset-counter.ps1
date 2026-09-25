@@ -66,12 +66,36 @@ if (Test-Path $DataRoot) {
     Remove-Item $DataRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# Disabling the services is what stops them racing the delete, and leaving them
+# that way would hand setup a failure of its own: it calls Start-Service, and a
+# disabled service refuses. Anything that survived the unregister goes back to
+# automatic before this script is finished with it.
+foreach ($name in 'RadiancePos', 'RadiancePosPostgreSQL') {
+    if (Get-Service $name -ErrorAction SilentlyContinue) {
+        Write-Host "$name is still registered; setting it back to automatic so setup can start it."
+        Set-Service $name -StartupType Automatic -ErrorAction SilentlyContinue
+    }
+}
+
 if (Test-Path $DataRoot) {
-    $remaining = @(Get-ChildItem $DataRoot -Recurse -Force -ErrorAction SilentlyContinue).Count
+    # Log files are held open by the service wrapper and are the usual survivors.
+    # They are also the one thing setup does not read: onboarding keys off
+    # install-state.json, the secrets, the config and the cluster. Leftover logs
+    # are not a reason to send somebody hunting handles.
+    $remaining = @(Get-ChildItem $DataRoot -Recurse -Force -File -ErrorAction SilentlyContinue)
+    $blocking = @($remaining | Where-Object { $_.FullName -notlike (Join-Path $DataRoot 'logs\*') })
     Write-Host ''
-    Write-Host "Could not remove $DataRoot - $remaining item(s) remain." -ForegroundColor Red
-    Write-Host 'Something outside Windows permissions is holding it. The usual cause is'
-    Write-Host 'anti-virus or ransomware protection. Check with:'
+    if ($blocking.Count -eq 0) {
+        Write-Host 'The counter is clean enough to set up again - only log files remain,' -ForegroundColor Green
+        Write-Host 'and setup does not read those. Start "Configure or repair Radiance POS".' -ForegroundColor Green
+        exit 0
+    }
+    Write-Host "Could not remove $($blocking.Count) item(s) that setup does read:" -ForegroundColor Red
+    $blocking | ForEach-Object { Write-Host "  $($_.FullName)" }
+    Write-Host ''
+    Write-Host 'Restart Windows and run this again - the services are disabled now, so'
+    Write-Host 'nothing will reopen them. If it still fails, anti-virus or ransomware'
+    Write-Host 'protection is holding the folder. Check with:'
     Write-Host '  Get-MpPreference | Select EnableControlledFolderAccess'
     exit 64
 }
