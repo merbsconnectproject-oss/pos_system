@@ -175,7 +175,11 @@ class WindowsAppWindowTest {
         // is the difference between a five-minute fix and a reinstall.
         assertTrue(onboarding.contains("is a folder where a file belongs"),
                 "the folder-not-file case must name itself");
-        assertTrue(onboarding.contains("[regex]::Match(($granted -join"),
+        // Native-command output is an array of lines, and PowerShell fills its
+        // automatic $Matches only for a scalar left side — so -match here would
+        // fail under StrictMode before the ACL result could be reported. One
+        // helper now does that parsing for every icacls call.
+        assertTrue(onboarding.contains("[regex]::Match(($output -join"),
                 "multi-line icacls output must be parsed without PowerShell's scalar-only $Matches variable");
         assertFalse(onboarding.contains("$granted -match"),
                 "using -match on native-command output leaves $Matches unset under StrictMode");
@@ -185,20 +189,44 @@ class WindowsAppWindowTest {
                 "generic exit-code checking misses icacls files it failed while continuing");
     }
 
+    /**
+     * PostgreSQL's one hard rule on Windows, stated by initdb itself: "the files
+     * belonging to this database system will be owned by user X. This user must
+     * also own the server process."
+     *
+     * <p>An installing administrator necessarily runs initdb, and no built-in
+     * service account can ever be that administrator — so granting LocalSystem
+     * or NetworkService access to the cluster was answering a question nobody
+     * asked, and a clean Windows runner refused to start the service either way.
+     * A dedicated local account owns the cluster and runs the service, which is
+     * what PostgreSQL's own Windows installer has always done.
+     */
     @Test
-    @DisplayName("PostgreSQL is owned and run by one low-privilege identity")
+    @DisplayName("PostgreSQL is owned and run by one dedicated local account")
     void postgresServiceOwnsItsClusterAndLogsItsFailures() throws IOException {
         String onboarding = Files.readString(Path.of("packaging/windows/tools/onboard.ps1"));
 
-        assertTrue(onboarding.contains("'/setowner' '*S-1-5-20'"),
-                "NetworkService must own the cluster before its first start");
-        assertTrue(onboarding.contains("'-U', 'NT AUTHORITY\\NetworkService'"),
+        assertTrue(onboarding.contains("New-LocalUser"), "setup must create the account that owns the cluster");
+        assertTrue(onboarding.contains("'/setowner'"), "that account must own the cluster before its first start");
+        assertTrue(onboarding.contains("'-U', \".\\$DbAccount\", '-P', $dbPassword"),
                 "PostgreSQL must run as the identity that owns its cluster");
+        // CreateService does not grant this, and a service whose account lacks
+        // it fails with error 1069 and nothing in any log setup writes.
+        assertTrue(onboarding.contains("SeServiceLogonRight"),
+                "the account must be granted the right to run as a service");
+        // The account is in no group that Program Files grants anything to.
+        assertTrue(onboarding.contains("'the Radiance POS program files'"),
+                "the account must be able to read the PostgreSQL binaries");
+
         assertTrue(onboarding.contains("logging_collector = on")
                         && onboarding.contains("log_filename = 'postgresql.log'"),
                 "service startup must leave a readable PostgreSQL log");
         assertFalse(onboarding.contains("'-S', 'auto', '-l'"),
                 "pg_ctl ignores -l in Windows register mode");
+        // A cluster that dies before opening that log writes nothing to it, and
+        // that is the failure a clean machine actually produced.
+        assertTrue(onboarding.contains("Get-WinEvent"),
+                "a start failure with no log must fall back to the Windows event log");
     }
 
     /**

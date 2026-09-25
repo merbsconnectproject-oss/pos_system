@@ -27,6 +27,16 @@ $PostgresAdminSecretPath = Join-Path $SecretsRoot 'postgres-admin.secret'
 $BackupEncryptionSecretPath = Join-Path $SecretsRoot 'backup-encryption.secret'
 $PgData = Join-Path $DataRoot 'postgres-data'
 $PgLog = Join-Path $DataRoot 'logs\postgresql.log'
+# PostgreSQL requires the account that owns the cluster to be the account that
+# runs the server. An installing administrator necessarily runs initdb, and no
+# built-in service account can ever be that administrator — which is why
+# granting LocalSystem or NetworkService access to the data directory kept
+# failing where ownership was what was being asked for. A dedicated local
+# account owns the cluster and runs the service, which is what PostgreSQL's own
+# Windows installer has always done.
+$DbAccount = 'RadiancePosDb'
+$DbAccountSecretPath = Join-Path $SecretsRoot 'db-service-account.secret'
+$script:DbAccountSid = $null
 $PgBin = Join-Path $InstallRoot 'postgresql\bin'
 $ServiceExe = Join-Path $InstallRoot 'service\RadiancePosService.exe'
 $HealthUrl = 'http://127.0.0.1:8080/actuator/health'
@@ -278,13 +288,84 @@ function Wait-Application([int]$Seconds = 300) {
 }
 
 function Set-DataPermissions {
-    Invoke-IcaclsChecked 'the Radiance POS data directory' @($DataRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:RX', '*S-1-5-20:RX', '/C')
+    $dbSid = Get-DbAccountSid
+    Invoke-IcaclsChecked 'the Radiance POS data directory' @($DataRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:RX', "*$($dbSid):RX", '/C')
     Invoke-IcaclsChecked 'the application configuration' @($ConfigRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:(OI)(CI)RX', '/T', '/C')
     foreach ($writable in (Join-Path $DataRoot 'backups'), (Join-Path $DataRoot 'logs')) {
-        Invoke-IcaclsChecked $writable @($writable, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:(OI)(CI)M', '*S-1-5-20:(OI)(CI)M', '/T', '/C')
+        Invoke-IcaclsChecked $writable @($writable, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:(OI)(CI)M', "*$($dbSid):(OI)(CI)M", '/T', '/C')
     }
-    Invoke-IcaclsChecked 'the PostgreSQL cluster' @($PgData, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-20:(OI)(CI)F', '/T', '/C')
+    # /grant:r replaces, so the cluster's own account has to be named here too
+    # or the final pass takes the database away from the service running it.
+    $dbSid = Get-DbAccountSid
+    Invoke-IcaclsChecked 'the PostgreSQL cluster' @($PgData, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', "*$($dbSid):(OI)(CI)F", '/T', '/C')
     Invoke-IcaclsChecked 'the protected secrets directory' @($SecretsRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '/T', '/C')
+}
+
+function Grant-ServiceLogonRight([string]$Sid) {
+    # CreateService does not grant SeServiceLogonRight, so a service registered
+    # to an account that lacks it fails to start with error 1069 and nothing in
+    # any log the installer writes. secedit is the only scriptable way to set it
+    # on a machine that may not be domain-joined.
+    $export = Join-Path $env:TEMP ("radiance-secpol-{0}.inf" -f [guid]::NewGuid())
+    $database = Join-Path $env:TEMP ("radiance-secpol-{0}.sdb" -f [guid]::NewGuid())
+    try {
+        & secedit.exe /export /cfg $export /areas USER_RIGHTS | Out-Null
+        $lines = [Collections.Generic.List[string]](Get-Content $export)
+        $index = -1
+        for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -like 'SeServiceLogonRight*') { $index = $i; break }
+        }
+        if ($index -ge 0) {
+            if ($lines[$index] -like "*$Sid*") { return }
+            $lines[$index] = "$($lines[$index]),*$Sid"
+        } else {
+            for ($i = 0; $i -lt $lines.Count; $i++) {
+                if ($lines[$i].Trim() -eq '[Privilege Rights]') { $index = $i; break }
+            }
+            if ($index -lt 0) { throw 'The local security policy has no [Privilege Rights] section.' }
+            $lines.Insert($index + 1, "SeServiceLogonRight = *$Sid")
+        }
+        Set-Content -LiteralPath $export -Value $lines -Encoding Unicode
+        & secedit.exe /configure /db $database /cfg $export /areas USER_RIGHTS | Out-Null
+    } finally {
+        Remove-Item $export, $database -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Initialize-DatabaseAccount {
+    # Returns the account's password. Reused when it already exists, because the
+    # cluster's files are owned by this account and a counter that loses it
+    # cannot start its own database.
+    $password = Read-Secret $DbAccountSecretPath 'database service account password'
+    if (-not $password) {
+        # The suffix guarantees the mix a local complexity policy may demand;
+        # New-RandomSecret is deliberately alphanumeric so it survives quoting.
+        $password = (New-RandomSecret 24) + '!Aa9'
+    }
+    $secure = ConvertTo-SecureString $password -AsPlainText -Force
+
+    if (Get-LocalUser -Name $DbAccount -ErrorAction SilentlyContinue) {
+        Set-LocalUser -Name $DbAccount -Password $secure -PasswordNeverExpires $true
+    } else {
+        New-LocalUser -Name $DbAccount -Password $secure -FullName 'Radiance POS database' `
+            -Description 'Runs and owns the Radiance POS PostgreSQL cluster. Not for sign-in.' `
+            -PasswordNeverExpires -UserMayNotChangePassword -AccountNeverExpires | Out-Null
+    }
+    Save-Secret $DbAccountSecretPath $password
+
+    $script:DbAccountSid = (Get-LocalUser -Name $DbAccount).SID.Value
+    Grant-ServiceLogonRight $script:DbAccountSid
+    # The cluster binaries live under Program Files, and this account is in no
+    # group that is granted anything there.
+    Invoke-IcaclsChecked 'the Radiance POS program files' @($InstallRoot, '/grant:r', "*$($script:DbAccountSid):(OI)(CI)RX", '/T', '/C')
+    return $password
+}
+
+function Get-DbAccountSid {
+    if ($script:DbAccountSid) { return $script:DbAccountSid }
+    $user = Get-LocalUser -Name $DbAccount -ErrorAction SilentlyContinue
+    if ($user) { $script:DbAccountSid = $user.SID.Value }
+    return $script:DbAccountSid
 }
 
 function Read-Secret([string]$Path, [string]$Name) {
@@ -359,6 +440,19 @@ function Start-PostgresService {
     # own log, so that is what goes in the message.
     $detail = @()
     if (Test-Path $PgLog) { $detail += (Get-Content -Tail 15 $PgLog) }
+    # A cluster that dies before its logging collector opens a file writes
+    # nothing here, and that is exactly the failure that has to be readable: the
+    # Service Control Manager records a logon failure or a missing binary in the
+    # event log and nowhere else.
+    try {
+        $events = Get-WinEvent -FilterHashtable @{
+            LogName = 'Application', 'System'
+            StartTime = (Get-Date).AddMinutes(-10)
+        } -ErrorAction SilentlyContinue |
+            Where-Object { $_.Message -match 'RadiancePosPostgreSQL|postgres' } |
+            Select-Object -First 5
+        foreach ($event in $events) { $detail += "[$($event.ProviderName)] $($event.Message)" }
+    } catch { }
     $stray = Join-Path $PgData 'postmaster.pid'
     if (Test-Path $stray) {
         $detail += "A lock file from an earlier run is still present: $stray"
@@ -406,32 +500,21 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
     # the first service start and retain Administrators for repair operations.
     # LocalSystem used to be granted access without becoming the owner; that is
     # not the ownership model PostgreSQL requires and failed on clean counters.
+    $dbPassword = Initialize-DatabaseAccount
+    $dbSid = Get-DbAccountSid
+
+    # Ownership, not access. PostgreSQL says it plainly during initdb: "the
+    # files belonging to this database system will be owned by user X; this user
+    # must also own the server process." initdb necessarily runs as the
+    # installing administrator, so the cluster is handed to the service account
+    # afterwards. takeown first, because an administrator cannot reassign what
+    # it has no say over — one counter reported 305 of 1288 files refused.
     & takeown.exe /F $PgData /R /A /D Y 2>&1 | Out-Null
-    $owned = & icacls.exe $PgData '/setowner' '*S-1-5-20' '/T' '/C' 2>&1
-    $ownerExit = $LASTEXITCODE
-    $ownerSummary = [regex]::Match(($owned -join "`n"), 'Failed processing (\d+) files')
-    if ($ownerExit -ne 0 -or ($ownerSummary.Success -and $ownerSummary.Groups[1].Value -ne '0')) {
-        throw 'Setup could not assign the database cluster to its Windows service account. Run Reset this counter before setup, then try again.'
-    }
-    $granted = & icacls.exe $PgData '/inheritance:r' '/grant:r' '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-20:(OI)(CI)F' '/T' '/C' 2>&1
-    $grantExit = $LASTEXITCODE
-    # Native-command output is an array of lines. PowerShell only fills its
-    # automatic $Matches variable when the left side of -match is a scalar, so
-    # using it here fails under StrictMode before setup can report the ACL
-    # result. Parse the joined output explicitly instead.
-    $grantSummary = [regex]::Match(($granted -join "`n"), 'Failed processing (\d+) files')
-    if ($grantExit -ne 0 -or ($grantSummary.Success -and $grantSummary.Groups[1].Value -ne '0')) {
-        $failedFiles = if ($grantSummary.Success) { $grantSummary.Groups[1].Value } else { 'one or more' }
-        throw ("Setup could not set permissions on $failedFiles files in the database directory, " +
-               "so PostgreSQL would not be able to open it.`n`n" +
-               "This cluster was created by a different Windows account and cannot be repaired from here. " +
-               "Run 'Reset this counter before setup' from the Start menu, then set up again. " +
-               'No sales have been recorded yet.')
-    }
-    # NetworkService must also be able to traverse the protected data root and
-    # create the collector log before PostgreSQL starts for the first time.
-    Invoke-IcaclsChecked 'the Radiance POS data directory' @($DataRoot, '/grant:r', '*S-1-5-20:RX', '/C')
-    Invoke-IcaclsChecked 'the PostgreSQL log directory' @((Join-Path $DataRoot 'logs'), '/grant:r', '*S-1-5-20:(OI)(CI)M', '/T', '/C')
+    Invoke-IcaclsChecked 'the PostgreSQL cluster owner' @($PgData, '/setowner', "*$dbSid", '/T', '/C')
+    Invoke-IcaclsChecked 'the PostgreSQL cluster' @($PgData, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', "*$($dbSid):(OI)(CI)F", '/T', '/C')
+    # Traverse the protected data root, and write the collector log.
+    Invoke-IcaclsChecked 'the Radiance POS data directory' @($DataRoot, '/grant:r', "*$($dbSid):RX", '/C')
+    Invoke-IcaclsChecked 'the PostgreSQL log directory' @((Join-Path $DataRoot 'logs'), '/grant:r', "*$($dbSid):(OI)(CI)M", '/T', '/C')
 
     # A registration left by an earlier install points at whatever data directory
     # it was given then. Setup used to keep any service it found, so a stale or
@@ -441,7 +524,7 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
     if ($existing) {
         $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='RadiancePosPostgreSQL'"
         $binary = $serviceInfo.PathName
-        $wrongAccount = $serviceInfo.StartName -notmatch '(?i)^NT AUTHORITY\\Network ?Service$'
+        $wrongAccount = $serviceInfo.StartName -notmatch "(?i)^(\.\\)?$([regex]::Escape($DbAccount))$"
         if ($binary -notlike "*$PgData*" -or $wrongAccount) {
             Write-Host 'The PostgreSQL service has stale settings; re-registering it.'
             Stop-Service RadiancePosPostgreSQL -Force -ErrorAction SilentlyContinue
@@ -458,7 +541,7 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
         # -l is ignored by pg_ctl's Windows register mode. PostgreSQL's logging
         # collector above writes the durable file, while -e gives very-early
         # service failures a distinct Windows event source.
-        Invoke-Checked (Join-Path $PgBin 'pg_ctl.exe') @('register', '-N', 'RadiancePosPostgreSQL', '-D', $PgData, '-S', 'auto', '-U', 'NT AUTHORITY\NetworkService', '-e', 'RadiancePosPostgreSQL')
+        Invoke-Checked (Join-Path $PgBin 'pg_ctl.exe') @('register', '-N', 'RadiancePosPostgreSQL', '-D', $PgData, '-S', 'auto', '-U', ".\$DbAccount", '-P', $dbPassword, '-e', 'RadiancePosPostgreSQL')
     }
     Start-PostgresService
     Wait-ServiceReady RadiancePosPostgreSQL

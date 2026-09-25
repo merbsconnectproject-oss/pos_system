@@ -25,6 +25,17 @@ PostgreSQL 18, and WinSW. The installed application binds only to
    dedicated, maximized Radiance POS window without an address bar or browser
    tabs; a build may instead open the default browser (see *Two builds*).
 
+Setup creates one local Windows account, **`RadiancePosDb`**, with a random
+password stored beside the other secrets. It owns the PostgreSQL cluster and
+runs the `RadiancePosPostgreSQL` service. PostgreSQL requires the account that
+owns a cluster's files to be the account that runs the server, and the
+administrator who runs `initdb` can never be a built-in service account — so
+granting LocalSystem or NetworkService access to the data directory does not
+satisfy it, and a clean Windows machine refuses to start the service. The
+account cannot sign in interactively and is a member of no group; it is granted
+read access to the program files and the right to run as a service, and nothing
+else. Uninstall leaves it in place alongside the retained database.
+
 Runtime data is under `%ProgramData%\GiftedLabs\Radiance POS`. ACLs separate
 the PostgreSQL administrator secret from the lower-privilege application
 service. Uninstall removes binaries and both services but deliberately retains
