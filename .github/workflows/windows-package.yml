@@ -23,6 +23,11 @@ jobs:
     permissions:
       contents: read
 
+    # A hung installer used to sit until GitHub's six-hour job limit killed it,
+    # which costs most of a day and teaches nothing. The build takes 26 minutes
+    # and the smoke test a few, so anything past this is stuck, not slow.
+    timeout-minutes: 50
+
     # Two artifacts from one commit: the dedicated app window a till should have,
     # and the same application in the machine's ordinary browser. They install
     # over each other — same AppId, same services, same ports — so they are for
@@ -59,6 +64,15 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: pos-system/package-lock.json
+
+      # build-installer.ps1 caches PostgreSQL and WinSW under target/, which is
+      # rebuilt every run. Re-downloading 350MB per job is most of the gap
+      # between a feedback loop you can iterate on and one you cannot.
+      - name: Cache Windows build dependencies
+        uses: actions/cache@v4
+        with:
+          path: pos-api/target/windows-dependencies
+          key: windows-deps-postgresql-18.6-winsw-2.12.0
 
       - name: Install Inno Setup
         shell: powershell
@@ -120,7 +134,31 @@ jobs:
           $installer = Get-ChildItem 'pos-api\dist\Radiance-POS-Setup-*.exe' | Select-Object -First 1
           $install = Start-Process $installer.FullName -ArgumentList @(
             '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/ONBOARDING=$response"
-          ) -Wait -PassThru
+          ) -PassThru
+
+          # -Wait would block until the job timeout. A silent install that has
+          # not finished in twelve minutes is stuck on something, and what it is
+          # stuck on is the only thing worth knowing - so say where it got to,
+          # name what is still running, and stop it.
+          if (-not $install.WaitForExit(12 * 60 * 1000)) {
+            Write-Host '::error::The silent install did not finish within 12 minutes.'
+            $logs = Join-Path $env:ProgramData 'GiftedLabs\Radiance POS\logs'
+            Get-ChildItem $logs -File -ErrorAction SilentlyContinue |
+              Sort-Object LastWriteTime |
+              ForEach-Object {
+                Write-Host "`n===== $($_.FullName) ====="
+                Get-Content $_.FullName -Tail 120 -ErrorAction SilentlyContinue
+              }
+            Write-Host "`n===== processes still running ====="
+            Get-Process -Name 'powershell', 'icacls', 'takeown', 'secedit', 'initdb', 'postgres', 'pg_ctl', 'java', 'Radiance*' -ErrorAction SilentlyContinue |
+              Format-Table Id, ProcessName, StartTime, Path -AutoSize | Out-String -Width 400 | Write-Host
+            Write-Host "`n===== last command line of each powershell ====="
+            Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
+              ForEach-Object { Write-Host $_.CommandLine }
+            Get-Process -Name 'Radiance*', 'powershell' -ErrorAction SilentlyContinue |
+              Where-Object { $_.Id -ne $PID } | Stop-Process -Force -ErrorAction SilentlyContinue
+            throw 'Silent install hung.'
+          }
 
           $healthy = $false
           if ($install.ExitCode -eq 0) {

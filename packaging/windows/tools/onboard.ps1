@@ -246,6 +246,13 @@ function Set-SetupStatus([string]$Status) {
     [Windows.Forms.Application]::DoEvents()
 }
 
+function Write-Step([string]$Message) {
+    # Setup runs hidden, so the transcript is the only account of where it got
+    # to. One install hung and burned six hours of CI proving only that it had
+    # hung somewhere; a line per step is what makes the next one cost minutes.
+    Write-Host ('{0:HH:mm:ss}  {1}' -f (Get-Date), $Message)
+}
+
 function Invoke-Checked([string]$File, [string[]]$Arguments, [hashtable]$Environment = @{}) {
     foreach ($entry in $Environment.GetEnumerator()) { [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process') }
     & $File @Arguments
@@ -253,6 +260,7 @@ function Invoke-Checked([string]$File, [string[]]$Arguments, [hashtable]$Environ
 }
 
 function Invoke-IcaclsChecked([string]$Context, [string[]]$Arguments) {
+    Write-Step "Applying permissions to $Context"
     $output = & icacls.exe @Arguments 2>&1
     $exitCode = $LASTEXITCODE
     $summary = [regex]::Match(($output -join "`n"), 'Failed processing (\d+) files')
@@ -328,6 +336,7 @@ function Grant-ServiceLogonRight([string]$Sid) {
     $export = Join-Path $env:TEMP ("radiance-secpol-{0}.inf" -f [guid]::NewGuid())
     $database = Join-Path $env:TEMP ("radiance-secpol-{0}.sdb" -f [guid]::NewGuid())
     try {
+        Write-Step 'Reading the local security policy'
         & secedit.exe /export /cfg $export /areas USER_RIGHTS | Out-Null
         $lines = [Collections.Generic.List[string]](Get-Content $export)
         $index = -1
@@ -345,6 +354,7 @@ function Grant-ServiceLogonRight([string]$Sid) {
             $lines.Insert($index + 1, "SeServiceLogonRight = *$Sid")
         }
         Set-Content -LiteralPath $export -Value $lines -Encoding Unicode
+        Write-Step 'Granting the right to run as a service'
         & secedit.exe /configure /db $database /cfg $export /areas USER_RIGHTS | Out-Null
     } finally {
         Remove-Item $export, $database -Force -ErrorAction SilentlyContinue
@@ -383,6 +393,7 @@ function Initialize-DatabaseAccount {
     # failed its first stat() of postgresql.conf with a plain permission denied.
     # Users is the baseline every Windows service account runs with; the SID is
     # used because the group's name is localised.
+    Write-Step 'Adding the database account to Users'
     try {
         Add-LocalGroupMember -SID 'S-1-5-32-545' -Member $DbAccount -ErrorAction Stop
     } catch {
@@ -554,6 +565,7 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
     # the first service start and retain Administrators for repair operations.
     # LocalSystem used to be granted access without becoming the owner; that is
     # not the ownership model PostgreSQL requires and failed on clean counters.
+    Write-Step 'Creating the database service account'
     $dbPassword = Initialize-DatabaseAccount
     $dbSid = Get-DbAccountSid
 
@@ -563,6 +575,7 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
     # installing administrator, so the cluster is handed to the service account
     # afterwards. takeown first, because an administrator cannot reassign what
     # it has no say over — one counter reported 305 of 1288 files refused.
+    Write-Step 'Taking ownership of the cluster'
     & takeown.exe /F $PgData /R /A /D Y 2>&1 | Out-Null
     Invoke-IcaclsChecked 'the PostgreSQL cluster owner' @($PgData, '/setowner', "*$dbSid", '/T', '/C')
     # Set the folder's ACL, then let every child re-inherit it. Stamping
@@ -607,6 +620,7 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
         # service failures a distinct Windows event source.
         Invoke-Checked (Join-Path $PgBin 'pg_ctl.exe') @('register', '-N', 'RadiancePosPostgreSQL', '-D', $PgData, '-S', 'auto', '-U', ".\$DbAccount", '-P', $dbPassword, '-e', 'RadiancePosPostgreSQL')
     }
+    Write-Step 'Starting the PostgreSQL service'
     Start-PostgresService
     Wait-ServiceReady RadiancePosPostgreSQL
     $pgEnv = @{ PGPASSWORD = $SuperPassword }
