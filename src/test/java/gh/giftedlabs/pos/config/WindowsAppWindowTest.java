@@ -96,6 +96,17 @@ class WindowsAppWindowTest {
                 "response-file onboarding must not block on the interactive success dialog");
     }
 
+    @Test
+    @DisplayName("Windows packaging reads the frontend from the Gifted-Labs repository")
+    void packagingUsesTheGiftedLabsFrontend() throws IOException {
+        String workflow = Files.readString(Path.of(".github/workflows/windows-package.yml"));
+
+        assertTrue(workflow.contains("repository: Gifted-Labs/radiance-pos-frontend"),
+                "the package must not silently fall back to the old personal frontend repository");
+        assertTrue(workflow.contains("ssh-key: ${{ secrets.POS_SYSTEM_DEPLOY_KEY }}"),
+                "the private frontend checkout must use its read-only deploy key");
+    }
+
     /**
      * Setup must raise its own UAC prompt and must be watchable.
      *

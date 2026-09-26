@@ -8,7 +8,7 @@ on:
         required: true
         default: 0.1.0
       frontend_ref:
-        description: pos-system branch, tag, or SHA
+        description: radiance-pos-frontend branch, tag, or SHA
         required: true
         default: main
   push:
@@ -46,7 +46,7 @@ jobs:
       - name: Check out frontend
         uses: actions/checkout@v7
         with:
-          repository: sowlbaby/pos-system
+          repository: Gifted-Labs/radiance-pos-frontend
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.frontend_ref || (github.ref_name == 'feature/auth-session' && 'feature/auth-integration' || 'main') }}
           path: pos-system
           ssh-key: ${{ secrets.POS_SYSTEM_DEPLOY_KEY }}

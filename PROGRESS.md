@@ -1,6 +1,6 @@
 # Progress
 
-**Updated** 2026-09-26 · **Tests** 568 backend (3 skipped) + 95 frontend green · **DB** migrations V1–V34 validated
+**Updated** 2026-09-26 · **Tests** 569 backend (3 skipped) + 95 frontend green · **DB** migrations V1–V34 validated
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (258 items, dual checkbox).
@@ -36,7 +36,7 @@ S ██████████  Expenses & credit  100%  expenses, P&L and ins
 T ██████████  Returns & swaps    100%  wired end to end; net of returns now reaches the takings and the P&L
 ```
 
-568 backend tests green (3 skipped) across the full 2026-09-26 Testcontainers run,
+569 backend tests green (3 skipped) across the full 2026-09-26 Testcontainers run,
 including Cloud Sync scheduling and Windows installer acceptance checks; the last
 recorded frontend contract and Vitest suite is also green (95 tests). Three live R2
 checks remain on-demand because they require configured credentials.
@@ -54,7 +54,7 @@ checks remain on-demand because they require configured credentials.
 | Database | `pos_system` on localhost, role `giftedlabs`, **V1–V30 applied** |
 | Deployment config | `counter` / `consolidator` profiles; Railway `DATABASE_URL` + `PORT` handled |
 | Security baseline | Argon2id, separate PIN hashing, session-cookie policy, CSRF, CORS |
-| Windows delivery | Offline x64 installer: embedded UI, private Java/PostgreSQL, service lifecycle, secure onboarding, diagnostics, upgrades and data-preserving uninstall; desktop and Start-menu launchers open a dedicated Edge/Chrome app window without browser chrome; response-file installs never block on an interactive completion dialog |
+| Windows delivery | Offline x64 installer: embedded UI, private Java/PostgreSQL, service lifecycle, secure onboarding, diagnostics, upgrades and data-preserving uninstall; desktop and Start-menu launchers open a dedicated Edge/Chrome app window without browser chrome; response-file installs never block on an interactive completion dialog; CI reads the frontend from `Gifted-Labs/radiance-pos-frontend` through a read-only deploy key |
 | Ubuntu delivery | Native `.deb`: embedded UI and Java 25 runtime, Ubuntu PostgreSQL, hardened systemd service, secure onboarding, desktop launcher and diagnostics |
 | Commercial catalogue UI | POS category pills come from the database-managed catalogue; category, brand and unit renames use the styled in-app editor rather than a browser prompt |
 | Refresh continuity | The current authorised workspace and open POS terminal survive a page refresh; state is scoped per user and cleared on sign-out |
