@@ -797,8 +797,13 @@ try {
             (Join-Path $InstallRoot 'tools\launch.vbs'), 'open-pos.ps1'
         )
     }
-    Add-Type -AssemblyName PresentationFramework
-    [System.Windows.MessageBox]::Show('Radiance POS is installed, protected, and ready to use.', 'Setup complete', 'OK', 'Information') | Out-Null
+    # A response file means there is no operator at this desktop. Inno waits for
+    # this process, so showing a modal dialog in that path leaves a silent install
+    # hung forever even though the counter is already healthy and configured.
+    if (-not $ConfigFile) {
+        Add-Type -AssemblyName PresentationFramework
+        [System.Windows.MessageBox]::Show('Radiance POS is installed, protected, and ready to use.', 'Setup complete', 'OK', 'Information') | Out-Null
+    }
     Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
 } catch {
     Show-SetupFailure "Setup could not finish.`n`n$($_.Exception.Message)"

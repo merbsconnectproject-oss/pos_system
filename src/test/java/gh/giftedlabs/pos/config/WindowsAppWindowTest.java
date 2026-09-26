@@ -69,6 +69,34 @@ class WindowsAppWindowTest {
     }
 
     /**
+     * The package smoke test supplies a response file and runs with no desktop
+     * operator. A success dialog in that path leaves Inno Setup waiting forever
+     * for an OK click that can never happen.
+     */
+    @Test
+    @DisplayName("silent onboarding completes without waiting for a desktop dialog")
+    void silentOnboardingDoesNotShowACompletionDialog() throws IOException {
+        String onboarding = Files.readString(Path.of("packaging/windows/tools/onboard.ps1"));
+        String installer = Files.readString(Path.of("packaging/windows/RadiancePOS.iss"));
+
+        String silentRun = installer.lines()
+                .filter(line -> line.contains("Check: NeedsOnboarding and WizardSilent")
+                        && line.contains("onboard.ps1"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("the installer must have a silent onboarding path"));
+        assertTrue(silentRun.contains("-ConfigFile") && silentRun.contains("-NonInteractive"),
+                "silent setup must identify itself with a response file: " + silentRun);
+
+        Pattern guardedSuccessDialog = Pattern.compile(
+                "if \\(-not \\$ConfigFile\\) \\{\\s*"
+                        + "Add-Type -AssemblyName PresentationFramework\\s*"
+                        + "\\[System\\.Windows\\.MessageBox\\]::Show\\('Radiance POS is installed, protected, and ready to use\\.'",
+                Pattern.DOTALL);
+        assertTrue(guardedSuccessDialog.matcher(onboarding).find(),
+                "response-file onboarding must not block on the interactive success dialog");
+    }
+
+    /**
      * Setup must raise its own UAC prompt and must be watchable.
      *
      * <p>Relying on somebody right-clicking and choosing "Run as administrator"
