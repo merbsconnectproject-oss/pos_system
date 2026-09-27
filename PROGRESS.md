@@ -1,6 +1,6 @@
 # Progress
 
-**Updated** 2026-09-26 · **Tests** 569 backend (3 skipped) + 95 frontend green · **DB** migrations V1–V34 validated
+**Updated** 2026-09-27 · **Tests** 570 backend (3 skipped) + 102 frontend green · **DB** migrations V1–V34 validated
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (258 items, dual checkbox).
@@ -36,9 +36,9 @@ S ██████████  Expenses & credit  100%  expenses, P&L and ins
 T ██████████  Returns & swaps    100%  wired end to end; net of returns now reaches the takings and the P&L
 ```
 
-569 backend tests green (3 skipped) across the full 2026-09-26 Testcontainers run,
+570 backend tests green (3 skipped) across the full 2026-09-27 Testcontainers run,
 including Cloud Sync scheduling and Windows installer acceptance checks; the last
-recorded frontend contract and Vitest suite is also green (95 tests). Three live R2
+recorded frontend contract and Vitest suite is also green (102 tests). Three live R2
 checks remain on-demand because they require configured credentials.
 
 ---
@@ -54,8 +54,8 @@ checks remain on-demand because they require configured credentials.
 | Database | `pos_system` on localhost, role `giftedlabs`, **V1–V30 applied** |
 | Deployment config | `counter` / `consolidator` profiles; Railway `DATABASE_URL` + `PORT` handled |
 | Security baseline | Argon2id, separate PIN hashing, session-cookie policy, CSRF, CORS |
-| Windows delivery | Offline x64 installer: embedded UI, private Java/PostgreSQL, service lifecycle, secure onboarding, diagnostics, upgrades and data-preserving uninstall; desktop and Start-menu launchers open a dedicated Edge/Chrome app window without browser chrome; response-file installs never block on an interactive completion dialog; CI reads the frontend from `Gifted-Labs/radiance-pos-frontend` through a read-only deploy key |
-| Ubuntu delivery | Native `.deb`: embedded UI and Java 25 runtime, Ubuntu PostgreSQL, hardened systemd service, secure onboarding, desktop launcher and diagnostics |
+| Windows delivery | Offline x64 installer: embedded UI, private Java/PostgreSQL, service lifecycle, secure onboarding, diagnostics, upgrades and data-preserving uninstall; installer, Installed Apps entry, desktop and Start-menu shortcuts carry the supplied Radiance icon; launchers open a dedicated Edge/Chrome app window without browser chrome; response-file installs never block on an interactive completion dialog; CI reads the frontend from `Gifted-Labs/radiance-pos-frontend` through a read-only deploy key |
+| Ubuntu delivery | Native `.deb`: embedded UI and Java 25 runtime, Ubuntu PostgreSQL, hardened systemd service, secure onboarding, branded desktop launcher and diagnostics |
 | Commercial catalogue UI | POS category pills come from the database-managed catalogue; category, brand and unit renames use the styled in-app editor rather than a browser prompt |
 | Refresh continuity | The current authorised workspace and open POS terminal survive a page refresh; state is scoped per user and cleared on sign-out |
 | Automatic shift close | On counter deployments, any shift still open at the latest 23:00 `Africa/Accra` boundary is closed and audited; startup catches a boundary missed while the machine was off, while physical count and variance remain explicitly pending |
@@ -933,3 +933,20 @@ enough to see both. Kept separate from `VERSION.txt` deliberately: a stamp for
 people to read and a setting for a script to read are different things, and only
 one of them is allowed to change. An unreadable or unknown value is logged and
 the default stands; a till does not stop selling over a preference.
+
+### One supplied logo, everywhere the operator meets the application — 2026-09-27
+
+The supplied transparent Radiance artwork is now the source for the interface
+wordmark and for a square icon derived from its orange mark without redrawing it.
+The interface uses the full wordmark in the application header and the mark on
+the sign-in screen; the browser carries matching favicons, Apple touch icon and
+installable-web-app manifest sizes.
+
+Windows packages the multi-resolution `.ico` into the setup executable, the
+Installed Apps entry, and every desktop or Start-menu shortcut. Ubuntu installs
+the 512 px PNG into the matching hicolor icon directory. The packaging test
+checks that every Windows shortcut names the installed icon, because a shortcut
+targeting `wscript.exe` otherwise silently inherits Windows' generic script-host
+icon. The full backend suite is green at 570 tests (3 live R2 checks skipped),
+and the frontend contract, 102 tests, production build, and live dashboard render
+are green.

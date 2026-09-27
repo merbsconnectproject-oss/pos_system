@@ -26,6 +26,8 @@ OutputDir=..\..\dist
 OutputBaseFilename=Radiance-POS-Setup-{#MyAppVersion}-x64{#VariantSuffix}
 SetupLogging=yes
 UninstallDisplayName=Radiance POS
+SetupIconFile={#StageDir}\radiance-pos.ico
+UninstallDisplayIcon={app}\radiance-pos.ico
 CloseApplications=force
 RestartApplications=no
 ChangesEnvironment=no
@@ -40,15 +42,15 @@ Name: "{commonappdata}\GiftedLabs\Radiance POS"; Permissions: admins-full system
 ; Through wscript + launch.vbs rather than powershell.exe directly. PowerShell
 ; applies -WindowStyle after it already owns a console, so every shortcut
 ; flashed a black window on the counter screen before anything else happened.
-Name: "{group}\Open Radiance POS"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" open-pos.ps1"; WorkingDir: "{app}"
-Name: "{group}\Configure or repair Radiance POS"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" /elevate /show onboard.ps1"; WorkingDir: "{app}"
-Name: "{group}\Radiance POS Diagnostics"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" /show diagnostics.ps1"; WorkingDir: "{app}"
-Name: "{group}\Restore a Radiance POS backup"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" /elevate /show restore-backup.ps1"; WorkingDir: "{app}"
+Name: "{group}\Open Radiance POS"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" open-pos.ps1"; WorkingDir: "{app}"; IconFilename: "{app}\radiance-pos.ico"
+Name: "{group}\Configure or repair Radiance POS"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" /elevate /show onboard.ps1"; WorkingDir: "{app}"; IconFilename: "{app}\radiance-pos.ico"
+Name: "{group}\Radiance POS Diagnostics"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" /show diagnostics.ps1"; WorkingDir: "{app}"; IconFilename: "{app}\radiance-pos.ico"
+Name: "{group}\Restore a Radiance POS backup"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" /elevate /show restore-backup.ps1"; WorkingDir: "{app}"; IconFilename: "{app}\radiance-pos.ico"
 ; Only useful before a counter has traded, which is exactly when onboarding is
 ; still being fought with. It deletes the database, so it says so and it is not
 ; on the desktop.
-Name: "{group}\Reset this counter before setup"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" /elevate /show reset-counter.ps1"; WorkingDir: "{app}"
-Name: "{commondesktop}\Radiance POS"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" open-pos.ps1"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\Reset this counter before setup"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" /elevate /show reset-counter.ps1"; WorkingDir: "{app}"; IconFilename: "{app}\radiance-pos.ico"
+Name: "{commondesktop}\Radiance POS"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\launch.vbs"" open-pos.ps1"; WorkingDir: "{app}"; IconFilename: "{app}\radiance-pos.ico"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: checkedonce

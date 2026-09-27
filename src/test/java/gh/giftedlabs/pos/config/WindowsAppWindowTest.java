@@ -325,4 +325,28 @@ class WindowsAppWindowTest {
         assertTrue(build.contains("rev-parse"), "the stamp must name the commit it was built from");
         assertTrue(diagnostics.contains("VERSION.txt"), "diagnostics must read it back");
     }
+
+    @Test
+    @DisplayName("NFR-13 · installed shortcuts and setup carry the Radiance icon")
+    void installedApplicationCarriesRadianceBranding() throws IOException {
+        String build = Files.readString(Path.of("packaging/windows/build-installer.ps1"));
+        String installer = Files.readString(Path.of("packaging/windows/RadiancePOS.iss"));
+
+        assertTrue(build.contains("radiance-pos.ico"),
+                "the branded icon must be copied into the install stage");
+        assertTrue(installer.contains("SetupIconFile={#StageDir}\\radiance-pos.ico"),
+                "the setup executable must carry the branded icon");
+        assertTrue(installer.contains("UninstallDisplayIcon={app}\\radiance-pos.ico"),
+                "Windows Installed Apps must show the branded icon");
+
+        for (String line : installer.split("\n")) {
+            String trimmed = line.trim();
+            boolean shortcut = trimmed.startsWith("Name: \"{group}")
+                    || trimmed.startsWith("Name: \"{commondesktop}");
+            if (shortcut) {
+                assertTrue(trimmed.contains("IconFilename: \"{app}\\radiance-pos.ico\""),
+                        "every installed shortcut must carry the branded icon: " + trimmed);
+            }
+        }
+    }
 }

@@ -72,7 +72,7 @@ install -d \
   "$PKG/usr/bin" \
   "$PKG/usr/lib/systemd/system" \
   "$PKG/usr/share/applications" \
-  "$PKG/usr/share/icons/hicolor/scalable/apps" \
+  "$PKG/usr/share/icons/hicolor/512x512/apps" \
   "$PKG/usr/share/doc/radiance-pos"
 
 install -m 640 "$JAR" "$PKG/opt/radiance-pos/radiance-pos.jar"
@@ -82,7 +82,7 @@ install -m 755 "$SCRIPT_DIR/radiance-pos-diagnostics" "$PKG/usr/bin/radiance-pos
 install -m 755 "$SCRIPT_DIR/radiance-pos-repair-database" "$PKG/usr/bin/radiance-pos-repair-database"
 install -m 644 "$SCRIPT_DIR/radiance-pos.service" "$PKG/usr/lib/systemd/system/radiance-pos.service"
 install -m 644 "$SCRIPT_DIR/radiance-pos.desktop" "$PKG/usr/share/applications/radiance-pos.desktop"
-install -m 644 "$SCRIPT_DIR/radiance-pos.svg" "$PKG/usr/share/icons/hicolor/scalable/apps/radiance-pos.svg"
+install -m 644 "$SCRIPT_DIR/radiance-pos.png" "$PKG/usr/share/icons/hicolor/512x512/apps/radiance-pos.png"
 install -m 644 "$SCRIPT_DIR/README.md" "$PKG/usr/share/doc/radiance-pos/README.md"
 if [[ -f "$BACKEND_ROOT/LICENSE" ]]; then
   install -m 644 "$BACKEND_ROOT/LICENSE" "$PKG/usr/share/doc/radiance-pos/copyright"

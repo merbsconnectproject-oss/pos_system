@@ -62,6 +62,7 @@ if ($jarListing -notcontains 'BOOT-INF/classes/static/index.html') { throw 'The 
 
 New-Item -ItemType Directory -Force (Join-Path $Stage 'app'), (Join-Path $Stage 'service'), (Join-Path $Stage 'tools') | Out-Null
 Copy-Item $jar.FullName (Join-Path $Stage 'app\pos-api.jar')
+Copy-Item (Join-Path $PSScriptRoot 'radiance-pos.ico') (Join-Path $Stage 'radiance-pos.ico')
 Copy-Item (Join-Path $PSScriptRoot 'service\RadiancePosService.xml') (Join-Path $Stage 'service\RadiancePosService.xml')
 Copy-Item (Join-Path $PSScriptRoot 'tools\*') (Join-Path $Stage 'tools')
 
