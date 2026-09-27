@@ -194,7 +194,7 @@ export function AuthView({ companyName, accentColor, onAuthenticated }: AuthView
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950/35 via-slate-950/70 to-slate-950/96" />
         <div className="absolute inset-0 opacity-30" style={{ background: `radial-gradient(circle at 20% 20%, ${accentColor}, transparent 45%)` }} />
         <div className="relative flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ backgroundColor: accentColor }}><Store className="h-6 w-6" /></div>
+          <img src="/assets/radiance-pos-icon-512.png" alt="" className="h-11 w-11 object-contain" />
           <div><div className="font-black">Radiance POS</div><div className="text-xs text-slate-400">Multi-outlet retail system</div></div>
         </div>
 
@@ -228,7 +228,7 @@ export function AuthView({ companyName, accentColor, onAuthenticated }: AuthView
               otherwise get a form and no sign of what it belongs to. */}
           <div className="mb-6 lg:hidden">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl text-white" style={{ backgroundColor: accentColor }}><Store className="h-5 w-5" /></div>
+              <img src="/assets/radiance-pos-icon-512.png" alt="" className="h-10 w-10 object-contain" />
               <div><div className="font-black text-slate-900">Radiance POS</div><div className="text-xs text-slate-500">Secure terminal access</div></div>
             </div>
             <div className="mt-5 flex justify-center rounded-2xl border border-slate-200 bg-white px-4 py-5">

@@ -119,34 +119,15 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
 
         {/* Brand Logo & Name */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-accent-500 text-white flex items-center justify-center font-black text-sm shrink-0">
-            <svg
-              className="w-6 h-6 text-white"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <path d="M16 10a4 4 0 0 1-8 0" />
-            </svg>
-          </div>
-
-          <div className="flex flex-col leading-none">
-            <div className="flex items-baseline gap-2">
-              <span className="text-xl font-black tracking-tight text-slate-900">Radiance</span>
-              <span className="text-xs font-bold uppercase text-accent-600 tracking-wider px-2 py-0.5 rounded bg-accent-50 border border-accent-200">
-                POS
-              </span>
-            </div>
-            <span className="text-xs font-medium text-slate-400 mt-1 hidden sm:inline">
-              Multi-Outlet Retail OS
-            </span>
-          </div>
+        <div className="flex flex-col items-start leading-none">
+          <img
+            src="/assets/radiance-pos-logo.png"
+            alt="Radiance POS"
+            className="h-9 w-auto max-w-[150px] shrink-0 object-contain"
+          />
+          <span className="mt-1 hidden text-xs font-medium text-slate-400 sm:inline">
+            Multi-Outlet Retail OS
+          </span>
         </div>
 
         {/* Desktop Sidebar Collapse Toggle Button */}
