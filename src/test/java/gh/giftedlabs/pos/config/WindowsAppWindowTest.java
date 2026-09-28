@@ -107,6 +107,17 @@ class WindowsAppWindowTest {
                 "the private frontend checkout must use its read-only deploy key");
     }
 
+    @Test
+    @DisplayName("NFR-13 · service-account rights compile on Windows PowerShell")
+    void serviceLogonRightDoesNotDuplicateInteropImport() throws IOException {
+        String onboarding = Files.readString(Path.of("packaging/windows/tools/onboard.ps1"));
+
+        assertTrue(onboarding.contains("Add-Type -Namespace 'Radiance' -Name 'Lsa' -MemberDefinition"),
+                "setup must compile the narrow LSA helper used to grant Log on as a service");
+        assertFalse(onboarding.contains("-UsingNamespace 'System.Runtime.InteropServices'"),
+                "Add-Type -MemberDefinition imports interop itself; a duplicate using is a compiler error");
+    }
+
     /**
      * Setup must raise its own UAC prompt and must be watchable.
      *

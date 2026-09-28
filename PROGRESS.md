@@ -950,3 +950,14 @@ targeting `wscript.exe` otherwise silently inherits Windows' generic script-host
 icon. The full backend suite is green at 570 tests (3 live R2 checks skipped),
 and the frontend contract, 102 tests, production build, and live dashboard render
 are green.
+
+### The service right helper compiles on the machine it configures — 2026-09-28
+
+The Windows smoke test reached onboarding and caught the actual failure behind
+the database service message: `Add-Type -MemberDefinition` already supplies
+`System.Runtime.InteropServices`, while setup supplied the same namespace again
+with `-UsingNamespace`. Windows PowerShell promotes the resulting duplicate
+`using` warning to a compilation error, so the LSA helper never ran and
+`RadiancePosDb` never received **Log on as a service**. The redundant option is
+gone, and the packaging test pins that exact constraint so Linux-side tests do
+not bless another installer whose PowerShell helper cannot compile on Windows.

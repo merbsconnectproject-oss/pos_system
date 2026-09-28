@@ -401,7 +401,7 @@ public static void AddRight(string sid, string right) {
         } finally { Marshal.FreeHGlobal(rights[0].Buffer); }
     } finally { LsaClose(policy); }
 }
-'@ -UsingNamespace 'System.Runtime.InteropServices'
+'@
     }
     [Radiance.Lsa]::AddRight($Sid, 'SeServiceLogonRight')
 }
