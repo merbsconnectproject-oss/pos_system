@@ -37,7 +37,6 @@ $PgLog = Join-Path $DataRoot 'logs\postgresql.log'
 $DbAccount = 'RadiancePosDb'
 $DbAccountSecretPath = Join-Path $SecretsRoot 'db-service-account.secret'
 $script:DbAccountSid = $null
-$script:DbPasswordIsNew = $false
 $PgBin = Join-Path $InstallRoot 'postgresql\bin'
 $ServiceExe = Join-Path $InstallRoot 'service\RadiancePosService.exe'
 $HealthUrl = 'http://127.0.0.1:8080/actuator/health'
@@ -324,27 +323,101 @@ function Set-DataPermissions {
     Set-FolderAccess 'the application configuration' $ConfigRoot @($system, $admins, '*S-1-5-19:(OI)(CI)RX')
     Set-FolderAccess 'the backup directory' (Join-Path $DataRoot 'backups') @($system, $admins, '*S-1-5-19:(OI)(CI)M', "*$($dbSid):(OI)(CI)M")
     Set-FolderAccess 'the log directory' (Join-Path $DataRoot 'logs') @($system, $admins, '*S-1-5-19:(OI)(CI)M', "*$($dbSid):(OI)(CI)M")
-    Set-FolderAccess 'the PostgreSQL cluster' $PgData @($system, $admins, "*$($dbSid):(OI)(CI)F")
     Set-FolderAccess 'the protected secrets directory' $SecretsRoot @($system, $admins)
+
+    # The cluster is deliberately not in the list above. Initialize-Database
+    # gives it these same entries before PostgreSQL first opens it, and by the
+    # time this runs the server is live and holding its files. Re-applying them
+    # here only reset the ACL of every open file in a running database, and
+    # Invoke-IcaclsChecked treats a single file it cannot touch as a failed
+    # install. The folder's own entry is refreshed; its contents are left alone.
+    Invoke-IcaclsChecked 'the PostgreSQL cluster' @($PgData, '/inheritance:r', '/grant:r', $system, $admins, "*$($dbSid):(OI)(CI)F", '/C')
 }
 
-function Grant-ServiceLogonRight([string]$Sid) {
-    # CreateService does not grant SeServiceLogonRight, so a service registered
-    # to an account that lacks it fails to start with error 1069 and nothing in
-    # any log the installer writes. secedit is the only scriptable way to set it
-    # on a machine that may not be domain-joined.
+function Test-ServiceLogonRight([string]$Sid) {
+    # Read-only: exports the policy and looks, and never writes one back. The
+    # grant below is only believed once this says so.
+    $export = Join-Path $env:TEMP ("radiance-secpol-read-{0}.inf" -f [guid]::NewGuid())
+    try {
+        & secedit.exe /export /cfg $export /areas USER_RIGHTS 2>&1 | Out-Null
+        if (-not (Test-Path $export)) { return $false }
+        foreach ($line in Get-Content $export) {
+            if ($line -like 'SeServiceLogonRight*') { return ($line -like "*$Sid*") }
+        }
+        return $false
+    } catch { return $false } finally {
+        Remove-Item $export -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Add-ServiceLogonRightViaLsa([string]$Sid) {
+    # LsaAddAccountRights adds one right to one account. secedit /configure
+    # rewrites every user right on the machine from a file, which is a large
+    # thing to do to a shop's PC in order to change one entry, and which a
+    # managed machine may refuse or revert wholesale.
+    if (-not ('Radiance.Lsa' -as [type])) {
+        Add-Type -Namespace 'Radiance' -Name 'Lsa' -MemberDefinition @'
+[StructLayout(LayoutKind.Sequential)]
+struct LSA_UNICODE_STRING { public ushort Length; public ushort MaximumLength; public IntPtr Buffer; }
+
+[StructLayout(LayoutKind.Sequential)]
+struct LSA_OBJECT_ATTRIBUTES {
+    public int Length; public IntPtr RootDirectory; public IntPtr ObjectName;
+    public int Attributes; public IntPtr SecurityDescriptor; public IntPtr SecurityQualityOfService;
+}
+
+[DllImport("advapi32.dll", SetLastError = true)]
+static extern uint LsaOpenPolicy(IntPtr SystemName, ref LSA_OBJECT_ATTRIBUTES ObjectAttributes, int DesiredAccess, out IntPtr PolicyHandle);
+
+[DllImport("advapi32.dll", SetLastError = true)]
+static extern uint LsaAddAccountRights(IntPtr PolicyHandle, byte[] AccountSid, LSA_UNICODE_STRING[] UserRights, int CountOfRights);
+
+[DllImport("advapi32.dll")]
+static extern uint LsaClose(IntPtr PolicyHandle);
+
+[DllImport("advapi32.dll")]
+static extern int LsaNtStatusToWinError(uint Status);
+
+public static void AddRight(string sid, string right) {
+    var identifier = new System.Security.Principal.SecurityIdentifier(sid);
+    byte[] rawSid = new byte[identifier.BinaryLength];
+    identifier.GetBinaryForm(rawSid, 0);
+
+    var attributes = new LSA_OBJECT_ATTRIBUTES();
+    attributes.Length = Marshal.SizeOf(typeof(LSA_OBJECT_ATTRIBUTES));
+
+    IntPtr policy;
+    // POLICY_CREATE_ACCOUNT | POLICY_LOOKUP_NAMES
+    uint status = LsaOpenPolicy(IntPtr.Zero, ref attributes, 0x00000010 | 0x00000800, out policy);
+    if (status != 0) throw new System.ComponentModel.Win32Exception(LsaNtStatusToWinError(status));
+    try {
+        var rights = new LSA_UNICODE_STRING[1];
+        rights[0].Buffer = Marshal.StringToHGlobalUni(right);
+        rights[0].Length = (ushort)(right.Length * 2);
+        rights[0].MaximumLength = (ushort)((right.Length + 1) * 2);
+        try {
+            status = LsaAddAccountRights(policy, rawSid, rights, 1);
+            if (status != 0) throw new System.ComponentModel.Win32Exception(LsaNtStatusToWinError(status));
+        } finally { Marshal.FreeHGlobal(rights[0].Buffer); }
+    } finally { LsaClose(policy); }
+}
+'@ -UsingNamespace 'System.Runtime.InteropServices'
+    }
+    [Radiance.Lsa]::AddRight($Sid, 'SeServiceLogonRight')
+}
+
+function Add-ServiceLogonRightViaSecedit([string]$Sid) {
     $export = Join-Path $env:TEMP ("radiance-secpol-{0}.inf" -f [guid]::NewGuid())
     $database = Join-Path $env:TEMP ("radiance-secpol-{0}.sdb" -f [guid]::NewGuid())
     try {
-        Write-Step 'Reading the local security policy'
-        & secedit.exe /export /cfg $export /areas USER_RIGHTS | Out-Null
+        & secedit.exe /export /cfg $export /areas USER_RIGHTS 2>&1 | Out-Null
+        if (-not (Test-Path $export)) { throw 'secedit could not export the local security policy.' }
         $lines = [Collections.Generic.List[string]](Get-Content $export)
         $index = -1
         for ($i = 0; $i -lt $lines.Count; $i++) {
             if ($lines[$i] -like 'SeServiceLogonRight*') { $index = $i; break }
         }
         if ($index -ge 0) {
-            if ($lines[$index] -like "*$Sid*") { return }
             $lines[$index] = "$($lines[$index]),*$Sid"
         } else {
             for ($i = 0; $i -lt $lines.Count; $i++) {
@@ -354,11 +427,39 @@ function Grant-ServiceLogonRight([string]$Sid) {
             $lines.Insert($index + 1, "SeServiceLogonRight = *$Sid")
         }
         Set-Content -LiteralPath $export -Value $lines -Encoding Unicode
-        Write-Step 'Granting the right to run as a service'
-        & secedit.exe /configure /db $database /cfg $export /areas USER_RIGHTS | Out-Null
+        & secedit.exe /configure /db $database /cfg $export /areas USER_RIGHTS 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "secedit refused the policy change (exit code $LASTEXITCODE)." }
     } finally {
         Remove-Item $export, $database -Force -ErrorAction SilentlyContinue
     }
+}
+
+function Grant-ServiceLogonRight([string]$Sid) {
+    # CreateService does not grant SeServiceLogonRight, so a service registered
+    # to an account that lacks it fails to start with error 1069 and nothing in
+    # any log the installer writes. That is the single most likely reason a
+    # counter reports "the PostgreSQL service would not start", so this no
+    # longer assumes the grant worked: it grants, then reads the policy back,
+    # and says so plainly when the machine would not take it.
+    Write-Step 'Reading the local security policy'
+    if (Test-ServiceLogonRight $Sid) { return }
+
+    Write-Step 'Granting the right to run as a service'
+    $failures = [Collections.Generic.List[string]]::new()
+    try { Add-ServiceLogonRightViaLsa $Sid } catch { $failures.Add("LSA: $($_.Exception.Message)") }
+    if (-not (Test-ServiceLogonRight $Sid)) {
+        try { Add-ServiceLogonRightViaSecedit $Sid } catch { $failures.Add("secedit: $($_.Exception.Message)") }
+    }
+    if (Test-ServiceLogonRight $Sid) { return }
+
+    throw ("Windows would not grant $DbAccount the right to log on as a service, so its " +
+           "database service cannot start.`n`n" +
+           $(if ($failures.Count) { ($failures -join "`n") } else { 'The policy reported no error but the right is still absent.' }) +
+           "`n`nA group policy that manages 'Log on as a service', or security software blocking " +
+           'changes to the local security policy, is the usual cause. Add ' +
+           "$env:COMPUTERNAME\$DbAccount to 'Log on as a service' in Local Security Policy " +
+           "(secpol.msc, Local Policies > User Rights Assignment), then run " +
+           "'Configure or repair Radiance POS' again.")
 }
 
 function Initialize-DatabaseAccount {
@@ -366,12 +467,6 @@ function Initialize-DatabaseAccount {
     # cluster's files are owned by this account and a counter that loses it
     # cannot start its own database.
     $password = Read-Secret $DbAccountSecretPath 'database service account password'
-    # A counter that lost its secrets gets a new password, and the Windows
-    # service still holds the old one - which fails to log on, which is the
-    # failure that reports nothing anywhere. The registration has to be replaced
-    # whenever the password is, and clearing the secrets is exactly what the
-    # reset tool does.
-    $script:DbPasswordIsNew = -not $password
     if (-not $password) {
         # The suffix guarantees the mix a local complexity policy may demand;
         # New-RandomSecret is deliberately alphanumeric so it survives quoting.
@@ -483,13 +578,65 @@ function Save-Secret([string]$Path, [string]$Value) {
     }
 }
 
-function Start-PostgresService {
+function Wait-PostgresAcceptingConnections([int]$Seconds = 60) {
+    $isReady = Join-Path $PgBin 'pg_isready.exe'
+    $deadline = (Get-Date).AddSeconds($Seconds)
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     try {
-        Start-Service RadiancePosPostgreSQL
-        return
-    } catch {
-        $reason = $_.Exception.Message
+        do {
+            & $isReady '-h' '127.0.0.1' '-p' "$PgPort" '-q' 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) { return }
+            Start-Sleep 1
+        } while ((Get-Date) -lt $deadline)
+    } finally { $ErrorActionPreference = $previous }
+    $tail = if (Test-Path $PgLog) { (Get-Content -Tail 15 $PgLog) -join "`n" } else { "Nothing was written to $PgLog." }
+    throw ("The PostgreSQL service is running but is not accepting connections on port $PgPort " +
+           "after $Seconds seconds.`n`n$tail")
+}
+
+function Get-ServiceStartFailureHint([int]$Code) {
+    # Start-Service says "failed to start" for every one of these. The number
+    # underneath is the only thing that distinguishes a password Windows
+    # rejected from a binary it could not load, and each has a different answer.
+    switch ($Code) {
+        1069 { return ("Windows error 1069: the service could not log on. The $DbAccount account's " +
+                       "password or its right to log on as a service was refused. Run 'Configure or " +
+                       "repair Radiance POS' from the Start menu, which rebuilds both.") }
+        1053 { return ('Windows error 1053: the service started but did not report ready in time. ' +
+                       'PostgreSQL usually writes the reason to its own log, below.') }
+        1067 { return ('Windows error 1067: the service process exited immediately. PostgreSQL ' +
+                       'usually writes the reason to its own log, below.') }
+        1058 { return ('Windows error 1058: the service is disabled. Run "Reset this counter before ' +
+                       'setup", then set up again.') }
+        2    { return ('Windows error 2: the service executable is missing. Reinstall Radiance POS.') }
+        5    { return ('Windows error 5: access denied starting the service. Setup must run as an ' +
+                       'administrator.') }
+        1275 { return ('Windows error 1275: security software blocked the service driver or binary.') }
+        default { return $null }
     }
+}
+
+function Start-PostgresService {
+    $reason = $null
+    $code = 0
+    # Twice, a few seconds apart. A registration created moments ago can lose a
+    # first start to the service control manager still settling, and a single
+    # attempt turned that into a failed install.
+    foreach ($attempt in 1, 2) {
+        try {
+            Start-Service RadiancePosPostgreSQL
+            return
+        } catch {
+            $reason = $_.Exception.Message
+            $win32 = $_.Exception
+            while ($win32 -and -not ($win32 -is [ComponentModel.Win32Exception])) { $win32 = $win32.InnerException }
+            if ($win32) { $code = $win32.NativeErrorCode }
+        }
+        if ($attempt -eq 1) { Start-Sleep 5 }
+    }
+    $hint = Get-ServiceStartFailureHint $code
+    if ($hint) { $reason = "$reason`n`n$hint" }
 
     # "Failed to start service" is everything Start-Service knows and nothing an
     # operator can act on. PostgreSQL writes the actual reason — a port already
@@ -518,6 +665,19 @@ function Start-PostgresService {
             $detail += (& icacls.exe $subject 2>&1 | ForEach-Object { "$_" })
         }
     }
+    # Who the service was told to run as, and whether Windows will let that
+    # account be a service at all. Those two facts are the whole of error 1069
+    # and neither was previously recorded anywhere.
+    try {
+        $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='RadiancePosPostgreSQL'" -ErrorAction SilentlyContinue
+        if ($serviceInfo) {
+            $detail += "Service account: $($serviceInfo.StartName)"
+            $detail += "Service binary: $($serviceInfo.PathName)"
+        }
+        $sid = Get-DbAccountSid
+        $detail += "$DbAccount SID: $sid"
+        $detail += "$DbAccount holds 'log on as a service': $(Test-ServiceLogonRight $sid)"
+    } catch { $detail += "Could not read the service account: $($_.Exception.Message)" }
     $stray = Join-Path $PgData 'postmaster.pid'
     if (Test-Path $stray) {
         $detail += "A lock file from an earlier run is still present: $stray"
@@ -533,10 +693,66 @@ function Start-PostgresService {
            $(if ($detail) { ($detail -join "`n") } else { "Nothing was written to $PgLog." }))
 }
 
+function Test-PostgresBinaries {
+    # A functional probe, not a hunt through imports: whatever the binaries need
+    # in order to load, Windows answers that question here, on the exact
+    # executable the service runs. -V is handled before postgres looks at a data
+    # directory or at who is running it, so this asks nothing else.
+    # Continue, not Stop: Windows PowerShell turns a native command's redirected
+    # stderr into a terminating error while $ErrorActionPreference is Stop, and a
+    # binary that cannot load says so on stderr - which is the answer this is
+    # asking for, not a reason to abandon the run.
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & (Join-Path $PgBin 'postgres.exe') '-V' 2>&1 | Out-Null
+        return ($LASTEXITCODE -eq 0)
+    } catch { return $false } finally { $ErrorActionPreference = $previous }
+}
+
+function Install-VisualCppRuntime {
+    # PostgreSQL's Windows binaries are built with MSVC and need the Visual C++
+    # runtime, which is not part of Windows and which the upstream binaries zip
+    # does not carry - EDB's own installer ships the redistributable beside it.
+    # A build machine and a CI runner have it already; a shop's counter PC often
+    # does not, and every PostgreSQL executable then fails to load with nothing
+    # written anywhere. The installer carries a copy so this stays offline.
+    $redist = Join-Path $InstallRoot 'vendor\vc_redist.x64.exe'
+    if (-not (Test-Path $redist)) {
+        throw ('PostgreSQL cannot run on this computer: it needs the Microsoft Visual C++ ' +
+               'runtime, which is not installed, and this build does not carry a copy. ' +
+               'Install the Microsoft Visual C++ 2015-2022 Redistributable (x64) from ' +
+               "Microsoft, then run 'Configure or repair Radiance POS' again.")
+    }
+    Write-Step 'Installing the Microsoft Visual C++ runtime PostgreSQL needs'
+    $process = Start-Process $redist -ArgumentList '/install', '/quiet', '/norestart' -Wait -PassThru
+    # 1638 is a newer runtime already present; 3010 is installed, reboot pending.
+    # The files are on disk in both cases, which is all PostgreSQL needs.
+    if ($process.ExitCode -notin 0, 1638, 3010) {
+        throw ("The Microsoft Visual C++ runtime installer failed with exit code $($process.ExitCode). " +
+               'PostgreSQL cannot start without it.')
+    }
+}
+
+function Assert-PostgresRuntime {
+    Write-Step 'Checking that the database binaries can run on this computer'
+    if (Test-PostgresBinaries) { return }
+    Install-VisualCppRuntime
+    if (Test-PostgresBinaries) { return }
+    throw ('The bundled PostgreSQL executables still will not run on this computer after the ' +
+           'Microsoft Visual C++ runtime was installed. Security software blocking ' +
+           "$PgBin is the usual remaining cause; allow that folder and run " +
+           "'Configure or repair Radiance POS' again.")
+}
+
 function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) {
-    foreach ($tool in 'initdb.exe', 'pg_ctl.exe', 'psql.exe', 'createdb.exe') {
+    foreach ($tool in 'initdb.exe', 'pg_ctl.exe', 'psql.exe', 'createdb.exe', 'pg_isready.exe', 'postgres.exe') {
         if (-not (Test-Path (Join-Path $PgBin $tool))) { throw "PostgreSQL tool is missing: $tool" }
     }
+    # Before initdb, not after: a counter without the Visual C++ runtime fails
+    # every PostgreSQL binary, and "the service would not start" is the last and
+    # least informative place to discover that.
+    Assert-PostgresRuntime
     New-Item -ItemType Directory -Force $DataRoot, (Join-Path $DataRoot 'logs') | Out-Null
     if (-not (Test-Path (Join-Path $PgData 'PG_VERSION'))) {
         New-Item -ItemType Directory -Force $PgData | Out-Null
@@ -591,38 +807,47 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
     Invoke-IcaclsChecked 'the GiftedLabs data folder' @((Split-Path $DataRoot -Parent), '/grant:r', "*$($dbSid):RX", '/C')
     Invoke-IcaclsChecked 'the PostgreSQL log directory' @((Join-Path $DataRoot 'logs'), '/grant:r', "*$($dbSid):(OI)(CI)M", '/C')
 
-    # A registration left by an earlier install points at whatever data directory
-    # it was given then. Setup used to keep any service it found, so a stale or
-    # disabled one was inherited silently and then failed to start with nothing
-    # said about why. Re-register unless the existing one is this cluster.
+    # Setup used to keep a registration it recognised and only replace one whose
+    # data directory or account looked wrong. That left the one failure it could
+    # not see: a service still holding the password it was registered with, on an
+    # account whose password setup has since changed. Windows reports that as
+    # error 1069 and writes nothing anywhere, and the check for it was a guess
+    # about whether the stored secret was new.
+    #
+    # Registering is cheap and the account's password is known for certain right
+    # here, so the registration is simply rebuilt every run. The service and the
+    # account can then never disagree about the password.
     $existing = Get-Service RadiancePosPostgreSQL -ErrorAction SilentlyContinue
     if ($existing) {
-        $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='RadiancePosPostgreSQL'"
-        $binary = $serviceInfo.PathName
-        # Windows may report the account as .\name or MACHINE\name depending on
-        # how it was registered, and neither is wrong.
-        $wrongAccount = $serviceInfo.StartName -notmatch "(?i)^(.*\\)?$([regex]::Escape($DbAccount))$"
-        if ($binary -notlike "*$PgData*" -or $wrongAccount -or $script:DbPasswordIsNew) {
-            Write-Host 'The PostgreSQL service has stale settings; re-registering it.'
-            Stop-Service RadiancePosPostgreSQL -Force -ErrorAction SilentlyContinue
-            & (Join-Path $PgBin 'pg_ctl.exe') unregister -N RadiancePosPostgreSQL 2>&1 | Out-Null
-            $existing = $null
-        } elseif ($existing.StartType -eq 'Disabled') {
-            # Disabling these is the standard way to clear a failed attempt, and
-            # a disabled service refuses to start however healthy the cluster is.
-            Write-Host 'The PostgreSQL service was disabled; setting it back to automatic.'
-            Set-Service RadiancePosPostgreSQL -StartupType Automatic
+        Write-Step 'Replacing the PostgreSQL service registration'
+        Stop-Service RadiancePosPostgreSQL -Force -ErrorAction SilentlyContinue
+        & (Join-Path $PgBin 'pg_ctl.exe') unregister -N RadiancePosPostgreSQL 2>&1 | Out-Null
+        # A service with an open handle is marked for deletion rather than
+        # removed, and registering over it fails with "marked for deletion" -
+        # which reads like a permissions problem and is not one.
+        $deadline = (Get-Date).AddSeconds(30)
+        while ((Get-Service RadiancePosPostgreSQL -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+            Start-Sleep 1
+        }
+        if (Get-Service RadiancePosPostgreSQL -ErrorAction SilentlyContinue) {
+            throw ('Windows would not remove the old RadiancePosPostgreSQL service registration. ' +
+                   "Restart this computer and run 'Configure or repair Radiance POS' again.")
         }
     }
-    if (-not $existing) {
-        # -l is ignored by pg_ctl's Windows register mode. PostgreSQL's logging
-        # collector above writes the durable file, while -e gives very-early
-        # service failures a distinct Windows event source.
-        Invoke-Checked (Join-Path $PgBin 'pg_ctl.exe') @('register', '-N', 'RadiancePosPostgreSQL', '-D', $PgData, '-S', 'auto', '-U', ".\$DbAccount", '-P', $dbPassword, '-e', 'RadiancePosPostgreSQL')
-    }
+    # -l is ignored by pg_ctl's Windows register mode. PostgreSQL's logging
+    # collector above writes the durable file, while -e gives very-early service
+    # failures a distinct Windows event source.
+    Write-Step 'Registering the PostgreSQL service'
+    Invoke-Checked (Join-Path $PgBin 'pg_ctl.exe') @('register', '-N', 'RadiancePosPostgreSQL', '-D', $PgData, '-S', 'auto', '-U', ".\$DbAccount", '-P', $dbPassword, '-e', 'RadiancePosPostgreSQL')
+
     Write-Step 'Starting the PostgreSQL service'
     Start-PostgresService
     Wait-ServiceReady RadiancePosPostgreSQL
+    # A running service means the postmaster launched, not that it is accepting
+    # connections. psql used to be the first thing to find out, and reported it
+    # as "could not connect to the private PostgreSQL instance" - which is also
+    # what a wrong password looks like.
+    Wait-PostgresAcceptingConnections
     $pgEnv = @{ PGPASSWORD = $SuperPassword }
     $env:PGPASSWORD = $SuperPassword
     $roleExists = & (Join-Path $PgBin 'psql.exe') -h 127.0.0.1 -p $PgPort -U postgres -d postgres -tAc "select 1 from pg_roles where rolname='giftedlabs'"

@@ -8,6 +8,14 @@ param(
     [string]$WinSwPath,
     [string]$WinSwUrl = 'https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe',
     [string]$WinSwSha256,
+    # PostgreSQL's Windows binaries are MSVC builds and need the Visual C++
+    # runtime, which is not part of Windows and is not in the upstream binaries
+    # zip. Build machines and CI runners have it; a shop's counter PC often does
+    # not, and then every PostgreSQL executable fails to load. Carried in the
+    # installer so a counter with no internet can still be set up.
+    [string]$VcRedistPath,
+    [string]$VcRedistUrl = 'https://aka.ms/vs/17/release/vc_redist.x64.exe',
+    [string]$VcRedistSha256,
     [string]$InnoCompiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
     # How the installed counter opens the POS. AppWindow is what a till should
     # look like; Browser is the same application in the machine's ordinary
@@ -141,6 +149,21 @@ $initdb = Get-ChildItem $pgExtract -Filter initdb.exe -Recurse | Select-Object -
 if (-not $initdb) { throw 'PostgreSQL archive does not contain initdb.exe.' }
 $pgRoot = Split-Path (Split-Path $initdb.FullName -Parent) -Parent
 Copy-Item $pgRoot (Join-Path $Stage 'postgresql') -Recurse
+
+if (-not $VcRedistPath) {
+    $VcRedistPath = Join-Path $DependencyCache 'vc_redist.x64.exe'
+    if (-not (Test-Path $VcRedistPath)) { Invoke-WebRequest $VcRedistUrl -OutFile $VcRedistPath }
+}
+Assert-DependencyHash $VcRedistPath $VcRedistSha256 'Visual C++ redistributable'
+New-Item -ItemType Directory -Force (Join-Path $Stage 'vendor') | Out-Null
+Copy-Item $VcRedistPath (Join-Path $Stage 'vendor\vc_redist.x64.exe')
+
+# The staged tree is what a counter gets, so the question "can these binaries
+# run at all?" is answered on the build machine too. postgres.exe -V prints and
+# exits before it looks at anything else, so this asks only whether Windows can
+# load it.
+& (Join-Path $Stage 'postgresql\bin\postgres.exe') '-V' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'The staged postgres.exe will not run on this build machine.' }
 
 # The two variants install over each other by design — same AppId, same services,
 # same ports — so the suffix is about telling the files apart, not about running

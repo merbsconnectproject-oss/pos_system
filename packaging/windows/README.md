@@ -11,8 +11,8 @@ PostgreSQL 18, and WinSW. The installed application binds only to
 2. Collects and validates the first owner, password, approval PIN, outlet and
    terminal. Off-site S3-compatible backup is optional during setup.
 3. Initializes a private PostgreSQL cluster on port `54329`, reachable only on
-   loopback, assigns it to the low-privilege Windows `NetworkService` identity,
-   and registers it as `RadiancePosPostgreSQL`.
+   loopback, assigns it to the dedicated `RadiancePosDb` account described
+   below, and registers it as `RadiancePosPostgreSQL`.
 4. Creates the application database and a random application-only credential.
 5. Registers `RadiancePos` as a delayed, restart-on-failure Windows service
    running as `LocalService`.
@@ -36,6 +36,20 @@ account cannot sign in interactively. It is a member of `Users` only — without
 that it holds nothing on `C:\ProgramData` or the folders above the cluster, and
 PostgreSQL cannot reach its own configuration file — and it is granted the right
 to run as a service plus ownership of the cluster, and nothing else. Uninstall leaves it in place alongside the retained database.
+
+### The Visual C++ runtime
+
+PostgreSQL's Windows binaries are MSVC builds and need the Microsoft Visual C++
+runtime, which is **not** part of Windows and is **not** in the upstream
+binaries zip — EDB's own installer ships the redistributable beside it. Build
+machines and CI runners already have it, so its absence only ever shows up on a
+counter PC, as `postgres.exe` failing to load and the service refusing to start
+with nothing written to any log.
+
+The installer therefore carries `vendor\vc_redist.x64.exe`. Before it touches
+the cluster, setup runs `postgres.exe -V`; if Windows cannot load it, the
+bundled redistributable is installed silently and the probe is repeated. Pin it
+for release builds with `-VcRedistSha256`.
 
 Runtime data is under `%ProgramData%\GiftedLabs\Radiance POS`. ACLs separate
 the PostgreSQL administrator secret from the lower-privilege application
@@ -153,6 +167,13 @@ file after setup. Upgrades do not need it and preserve the database/config.
 - **Restore a Radiance POS backup** first saves the current database, decrypts
   `.dump.enc` objects when necessary, restores in one transaction, and restarts
   and health-checks the application.
+- A failed **PostgreSQL** start reports the Windows error number behind
+  "the service would not start", the account the service was registered to,
+  whether that account holds *Log on as a service*, PostgreSQL's own log tail,
+  the cluster ACLs and anything already holding port `54329`. Error **1069** is
+  a logon failure and is almost always the *Log on as a service* right being
+  withheld by group policy or security software; setup grants it through LSA,
+  verifies it was taken, and names the policy to edit when it was not.
 - **Diagnostics** writes the installed version and commit, service state,
   health, disk space and the latest log tail to a text file on the current
   user's desktop. It does not copy secrets.
