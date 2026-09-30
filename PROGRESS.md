@@ -961,3 +961,12 @@ with `-UsingNamespace`. Windows PowerShell promotes the resulting duplicate
 `RadiancePosDb` never received **Log on as a service**. The redundant option is
 gone, and the packaging test pins that exact constraint so Linux-side tests do
 not bless another installer whose PowerShell helper cannot compile on Windows.
+
+### Service-right verification reads the live Windows policy — 2026-09-30
+
+The Windows packaging smoke test showed both service-right grant paths returning
+success while an immediate `secedit` export still omitted the new account. Setup
+then rejected its own successful LSA grant before PostgreSQL could start. The LSA
+helper now reads `SeServiceLogonRight` back with `LsaEnumerateAccountRights`, so
+grant and verification use the same live Windows policy. The `secedit` export is
+kept only for the cheap pre-check and as the fallback grant mechanism.

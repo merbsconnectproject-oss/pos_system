@@ -116,6 +116,9 @@ class WindowsAppWindowTest {
                 "setup must compile the narrow LSA helper used to grant Log on as a service");
         assertFalse(onboarding.contains("-UsingNamespace 'System.Runtime.InteropServices'"),
                 "Add-Type -MemberDefinition imports interop itself; a duplicate using is a compiler error");
+        assertTrue(onboarding.contains("LsaEnumerateAccountRights")
+                        && onboarding.contains("[Radiance.Lsa]::HasRight"),
+                "a successful LSA grant must be verified against live LSA policy, not a stale secedit export");
     }
 
     /**

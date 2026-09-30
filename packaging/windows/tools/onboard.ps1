@@ -335,8 +335,16 @@ function Set-DataPermissions {
 }
 
 function Test-ServiceLogonRight([string]$Sid) {
-    # Read-only: exports the policy and looks, and never writes one back. The
-    # grant below is only believed once this says so.
+    # Once the LSA helper has been loaded, read back through the same Windows
+    # API that grants the right. A secedit export can lag the live LSA policy;
+    # treating that stale snapshot as authoritative made setup reject a grant
+    # that LsaAddAccountRights had accepted successfully.
+    if ('Radiance.Lsa' -as [type]) {
+        return [Radiance.Lsa]::HasRight($Sid, 'SeServiceLogonRight')
+    }
+
+    # Before the helper is loaded, use the read-only export to avoid compiling
+    # anything when the account already has the right.
     $export = Join-Path $env:TEMP ("radiance-secpol-read-{0}.inf" -f [guid]::NewGuid())
     try {
         & secedit.exe /export /cfg $export /areas USER_RIGHTS 2>&1 | Out-Null
@@ -373,6 +381,12 @@ static extern uint LsaOpenPolicy(IntPtr SystemName, ref LSA_OBJECT_ATTRIBUTES Ob
 static extern uint LsaAddAccountRights(IntPtr PolicyHandle, byte[] AccountSid, LSA_UNICODE_STRING[] UserRights, int CountOfRights);
 
 [DllImport("advapi32.dll")]
+static extern uint LsaEnumerateAccountRights(IntPtr PolicyHandle, byte[] AccountSid, out IntPtr UserRights, out uint CountOfRights);
+
+[DllImport("advapi32.dll")]
+static extern uint LsaFreeMemory(IntPtr Buffer);
+
+[DllImport("advapi32.dll")]
 static extern uint LsaClose(IntPtr PolicyHandle);
 
 [DllImport("advapi32.dll")]
@@ -399,6 +413,37 @@ public static void AddRight(string sid, string right) {
             status = LsaAddAccountRights(policy, rawSid, rights, 1);
             if (status != 0) throw new System.ComponentModel.Win32Exception(LsaNtStatusToWinError(status));
         } finally { Marshal.FreeHGlobal(rights[0].Buffer); }
+    } finally { LsaClose(policy); }
+}
+
+public static bool HasRight(string sid, string right) {
+    var identifier = new System.Security.Principal.SecurityIdentifier(sid);
+    byte[] rawSid = new byte[identifier.BinaryLength];
+    identifier.GetBinaryForm(rawSid, 0);
+
+    var attributes = new LSA_OBJECT_ATTRIBUTES();
+    attributes.Length = Marshal.SizeOf(typeof(LSA_OBJECT_ATTRIBUTES));
+
+    IntPtr policy;
+    uint status = LsaOpenPolicy(IntPtr.Zero, ref attributes, 0x00000800, out policy);
+    if (status != 0) throw new System.ComponentModel.Win32Exception(LsaNtStatusToWinError(status));
+    try {
+        IntPtr rights;
+        uint count;
+        status = LsaEnumerateAccountRights(policy, rawSid, out rights, out count);
+        // STATUS_OBJECT_NAME_NOT_FOUND means the account has no policy rights.
+        if (status == 0xC0000034) return false;
+        if (status != 0) throw new System.ComponentModel.Win32Exception(LsaNtStatusToWinError(status));
+        try {
+            int size = Marshal.SizeOf(typeof(LSA_UNICODE_STRING));
+            for (int i = 0; i < count; i++) {
+                var entry = (LSA_UNICODE_STRING)Marshal.PtrToStructure(
+                    IntPtr.Add(rights, i * size), typeof(LSA_UNICODE_STRING));
+                string name = Marshal.PtrToStringUni(entry.Buffer, entry.Length / 2);
+                if (String.Equals(name, right, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        } finally { LsaFreeMemory(rights); }
     } finally { LsaClose(policy); }
 }
 '@
