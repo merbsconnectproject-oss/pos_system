@@ -22,14 +22,6 @@ import {
   Calculator,
   Tag,
   Phone,
-  Package,
-  Zap,
-  Plug,
-  Cable,
-  Wrench,
-  PaintBucket,
-  HardHat,
-  Lightbulb,
   AlertTriangle,
   Clock,
   List,
@@ -66,6 +58,7 @@ import {
 } from '../discounts';
 import { heldSalesApi, type HeldSaleWire } from '../heldSalesApi';
 import { catalogueApi, type CatalogueListItem } from '../catalogueApi';
+import { ProductCategoryVisual } from './ProductCategoryVisual';
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: 'Cash',
@@ -312,18 +305,6 @@ export const PosModal: React.FC<PosModalProps> = ({
   } | null>(null);
 
   const outletId = currentOutlet.id === 'all-outlets' ? 'inco-hardware' : currentOutlet.id;
-
-  const getProductFallbackIcon = (category: string) => {
-    const normalizedCategory = category.toLowerCase();
-    if (normalizedCategory.includes('cable') || normalizedCategory.includes('wire')) return Cable;
-    if (normalizedCategory.includes('socket') || normalizedCategory.includes('plug')) return Plug;
-    if (normalizedCategory.includes('lighting') || normalizedCategory.includes('lamp')) return Lightbulb;
-    if (normalizedCategory.includes('tool') || normalizedCategory.includes('hardware')) return Wrench;
-    if (normalizedCategory.includes('paint') || normalizedCategory.includes('adhesive')) return PaintBucket;
-    if (normalizedCategory.includes('safety') || normalizedCategory.includes('building')) return HardHat;
-    if (normalizedCategory.includes('electrical') || normalizedCategory.includes('breaker')) return Zap;
-    return Package;
-  };
 
   // Reset category and cart when active outlet changes
   useEffect(() => {
@@ -1200,7 +1181,7 @@ export const PosModal: React.FC<PosModalProps> = ({
         className={`bg-slate-100 flex flex-col overflow-hidden shadow-2xl animate-modal-card ${
           isMaximized
             ? 'w-full h-full'
-            : 'rounded-xl w-full max-w-[1550px] h-[95vh] border border-slate-300'
+            : 'ui-pos-window-normal rounded-xl max-w-[1550px] border border-slate-300'
         }`}
       >
         {/* POS Top Bar */}
@@ -1381,12 +1362,13 @@ export const PosModal: React.FC<PosModalProps> = ({
           {/* LEFT: PRODUCTS CATALOGUE GRID */}
           <div className="flex-1 flex flex-col overflow-hidden p-3 sm:p-4 space-y-3">
             {/* Search and Category Pills */}
-            <div className="flex flex-col sm:flex-row gap-2 items-center justify-between">
-              <div className="relative w-full sm:w-[28rem] lg:w-[34rem] shrink-0">
-                <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <div className="flex w-full flex-col gap-2">
+              <div className="relative w-full min-w-0">
+                <Search aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-500" />
                 <input
                   ref={searchInputRef}
                   type="text"
+                  aria-label="Search products by name, SKU, or barcode"
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
@@ -1422,7 +1404,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                     }
                   }}
                   placeholder="Start typing a product, SKU or barcode…  ↑↓ choose · Enter adds"
-                  className="w-full pl-11 pr-3 py-3 text-sm font-semibold bg-white border-2 border-slate-300 rounded-xl focus:outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20 shadow-xs placeholder:font-normal placeholder:text-slate-400"
+                  className="block w-full min-w-0 rounded-xl border-2 border-slate-300 bg-white py-3 pl-11 pr-4 text-left text-sm font-semibold leading-5 text-slate-900 caret-accent-600 shadow-xs placeholder:font-normal placeholder:text-slate-500 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
                 {searchQuery.trim() && (
                   <div className="absolute left-0 right-0 top-[calc(100%+0.375rem)] z-40 max-h-[60vh] overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-xl p-2">
@@ -1509,9 +1491,6 @@ export const PosModal: React.FC<PosModalProps> = ({
                 const minAlert = p.minStockAlert[outletId] || 10;
                 const isLow = stockOnHand <= minAlert;
                 const isOutOfStock = stockOnHand <= 0;
-                const FallbackIcon = getProductFallbackIcon(p.category);
-                const hasImage = Boolean(p.imageUrl && p.imageUrl.trim());
-
                 return (
                   <div
                     key={p.id}
@@ -1521,20 +1500,13 @@ export const PosModal: React.FC<PosModalProps> = ({
                     }`}
                   >
                     <div className={`space-y-3 ${catalogueView === 'list' || catalogueView === 'table' ? 'flex min-w-0 flex-1 items-center gap-4 space-y-0' : ''}`}>
-                      <div className={`relative rounded overflow-hidden bg-[#F1F5F9] border border-slate-200 ${catalogueView === 'list' ? 'h-16 w-20 shrink-0' : catalogueView === 'table' ? 'hidden' : 'aspect-[4/3]'}`}>
-                        <div className="absolute inset-0 flex items-center justify-center text-slate-400">
-                          <FallbackIcon className="w-6 h-6 stroke-[1.75]" />
-                        </div>
-                        {hasImage && (
-                          <img
-                            src={p.imageUrl}
-                            alt={p.name}
-                            onError={(event) => {
-                              event.currentTarget.style.display = 'none';
-                            }}
-                            className="relative z-10 w-full h-full object-cover rounded group-hover:scale-[1.02] transition-transform duration-200"
-                          />
-                        )}
+                      <div className={`relative ${catalogueView === 'list' ? 'h-16 w-20 shrink-0' : catalogueView === 'table' ? 'hidden' : 'aspect-[4/3]'}`}>
+                        <ProductCategoryVisual
+                          category={p.category}
+                          showLabel={catalogueView === 'grid'}
+                          className="h-full w-full rounded"
+                          iconClassName={catalogueView === 'grid' ? 'h-9 w-9' : 'h-6 w-6'}
+                        />
                         <span
                           className={`absolute z-20 top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold border backdrop-blur-sm ${
                             isOutOfStock
@@ -1627,7 +1599,7 @@ export const PosModal: React.FC<PosModalProps> = ({
 
           {/* RIGHT: CART & CHECKOUT DRAWER */}
           <div
-            className={`w-full lg:w-[440px] bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col justify-between shrink-0 shadow-xl ${
+            className={`w-full lg:w-[36vw] lg:min-w-80 lg:max-w-[30rem] bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col justify-between shrink-0 shadow-xl ${
               mobileCartDrawerOpen
                 ? 'fixed inset-0 z-50 lg:relative lg:inset-auto flex animate-sheet-up'
                 : 'hidden lg:flex'
@@ -2451,7 +2423,7 @@ export const PosModal: React.FC<PosModalProps> = ({
       {/* ATTACH / QUICK CREATE CUSTOMER (C-09, C-10) */}
       {customerModalOpen && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-70 flex items-center justify-center p-4 animate-modal-backdrop">
-          <div className="bg-white rounded-2xl w-full max-w-2xl border border-slate-300 shadow-2xl overflow-hidden animate-modal-card">
+          <div className="bg-white rounded-2xl w-full max-w-2xl border border-slate-300 shadow-2xl overflow-hidden animate-modal-card flex flex-col">
             <div className="p-5 border-b border-slate-200 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-black text-slate-900">Attach customer</h3>
@@ -2461,7 +2433,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-5 overflow-y-auto min-h-0">
               <div className="space-y-3">
                 <label className="text-xs font-bold text-slate-700">Phone search</label>
                 <input

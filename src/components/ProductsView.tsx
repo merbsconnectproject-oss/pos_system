@@ -48,6 +48,7 @@ import { exportToCsv } from '../utils/csvExport';
 import { ProductBarcodeModal, ProductBarcodeSvg } from './ProductBarcodeModal';
 import { ProductPricingModal } from './ProductPricingModal';
 import { TablePagination } from './TablePagination';
+import { ProductCategoryVisual } from './ProductCategoryVisual';
 
 type ProductMode = 'list' | 'import' | 'setup' | 'bulk-price';
 type ImportStep = 'upload' | 'mapping' | 'validation' | 'preview' | 'result';
@@ -89,7 +90,6 @@ type ProductForm = {
   cost: string;
   stock: string;
   minAlert: string;
-  imageUrl: string;
   sellingUnitName: string;
   sellingUnitFactor: string;
   sellingUnitPrice: string;
@@ -111,7 +111,6 @@ const emptyProductForm: ProductForm = {
   cost: '',
   stock: '',
   minAlert: '',
-  imageUrl: '',
   sellingUnitName: '',
   sellingUnitFactor: '',
   sellingUnitPrice: '',
@@ -333,7 +332,6 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       cost: String(product.costPrice[key] || 0),
       stock: String(product.stock[key] || 0),
       minAlert: String(product.minStockAlert[key] || 0),
-      imageUrl: product.imageUrl,
       sellingUnitName: product.sellingUnits?.[1]?.name || '',
       sellingUnitFactor: String(product.sellingUnits?.[1]?.conversionFactor || 1),
       sellingUnitPrice: String(product.sellingUnits?.[1]?.price || 0),
@@ -392,7 +390,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       minStockAlert: canAdjustStock
         ? { ...(editingProduct?.minStockAlert || {}), [form.storeId]: minAlert }
         : { ...(editingProduct?.minStockAlert || {}) },
-      imageUrl: form.imageUrl.trim() || 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=400&auto=format&fit=crop&q=80',
+      imageUrl: editingProduct?.imageUrl || '',
       salesCount: editingProduct?.salesCount || 0,
       active: editingProduct?.active ?? true,
     };
@@ -727,7 +725,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                       <Download className="h-3.5 w-3.5" /> Download error file
                     </button>
                   </div>
-                  <div className="max-h-64 overflow-y-auto">
+                  <div className="max-h-64 overflow-auto">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-white text-[10px] uppercase tracking-wider text-slate-500">
                         <tr>
@@ -783,7 +781,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   <p className="mt-1 text-xl font-black text-slate-900">{importValidation.invalid.length}</p>
                 </div>
               </div>
-              <div className="overflow-hidden rounded-xl border border-slate-200">
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
                     <tr>
@@ -990,7 +988,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3 min-w-[260px]">
-                        <img src={product.imageUrl} alt={product.name} className="w-11 h-11 rounded-md object-cover border border-slate-200 bg-slate-100" />
+                        <ProductCategoryVisual category={product.category} className="h-11 w-11 shrink-0 rounded-md" iconClassName="h-5 w-5" />
                         <div>
                           <button onClick={() => setSelectedProduct(product)} className="font-bold text-slate-800 text-left hover:text-accent-600 line-clamp-2 cursor-pointer">{product.name}</button>
                           <div className="text-[10px] text-slate-400">{product.outletId || 'Shared catalogue'}</div>
@@ -1120,7 +1118,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               <button onClick={() => setSelectedProduct(null)} className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-white">
-              <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="w-full aspect-[4/3] object-cover rounded-lg border border-slate-200 bg-slate-100" />
+              <ProductCategoryVisual category={selectedProduct.category} showLabel className="w-full aspect-[4/3] rounded-lg" iconClassName="h-16 w-16" />
               <div className="grid grid-cols-2 gap-3">
                 {[
                   ['Category', selectedProduct.category],
@@ -1393,7 +1391,10 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   </span></label>}
                 {canAdjustStock && <label className="text-xs font-bold text-slate-700">Reorder level<input type="number" value={form.minAlert} onChange={(e) => setForm({ ...form, minAlert: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" />
                   <span className="mt-1 block text-[10px] font-semibold text-slate-500">Saved against the outlet above — FR-INV-08</span></label>}
-                <label className="text-xs font-bold text-slate-700">Image URL<input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} className="mt-1 w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 focus:outline-accent-500" /></label>
+                <div className="text-xs font-bold text-slate-700">
+                  Category visual
+                  <ProductCategoryVisual category={form.category || 'General'} className="mt-1 h-16 w-full rounded-lg" iconClassName="h-6 w-6" showLabel />
+                </div>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-200">
                 <button type="button" onClick={() => setAddModalOpen(false)} className="sm:w-1/3 py-3 rounded-lg border border-slate-300 font-bold text-sm text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>

@@ -29,9 +29,6 @@ export interface ProductWire {
   updatedAt: string;
 }
 
-const PLACEHOLDER_IMAGE =
-  'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=400&auto=format&fit=crop&q=80';
-
 export const toProduct = (wire: ProductWire): Product => ({
   id: wire.id,
   name: wire.name,
@@ -55,7 +52,9 @@ export const toProduct = (wire: ProductWire): Product => ({
   costPrice: {},
   stock: {},
   minStockAlert: {},
-  imageUrl: wire.imageUrl || PLACEHOLDER_IMAGE,
+  // Product identity is represented by its category colour and icon in the UI.
+  // Keep a supplied legacy URL for API compatibility, but never invent a photo.
+  imageUrl: wire.imageUrl || '',
   salesCount: 0,
   active: wire.active,
 });

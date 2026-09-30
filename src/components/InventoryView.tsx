@@ -7,8 +7,12 @@ import {
   Calculator,
   CheckCircle2,
   ClipboardList,
+  Download,
   Eye,
+  FileSpreadsheet,
+  FileText,
   Package,
+  RotateCcw,
   Search,
   ShieldAlert,
   Sliders,
@@ -18,6 +22,12 @@ import { InfoHint } from './InfoHint';
 import { TablePagination } from './TablePagination';
 import { Outlet, Product, StockMovement } from '../types';
 import type { PermissionSet } from '../permissions';
+import {
+  downloadStockCountCsv,
+  downloadStockCountPdf,
+  type StockCountSheetMeta,
+  type StockCountSheetRow,
+} from '../stockCountSheet';
 
 type InventoryMode = 'stock' | 'low-stock' | 'valuation' | 'exceptions' | 'count' | 'transfer';
 
@@ -33,6 +43,13 @@ interface InventoryViewProps {
 }
 
 const formatMoney = (amount: number) => `GH₵ ${amount.toFixed(2)}`;
+
+const newCountReference = () => {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const time = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+  return `COUNT-${date}-${time}`;
+};
 
 const productOutletKey = (product: Product, outlet: Outlet) =>
   product.outletId || (outlet.id === 'all-outlets' ? Object.keys(product.stock)[0] : outlet.id);
@@ -53,7 +70,15 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [countSession, setCountSession] = useState(false);
+  const [countReview, setCountReview] = useState(false);
   const [counted, setCounted] = useState<Record<string, string>>({});
+  const [countOutletId, setCountOutletId] = useState(() => currentOutlet.id === 'all-outlets' ? '' : currentOutlet.id);
+  const [countReference, setCountReference] = useState(newCountReference);
+  const [countDate, setCountDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [countedBy, setCountedBy] = useState('');
+  const [countNotes, setCountNotes] = useState('');
+  const [countSearch, setCountSearch] = useState('');
+  const [countError, setCountError] = useState('');
   const [transferFrom, setTransferFrom] = useState('');
   const [transferTo, setTransferTo] = useState('');
   const [transferProduct, setTransferProduct] = useState('');
@@ -66,6 +91,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   useEffect(() => {
     setActiveMode(mode);
   }, [mode]);
+
+  useEffect(() => {
+    if (!countSession) setCountOutletId(currentOutlet.id === 'all-outlets' ? '' : currentOutlet.id);
+  }, [countSession, currentOutlet.id]);
 
   const scopedProducts = useMemo(
     () =>
@@ -110,6 +139,65 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     return outletMatches && (largeAdjustment || writeOff || oversell);
   });
 
+  const countRows = useMemo(() => {
+    const needle = countSearch.trim().toLowerCase();
+    return products
+      .filter((product) => product.active)
+      .filter((product) => !countOutletId
+        || !product.outletId
+        || product.outletId === 'all-outlets'
+        || product.outletId === countOutletId)
+      .filter((product) => !needle || `${product.name} ${product.sku} ${product.category}`.toLowerCase().includes(needle))
+      .map((product) => ({
+        product,
+        quantity: countOutletId ? product.stock[countOutletId] || 0 : 0,
+        key: `${product.id}-${countOutletId}`,
+      }));
+  }, [countOutletId, countSearch, products]);
+
+  const allCountRows = useMemo(() => products
+    .filter((product) => product.active)
+    .filter((product) => !countOutletId
+      || !product.outletId
+      || product.outletId === 'all-outlets'
+      || product.outletId === countOutletId)
+    .map((product) => ({
+      product,
+      quantity: countOutletId ? product.stock[countOutletId] || 0 : 0,
+      key: `${product.id}-${countOutletId}`,
+    })), [countOutletId, products]);
+
+  const completedCounts = allCountRows.filter((row) => {
+    const value = counted[row.key];
+    return value !== '' && value !== undefined && Number.isFinite(Number(value)) && Number(value) >= 0;
+  }).length;
+  const stockCountRows: StockCountSheetRow[] = allCountRows.map((row) => {
+    const countedQuantity = Number(counted[row.key]);
+    return {
+      sku: row.product.sku,
+      product: row.product.name,
+      category: row.product.category,
+      systemQuantity: row.quantity,
+      countedQuantity,
+      variance: countedQuantity - row.quantity,
+      unit: row.product.baseUnit,
+    };
+  });
+  const countSummary = stockCountRows.reduce((summary, row) => {
+    if (row.variance > 0) summary.over += 1;
+    else if (row.variance < 0) summary.short += 1;
+    else summary.matched += 1;
+    summary.netVariance += row.variance;
+    return summary;
+  }, { over: 0, short: 0, matched: 0, netVariance: 0 });
+  const countMeta: StockCountSheetMeta = {
+    reference: countReference.trim(),
+    outlet: realOutlets.find((outlet) => outlet.id === countOutletId)?.name || countOutletId,
+    countDate,
+    countedBy: countedBy.trim(),
+    notes: countNotes.trim(),
+  };
+
   const title =
     activeMode === 'low-stock'
       ? 'Low Stock'
@@ -123,9 +211,31 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       ? 'Stock Transfer'
       : 'Stock On Hand';
 
-  const startCount = () => {
+  const startCount = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!countOutletId || !countReference.trim() || !countDate || !countedBy.trim()) return;
     setCountSession(true);
+    setCountReview(false);
     setCounted({});
+    setCountSearch('');
+    setCountError('');
+  };
+  const reviewCount = () => {
+    if (completedCounts !== allCountRows.length) {
+      setCountError(`Enter a physical quantity for all ${allCountRows.length} products. ${allCountRows.length - completedCounts} remain.`);
+      return;
+    }
+    setCountError('');
+    setCountReview(true);
+  };
+  const resetCount = () => {
+    setCountSession(false);
+    setCountReview(false);
+    setCounted({});
+    setCountSearch('');
+    setCountError('');
+    setCountReference(newCountReference());
+    setCountDate(new Date().toISOString().slice(0, 10));
   };
   const submitTransfer = (event: React.FormEvent) => {
     event.preventDefault();
@@ -357,10 +467,101 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             <ClipboardList className="w-6 h-6 text-accent-600" />
             <div>
               <h2 className="text-lg font-black text-slate-900">Physical Stock Count</h2>
-              <p className="text-sm text-slate-500">Stage 2 workflow: generate count sheet, enter counts, review variance, approve, then post batch adjustments.</p>
+              <p className="text-sm text-slate-500">Create a count session, record every physical quantity, review variances, then export the signed reconciliation sheet.</p>
             </div>
           </div>
-          {!countSession ? <div className="rounded-xl border border-slate-200 bg-slate-50 p-5"><p className="text-sm font-bold text-slate-800">Start a count session for {inventoryRows.length} products in this scope.</p><button type="button" onClick={startCount} className="mt-4 rounded-lg bg-accent-600 px-4 py-2.5 text-xs font-bold text-white">Generate count sheet</button></div> : <div className="overflow-hidden rounded-xl border border-slate-200"><div className="grid grid-cols-[1fr_120px_120px] bg-slate-50 px-4 py-3 text-[10px] font-black uppercase text-slate-500"><span>Product</span><span>System</span><span>Counted</span></div>{inventoryRows.slice(0, 12).map((row) => { const key = `${row.product.id}-${row.key}`; return <div key={key} className="grid grid-cols-[1fr_120px_120px] items-center border-t border-slate-100 px-4 py-2.5 text-xs"><span className="font-bold text-slate-800">{row.product.name}</span><span className="text-slate-500">{row.quantity} {row.product.baseUnit}</span><input type="number" min="0" value={counted[key] || ''} onChange={(event) => setCounted((current) => ({ ...current, [key]: event.target.value }))} className="w-24 rounded-md border border-slate-300 px-2 py-1.5 text-xs" aria-label={`Count for ${row.product.name}`} /></div>; })}<div className="flex justify-end border-t border-slate-200 p-3"><button type="button" onClick={() => setCountSession(false)} className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white">Submit count for review</button></div></div>}
+
+          {!countSession && (
+            <form onSubmit={startCount} className="rounded-xl border border-slate-200 bg-slate-50 p-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-900">Count session details</h3>
+                <p className="mt-1 text-xs text-slate-500">These details appear in both the PDF and spreadsheet export.</p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <label className="text-xs font-bold text-slate-700">Outlet *
+                  <select required value={countOutletId} onChange={(event) => setCountOutletId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900">
+                    <option value="" disabled>Select outlet</option>
+                    {realOutlets.map((outlet) => <option key={outlet.id} value={outlet.id}>{outlet.name}</option>)}
+                  </select>
+                </label>
+                <label className="text-xs font-bold text-slate-700">Count reference *
+                  <input required value={countReference} onChange={(event) => setCountReference(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900" />
+                </label>
+                <label className="text-xs font-bold text-slate-700">Count date *
+                  <input required type="date" value={countDate} onChange={(event) => setCountDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900" />
+                </label>
+                <label className="text-xs font-bold text-slate-700">Counted by *
+                  <input required value={countedBy} onChange={(event) => setCountedBy(event.target.value)} placeholder="Full name" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900" />
+                </label>
+              </div>
+              <label className="block text-xs font-bold text-slate-700">Notes
+                <textarea value={countNotes} onChange={(event) => setCountNotes(event.target.value)} rows={2} placeholder="Area counted, shelf range, team, or special instructions" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900" />
+              </label>
+              <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs font-semibold text-slate-500">{countOutletId ? `The selected outlet currently has ${allCountRows.length} active products to count.` : 'Select one outlet to prepare its count sheet.'}</p>
+                <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent-600 px-4 py-2.5 text-xs font-bold text-white"><ClipboardList className="h-4 w-4" /> Create count sheet</button>
+              </div>
+            </form>
+          )}
+
+          {countSession && !countReview && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {[
+                  ['Reference', countMeta.reference],
+                  ['Outlet', countMeta.outlet],
+                  ['Counted by', countMeta.countedBy],
+                  ['Progress', `${completedCounts} / ${allCountRows.length}`],
+                ].map(([label, value]) => <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="text-[10px] font-black uppercase text-slate-400">{label}</div><div className="mt-1 truncate text-sm font-bold text-slate-800">{value}</div></div>)}
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="relative w-full sm:max-w-md">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input value={countSearch} onChange={(event) => setCountSearch(event.target.value)} placeholder="Find product, SKU, or category" className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900" />
+                </div>
+                <button type="button" onClick={() => setCounted(Object.fromEntries(allCountRows.map((row) => [row.key, String(row.quantity)])))} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700">Mark all as system quantity</button>
+              </div>
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full min-w-[760px] text-left text-xs">
+                  <thead className="border-b border-slate-200 bg-slate-50 text-[10px] font-black uppercase text-slate-500"><tr><th className="px-4 py-3">Product</th><th className="px-4 py-3">Category</th><th className="px-4 py-3 text-right">System</th><th className="px-4 py-3 text-right">Physical count</th><th className="px-4 py-3 text-right">Variance</th></tr></thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {countRows.map((row) => {
+                      const value = counted[row.key];
+                      const variance = value === undefined || value === '' ? null : Number(value) - row.quantity;
+                      return <tr key={row.key} className="hover:bg-slate-50"><td className="px-4 py-3"><div className="font-bold text-slate-800">{row.product.name}</div><div className="font-mono text-[10px] text-slate-400">{row.product.sku}</div></td><td className="px-4 py-3 text-slate-600">{row.product.category}</td><td className="px-4 py-3 text-right font-bold text-slate-700">{row.quantity} {row.product.baseUnit}</td><td className="px-4 py-2 text-right"><input type="number" min="0" step="any" value={value || ''} onChange={(event) => { setCounted((current) => ({ ...current, [row.key]: event.target.value })); setCountError(''); }} className="w-28 rounded-md border border-slate-300 bg-white px-2.5 py-2 text-right text-sm font-bold text-slate-900" aria-label={`Physical count for ${row.product.name}`} /></td><td className={`px-4 py-3 text-right font-black ${variance === null || variance === 0 ? 'text-slate-500' : variance > 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{variance === null ? '—' : `${variance > 0 ? '+' : ''}${variance} ${row.product.baseUnit}`}</td></tr>;
+                    })}
+                    {countRows.length === 0 && <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-500">No products match this search.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+              {countError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-800">{countError}</p>}
+              <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:justify-between">
+                <button type="button" onClick={resetCount} className="rounded-lg border border-slate-300 px-4 py-2.5 text-xs font-bold text-slate-700">Cancel session</button>
+                <button type="button" onClick={reviewCount} className="rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-bold text-white">Review completed count</button>
+              </div>
+            </div>
+          )}
+
+          {countSession && countReview && (
+            <div className="space-y-5">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><div className="flex items-center gap-2 text-sm font-black text-emerald-900"><CheckCircle2 className="h-5 w-5" /> Count completed and ready to export</div><p className="mt-1 text-xs text-emerald-800">Exporting documents does not change stock balances. Approved differences must still be posted through the audited adjustment workflow for the counted outlet.</p></div>
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {[
+                  ['Matched', countSummary.matched, 'text-slate-900'],
+                  ['Over', countSummary.over, 'text-emerald-700'],
+                  ['Short', countSummary.short, 'text-rose-700'],
+                  ['Net variance', `${countSummary.netVariance > 0 ? '+' : ''}${countSummary.netVariance}`, countSummary.netVariance === 0 ? 'text-slate-900' : countSummary.netVariance > 0 ? 'text-emerald-700' : 'text-rose-700'],
+                ].map(([label, value, colour]) => <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="text-[10px] font-black uppercase text-slate-400">{label}</div><div className={`mt-1 text-xl font-black ${colour}`}>{value}</div></div>)}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => downloadStockCountPdf(countMeta, stockCountRows)} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-bold text-white"><FileText className="h-4 w-4" /> Export PDF</button>
+                <button type="button" onClick={() => downloadStockCountCsv(countMeta, stockCountRows)} className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-xs font-bold text-emerald-800"><FileSpreadsheet className="h-4 w-4" /> Export Excel / CSV</button>
+                <button type="button" onClick={() => setCountReview(false)} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-xs font-bold text-slate-700"><RotateCcw className="h-4 w-4" /> Edit counts</button>
+                <button type="button" onClick={resetCount} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-xs font-bold text-slate-700"><Download className="h-4 w-4" /> New session</button>
+              </div>
+              <div className="overflow-x-auto rounded-xl border border-slate-200"><table className="w-full min-w-[720px] text-left text-xs"><thead className="border-b border-slate-200 bg-slate-50 text-[10px] font-black uppercase text-slate-500"><tr><th className="px-4 py-3">Product</th><th className="px-4 py-3">Category</th><th className="px-4 py-3 text-right">System</th><th className="px-4 py-3 text-right">Counted</th><th className="px-4 py-3 text-right">Variance</th></tr></thead><tbody className="divide-y divide-slate-100">{stockCountRows.map((row) => <tr key={row.sku}><td className="px-4 py-3"><div className="font-bold text-slate-800">{row.product}</div><div className="font-mono text-[10px] text-slate-400">{row.sku}</div></td><td className="px-4 py-3 text-slate-600">{row.category}</td><td className="px-4 py-3 text-right">{row.systemQuantity} {row.unit}</td><td className="px-4 py-3 text-right font-bold">{row.countedQuantity} {row.unit}</td><td className={`px-4 py-3 text-right font-black ${row.variance === 0 ? 'text-slate-500' : row.variance > 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{row.variance > 0 ? '+' : ''}{row.variance} {row.unit}</td></tr>)}</tbody></table></div>
+            </div>
+          )}
         </div>
       )}
 

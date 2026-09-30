@@ -36,7 +36,7 @@ Primary sidebar entries:
 | E-11 | Valuation | Implemented | Per-outlet and combined valuation at weighted average cost. |
 | E-12 | Exceptions | Implemented demo | Exceptions view lists oversells, write-offs and large adjustment candidates from movement data. |
 | E-13 | No stock movement | Implemented | Stock detail drawer shows no-movement state with receive-stock guidance. |
-| E-14 | Stock count | Implemented placeholder | S2 workflow surface shows count lifecycle steps; batch posting still deferred. |
+| E-14 | Stock count | Implemented partial | Session metadata, all-product entry, completion validation, variance review and PDF/CSV sheets are live; approved batch posting remains deferred. |
 | E-15 | Transfer | Implemented placeholder | S3 transfer surface shows despatch/receive structure; transfer workflow is deferred by PRD assumptions. |
 
 ## Notes For Next Pass

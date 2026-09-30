@@ -231,7 +231,7 @@ and how to reverse it are on `Permission.isFutureStage()`.
 - [x][x] Low stock flagged at or below reorder level, per outlet — FR-INV-08 · `E-10`
 - [x][x] Valuation at weighted average cost, per outlet and combined — FR-INV-09 · `E-11` *(the inventory valuation report is on the reports screen behind `price.view_cost` — the valuation *is* the cost, so the permission gates the report rather than a column of it)*
 - [x][x] Exceptions view: oversells, large adjustments, write-offs — FR-INV-10 · `E-12`
-- [~][-] Stock count: generate sheet, enter counts, review variance, approve, post as one batch — FR-INV-11 · `E-14` *(Stage 2; entry works, does not post)*
+- [~][-] Stock count: generate sheet, enter counts, review variance, approve, post as one batch — FR-INV-11 · `E-14` *(Stage 2; session metadata, full-catalogue entry, variance review and PDF/CSV export work; approved batch posting remains deferred)*
 - [-][-] Quarantine state for faulty goods — FR-INV-12 *(Stage 3)*
 
 ### Non-functional

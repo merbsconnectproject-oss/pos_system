@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, X, Package, Monitor, ArrowRight, Wallet, Users, BarChart3 } from 'lucide-react';
 import { Product } from '../types';
+import { ProductCategoryVisual } from './ProductCategoryVisual';
 
 interface GlobalSearchModalProps {
   isOpen: boolean;
@@ -47,7 +48,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   return (
     <div 
       onClick={onClose}
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-start justify-center pt-16 sm:pt-24 p-4 sm:p-6 animate-modal-backdrop"
+      className="ui-command-layer fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-70 flex items-start justify-center p-4 sm:p-6 animate-modal-backdrop"
     >
       <div 
         onClick={(e) => e.stopPropagation()}
@@ -135,11 +136,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                     className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 border border-slate-200 hover:border-slate-300 cursor-pointer text-sm transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <img
-                        src={p.imageUrl}
-                        alt={p.name}
-                        className="w-10 h-10 rounded-lg object-cover bg-slate-100 border border-slate-300 shrink-0"
-                      />
+                      <ProductCategoryVisual category={p.category} className="h-10 w-10 shrink-0 rounded-lg" iconClassName="h-5 w-5" />
                       <div>
                         <div className="font-bold text-slate-900">{p.name}</div>
                         <div className="text-xs text-slate-500 font-mono mt-0.5">

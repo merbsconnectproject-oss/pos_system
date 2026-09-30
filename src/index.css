@@ -34,6 +34,9 @@
 
 @layer base {
   :root {
+    /* Kept alongside the root font size so responsive chrome can account for
+       the selected readability setting as well as the physical viewport. */
+    --ui-scale: 1;
     /* Counter Datasheet Design System Tokens */
     --accent: #c55200;
     --accent-fg: #ffffff;
@@ -432,6 +435,169 @@ body {
 .animate-sheet-up {
   animation: sheetSlideInUp 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   will-change: transform, opacity;
+}
+
+/* Responsive overlay contract ------------------------------------------------
+ * AppWindow does not cause the sizing issue: it merely exposes dialogs that
+ * were centred inside a fixed viewport while their content kept growing with
+ * the user's text setting. Every centred full-screen overlay now owns a safe
+ * scroll boundary. Its direct panel is constrained by the *usable* dynamic
+ * viewport, not a fixed 88/92vh guess, and narrow modal grids respond to the
+ * panel rather than to the much wider application window. A panel's own
+ * max-width remains authoritative so responsiveness never stretches a dialog
+ * beyond its designed proportions.
+ */
+.fixed.inset-0.items-center {
+  --modal-gutter: clamp(0.5rem, 2vmin, 1.5rem);
+  align-items: safe center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--modal-gutter);
+  scrollbar-gutter: stable;
+}
+
+.fixed.inset-0.items-center > :first-child {
+  box-sizing: border-box;
+  container-type: inline-size;
+  max-height: calc(100dvh - var(--modal-gutter) - var(--modal-gutter)) !important;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* The till is a desktop workspace, not a generic form dialog. In normal
+   AppWindow mode it scales as one 16:9 frame: a short window reduces its width
+   and a narrow window reduces its height. This prevents the formerly wide,
+   flattened layout while maximized mode still deliberately fills the screen. */
+.ui-pos-window-normal {
+  aspect-ratio: 16 / 9;
+  height: auto !important;
+  max-height: calc(100dvh - 2 * var(--modal-gutter)) !important;
+  /* 165dvh is a 16:9 width whose resulting height is 92.8dvh. Keeping the
+     arithmetic in like units avoids relying on newer calc multiplication. */
+  width: min(96vw, 1550px, 165dvh) !important;
+}
+
+/* Small confirmation cards and printable slips scroll as a whole. Larger
+   flex-column dialogs retain their fixed header/footer and scrollable body. */
+.fixed.inset-0.items-center > :first-child:not(.flex) {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.fixed.inset-0.items-center > .flex.flex-col > :is(.flex-1, .overflow-y-auto, .overflow-auto),
+.fixed.inset-0.items-center > :first-child .min-h-0 {
+  min-height: 0;
+}
+
+.fixed.inset-0.items-center > :first-child :is(h1, h2, h3, h4, p, label, span) {
+  overflow-wrap: anywhere;
+}
+
+.fixed.inset-0.items-center > :first-child :is(input, select, textarea),
+.fixed.inset-0.items-center > :first-child :is(.flex, .grid) > * {
+  min-width: 0;
+}
+
+/* Viewport breakpoints can leave three- and four-column forms inside a narrow
+   dialog because the underlying page is wide. Container queries make those
+   grids honour the space the dialog actually has; the rem threshold grows
+   with the selected font size, so larger text stacks sooner. */
+@container (max-width: 25rem) {
+  .fixed.inset-0.items-center > :first-child :is(
+    [class*="sm:grid-cols-"],
+    [class*="md:grid-cols-"],
+    [class*="lg:grid-cols-"]
+  ) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .fixed.inset-0.items-center > :first-child :is(
+    [class*="sm:col-span-"],
+    [class*="md:col-span-"],
+    [class*="lg:col-span-"]
+  ) {
+    grid-column: 1 / -1 !important;
+  }
+
+  .fixed.inset-0.items-center > :first-child > [class*="border-t"]:has(button) {
+    align-items: stretch;
+    flex-direction: column;
+    flex-wrap: wrap;
+  }
+
+  .fixed.inset-0.items-center > :first-child > [class*="border-t"]:has(button) button {
+    width: 100%;
+  }
+}
+
+/* Short laptop/AppWindow viewports must start at the top edge. `safe center`
+   is the normal path; this explicit fallback also covers older WebView builds. */
+@media (max-height: 48rem) {
+  .fixed.inset-0.items-center {
+    --modal-gutter: 0.5rem;
+    align-items: flex-start;
+  }
+}
+
+/* The command palette is intentionally top-aligned, but its old 4–6rem top
+   padding could consume most of a short AppWindow. Give it the same reachable
+   dynamic-viewport boundary without forcing it into vertical centring. */
+.ui-command-layer {
+  --modal-gutter: clamp(0.5rem, 4vmin, 3rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-top: var(--modal-gutter);
+}
+
+.ui-command-layer > .animate-command-palette {
+  max-height: calc(100dvh - var(--modal-gutter) - 0.5rem) !important;
+  min-height: 0;
+  min-width: 0;
+}
+
+@media (max-height: 48rem) {
+  .ui-command-layer {
+    --modal-gutter: 0.5rem;
+  }
+}
+
+/* Drawers remain full-height, but never become wider than the live viewport
+   when their rem-based max width grows with the typography setting. */
+.fixed.inset-0.justify-end > :is(.animate-drawer-right, [class*="h-full"]) {
+  max-width: 100vw;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* General workspace containment: flex/grid children and long identifiers can
+   shrink instead of widening the native AppWindow. Tables keep intentional
+   width and scroll inside their dedicated overflow wrappers. */
+.app-main,
+.app-main > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.app-main :is(.flex, .grid) > * {
+  min-width: 0;
+}
+
+.app-main :is(img, svg, canvas) {
+  max-width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-modal-backdrop,
+  .animate-modal-card,
+  .animate-command-palette,
+  .animate-drawer-right,
+  .animate-drawer-left,
+  .animate-sheet-up {
+    animation: none !important;
+    transform: none !important;
+  }
 }
 
 /* Analytics surfaces use one restrained shell; chart series keep their own semantic colors. */

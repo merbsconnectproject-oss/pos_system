@@ -30,5 +30,6 @@ export const applyTypography = (fontFamily: FontFamily, scalePercent: number) =>
   const choice = FONT_CHOICES.find((item) => item.key === fontFamily) ?? FONT_CHOICES[0];
   const safeScale = Math.min(130, Math.max(90, scalePercent));
   document.documentElement.style.setProperty('--font-sans', choice.stack);
+  document.documentElement.style.setProperty('--ui-scale', String(safeScale / 100));
   document.documentElement.style.fontSize = `${15.5 * safeScale / 100}px`;
 };

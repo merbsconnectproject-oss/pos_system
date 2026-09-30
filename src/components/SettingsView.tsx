@@ -2643,7 +2643,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     {backupStatus.history.length > 0 && (
                       <div className="pt-1">
                         <div className="text-[11px] font-bold text-slate-700 mb-1.5">Recent runs</div>
-                        <div className="max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-white">
+                        <div className="max-h-52 overflow-auto rounded-xl border border-slate-200 bg-white">
                           <table className="w-full text-[11px]">
                             <thead className="bg-slate-50 text-slate-500 sticky top-0">
                               <tr>

@@ -1216,8 +1216,8 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-xs animate-modal-backdrop">
           <div className="bg-white w-full max-w-md rounded-xl shadow-2xl border border-slate-300 overflow-hidden animate-modal-card p-6 sm:p-8 space-y-5 font-mono text-sm">
             <div className="text-center border-b border-dashed border-slate-300 pb-4 space-y-1.5 font-sans">
-              <h3 className="font-black text-lg text-slate-900">RADIANCE LIGHTING</h3>
-              <p className="text-xs text-slate-500">Showroom East Legon • Accra, Ghana</p>
+              <h3 className="font-black text-lg text-slate-900">{paymentReceiptSlip.plan.outletName || outlets.find((outlet) => outlet.id === paymentReceiptSlip.plan.outletId)?.name || currentOutlet.name}</h3>
+              <p className="text-xs text-slate-500">{(() => { const outlet = outlets.find((item) => item.id === paymentReceiptSlip.plan.outletId); return outlet ? [outlet.address, outlet.town].filter(Boolean).join(' • ') : paymentReceiptSlip.plan.outletId; })()}</p>
               <div className="text-xs bg-slate-100 text-slate-700 px-3 py-1 rounded-full inline-block font-mono font-bold">
                 INSTALLMENT PAYMENT RECEIPT
               </div>

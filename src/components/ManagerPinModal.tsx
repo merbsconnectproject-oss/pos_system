@@ -106,7 +106,6 @@ export const ManagerPinModal: React.FC<ManagerPinModalProps> = ({
               className="w-full text-center text-3xl tracking-widest font-black py-3.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:outline-accent-500 text-slate-900"
             />
             {error && <p className="text-xs text-red-600 font-bold mt-2">{error}</p>}
-            <p className="text-xs text-slate-400 mt-2 text-center">Default authorized manager PIN for simulation: <strong>1234</strong></p>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-slate-200">
