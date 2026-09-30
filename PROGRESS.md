@@ -1,6 +1,6 @@
 # Progress
 
-**Updated** 2026-09-27 · **Tests** 570 backend (3 skipped) + 102 frontend green · **DB** migrations V1–V34 validated
+**Updated** 2026-09-30 · **Tests** 570 backend (3 live R2 checks skipped) + 115 frontend green · **DB** migrations V1–V34 validated
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (258 items, dual checkbox).
@@ -22,7 +22,7 @@ E ██████████  Pricing            100%  branch overrides, cus
 F ██████████  Inventory          100%   FR-INV-06 enforced against P's threshold
 G ██████████  Point of sale      100%   discount ceiling enforced; gates 3 and 4 pass
 H ██████████  Payments            100%  cash, split, reference-confirmed non-cash, exact settlement, change and duplicate protection are server-enforced
-I █████████░  Receipts & printing 90%   layout, ESC/POS, both widths, audited reprints, preview; the Windows print service needs the hardware
+I ██████████  Receipts & printing 100%  one renderer, ESC/POS at both widths, audited reprints and POS-80 hardware validation
 J ██████████  Shifts & cash      100%   blind/manual close plus audited 23:00 automatic close; gates remain green
 K ██████████  Suppliers & receipt  100%  supplier directory, outlet-scoped goods receipts, weighted-average costing, reversals, and supplier/product purchase history are API-backed and wired in the frontend
 L ██████████  Customers          100%   shared directory, phone lookup, pricing and cross-outlet history
@@ -36,10 +36,21 @@ S ██████████  Expenses & credit  100%  expenses, P&L and ins
 T ██████████  Returns & swaps    100%  wired end to end; net of returns now reaches the takings and the P&L
 ```
 
-570 backend tests green (3 skipped) across the full 2026-09-27 Testcontainers run,
-including Cloud Sync scheduling and Windows installer acceptance checks; the last
-recorded frontend contract and Vitest suite is also green (102 tests). Three live R2
-checks remain on-demand because they require configured credentials.
+570 backend tests green (3 skipped) across the full 2026-09-30 Testcontainers run,
+including Cloud Sync scheduling and Windows installer acceptance checks; the frontend
+is green at **115 tests** across 17 files, with `tsc --noEmit` clean and the contract
+check passing all 41 barcodes over 32 products. Three live R2 checks remain on-demand
+because they require configured credentials. The offline Windows build, onboarding and
+installation have completed successfully on the target machine.
+
+**Read the XML, not the `.txt`.** `target/surefire-reports/*.txt` sums to **201**, not
+570, and the build still exits 0. The outer class of every `@Nested` suite writes
+`Tests run: 0` to its `.txt` while its nested tests are counted only in the `.xml` — 29
+of the 55 classes report zero that way, `SaleControllerTest` among them at 11 seconds
+of elapsed time for its supposed nothing. The `.xml` `testsuite` attributes agree with
+Maven: 570 tests, 0 failures, 0 errors, 3 skipped. This is the same trap recorded on
+2026-09-23 in a different disguise, and it is worth naming once more because the
+cheap glance is the wrong one.
 
 ---
 
@@ -307,7 +318,7 @@ named approver was trusted from the request body; it is now verified against
 
 ---
 
-## I · Receipts and printing — 98%
+## I · Receipts and printing — done
 
 | Requirement | Status |
 |---|---|
@@ -516,9 +527,12 @@ is actually there.
 
 ## Next up
 
-1. **I · Receipts & printing** — software receipt generation, preview, ESC/POS
-   layouts and audited reprints are complete; physical printer validation remains.
-2. Release packaging and an on-site hardware acceptance pass.
+All implementation, physical printing, packaging and baseline installation work tracked
+here is complete. What remains is operational handover rather than product development:
+
+1. Install the final frontend refresh over the accepted Windows baseline.
+2. Complete cashier/manager handover and the one-session competence check.
+3. Run the three live R2 checks when production bucket credentials are available.
 
 ---
 
@@ -530,8 +544,8 @@ is actually there.
 | ~~**One instance, or one per shop?**~~ | *Taken* | **One per shop**, with the owner running the same application and Cloudflare R2 as a one-way postbox between them. Settled by three facts about the client: the two shops sell largely different ranges, the overlap is small but real, and the second outlet's internet cannot be relied on to sell. Written up in `../pos-system/docs/ARCHITECTURE-topology-and-sync.md`. |
 | ~~**31 vs 33 permission codes**~~ | *Taken* | Now **36**. The three added with the accounting module are all enforced. `customer.credit` stopped being a placeholder when installment plans got endpoints; `stock.transfer` is the last code flagged `futureStage`. `PermissionEnforcementTest` fails if any code is grantable with nothing behind it. |
 | **Acceptance criterion 4 is unsatisfiable** | You | One terminal per outlet + per-outlet stock = the two terminals can never contend. Reword to goods-receipt-vs-sale. |
-| **Returns / swaps expected live?** | Client | **Expenses and installment plans shipped 2026-09-14** and are no longer in question. Returns and exchanges are the last of the Stage 2 trio: `ReturnsExchangesView` has no backend and `sale.refund` authorises nothing. The owner has asked to see swaps in the combined view, which cannot happen until they are built. |
-| **Thermal printer ordered?** | You | Acceptance criterion 2 cannot close without one |
+| ~~**Returns / swaps expected live?**~~ | *Resolved* | Returns and swaps are API-backed, authorised, audited and netted through reports. |
+| ~~**Thermal printer ordered?**~~ | *Resolved* | POS-80 printing was physically validated with text, graphics, feed and cut. |
 
 ---
 
@@ -948,7 +962,7 @@ the 512 px PNG into the matching hicolor icon directory. The packaging test
 checks that every Windows shortcut names the installed icon, because a shortcut
 targeting `wscript.exe` otherwise silently inherits Windows' generic script-host
 icon. The full backend suite is green at 570 tests (3 live R2 checks skipped),
-and the frontend contract, 102 tests, production build, and live dashboard render
+and the frontend contract, 115 tests, production build, and live dashboard render
 are green.
 
 ### The service right helper compiles on the machine it configures — 2026-09-28
@@ -970,3 +984,90 @@ then rejected its own successful LSA grant before PostgreSQL could start. The LS
 helper now reads `SeServiceLogonRight` back with `LsaEnumerateAccountRights`, so
 grant and verification use the same live Windows policy. The `secedit` export is
 kept only for the cheap pre-check and as the fallback grant mechanism.
+
+## The stock count that prints, and two audits that are now tests — 2026-09-30
+
+Three pieces of frontend work, and the thing they have in common is that each
+replaces a claim with something a machine re-checks. The final release-safety pass
+also removed a displayed demo PIN and made both voucher previews outlet-aware.
+Frontend tests went 102 → 115.
+
+### FR-INV-11, the half that can be honest
+
+A physical count is done on paper, walking the aisles, and the screen had no way
+to produce the paper. `stockCountSheet.ts` builds both documents the shop actually
+uses: an Excel-openable CSV — BOM-prefixed and CRLF-terminated, so Excel opens it
+without an import wizard and a product named `Cable, 2.5mm "twin"` survives — and a
+**dependency-free landscape A4 PDF**, written as raw PDF objects with a Helvetica
+Type1 base font, 24 rows a page, each page numbered. No library.
+
+Writing the PDF by hand rather than adding one is a deliberate trade. The counter
+is an offline Windows install behind a shop's connection; a rendering dependency
+is megabytes in the installer, a licence to carry, and one more thing to be
+vulnerable later — for a document that is seven columns of left-aligned text. The
+cost is that the generator is ours to maintain, and the byte offsets in the xref
+table are exactly the kind of thing that breaks silently, so the test opens the
+output and asserts every count row is in it rather than asserting it is a PDF.
+
+**The screen says what it does not do.** After review it reads: *"Exporting
+documents does not change stock balances. Approved differences must still be
+posted through the audited adjustment workflow for the counted outlet."* That is
+the line between this and FR-INV-11 proper. Posting a count as one batch is still
+Stage 2, and a green tick over an export would have been the third time this
+project called a screen a feature. The count session, the variance column and the
+review step are real; the posting is not, and now says so on the screen rather than
+only in this file.
+
+### The overlay audit is no longer a claim in a document
+
+`RESPONSIVE-LAYOUT-AUDIT.md` recorded that the modals had been checked. A document
+saying something was checked stops being true the first time somebody adds a modal.
+`responsiveLayout.test.ts` now reads `index.css`, `typography.ts`, `PosModal.tsx`
+and **every** `.tsx` under `components/` and asserts the rules directly:
+
+- Every centred overlay is capped at `calc(100dvh - gutter - gutter)` and scrolls
+  inside itself — `dvh`, not `vh`, because a phone's address bar is the difference
+  between a visible Confirm button and one under the fold.
+- `align-items: safe center`, so a panel taller than the screen pins to the top
+  edge rather than centring its overflow off both ends where nothing can scroll to it.
+- The shared panel rule sets **no** `max-width`, so each modal keeps its own.
+- Any full-screen flex overlay must be deliberately centred, edge-docked,
+  top-aligned, responsive-only, or the POS's own maximised/sheet mode. Anything
+  else fails the test with the offending class string.
+
+That last assertion is the one with teeth: it fails on a *new* overlay nobody
+thought about, which is the failure the markdown audit could never catch. It also
+pins the POS window's aspect ratio and the search field's explicit text colour —
+both regressions that had been fixed before and could return.
+
+### Product imagery that refuses to invent a photograph
+
+`ProductCategoryVisual` gives every product a tile: 16 hand-picked category rules
+matched on terms (lighting, solar, cable, switch/socket, breaker, conduit, power
+tool, hand tool, paint, plumbing, fastener, safety, battery, security, measure) with
+a chosen icon and a fixed colour, and a curated fallback palette assigned by a
+stable hash for categories the merchant invents. The same category is the same
+colour on every screen and every counter.
+
+The test that matters is the third one: **it does not manufacture a stock-photo
+URL for a product without an image.** The easy version of this feature reaches for
+a placeholder image service — which is a network call from an offline till, a
+photograph of somebody else's product presented as yours, and a grey box when the
+connection is down. A coloured tile with the category's icon is honest at a glance
+and costs nothing.
+
+### Two things found and fixed before release
+
+`InstallmentsView` and `ReturnsExchangesView` hard-coded Radiance Lighting into
+their on-screen voucher previews. They now render the outlet name, address and town
+recorded by the plan or return. `ManagerPinModal` also displayed the old simulation
+PIN even though approval already went to the server; that coaching text is gone.
+`releaseSafety.test.ts` pins both constraints so neither defect can return quietly.
+
+### Windows build and installation accepted
+
+The offline installer built successfully and completed onboarding and installation
+on the target Windows machine. The dedicated app-window launcher starts the installed
+counter correctly. The working backend is tagged
+`snapshot/windows-smoke-green-2026-09-30`; the final release packages this frontend
+refresh against that accepted configuration and repeats the automated smoke test.
