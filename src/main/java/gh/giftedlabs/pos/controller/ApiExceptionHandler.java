@@ -3,6 +3,7 @@ package gh.giftedlabs.pos.controller;
 import gh.giftedlabs.pos.dto.ApiError;
 import gh.giftedlabs.pos.exception.AuthenticationFailedException;
 import gh.giftedlabs.pos.exception.OutletCodeTakenException;
+import gh.giftedlabs.pos.exception.TerminalCodeTakenException;
 import gh.giftedlabs.pos.exception.OutletNotFoundException;
 import gh.giftedlabs.pos.exception.OutletNotPermittedException;
 import gh.giftedlabs.pos.exception.CatalogueConflictException;
@@ -106,6 +107,13 @@ public class ApiExceptionHandler {
     public ResponseEntity<ApiError> onOutletCodeTaken(OutletCodeTakenException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiError("OUTLET_CODE_TAKEN", ex.getMessage(), Map.of("code", ex.getCode())));
+    }
+
+    /** BR-6 · FR-SET-05: two tills at one branch cannot share a code. */
+    @ExceptionHandler(TerminalCodeTakenException.class)
+    public ResponseEntity<ApiError> onTerminalCodeTaken(TerminalCodeTakenException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError("TERMINAL_CODE_TAKEN", ex.getMessage(), Map.of("code", ex.getCode())));
     }
 
     /** FR-PROD-02/03: a duplicate SKU or barcode is a conflict, not bad input. */

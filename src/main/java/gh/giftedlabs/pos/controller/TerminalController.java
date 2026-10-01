@@ -1,6 +1,7 @@
 package gh.giftedlabs.pos.controller;
 
 import gh.giftedlabs.pos.entity.Terminal;
+import gh.giftedlabs.pos.exception.TerminalCodeTakenException;
 import gh.giftedlabs.pos.repository.TerminalRepository;
 import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.security.PosPrincipal;
@@ -55,9 +56,27 @@ public class TerminalController {
     @Transactional
     public TerminalView create(@Valid @RequestBody NewTerminal body,
                                @AuthenticationPrincipal PosPrincipal actor, HttpServletRequest request) {
+        String code = body.code().toUpperCase();
+
+        // `terminal_code_unique_per_outlet` would refuse this anyway, but as a
+        // constraint violation surfacing as a 500 — the generic "tell a
+        // manager" for what is a typo somebody can fix in the field in front of
+        // them. Checked here so the answer names the code and the branch.
+        //
+        // The index stays the authority: two people adding "02" at the same
+        // instant both pass this read and one loses at the constraint. That
+        // race ends in a 500 rather than corrupt data, which is the right way
+        // round, and it is rare enough not to be worth a lock over.
+        // Not the active-only list: the unique index does not care whether a
+        // till was retired, so neither can this — otherwise deactivating "02"
+        // would let somebody add a second "02" that the database then refuses.
+        if (terminals.findByOutletIdAndCodeIgnoreCase(body.outletId(), code).isPresent()) {
+            throw new TerminalCodeTakenException(code);
+        }
+
         long start = terminals.highestAllocatedAt(body.outletId()) + 1;
         Terminal terminal = terminals.save(
-                new Terminal(body.outletId(), body.code().toUpperCase(), body.name(), start, BLOCK_SIZE));
+                new Terminal(body.outletId(), code, body.name(), start, BLOCK_SIZE));
 
         // No terminal_id on this one. The audit log is written in its own
         // transaction (REQUIRES_NEW, so a failure cannot take the record of the

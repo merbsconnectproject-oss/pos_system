@@ -133,6 +133,45 @@ class TerminalControllerTest {
         }
 
         @Test
+        @DisplayName("a code already used at this branch is refused by name, not by a 500 — BR-6")
+        void duplicateCodeIsAConflict() throws Exception {
+            Session session = signIn(managerName);
+
+            mvc.perform(session.authorise(post("/api/terminals"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(till("D1", "Counter D1"))))
+                    .andExpect(status().isCreated());
+
+            // `terminal_code_unique_per_outlet` would refuse this regardless.
+            // What is asserted is the answer: a conflict that names the code,
+            // rather than the constraint arriving as the generic 500 that tells
+            // a shopkeeper to fetch a manager for what is a typo they can fix.
+            mvc.perform(session.authorise(post("/api/terminals"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(till("D1", "Another counter"))))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("TERMINAL_CODE_TAKEN"))
+                    .andExpect(jsonPath("$.details.code").value("D1"));
+        }
+
+        @Test
+        @DisplayName("case is not a way around the one code per till rule")
+        void duplicateCodeIgnoresCase() throws Exception {
+            Session session = signIn(managerName);
+
+            mvc.perform(session.authorise(post("/api/terminals"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(till("e1", "Counter E1"))))
+                    .andExpect(status().isCreated());
+
+            // Stored uppercased, so "e1" and "E1" are one till on the receipt.
+            mvc.perform(session.authorise(post("/api/terminals"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(till("E1", "Counter E1 again"))))
+                    .andExpect(status().isConflict());
+        }
+
+        @Test
         @DisplayName("the code becomes part of the receipt number, so it is constrained")
         void codeIsValidated() throws Exception {
             Session session = signIn(managerName);
