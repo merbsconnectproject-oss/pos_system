@@ -90,8 +90,10 @@ logging:
 
 pos:
   printer:
-    # Exact operating-system queue name. Blank uses the system default.
-    name: ${POS_PRINTER_NAME:POS-80}
+    # Blank — the normal case — detects the counter's thermal printer by its
+    # installed queue name, whatever the driver called it. Set this only to
+    # disambiguate a counter with more than one thermal printer attached.
+    name: ${POS_PRINTER_NAME:}
   bootstrap:
     enabled: ${POS_BOOTSTRAP_ADMIN_ENABLED:false}
     username: ${POS_BOOTSTRAP_ADMIN_USERNAME:admin}
