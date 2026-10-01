@@ -122,6 +122,8 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
     reprint: boolean;
   } | null>(null);
   const [receiptPrintStatus, setReceiptPrintStatus] = useState<'ready' | 'printing' | 'sent' | 'failed'>('ready');
+  /** The queue the server printed to. Detected on the counter, so never assumed here. */
+  const [receiptPrintedTo, setReceiptPrintedTo] = useState<string | null>(null);
 
   // Calculate Overdue & Filtered Plans
   const processedPlans = useMemo(() => {
@@ -219,6 +221,7 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
         isReprint: receipt.reprint,
         payload: receipt.escPos,
       });
+      setReceiptPrintedTo(result.ok ? result.printer : null);
       setReceiptPrintStatus(result.ok ? 'sent' : 'failed');
     } catch {
       setReceiptPrintStatus('failed');
@@ -1309,7 +1312,9 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
               </button>
             </div>
             {receiptPrintStatus === 'sent' && (
-              <p className="text-center text-xs font-bold text-emerald-700 font-sans">Receipt sent to POS-80.</p>
+              <p className="text-center text-xs font-bold text-emerald-700 font-sans">
+                {receiptPrintedTo ? `Receipt sent to ${receiptPrintedTo}.` : 'Receipt sent to the printer.'}
+              </p>
             )}
             {receiptPrintStatus === 'failed' && (
               <p className="text-center text-xs font-bold text-rose-700 font-sans">

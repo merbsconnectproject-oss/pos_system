@@ -28,7 +28,13 @@ export interface PrintJob {
 }
 
 export type PrintResult =
-  | { ok: true }
+  /**
+   * `printer` is the queue the server actually used, which is not necessarily
+   * the one configured: the counter's printer is detected by name, so the only
+   * honest way to tell the cashier where the paper came out is to report what
+   * came back.
+   */
+  | { ok: true; printer: string }
   | { ok: false; reason: 'service-unavailable' | 'printer-offline' | 'error'; detail: string };
 
 export const PRINT_SERVICE_URL = '/api/printing/receipt';
@@ -36,11 +42,11 @@ export const PRINT_SERVICE_URL = '/api/printing/receipt';
 /** Never throws. A print failure is a reportable outcome, not an exception. */
 export async function printReceipt(job: PrintJob): Promise<PrintResult> {
   try {
-    await request<{ ok: true; printer: string; receiptNumber: string }>(PRINT_SERVICE_URL, {
-      method: 'POST',
-      body: JSON.stringify(job),
-    });
-    return { ok: true };
+    const accepted = await request<{ ok: true; printer: string; receiptNumber: string }>(
+      PRINT_SERVICE_URL,
+      { method: 'POST', body: JSON.stringify(job) },
+    );
+    return { ok: true, printer: accepted.printer };
   } catch (error) {
     if (error instanceof ApiError && ['PRINTER_OFFLINE', 'PRINTER_NOT_FOUND'].includes(error.code)) {
       return { ok: false, reason: 'printer-offline', detail: error.message };
