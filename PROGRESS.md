@@ -1,6 +1,6 @@
 # Progress
 
-**Updated** 2026-09-30 · **Tests** 570 backend (3 live R2 checks skipped) + 115 frontend green · **DB** migrations V1–V34 validated
+**Updated** 2026-09-30 · **Tests** 572 backend (3 live R2 checks skipped) + 124 frontend green · **DB** migrations V1–V34 validated
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (258 items, dual checkbox).
@@ -530,7 +530,7 @@ is actually there.
 All implementation, physical printing, packaging and baseline installation work tracked
 here is complete. What remains is operational handover rather than product development:
 
-1. Install the final frontend refresh over the accepted Windows baseline.
+1. Deploy the final accepted installer to the shop counters.
 2. Complete cashier/manager handover and the one-session competence check.
 3. Run the three live R2 checks when production bucket credentials are available.
 
@@ -1066,8 +1066,87 @@ PIN even though approval already went to the server; that coaching text is gone.
 
 ### Windows build and installation accepted
 
-The offline installer built successfully and completed onboarding and installation
-on the target Windows machine. The dedicated app-window launcher starts the installed
-counter correctly. The working backend is tagged
-`snapshot/windows-smoke-green-2026-09-30`; the final release packages this frontend
-refresh against that accepted configuration and repeats the automated smoke test.
+The baseline offline installer built successfully and completed onboarding and
+installation on the target Windows machine. Final workflow run `36757872789` then
+packaged frontend `83c6613` against backend `2687eee` and repeated the complete
+clean-Windows installation smoke test in both launch modes. Both PostgreSQL and the
+application service were running and `/actuator/health` reported `UP` in each job.
+
+The uploaded `0.1.0` release artifacts are:
+
+- **AppWindow** — `Radiance-POS-Setup-0.1.0-x64.exe`
+  SHA-256 `C84008A4F13585BDBCF6FDA0044FF96D7544D25B416E70C5985F24C6DFAB1AC8`
+- **Browser** — `Radiance-POS-Setup-0.1.0-x64-browser.exe`
+  SHA-256 `3E4938B72BAF005AD19D25251EB2FA59DE88258AF8E66CF4ABF9AC225E6A3113`
+
+GitHub finalized both artifacts successfully. AppWindow is the production default;
+Browser remains the troubleshooting/comparison build. The working backend baseline
+remains tagged `snapshot/windows-smoke-green-2026-09-30`.
+
+## The till that could never be added — 2026-09-30
+
+Re-verified the seven defects recorded above against the running system rather
+than against this file. **All seven are genuinely fixed**, and the evidence is
+the suites rather than a reading: `TerminalControllerTest`, `SaleControllerTest`
+and `PermissionEnforcementTest` are green, the cart discount travels as its own
+field and is apportioned across the lines, `requireAtOrAboveFloor` measures the
+price *after* every discount, `sale.discount` buys the discretion before the
+ceiling answers how much, and `attachCustomer` re-prices on all four paths that
+attach a customer while a held sale deliberately keeps the prices it was parked
+with.
+
+One was not fixed, and it was not on the list.
+
+### Multiple tills existed everywhere except in the application
+
+`POST /api/terminals` and `POST /api/terminals/{id}/block` have existed since
+BR-6 was built, behind `settings.terminal`, with tests covering block allocation,
+non-overlap, code validation and who may call them. **Nothing called either.**
+`terminalsApi` carried `atOutlet` and nothing else.
+
+So every outlet had exactly the one till its creation seeded, `Counter 1`, and
+there was no way to add a second from anywhere in the interface. A shop opening
+another counter had nowhere to ring up from, and the feature reported complete
+was complete on the half nobody can reach.
+
+Underneath it, `handleStartShift` called `shiftsApi.open(tills[0].id, ...)` —
+while its own comment explained that `"01"` had been a placeholder *"that would
+have been wrong at any outlet with two counters"*. The same fault one layer up,
+in the function written to fix it: two cashiers at two counters would both have
+opened on the first till, drawn receipt numbers from one block, and made "which
+till issued this receipt" unanswerable. It never showed because no branch has
+ever had a second till to expose it.
+
+**Now built end to end.** `terminalsApi` gained `create` and `issueBlock` and a
+wire type carrying every field the server returns — `remaining` included, because
+it is the only thing that warns a counter before it runs out of numbers mid-trade.
+Settings › Hardware & Receipts lists the branch's tills with their block range and
+what is left, registers another, and hands one a fresh block, all behind
+`settings.terminal` — the permission the endpoints already required, so the screen
+cannot show a control that always fails. The shift dialog asks **which till** when
+there is more than one and does not ask when there is one, because a single
+counter is not a decision and a field every cashier clears every morning for no
+information is a worse screen.
+
+Three smaller things came with it.
+
+- **The drawer printed a UUID.** `Terminal #a3f2c891-4e0d-…` is not something a
+  cashier can check against the sticker on the machine in front of them. It reads
+  `Till 02 · Counter 2` now, falling back to the id only while the list is still
+  loading.
+- **A branch with no till said nothing useful.** Both the drawer and the settings
+  panel now say so plainly and name where to add one, rather than failing at the
+  moment somebody tries to sell.
+- **A duplicate till code would have been a 500.** `terminal_code_unique_per_outlet`
+  refuses it at the database, and there is no handler for a constraint violation —
+  so the first person to reuse `02` would have been told to fetch a manager for
+  what is a typo they could fix in front of the machine. Making the feature
+  reachable is what exposed it: the path had never been walked. It is a 409 naming
+  the code now, checked case-insensitively and against *all* tills rather than only
+  the active ones, because the index does not care whether a till was retired
+  either. The index stays the authority — two people adding `02` in the same
+  instant still end at the constraint, which is the right way for that race to end.
+
+`tills.test.ts` pins all of it, including the negative: reintroducing
+`tills[0]` on purpose fails the suite with the exact diagnosis. Frontend tests
+112 → 124; `TerminalControllerTest` 7 → 9.
