@@ -11,24 +11,7 @@
  * shop would download a 401.
  */
 
-const download = (blob: Blob, filename: string) => {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  // Revoked on the next tick: revoking synchronously can beat the click in
-  // some browsers and the file arrives empty.
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-};
-
-/** Reads the name the server offered, falling back to a dated default. */
-const filenameFrom = (disposition: string | null, fallback: string): string => {
-  const match = disposition?.match(/filename="?([^";]+)"?/i);
-  return match ? match[1] : fallback;
-};
+import { filenameFrom, messageFromFailure, saveBlob } from './fileDownload';
 
 export const exportApi = {
   /**
@@ -44,14 +27,8 @@ export const exportApi = {
     if (!response.ok) {
       // The body is the API's own error shape when it has one; a status alone
       // tells a shop owner nothing about what to do next.
-      let message = `The export failed (${response.status}).`;
-      try {
-        const body = await response.json();
-        if (body?.message) message = body.message;
-      } catch {
-        // Not JSON — keep the status message.
-      }
-      throw new Error(message);
+      throw new Error(await messageFromFailure(
+        response, `The export failed (${response.status}).`));
     }
 
     const today = new Date().toISOString().slice(0, 10);
@@ -59,7 +36,7 @@ export const exportApi = {
       ? `radiance-pos-export-${today}.json`
       : `radiance-pos-accounting-${today}.zip`;
 
-    download(await response.blob(),
+    saveBlob(await response.blob(),
       filenameFrom(response.headers.get('Content-Disposition'), fallback));
   },
 };

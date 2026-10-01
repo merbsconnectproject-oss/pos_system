@@ -1,4 +1,5 @@
 import { request } from './apiClient';
+import { filenameFrom, messageFromFailure, saveBlob } from './fileDownload';
 
 /**
  * The two R2 channels — see `docs/ARCHITECTURE-topology-and-sync.md`.
@@ -58,6 +59,31 @@ export const syncApi = {
 
   /** Owner: bring in every batch not yet applied, oldest first. */
   ingest: () => request<SyncTransfer>('/api/sync/ingest', { method: 'POST' }),
+
+  /**
+   * Owner: download the enrollment file for one outlet's computer.
+   *
+   * Downloaded rather than shown, because what the operator does with it is
+   * carry it to the counter on a USB stick and point the installer at it.
+   *
+   * The file carries the bucket's access key and the business's sync key in the
+   * clear — the installer needs both before a database exists to keep them in.
+   * Treat it as a credential and delete it once the counter is enrolled.
+   */
+  downloadEnrollment: async (outletId: string, outletCode: string) => {
+    const response = await fetch(`/api/sync/enrollment/${outletId}`, {
+      method: 'POST',
+      credentials: 'same-origin',
+    });
+
+    if (!response.ok) {
+      throw new Error(await messageFromFailure(
+        response, `The enrollment file could not be produced (${response.status}).`));
+    }
+
+    saveBlob(await response.blob(), filenameFrom(
+      response.headers.get('Content-Disposition'), `${outletCode}.radiance-setup`));
+  },
 };
 
 /** "2 hours ago" — the answer to "how stale is Cloud Sync". */

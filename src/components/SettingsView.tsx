@@ -46,6 +46,7 @@ import {
   RefreshCw,
   Type,
   AlertTriangle,
+  MonitorSmartphone,
 } from 'lucide-react';
 import {
   Outlet,
@@ -377,12 +378,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   // Custom Appearance Hex Input State
   const [customHex, setCustomHex] = useState(accentColor);
 
+  /** The outlet whose enrollment file is being produced, so one row can show it. */
+  const [enrollingOutletId, setEnrollingOutletId] = useState<string | null>(null);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
     }, 3500);
   };
+
+  /**
+   * Hand the operator the file they carry to the counter.
+   *
+   * The server refuses when the outlet has not been published yet — deliberately,
+   * because the alternative is discovering it at the far end, standing at a
+   * counter with no way to publish from there.
+   */
+  const handleSetUpOutletComputer = async (outlet: Outlet) => {
+    setEnrollingOutletId(outlet.id);
+    try {
+      await syncApi.downloadEnrollment(outlet.id, outlet.receiptPrefix || outlet.name);
+      showToast(`Enrollment file for ${outlet.name} downloaded. It holds cloud keys — delete it once the counter is set up.`);
+    } catch (failure) {
+      showToast(failure instanceof Error ? failure.message : 'The enrollment file could not be produced.');
+    } finally {
+      setEnrollingOutletId(null);
+    }
+  };
+
 
   // Handle saving general settings
   const handleSaveGeneral = () => {
@@ -1684,6 +1708,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                               >
                                 <Edit2 className="w-4 h-4" />
                               </button>
+                              {/*
+                                The counter PC joins this business rather than
+                                starting its own: the file carries this branch's
+                                real id, so the till adopts it instead of
+                                inventing a second outlet nothing can merge.
+                              */}
+                              <button
+                                onClick={() => void handleSetUpOutletComputer(o)}
+                                disabled={enrollingOutletId === o.id}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-colors cursor-pointer disabled:cursor-wait disabled:opacity-60"
+                                title={`Produce the enrollment file for ${o.name}'s counter computer`}
+                              >
+                                <MonitorSmartphone className="w-3.5 h-3.5 text-slate-500" />
+                                <span>{enrollingOutletId === o.id ? 'Preparing…' : 'Set up outlet computer'}</span>
+                              </button>
                               <button
                                 onClick={() => handleToggleBranchActive(o)}
                                 className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-colors border ${
@@ -1707,6 +1746,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 Branches are never deleted — deactivating one keeps its sales history and stock
                 ledger intact while blocking new sign-ins and transactions.
               </p>
+
+              <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-900">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                <div className="leading-relaxed">
+                  <strong className="font-bold">Set up outlet computer</strong> produces a{' '}
+                  <span className="font-mono">.radiance-setup</span> file for that branch's till.
+                  Publish the branch's configuration first, under Cloud Sync. The file carries this
+                  workspace's cloud keys in the clear, so it is a credential: carry it to the counter,
+                  enroll the computer, then delete it.
+                </div>
+              </div>
             </div>
           )}
 
