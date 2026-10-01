@@ -5,6 +5,7 @@ import { syncApi, staleness, type SyncStatus } from '../syncApi';
 import { InfoHint } from './InfoHint';
 import { UserPermissionsModal } from './UserPermissionsModal';
 import { receiptsApi } from '../receiptsApi';
+import type { TerminalWire } from '../salesApi';
 import { exportApi } from '../exportApi';
 import {
   Users,
@@ -44,6 +45,7 @@ import {
   HardDrive,
   RefreshCw,
   Type,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   Outlet,
@@ -110,6 +112,18 @@ interface SettingsViewProps {
   accentColor: string;
   onChangeAccent: (color: string) => void;
   permissions: PermissionSet;
+  /** BR-6: the tills at the current branch, newest figures from the server. */
+  terminals: TerminalWire[];
+  /**
+   * FR-SET-05: register another counter.
+   *
+   * <p>Rejects when the server refuses, so the form can keep what was typed and
+   * say why — a duplicate till code is the common case and it is the one thing
+   * the person has to change.
+   */
+  onCreateTerminal: (code: string, name: string) => Promise<TerminalWire>;
+  /** BR-6: hand a till a fresh block of receipt numbers. */
+  onIssueTerminalBlock: (terminalId: string) => Promise<TerminalWire>;
 }
 
 type SettingsTab =
@@ -174,6 +188,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   accentColor,
   onChangeAccent,
   permissions,
+  terminals,
+  onCreateTerminal,
+  onIssueTerminalBlock,
 }) => {
   // Only the sections this user may open exist at all (L-09).
   const visibleTabs = SETTINGS_TABS.filter((item) => permissions.has(item.requires));
@@ -183,6 +200,70 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     () => SETTINGS_TABS.find((item) => permissions.has(item.requires))?.key || 'appearance',
   );
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // BR-6 · FR-SET-05: registering a counter and re-blocking one.
+  const [tillCode, setTillCode] = useState('');
+  const [tillName, setTillName] = useState('');
+  const [tillError, setTillError] = useState<string | null>(null);
+  const [tillNotice, setTillNotice] = useState<string | null>(null);
+  /** Which till action is in flight — 'create', or the till id being re-blocked. */
+  const [tillBusy, setTillBusy] = useState<string | null>(null);
+
+  const submitTill = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const code = tillCode.trim();
+    const name = tillName.trim();
+    setTillNotice(null);
+
+    // The same constraint the server applies, checked here so the common typo
+    // does not cost a round trip — but the server is still the one that decides.
+    if (!/^[A-Za-z0-9]{1,4}$/.test(code)) {
+      setTillError('A till code is 1-4 letters or digits — it becomes part of the receipt number.');
+      return;
+    }
+    if (!name) {
+      setTillError('Give the counter the name written on it.');
+      return;
+    }
+    if (terminals.some((till) => till.code.toUpperCase() === code.toUpperCase())) {
+      setTillError(`Till ${code.toUpperCase()} already exists at this branch.`);
+      return;
+    }
+
+    setTillBusy('create');
+    setTillError(null);
+    try {
+      const created = await onCreateTerminal(code, name);
+      // Cleared only once the server has accepted it. Resetting on the same
+      // tick as the call is how the expenses form used to lose an entry a
+      // rejection had already cost somebody.
+      setTillCode('');
+      setTillName('');
+      setTillNotice(
+        `Till ${created.code} added. Receipts from it are numbered ${created.blockStart.toLocaleString()}–${created.blockEnd.toLocaleString()}.`,
+      );
+    } catch (failure) {
+      setTillError(failure instanceof Error ? failure.message : 'Could not add the till.');
+    } finally {
+      setTillBusy(null);
+    }
+  };
+
+  const issueBlock = async (terminalId: string) => {
+    setTillBusy(terminalId);
+    setTillError(null);
+    setTillNotice(null);
+    try {
+      const updated = await onIssueTerminalBlock(terminalId);
+      setTillNotice(
+        `Till ${updated.code} now numbers from ${updated.blockStart.toLocaleString()}–${updated.blockEnd.toLocaleString()}.`,
+      );
+    } catch (failure) {
+      setTillError(failure instanceof Error ? failure.message : 'Could not issue a new block.');
+    } finally {
+      setTillBusy(null);
+    }
+  };
 
   // FR-SET-07 · NFR-6: the server's backups, which are the ones that survive
   // this machine. Loaded when the tab opens rather than on mount — an owner on
@@ -2331,6 +2412,150 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/*
+            BR-6 · FR-SET-05: the tills at this branch.
+
+            The create and re-block endpoints have existed and been tested since
+            BR-6 was built, and nothing called either — so a branch could never
+            have more than the one till its outlet was created with, and a shop
+            opening a second counter had nowhere to ring up from. Sits behind
+            `settings.terminal`, which is the permission the endpoints already
+            require.
+          */}
+          {activeTab === 'printers' && permissions.has('settings.terminal') && (
+            <div className="bg-white rounded-xl border border-slate-300 p-6 shadow-2xs space-y-6">
+              <div className="pb-4 border-b border-slate-200">
+                <h2 className="text-base font-bold text-slate-900">Tills at {currentOutlet.name}</h2>
+                <p className="text-xs text-slate-500">
+                  Each counter issues receipt numbers from a block of its own, so two tills can
+                  never print the same number. A branch needs one till per counter that takes money.
+                </p>
+              </div>
+
+              {terminals.length === 0 ? (
+                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                  <div className="leading-relaxed">
+                    <strong className="font-bold">No till is configured for this branch.</strong> No
+                    shift can be opened and nothing can be sold until one is registered.
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-left text-[10px] font-black uppercase tracking-wider text-slate-500">
+                        <th className="pb-2 pr-3">Till</th>
+                        <th className="pb-2 pr-3">Name</th>
+                        <th className="pb-2 pr-3 text-right">Block</th>
+                        <th className="pb-2 pr-3 text-right">Numbers left</th>
+                        <th className="pb-2 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {terminals.map((till) => {
+                        // A counter that runs out mid-trade cannot issue a
+                        // receipt, so the warning has to arrive with enough room
+                        // left to act on it rather than at zero.
+                        const low = till.remaining <= 500;
+                        return (
+                          <tr key={till.id} className="border-b border-slate-100">
+                            <td className="py-2.5 pr-3">
+                              <span className="font-mono font-bold text-slate-900">{till.code}</span>
+                            </td>
+                            <td className="py-2.5 pr-3 font-bold text-slate-700">{till.name}</td>
+                            <td className="py-2.5 pr-3 text-right font-mono text-slate-500">
+                              {till.blockStart.toLocaleString()}&ndash;{till.blockEnd.toLocaleString()}
+                            </td>
+                            <td className="py-2.5 pr-3 text-right">
+                              <span
+                                className={`font-mono font-bold ${low ? 'text-amber-700' : 'text-slate-700'}`}
+                              >
+                                {till.remaining.toLocaleString()}
+                              </span>
+                            </td>
+                            <td className="py-2.5 text-right">
+                              <button
+                                type="button"
+                                disabled={tillBusy === till.id}
+                                onClick={() => void issueBlock(till.id)}
+                                className={`rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                                  low
+                                    ? 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                                    : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                                }`}
+                              >
+                                {tillBusy === till.id ? 'Issuing…' : 'New block'}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <form onSubmit={submitTill} className="space-y-4 border-t border-slate-200 pt-5">
+                <h3 className="text-sm font-bold text-slate-900">Register another counter</h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
+                  <div className="space-y-1.5 sm:col-span-3">
+                    <label className="text-[11px] font-bold text-slate-700" htmlFor="till-code">
+                      Till code *
+                    </label>
+                    <input
+                      id="till-code"
+                      value={tillCode}
+                      onChange={(event) => setTillCode(event.target.value.toUpperCase())}
+                      maxLength={4}
+                      placeholder="02"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-mono text-sm font-bold text-slate-900 focus:outline-accent-500"
+                    />
+                    <p className="text-[10px] text-slate-400">
+                      1&ndash;4 letters or digits. It prints in every receipt number.
+                    </p>
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-6">
+                    <label className="text-[11px] font-bold text-slate-700" htmlFor="till-name">
+                      Counter name *
+                    </label>
+                    <input
+                      id="till-name"
+                      value={tillName}
+                      onChange={(event) => setTillName(event.target.value)}
+                      maxLength={80}
+                      placeholder="Counter 2"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 focus:outline-accent-500"
+                    />
+                    <p className="text-[10px] text-slate-400">
+                      What is written on the machine, so a cashier can tell which is which.
+                    </p>
+                  </div>
+                  <div className="flex items-end sm:col-span-3">
+                    <button
+                      type="submit"
+                      disabled={tillBusy === 'create'}
+                      className="w-full rounded-lg bg-accent-500 px-4 py-2.5 text-xs font-bold text-white shadow-xs transition-colors hover:bg-accent-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    >
+                      {tillBusy === 'create' ? 'Adding…' : 'Add till'}
+                    </button>
+                  </div>
+                </div>
+                {/*
+                  The reason stays on the form rather than replacing it. A code
+                  the server refused is a code somebody has to change, and
+                  clearing what they typed to tell them so costs them the entry.
+                */}
+                {tillError && (
+                  <p className="text-xs font-bold text-rose-600">{tillError}</p>
+                )}
+                {tillNotice && (
+                  <p className="text-xs font-bold text-emerald-700">{tillNotice}</p>
+                )}
+              </form>
             </div>
           )}
 

@@ -214,9 +214,51 @@ export const salesApi = {
   },
 };
 
+/**
+ * BR-6 · FR-SET-05: a till is where a receipt number comes from.
+ *
+ * <p>Every field the server returns is carried, not only the ones the shift
+ * needed. `remaining` is what tells somebody a counter is about to run out of
+ * numbers, and a screen that cannot see it cannot warn them.
+ */
+export interface TerminalWire {
+  id: string;
+  outletId: string;
+  code: string;
+  name: string;
+  blockStart: number;
+  blockEnd: number;
+  current: number;
+  remaining: number;
+}
+
 export const terminalsApi = {
-  /** BR-6: the till whose block the receipt number comes from. */
+  /** The tills at one branch, in code order. */
   atOutlet: (outletId: string) =>
-    request<{ id: string; code: string; name: string; remaining: number }[]>(
-      `/api/terminals?outletId=${encodeURIComponent(outletId)}`),
+    request<TerminalWire[]>(`/api/terminals?outletId=${encodeURIComponent(outletId)}`),
+
+  /**
+   * Register a second (or third) counter — `settings.terminal`.
+   *
+   * <p>The endpoint and its tests have existed since BR-6 was built and nothing
+   * called them, so a branch could never have more than the one till its outlet
+   * was created with. The code becomes part of every receipt number this till
+   * issues, which is why the server constrains it to 1-4 alphanumerics.
+   */
+  create: (outletId: string, code: string, name: string) =>
+    request<TerminalWire>('/api/terminals', {
+      method: 'POST',
+      body: JSON.stringify({ outletId, code, name }),
+    }),
+
+  /**
+   * BR-6: a fresh block when this till has used the one it has.
+   *
+   * <p>Allocated above every block already handed out at the branch, so it can
+   * never overlap a range another till is still issuing from.
+   */
+  issueBlock: (terminalId: string) =>
+    request<TerminalWire>(`/api/terminals/${encodeURIComponent(terminalId)}/block`, {
+      method: 'POST',
+    }),
 };

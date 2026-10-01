@@ -70,7 +70,7 @@ import { expensesApi } from './expensesApi';
 import { installmentsApi } from './installmentsApi';
 import { returnsApi } from './returnsApi';
 import { rolesApi, usersApi, toRolePermissions } from './usersApi';
-import { terminalsApi } from './salesApi';
+import { terminalsApi, type TerminalWire } from './salesApi';
 import {
   decodeWorkspaceLocation,
   encodeWorkspaceLocation,
@@ -412,6 +412,16 @@ export default function App() {
     openingFloat: 0,
     expectedCash: 0,
   });
+
+  /**
+   * BR-6 · FR-SET-05: the tills at this branch.
+   *
+   * Held here rather than fetched where they are needed, because two screens
+   * want them for different reasons — the drawer picks one to number receipts
+   * from, and Settings registers and re-blocks them — and a branch with one
+   * till behaves differently from a branch with three on both.
+   */
+  const [terminals, setTerminals] = useState<TerminalWire[]>([]);
 
   // Modals state
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -1124,23 +1134,89 @@ export default function App() {
   };
 
   /**
+   * BR-6 · FR-SET-05: read this branch's tills.
+   *
+   * Refreshed whenever the branch changes and after a till is registered or
+   * re-blocked, so the remaining-numbers figure on screen is the server's and
+   * not a count this app has been keeping on its own.
+   */
+  const refreshTerminals = useCallback(
+    (outletId: string) =>
+      terminalsApi
+        .atOutlet(outletId)
+        .then((tills) => {
+          setTerminals(tills);
+          return tills;
+        })
+        .catch(() => {
+          setTerminals([]);
+          return [] as TerminalWire[];
+        }),
+    [],
+  );
+
+  // `currentOutlet` is undefined until the outlets arrive — the shell renders
+  // while its outlet is still loading, deliberately, so this reads through
+  // optional access rather than assuming a branch is already known.
+  useEffect(() => {
+    const outletId = currentOutlet?.id;
+    if (!outletId) return;
+    void refreshTerminals(outletId);
+  }, [currentOutlet?.id, refreshTerminals]);
+
+  /**
    * FR-CASH-01 · BR-13: open a shift on the server.
    *
-   * The till is asked for rather than assumed — BR-6 numbers receipts from the
-   * terminal's own block, and "01" was a placeholder that would have been wrong
-   * at any outlet with two counters.
+   * <p>The till is chosen, not assumed. BR-6 numbers receipts from the
+   * terminal's own block, so which counter a cashier is standing at decides
+   * which numbers their receipts carry — and a branch with two counters that
+   * always opened on the first would put both cashiers on one block and make
+   * "which till issued this receipt" unanswerable.
+   *
+   * <p>A branch with exactly one till needs no decision and is not asked for
+   * one; the caller passes nothing and the only till is used.
    */
-  const handleStartShift = (openingFloat: number) => {
-    void terminalsApi.atOutlet(currentOutlet.id)
+  const handleStartShift = (openingFloat: number, terminalId?: string) => {
+    if (!currentOutlet) return;
+    void refreshTerminals(currentOutlet.id)
       .then((tills) => {
-        if (tills.length === 0) throw new Error('No till is configured for this branch');
-        return shiftsApi.open(tills[0].id, openingFloat);
+        if (tills.length === 0) {
+          throw new Error(
+            'No till is configured for this branch. Add one in Settings › Hardware & Receipts.',
+          );
+        }
+        // A till id from a stale list is worse than no choice at all, so it is
+        // resolved against what the server just returned rather than trusted.
+        const chosen = terminalId ? tills.find((till) => till.id === terminalId) : tills[0];
+        if (!chosen) throw new Error('That till is no longer configured for this branch');
+        return shiftsApi.open(chosen.id, openingFloat);
       })
       .then((wire) => {
         setShiftInfo(toShiftInfo(wire));
         setShiftRecords((prev) => [toShiftRecord(wire, currentOutlet.name), ...prev]);
       })
       .catch(reportShiftFailure);
+  };
+
+  /**
+   * FR-SET-05: register another counter at this branch.
+   *
+   * <p>The endpoint has existed and been tested since BR-6 was built, with no
+   * caller anywhere — so an outlet could never have more than the one till it
+   * was created with, and the second counter a shop opened had nowhere to ring
+   * up from.
+   */
+  const handleCreateTerminal = async (code: string, name: string) => {
+    const created = await terminalsApi.create(currentOutlet.id, code, name);
+    await refreshTerminals(currentOutlet.id);
+    return created;
+  };
+
+  /** BR-6: hand a till a fresh block when it has used the one it has. */
+  const handleIssueTerminalBlock = async (terminalId: string) => {
+    const updated = await terminalsApi.issueBlock(terminalId);
+    await refreshTerminals(currentOutlet.id);
+    return updated;
   };
 
   /**
@@ -2112,6 +2188,9 @@ export default function App() {
           {activeTab === 'settings' && (
             <SettingsView
               permissions={permissions}
+              terminals={terminals}
+              onCreateTerminal={handleCreateTerminal}
+              onIssueTerminalBlock={handleIssueTerminalBlock}
               currentOutlet={currentOutlet}
               outlets={outlets}
               onAddOutlet={handleAddOutlet}
@@ -2320,6 +2399,7 @@ export default function App() {
         isOpen={shiftModalOpen}
         onClose={() => setShiftModalOpen(false)}
         shiftInfo={shiftInfo}
+        terminals={terminals}
         onStartShift={handleStartShift}
         onCloseShift={handleCloseShift}
         currentOutlet={currentOutlet}

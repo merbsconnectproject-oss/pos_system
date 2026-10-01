@@ -2,12 +2,19 @@ import React, { useState } from 'react';
 import { formatMoney, roundMoney } from '../money';
 import { X, Wallet, DollarSign, CheckCircle2, AlertTriangle, Clock, Printer } from 'lucide-react';
 import { ShiftInfo, Outlet } from '../types';
+import type { TerminalWire } from '../salesApi';
 
 interface ShiftsModalProps {
   isOpen: boolean;
   onClose: () => void;
   shiftInfo: ShiftInfo;
-  onStartShift: (openingFloat: number) => void;
+  /**
+   * BR-6: the tills at this branch, so the drawer can be opened on the counter
+   * the cashier is actually standing at. One till needs no decision; two or
+   * more do, because the receipt numbers come from whichever is chosen.
+   */
+  terminals: TerminalWire[];
+  onStartShift: (openingFloat: number, terminalId?: string) => void;
   onCloseShift: (countedCash: number, note?: string) => void;
   currentOutlet: Outlet;
   /** FR-CASH-06: variance beyond this needs a written explanation (K-08). */
@@ -29,6 +36,7 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
   isOpen,
   onClose,
   shiftInfo,
+  terminals,
   varianceExplainThreshold,
   onStartShift,
   onCloseShift,
@@ -37,11 +45,24 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
   currencySymbol,
 }) => {
   const [openingFloat, setOpeningFloat] = useState('');
+  const [terminalId, setTerminalId] = useState('');
   const [countedCash, setCountedCash] = useState<string>('');
   const [varianceNote, setVarianceNote] = useState<string>('');
   const [showVarianceResult, setShowVarianceResult] = useState<boolean>(false);
 
   if (!isOpen) return null;
+
+  /** BR-6: how a till is named to the person standing at it. */
+  const namedTill = (id: string) => {
+    const till = terminals.find((item) => item.id === id);
+    return till ? `Till ${till.code} · ${till.name}` : `Terminal #${id}`;
+  };
+
+  // One till is not a decision. The picker appears only where there is
+  // something to pick, so the everyday counter keeps the two-field form it had.
+  const mustChooseTill = !shiftInfo.isOpen && terminals.length > 1;
+  const chosenTill = terminals.find((till) => till.id === terminalId) || null;
+  const tillReady = !mustChooseTill || chosenTill !== null;
 
   const countedNum = parseFloat(countedCash) || 0;
   const variance = roundMoney(countedNum - shiftInfo.expectedCash);
@@ -101,7 +122,16 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
               */}
               <div className="font-black text-slate-900">
                 {currentOutlet.name}
-                {shiftInfo.terminalId && <> • Terminal #{shiftInfo.terminalId}</>}
+                {/*
+                  The till by the name written on it, not its database id. This
+                  printed "Terminal #a3f2c891-4e0d-..." at a counter, which is
+                  not something a cashier can check against the sticker on the
+                  machine in front of them. Falls back to the id only when the
+                  till list has not arrived.
+                */}
+                {shiftInfo.terminalId && (
+                  <> • {namedTill(shiftInfo.terminalId)}</>
+                )}
               </div>
               <div className="text-xs text-slate-500 mt-0.5">
                 {shiftInfo.isOpen && shiftInfo.cashier ? (
@@ -131,6 +161,53 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
           {!shiftInfo.isOpen ? (
             /* Open Shift Form */
             <div className="space-y-5">
+              {/*
+                BR-6: which counter this drawer belongs to. The receipt numbers
+                come from the till's own block, so opening every shift on the
+                first till would put two cashiers on one block and make "which
+                till issued this receipt" unanswerable.
+              */}
+              {mustChooseTill && (
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-800 block" htmlFor="shift-till">
+                    Which till are you on? *
+                  </label>
+                  <select
+                    id="shift-till"
+                    value={terminalId}
+                    onChange={(event) => setTerminalId(event.target.value)}
+                    className="w-full px-4 py-3 text-sm font-bold border border-slate-300 rounded-lg bg-white text-slate-900 focus:outline-accent-500"
+                  >
+                    <option value="">Select a till…</option>
+                    {terminals.map((till) => (
+                      <option key={till.id} value={till.id}>
+                        Till {till.code} · {till.name}
+                      </option>
+                    ))}
+                  </select>
+                  {chosenTill && (
+                    <p className="text-xs text-slate-500">
+                      Receipts from this counter are numbered from its own block —{' '}
+                      <span className="font-bold text-slate-700">
+                        {chosenTill.remaining.toLocaleString()} numbers left
+                      </span>
+                      .
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {terminals.length === 0 && (
+                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                  <div className="leading-relaxed">
+                    <strong className="font-bold">No till is configured for this branch.</strong> A
+                    sale cannot be numbered without one. Register a counter in Settings &rsaquo;
+                    Hardware &amp; Receipts before opening a drawer.
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-800 block">
                   Opening float declaration ({currencySymbol}) *
@@ -155,13 +232,15 @@ export const ShiftsModal: React.FC<ShiftsModalProps> = ({
               </div>
 
               <button
+                disabled={!tillReady || terminals.length === 0}
                 onClick={() => {
                   const openingFloatValue = parseFloat(openingFloat);
                   if (Number.isNaN(openingFloatValue)) return;
-                  onStartShift(openingFloatValue);
+                  if (!tillReady) return;
+                  onStartShift(openingFloatValue, chosenTill?.id);
                   onClose();
                 }}
-                className="w-full bg-accent-500 hover:bg-accent-600 text-white font-bold py-3.5 rounded-lg shadow-xs transition-colors text-sm cursor-pointer"
+                className="w-full bg-accent-500 hover:bg-accent-600 disabled:cursor-not-allowed disabled:bg-slate-300 text-white font-bold py-3.5 rounded-lg shadow-xs transition-colors text-sm cursor-pointer"
               >
                 Start Shift &amp; Unlock POS Terminal
               </button>
