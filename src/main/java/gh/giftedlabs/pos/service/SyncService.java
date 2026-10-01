@@ -1,5 +1,6 @@
 package gh.giftedlabs.pos.service;
 
+import gh.giftedlabs.pos.dto.OutletEnrollment;
 import gh.giftedlabs.pos.dto.SyncView;
 import gh.giftedlabs.pos.security.PosPrincipal;
 
@@ -28,6 +29,15 @@ public interface SyncService {
      * rate in three places and the copies drifting apart in silence.
      */
     SyncView.Configuration pullConfiguration(PosPrincipal actor, String clientIp);
+
+    /**
+     * Owner: issue the file that lets one outlet computer join this business.
+     *
+     * <p>The counterpart to {@link #publishConfiguration}: publishing puts the
+     * configuration where a counter can reach it, and this says which counter,
+     * and how to reach it, without anybody retyping a bucket name.
+     */
+    OutletEnrollment issueEnrollment(UUID outletId, PosPrincipal actor, String clientIp);
 
     /** Shop: send everything written here since the last push. */
     SyncView.Transfer push(PosPrincipal actor, String clientIp);

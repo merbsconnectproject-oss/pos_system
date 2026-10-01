@@ -77,6 +77,12 @@ public class SyncServiceImpl implements SyncService {
         return configuration.pull(actor, clientIp);
     }
 
+    @Override
+    public gh.giftedlabs.pos.dto.OutletEnrollment issueEnrollment(
+            UUID outletId, PosPrincipal actor, String clientIp) {
+        return configuration.enroll(outletId, actor, clientIp);
+    }
+
     // --- channel 2, up ------------------------------------------------------
 
     @Override

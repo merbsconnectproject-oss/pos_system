@@ -28,8 +28,11 @@ class OffsitePayloadCryptoTest {
     @Test
     @DisplayName("an off-site payload cannot be written without an encryption key")
     void refusesAMissingKey() {
+        // The sync key, not the backup key: these objects are the configuration
+        // channel, and naming the backup key here sent operators to the one
+        // setting that was not the problem.
         assertThatThrownBy(() -> OffsitePayloadCrypto.encrypt(new byte[] {1}, ""))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("POS_BACKUP_ENCRYPTION_KEY");
+                .hasMessageContaining("POS_SYNC_ENCRYPTION_KEY");
     }
 }

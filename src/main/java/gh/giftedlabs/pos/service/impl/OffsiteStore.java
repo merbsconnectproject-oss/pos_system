@@ -37,17 +37,50 @@ import java.util.Optional;
 @Component
 public class OffsiteStore {
 
+    /**
+     * The key for the small objects on this channel — configuration and sync
+     * batches — which is <em>not</em> the backup key.
+     *
+     * <p>They were one property and that made enrolling a second computer
+     * impossible. A backup key is private to one installation: it protects a
+     * {@code pg_dump} that only that machine ever restores, and it is generated
+     * locally and never leaves. A sync key is the opposite — every computer in
+     * the business must hold the same one or it cannot read the configuration
+     * the owner published. Sharing the one key would have meant handing every
+     * counter the means to decrypt head office's database dumps.
+     *
+     * <p>{@code POS_BACKUP_ENCRYPTION_KEY} is still honoured as a fallback, so
+     * an installation that predates the split keeps reading objects it wrote
+     * before it. New installs set both.
+     */
     private final String encryptionKey;
 
     /** Production constructor: supports a protected external properties file as well as environment variables. */
     @Autowired
     public OffsiteStore(Environment environment) {
-        this.encryptionKey = environment.getProperty("POS_BACKUP_ENCRYPTION_KEY", "");
+        String sync = environment.getProperty("POS_SYNC_ENCRYPTION_KEY", "");
+        this.encryptionKey = sync.isBlank()
+                ? environment.getProperty("POS_BACKUP_ENCRYPTION_KEY", "")
+                : sync;
     }
 
     /** Live test/command-line constructor retains the documented environment-variable path. */
     public OffsiteStore() {
-        this.encryptionKey = System.getenv("POS_BACKUP_ENCRYPTION_KEY");
+        String sync = System.getenv("POS_SYNC_ENCRYPTION_KEY");
+        this.encryptionKey = sync == null || sync.isBlank()
+                ? System.getenv("POS_BACKUP_ENCRYPTION_KEY")
+                : sync;
+    }
+
+    /**
+     * The sync key, for the one caller that has to hand it on.
+     *
+     * <p>Package-private and deliberately not a getter on anything public: the
+     * only legitimate reader is the enrollment file an owner issues for a new
+     * outlet computer, which cannot join the business without it.
+     */
+    String syncEncryptionKey() {
+        return encryptionKey == null ? "" : encryptionKey;
     }
 
     /**

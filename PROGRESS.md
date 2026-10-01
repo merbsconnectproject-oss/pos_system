@@ -73,6 +73,7 @@ cheap glance is the wrong one.
 | Startup render safety | The shell renders while its outlet is still loading; missing browser assets are ordinary 404 responses rather than logged internal errors |
 | Workspace motion | Every module shares a viewport-aware reveal system, softly elevated interactive surfaces and page transitions; reduced-motion preferences disable it without hiding content |
 | Configurable Cloud Sync | Owners/admins choose the automatic upload interval in Settings › Cloud Sync from 15 minutes to 24 hours; manual sync stays immediate and failed attempts respect the chosen request cadence |
+| Outlet computer enrollment | A counter joins an existing business instead of starting a second one: the owner produces a `.radiance-setup` file per branch from Settings › Stores & Branches, and the installer's **Connect an outlet computer** mode reads it, takes the branch's real id, pulls its staff, catalogue and prices, then disables the throwaway account it enrolled with. No second owner, no second outlet |
 
 **Two bugs found and fixed in the frozen frontend:**
 `roundMoney(1.005)` returned 1.00 where `BigDecimal.HALF_UP` gives 1.01 — the
@@ -331,8 +332,42 @@ named approver was trusted from the request body; it is now verified against
 
 **No browser printing for receipts.** Sale completion, retry, audited reprints and
 credit notes all use the same-origin endpoint. Printer-offline and missing-queue
-failures return a retryable error after the sale remains committed. The queue is
-selected with `POS_PRINTER_NAME` (default `POS-80`).
+failures return a retryable error after the sale remains committed.
+
+**The queue is detected, not declared.** Shops install whatever driver came with
+the printer and it names its own queue — `XPrinter`, `XP-80C`, `Generic / Text
+Only` — so a pinned name is wrong on most installs. `ReceiptQueueMatcher` grades
+the installed queues and the printer picks the one that reads as a receipt
+printer, falling back to the system default and then to the only candidate on the
+machine. Recognisable PDF writers and page printers are ruled out rather than
+fallen back to, so a counter with no thermal printer gets a retryable error
+listing what *is* installed instead of twelve pages of control codes.
+`POS_PRINTER_NAME` is now a hint, blank by default, and only needs setting on a
+counter with two thermal printers attached.
+
+**An outlet computer joins; it does not start over.** Installing on a branch PC
+used to run the same three stages as head office, which produced a second owner
+and a second outlet for the same shop — two identities nothing could merge
+afterwards. The installer now asks which computer it is on. *Connect an outlet
+computer* reads the enrollment file the owner produced, bootstraps a stub outlet
+under **head office's own outlet code** so `adoptHeadOfficeId` recognises it and
+swaps in head office's UUID (carrying the till with it), pulls
+`config/<CODE>.json`, verifies staff actually arrived, and deactivates the
+generated account it signed in with. Deactivates rather than deletes:
+`audit_log.actor_id` is a foreign key to that row and the pull wrote
+`CONFIG_PULLED` against it.
+
+**Two encryption keys, not one.** `POS_BACKUP_ENCRYPTION_KEY` protects a
+`pg_dump` that only the machine that wrote it ever restores, so it is generated
+locally and never leaves. `POS_SYNC_ENCRYPTION_KEY` is the opposite — every
+computer in the business must hold the identical key or none of them can read the
+configuration the owner published — so it travels, in the enrollment file. They
+were one property, which made enrolling a second computer impossible: the counter
+generated its own key, found `config/ACC.json`, and could not decrypt a byte of
+it. Sharing the one key would instead have handed every counter the means to
+decrypt head office's database dumps. `OffsiteStore` still falls back to the
+backup key when the sync key is unset, so installations predating the split keep
+reading what they already wrote.
 
 **Cash overpayment survives onto the paper.** Checkout persists the amount the
 customer actually handed over rather than replacing it with the bill total. The

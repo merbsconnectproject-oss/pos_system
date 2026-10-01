@@ -35,11 +35,14 @@ final class OffsitePayloadCrypto {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key(encodedKey), "AES"), new GCMParameterSpec(128, nonce));
             return cipher.doFinal(java.util.Arrays.copyOfRange(payload, MAGIC.length + 12, payload.length));
-        } catch (Exception e) { throw new IllegalStateException("could not decrypt off-site payload (check POS_BACKUP_ENCRYPTION_KEY)", e); }
+        } catch (Exception e) { throw new IllegalStateException("could not decrypt off-site payload — this computer's "
+                + "POS_SYNC_ENCRYPTION_KEY does not match the one that wrote it. Every computer in "
+                + "the business shares one sync key; it is in the outlet enrollment file.", e); }
     }
 
     private static byte[] key(String value) {
-        if (value == null || value.isBlank()) throw new IllegalStateException("POS_BACKUP_ENCRYPTION_KEY is required");
+        if (value == null || value.isBlank())
+            throw new IllegalStateException("POS_SYNC_ENCRYPTION_KEY is required to read or write Cloud Sync objects");
         String encoded = value.trim();
         byte[] key = encoded.matches("[0-9a-fA-F]{64}")
                 ? HexFormat.of().parseHex(encoded)

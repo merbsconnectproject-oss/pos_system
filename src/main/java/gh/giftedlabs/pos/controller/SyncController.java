@@ -1,10 +1,16 @@
 package gh.giftedlabs.pos.controller;
 
+import gh.giftedlabs.pos.dto.OutletEnrollment;
 import gh.giftedlabs.pos.dto.SyncView;
 import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.SyncService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -63,6 +69,46 @@ public class SyncController {
     public SyncView.Configuration pull(@AuthenticationPrincipal PosPrincipal actor,
                                        HttpServletRequest request) {
         return sync.pullConfiguration(actor, clientIp(request));
+    }
+
+    /**
+     * Owner: download the enrollment file for one outlet's computer.
+     *
+     * <p>Returned as a download rather than JSON on the page because it is a
+     * credential the operator carries to another machine on a USB stick, and
+     * because the installer at the far end reads a file. {@code no-store} so a
+     * proxy or the browser's history cannot keep a copy of the bucket's keys.
+     *
+     * <p>{@code settings.general}, like publishing: whoever may decide what a
+     * whole shop sees may also authorise a computer to receive it.
+     */
+    @PostMapping("/enrollment/{outletId}")
+    @PreAuthorize("hasAuthority('" + Permission.Codes.SETTINGS_GENERAL + "')")
+    public ResponseEntity<OutletEnrollment> enrollment(@PathVariable UUID outletId,
+                                                       @AuthenticationPrincipal PosPrincipal actor,
+                                                       HttpServletRequest request) {
+        OutletEnrollment enrollment = sync.issueEnrollment(outletId, actor, clientIp(request));
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(filenameFor(enrollment)).build().toString())
+                .cacheControl(CacheControl.noStore())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(enrollment);
+    }
+
+    /**
+     * {@code Accra-Main-Store-ACC.radiance-setup}.
+     *
+     * <p>Named for the shop rather than the date because the operator picks it
+     * off a USB stick holding one file per outlet, and "which of these is
+     * Accra" is the only question they will be asking.
+     */
+    private static String filenameFor(OutletEnrollment enrollment) {
+        String name = enrollment.outlet().name().replaceAll("[^A-Za-z0-9]+", "-")
+                .replaceAll("(^-|-$)", "");
+        String stem = name.isBlank() ? enrollment.outlet().code()
+                : name + "-" + enrollment.outlet().code();
+        return stem + ".radiance-setup";
     }
 
     /**

@@ -3,6 +3,7 @@ package gh.giftedlabs.pos.service.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import gh.giftedlabs.pos.config.PosProperties;
 import gh.giftedlabs.pos.dto.OutletConfig;
+import gh.giftedlabs.pos.dto.OutletEnrollment;
 import gh.giftedlabs.pos.dto.SyncView;
 import gh.giftedlabs.pos.entity.*;
 import gh.giftedlabs.pos.exception.OutletNotFoundException;
@@ -120,6 +121,69 @@ public class ConfigurationChannel {
                 staff.size(), catalogue.size(),
                 "Published %d staff and %d products for %s."
                         .formatted(staff.size(), catalogue.size(), outlet.getName()));
+    }
+
+    // --- enrollment ---------------------------------------------------------
+
+    /**
+     * Issue the file that lets one outlet computer join this business.
+     *
+     * <p>Refuses when the outlet has not been published yet. That check is the
+     * point of doing this on the owner's computer: without it the operator
+     * carries a file to the counter, installs, and discovers at the far end that
+     * {@code config/ACC.json} does not exist — a failure with no fix available
+     * in the room they are standing in.
+     */
+    @Transactional(readOnly = true)
+    public OutletEnrollment enroll(UUID outletId, PosPrincipal actor, String clientIp) {
+        PosProperties.Offsite offsite = properties.backup().offsite();
+        requireBucket(offsite);
+
+        Outlet outlet = outlets.findById(outletId)
+                .orElseThrow(() -> new OutletNotFoundException(outletId));
+
+        String syncKey = store.syncEncryptionKey();
+        if (syncKey.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This computer has no Cloud Sync encryption key, so there is nothing to "
+                            + "enroll another computer into. Set POS_SYNC_ENCRYPTION_KEY first.");
+        }
+
+        String key = "config/%s.json".formatted(outlet.getCode());
+        if (store.get(key, offsite).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Publish %s's configuration before setting up its computer — there is nothing "
+                            .formatted(outlet.getCode())
+                            + "at " + key + " for the counter to pull.");
+        }
+
+        BusinessSettings profile = settings.findById(BusinessSettings.SINGLETON_ID).orElse(null);
+        String business = profile == null || profile.getCompanyName() == null
+                || profile.getCompanyName().isBlank()
+                ? "Radiance POS"
+                : profile.getCompanyName();
+
+        // Never the secrets themselves, and never at any level that reaches a
+        // log file somebody later pastes into a support thread.
+        audit.record(actor.userId(), "ENROLLMENT_ISSUED", "outlet", outletId, null,
+                Map.of("outlet", outlet.getCode(), "bucket", offsite.bucket()),
+                outletId, null, clientIp);
+        log.info("Issued an enrollment file for outlet {}", outlet.getCode());
+
+        return new OutletEnrollment(
+                OutletEnrollment.VERSION,
+                clock.instant().toString(),
+                new OutletEnrollment.Business(business, workspace(offsite)),
+                new OutletEnrollment.Outlet(outlet.getId(), outlet.getCode(), outlet.getName()),
+                new OutletEnrollment.CloudSync(
+                        offsite.endpoint(), offsite.bucket(), offsite.region(), offsite.prefix(),
+                        offsite.accessKeyId(), offsite.secretAccessKey(), syncKey),
+                OutletConfig.VERSION);
+    }
+
+    /** What every computer in this business shares, and nothing else does. */
+    private static String workspace(PosProperties.Offsite offsite) {
+        return offsite.prefix().isBlank() ? offsite.bucket() : offsite.prefix();
     }
 
     // --- pull ---------------------------------------------------------------

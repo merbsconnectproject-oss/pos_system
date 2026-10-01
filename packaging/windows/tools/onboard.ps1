@@ -1,3 +1,26 @@
+<#
+    Radiance POS first-run setup.
+
+    Two installations, not one. `mode` decides which:
+
+      business  (default, and what an absent `mode` means)
+                Creates the owner account, the first branch and this counter.
+                Generates its own Cloud Sync key and hands it out later in
+                enrollment files.
+
+      outlet    Joins a business that already exists. Reads the enrollment file
+                the owner produced for the branch, bootstraps a stub outlet
+                carrying that branch's real code, pulls the published
+                configuration, then disables the throwaway account it used.
+                Creates no owner and no second branch.
+
+    A response file for -ConfigFile is the wizard's object as JSON. For outlet
+    mode it needs `mode`, `enrollmentFile`, `expectedOutletId`,
+    `syncEncryptionKey`, the `offsite*` fields, `outletCode` and `outletName`
+    taken from the enrollment file, and `terminalCode`/`terminalName` for this
+    till. Files written before outlet mode existed are read as `business` and
+    keep working unchanged.
+#>
 [CmdletBinding()]
 param(
     [string]$ConfigFile,
@@ -25,6 +48,13 @@ $ConfigPath = Join-Path $ConfigRoot 'application.properties'
 $SecretsRoot = Join-Path $DataRoot 'secrets'
 $PostgresAdminSecretPath = Join-Path $SecretsRoot 'postgres-admin.secret'
 $BackupEncryptionSecretPath = Join-Path $SecretsRoot 'backup-encryption.secret'
+# Separate from the backup key on purpose. A backup key protects a pg_dump only
+# this machine ever restores, so it is generated here and never leaves. A sync
+# key has to be identical on every computer in the business or none of them can
+# read the configuration the owner published — so it travels, in the enrollment
+# file. One key doing both jobs meant handing every counter the means to decrypt
+# head office's database dumps.
+$SyncEncryptionSecretPath = Join-Path $SecretsRoot 'sync-encryption.secret'
 $PgData = Join-Path $DataRoot 'postgres-data'
 $PgLog = Join-Path $DataRoot 'logs\postgresql.log'
 # PostgreSQL requires the account that owns the cluster to be the account that
@@ -65,22 +95,79 @@ function New-BackupEncryptionKey {
     return [Convert]::ToBase64String($bytes)
 }
 
+function Read-EnrollmentFile([string]$Path) {
+    if ([string]::IsNullOrWhiteSpace($Path)) { throw 'Choose the outlet enrollment file supplied by the owner.' }
+    if (-not (Test-Path $Path)) { throw "The enrollment file was not found at $Path." }
+
+    try { $file = Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json }
+    catch { throw "$Path is not a readable Radiance enrollment file. Ask the owner to produce it again from System Settings - Stores & Branches." }
+
+    # Checked field by field rather than trusted, because every one of them is
+    # load-bearing: five of six being right is indistinguishable at the counter
+    # from all six being wrong, and the failure arrives as "cannot decrypt".
+    foreach ($path in 'outlet', 'cloudSync') {
+        if (-not $file.PSObject.Properties[$path]) { throw "The enrollment file is missing its $path section." }
+    }
+    foreach ($field in 'id', 'code', 'name') {
+        if ([string]::IsNullOrWhiteSpace([string]$file.outlet.$field)) { throw "The enrollment file does not say the outlet's $field." }
+    }
+    foreach ($field in 'endpoint', 'bucket', 'accessKeyId', 'secretAccessKey', 'encryptionKey') {
+        if ([string]::IsNullOrWhiteSpace([string]$file.cloudSync.$field)) { throw "The enrollment file does not carry the Cloud Sync $field." }
+    }
+    if ([string]$file.cloudSync.endpoint -notmatch '^https://') { throw 'The Cloud Sync endpoint in the enrollment file must use HTTPS.' }
+    if ([string]$file.outlet.id -notmatch '^[0-9a-fA-F-]{36}$') { throw 'The outlet id in the enrollment file is not a valid identifier.' }
+
+    return $file
+}
+
 function ConvertTo-PropertyValue([AllowNull()][string]$Value) {
     if ($null -eq $Value) { return '' }
     return $Value.Replace('\', '\\').Replace("`r", '').Replace("`n", '\n').Replace(':', '\:').Replace('=', '\=')
 }
 
+function Get-ConfigValue($Config, [string]$Name, $Default = '') {
+    # Strict mode makes a missing property an error, and response files written
+    # before outlet mode existed are missing several. A silent install that
+    # worked last release has to keep working, so every field added since is
+    # read through here rather than off the object.
+    if (-not $Config.PSObject.Properties[$Name]) { return $Default }
+    $value = $Config.$Name
+    if ($null -eq $value -or ([string]$value).Trim() -eq '') { return $Default }
+    return $value
+}
+
+function Get-SetupMode($Config) {
+    if ($Config.PSObject.Properties['mode'] -and $Config.mode) { return [string]$Config.mode }
+    # Absent means a response file written before outlet mode existed, and every
+    # one of those describes a new business.
+    return 'business'
+}
+
 function Assert-Configuration($Config) {
     $errors = [Collections.Generic.List[string]]::new()
-    if ([string]::IsNullOrWhiteSpace($Config.ownerUsername) -or $Config.ownerUsername -notmatch '^[A-Za-z0-9._-]{3,40}$') {
-        $errors.Add('Owner username must be 3-40 letters, numbers, dots, dashes, or underscores.')
+    $mode = Get-SetupMode $Config
+
+    # An outlet computer has no owner to create: the real staff arrive with the
+    # configuration, already carrying their password and PIN hashes. The account
+    # setup signs in with is generated here, used once and disabled, so none of
+    # the owner rules below describe anything an operator typed.
+    if ($mode -eq 'business') {
+        if ([string]::IsNullOrWhiteSpace($Config.ownerUsername) -or $Config.ownerUsername -notmatch '^[A-Za-z0-9._-]{3,40}$') {
+            $errors.Add('Owner username must be 3-40 letters, numbers, dots, dashes, or underscores.')
+        }
+        if ([string]::IsNullOrWhiteSpace($Config.ownerName)) { $errors.Add('Owner full name is required.') }
+        if ([string]::IsNullOrEmpty($Config.ownerPassword) -or $Config.ownerPassword.Length -lt 8) { $errors.Add('Owner password must be at least 8 characters.') }
+        if ($Config.ownerPassword -ne $Config.ownerPasswordConfirm) { $errors.Add('Owner passwords do not match.') }
+        if ($Config.ownerPin -notmatch '^\d{4,6}$') { $errors.Add('Owner PIN must contain 4 to 6 digits.') }
+        if ($Config.ownerPin -ne $Config.ownerPinConfirm) { $errors.Add('Owner PINs do not match.') }
+        if ($Config.ownerEmail -and $Config.ownerEmail -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') { $errors.Add('Owner email address is not valid.') }
+    } else {
+        if ([string]::IsNullOrWhiteSpace((Get-ConfigValue $Config 'enrollmentFile'))) { $errors.Add('Choose the outlet enrollment file supplied by the owner.') }
+        if ([string]::IsNullOrWhiteSpace((Get-ConfigValue $Config 'syncEncryptionKey'))) { $errors.Add('The enrollment file does not carry a Cloud Sync encryption key.') }
+        if ([string]::IsNullOrWhiteSpace((Get-ConfigValue $Config 'expectedOutletId'))) { $errors.Add('The enrollment file does not name the outlet this computer belongs to.') }
+        if (-not (Get-ConfigValue $Config 'offsiteEnabled' $false)) { $errors.Add('An outlet computer needs Cloud Sync, and the enrollment file supplies it.') }
     }
-    if ([string]::IsNullOrWhiteSpace($Config.ownerName)) { $errors.Add('Owner full name is required.') }
-    if ([string]::IsNullOrEmpty($Config.ownerPassword) -or $Config.ownerPassword.Length -lt 8) { $errors.Add('Owner password must be at least 8 characters.') }
-    if ($Config.ownerPassword -ne $Config.ownerPasswordConfirm) { $errors.Add('Owner passwords do not match.') }
-    if ($Config.ownerPin -notmatch '^\d{4,6}$') { $errors.Add('Owner PIN must contain 4 to 6 digits.') }
-    if ($Config.ownerPin -ne $Config.ownerPinConfirm) { $errors.Add('Owner PINs do not match.') }
-    if ($Config.ownerEmail -and $Config.ownerEmail -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') { $errors.Add('Owner email address is not valid.') }
+
     if ($Config.outletCode -notmatch '^[A-Za-z0-9]{2,6}$') { $errors.Add('Outlet code must be 2-6 letters or numbers, with no spaces or dashes.') }
     if ([string]::IsNullOrWhiteSpace($Config.outletName)) { $errors.Add('Outlet name is required.') }
     if ($Config.terminalCode -notmatch '^[A-Za-z0-9]{1,6}$') { $errors.Add('Terminal code must be 1-6 letters or numbers, with no spaces or dashes.') }
@@ -128,8 +215,32 @@ function Get-InteractiveConfiguration {
         return $input
     }
 
-    $ownerPage = [Windows.Forms.TabPage]::new('1. Owner')
-    $tabs.TabPages.Add($ownerPage)
+    $modePage = [Windows.Forms.TabPage]::new('1. Install type')
+    $modeHelp = [Windows.Forms.Label]::new()
+    $modeHelp.Text = 'Which computer is this?'
+    $modeHelp.SetBounds(28, 18, 565, 24)
+    $modePage.Controls.Add($modeHelp)
+
+    $modeBusiness = [Windows.Forms.RadioButton]::new()
+    $modeBusiness.Text = 'Set up a new business  (this is the owner''s computer)'
+    $modeBusiness.SetBounds(28, 52, 540, 25)
+    $modeBusiness.Checked = $true
+    $modePage.Controls.Add($modeBusiness)
+    $modeBusinessHelp = [Windows.Forms.Label]::new()
+    $modeBusinessHelp.Text = 'Creates the owner account, the first branch and this counter. Afterwards the owner adds the other branches, staff and products, publishes each branch, and produces one enrollment file per outlet computer.'
+    $modeBusinessHelp.SetBounds(50, 80, 530, 56)
+    $modePage.Controls.Add($modeBusinessHelp)
+
+    $modeOutlet = [Windows.Forms.RadioButton]::new()
+    $modeOutlet.Text = 'Connect an outlet computer to an existing business'
+    $modeOutlet.SetBounds(28, 150, 540, 25)
+    $modePage.Controls.Add($modeOutlet)
+    $modeOutletHelp = [Windows.Forms.Label]::new()
+    $modeOutletHelp.Text = 'Reads the enrollment file the owner produced for this branch, then takes its staff, products and prices from Cloud Sync. It does not create another owner or another branch, so this till joins the business rather than starting a second one.'
+    $modeOutletHelp.SetBounds(50, 178, 530, 60)
+    $modePage.Controls.Add($modeOutletHelp)
+
+    $ownerPage = [Windows.Forms.TabPage]::new('2. Owner')
     $ownerHelp = [Windows.Forms.Label]::new()
     $ownerHelp.Text = 'Create the first owner. The password and PIN are used once, hashed, and removed from setup files.'
     $ownerHelp.SetBounds(28, 20, 565, 40)
@@ -142,8 +253,7 @@ function Get-InteractiveConfiguration {
     $ownerPin = Add-Field $ownerPage 'Approval PIN (4-6 digits)' 272 $true
     $ownerPinConfirm = Add-Field $ownerPage 'Confirm PIN' 312 $true
 
-    $shopPage = [Windows.Forms.TabPage]::new('2. Shop')
-    $tabs.TabPages.Add($shopPage)
+    $shopPage = [Windows.Forms.TabPage]::new('3. Shop')
     $shopHelp = [Windows.Forms.Label]::new()
     $shopHelp.Text = 'The installer creates the first outlet and Counter 1. Codes appear in receipt numbers.'
     $shopHelp.SetBounds(28, 20, 565, 40)
@@ -152,8 +262,7 @@ function Get-InteractiveConfiguration {
     $outletName = Add-Field $shopPage 'Outlet name' 126 $false 'Radiance Lighting'
     $terminalCode = Add-Field $shopPage 'Terminal code' 166 $false '01'
 
-    $backupPage = [Windows.Forms.TabPage]::new('3. Protection')
-    $tabs.TabPages.Add($backupPage)
+    $backupPage = [Windows.Forms.TabPage]::new('4. Protection')
     $backupHelp = [Windows.Forms.Label]::new()
     $backupHelp.Text = 'Local backups run every 15 minutes. Add an S3-compatible bucket now for protection against disk loss, or configure it later in Settings.'
     $backupHelp.SetBounds(28, 18, 565, 52)
@@ -172,6 +281,100 @@ function Get-InteractiveConfiguration {
     $backupInputs | ForEach-Object { $_.Enabled = $false }
     $offsiteEnabled.Add_CheckedChanged({ $backupInputs | ForEach-Object { $_.Enabled = $offsiteEnabled.Checked } })
 
+    # --- outlet-computer pages ------------------------------------------
+    # One file instead of six fields. The endpoint, bucket, region, prefix,
+    # outlet code and sync key all have to match head office, and an operator
+    # typing six of those at a counter gets one wrong.
+    $enrollPage = [Windows.Forms.TabPage]::new('2. Enrollment')
+    $enrollHelp = [Windows.Forms.Label]::new()
+    $enrollHelp.Text = 'Choose the .radiance-setup file the owner produced for this branch. It carries the cloud keys and this branch''s identity, so nothing here has to be typed.'
+    $enrollHelp.SetBounds(28, 18, 565, 44)
+    $enrollPage.Controls.Add($enrollHelp)
+
+    $enrollPath = [Windows.Forms.TextBox]::new()
+    $enrollPath.SetBounds(28, 72, 440, 27)
+    $enrollPath.ReadOnly = $true
+    $enrollPage.Controls.Add($enrollPath)
+    $enrollBrowse = [Windows.Forms.Button]::new()
+    $enrollBrowse.Text = 'Browse...'
+    $enrollBrowse.SetBounds(478, 71, 97, 29)
+    $enrollPage.Controls.Add($enrollBrowse)
+
+    # Read back to the operator before they commit, because "wrong branch" is
+    # the one mistake here that is invisible until a cashier cannot sign in.
+    $enrollSummary = [Windows.Forms.Label]::new()
+    $enrollSummary.SetBounds(28, 118, 547, 170)
+    $enrollSummary.Text = 'No enrollment file chosen yet.'
+    $enrollPage.Controls.Add($enrollSummary)
+
+    $script:Enrollment = $null
+    $enrollBrowse.Add_Click({
+        $picker = [Windows.Forms.OpenFileDialog]::new()
+        $picker.Filter = 'Radiance enrollment file (*.radiance-setup)|*.radiance-setup|All files (*.*)|*.*'
+        $picker.Title = 'Choose this branch''s enrollment file'
+        if ($picker.ShowDialog() -ne [Windows.Forms.DialogResult]::OK) { return }
+        try {
+            $file = Read-EnrollmentFile $picker.FileName
+        } catch {
+            [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Enrollment file', 'OK', 'Warning') | Out-Null
+            return
+        }
+        $script:Enrollment = $file
+        $enrollPath.Text = $picker.FileName
+        $enrollSummary.Text = @(
+            "Business:   $($file.business.name)",
+            "Workspace:  $($file.business.workspace)",
+            '',
+            "Branch:     $($file.outlet.name)  ($($file.outlet.code))",
+            "Branch id:  $($file.outlet.id)",
+            '',
+            "Bucket:     $($file.cloudSync.bucket)",
+            "Endpoint:   $($file.cloudSync.endpoint)",
+            '',
+            'This computer will take its staff, products and prices from this branch.'
+        ) -join "`r`n"
+    })
+
+    $tillPage = [Windows.Forms.TabPage]::new('3. This till')
+    $tillHelp = [Windows.Forms.Label]::new()
+    $tillHelp.Text = 'The only settings that belong to this computer rather than to the business. The till code appears in every receipt number it issues.'
+    $tillHelp.SetBounds(28, 18, 565, 44)
+    $tillPage.Controls.Add($tillHelp)
+    $tillCode = Add-Field $tillPage 'Till code' 86 $false '01'
+    $tillName = Add-Field $tillPage 'Counter name' 126 $false 'Counter 1'
+    $tillNote = [Windows.Forms.Label]::new()
+    $tillNote.Text = 'Give a second till at the same branch a different code, so the two never issue the same receipt number.'
+    $tillNote.SetBounds(28, 172, 547, 40)
+    $tillPage.Controls.Add($tillNote)
+
+    # Rebuilding the collection rather than hiding pages, because a TabControl
+    # has no way to hide one. Invoked after the footer buttons exist, below —
+    # it resets them, and the first run of it would otherwise reference nothing.
+    $applyMode = {
+        $tabs.TabPages.Clear()
+        $tabs.TabPages.Add($modePage)
+        if ($modeOutlet.Checked) {
+            $tabs.TabPages.Add($enrollPage)
+            $tabs.TabPages.Add($tillPage)
+            $title.Text = 'Connect this outlet computer'
+        } else {
+            $tabs.TabPages.Add($ownerPage)
+            $tabs.TabPages.Add($shopPage)
+            $tabs.TabPages.Add($backupPage)
+            $title.Text = 'Set up this counter'
+        }
+        # Clearing the pages resets the selection to the first one without
+        # raising SelectedIndexChanged, so the footer has to be put back by hand
+        # or Install stays showing on a mode that has three pages left to fill.
+        $tabs.SelectedIndex = 0
+        $back.Enabled = $false
+        $next.Visible = $tabs.TabPages.Count -gt 1
+        $install.Visible = -not $next.Visible
+    }
+    # One radio is enough: it raises CheckedChanged in both directions, and
+    # binding both would run the rebuild twice for every switch.
+    $modeOutlet.Add_CheckedChanged($applyMode)
+
     $back = [Windows.Forms.Button]::new()
     $back.Text = 'Back'
     $back.SetBounds(388, 515, 82, 32)
@@ -187,6 +390,8 @@ function Get-InteractiveConfiguration {
     $install.Visible = $false
     $form.Controls.Add($install)
 
+    & $applyMode
+
     $tabs.Add_SelectedIndexChanged({
         $back.Enabled = $tabs.SelectedIndex -gt 0
         $next.Visible = $tabs.SelectedIndex -lt ($tabs.TabPages.Count - 1)
@@ -195,14 +400,55 @@ function Get-InteractiveConfiguration {
     $back.Add_Click({ if ($tabs.SelectedIndex -gt 0) { $tabs.SelectedIndex-- } })
     $next.Add_Click({ if ($tabs.SelectedIndex -lt $tabs.TabPages.Count - 1) { $tabs.SelectedIndex++ } })
     $install.Add_Click({
-        $candidate = [pscustomobject]@{
-            ownerUsername = $ownerUsername.Text.Trim(); ownerName = $ownerName.Text.Trim(); ownerEmail = $ownerEmail.Text.Trim()
-            ownerPassword = $ownerPassword.Text; ownerPasswordConfirm = $ownerPasswordConfirm.Text
-            ownerPin = $ownerPin.Text; ownerPinConfirm = $ownerPinConfirm.Text
-            outletCode = $outletCode.Text.Trim().ToUpperInvariant(); outletName = $outletName.Text.Trim(); terminalCode = $terminalCode.Text.Trim().ToUpperInvariant()
-            offsiteEnabled = $offsiteEnabled.Checked; offsiteEndpoint = $offsiteEndpoint.Text.Trim().TrimEnd('/'); offsiteBucket = $offsiteBucket.Text.Trim()
-            offsiteAccessKey = $offsiteAccess.Text.Trim(); offsiteSecretKey = $offsiteSecret.Text
-            offsiteRegion = $offsiteRegion.Text.Trim(); offsitePrefix = $offsitePrefix.Text.Trim().Trim('/')
+        $candidate = if ($modeOutlet.Checked) {
+            if ($null -eq $script:Enrollment) {
+                [Windows.Forms.MessageBox]::Show('Choose the enrollment file first.', 'Enrollment file', 'OK', 'Warning') | Out-Null
+                return
+            }
+            $file = $script:Enrollment
+            # The throwaway account that signs in once to take the configuration.
+            # Random because nobody is ever meant to use it, and the operator is
+            # not told it exists.
+            $enrollUser = 'setup-' + (New-RandomSecret 8).ToLowerInvariant()
+            $enrollPassword = New-RandomSecret 32
+            $enrollPin = -join (1..6 | ForEach-Object { [char](48 + (Get-Random -Maximum 10)) })
+            [pscustomobject]@{
+                mode = 'outlet'
+                ownerUsername = $enrollUser; ownerName = 'Setup (temporary)'; ownerEmail = ''
+                ownerPassword = $enrollPassword; ownerPasswordConfirm = $enrollPassword
+                ownerPin = $enrollPin; ownerPinConfirm = $enrollPin
+                # From the file, never typed. The stub outlet has to carry head
+                # office's code or the pull cannot recognise it by code, and the
+                # counter ends up with two branches instead of adopting the one.
+                outletCode = ([string]$file.outlet.code).Trim().ToUpperInvariant()
+                outletName = ([string]$file.outlet.name).Trim()
+                expectedOutletId = ([string]$file.outlet.id).Trim()
+                enrollmentFile = $enrollPath.Text
+                terminalCode = $tillCode.Text.Trim().ToUpperInvariant(); terminalName = $tillName.Text.Trim()
+                offsiteEnabled = $true
+                offsiteEndpoint = ([string]$file.cloudSync.endpoint).Trim().TrimEnd('/')
+                offsiteBucket = ([string]$file.cloudSync.bucket).Trim()
+                offsiteAccessKey = ([string]$file.cloudSync.accessKeyId).Trim()
+                offsiteSecretKey = [string]$file.cloudSync.secretAccessKey
+                offsiteRegion = if ($file.cloudSync.region) { ([string]$file.cloudSync.region).Trim() } else { 'auto' }
+                offsitePrefix = if ($file.cloudSync.prefix) { ([string]$file.cloudSync.prefix).Trim().Trim('/') } else { '' }
+                syncEncryptionKey = [string]$file.cloudSync.encryptionKey
+                businessName = [string]$file.business.name
+            }
+        } else {
+            [pscustomobject]@{
+                mode = 'business'
+                ownerUsername = $ownerUsername.Text.Trim(); ownerName = $ownerName.Text.Trim(); ownerEmail = $ownerEmail.Text.Trim()
+                ownerPassword = $ownerPassword.Text; ownerPasswordConfirm = $ownerPasswordConfirm.Text
+                ownerPin = $ownerPin.Text; ownerPinConfirm = $ownerPinConfirm.Text
+                outletCode = $outletCode.Text.Trim().ToUpperInvariant(); outletName = $outletName.Text.Trim()
+                terminalCode = $terminalCode.Text.Trim().ToUpperInvariant(); terminalName = 'Counter 1'
+                offsiteEnabled = $offsiteEnabled.Checked; offsiteEndpoint = $offsiteEndpoint.Text.Trim().TrimEnd('/'); offsiteBucket = $offsiteBucket.Text.Trim()
+                offsiteAccessKey = $offsiteAccess.Text.Trim(); offsiteSecretKey = $offsiteSecret.Text
+                offsiteRegion = $offsiteRegion.Text.Trim(); offsitePrefix = $offsitePrefix.Text.Trim().Trim('/')
+                syncEncryptionKey = ''
+                expectedOutletId = ''; enrollmentFile = ''
+            }
         }
         try { Assert-Configuration $candidate }
         catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Check setup details', 'OK', 'Warning') | Out-Null; return }
@@ -908,7 +1154,8 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
     }
 }
 
-function Write-ApplicationConfiguration($Config, [string]$DatabasePassword, [string]$BackupEncryptionKey, [bool]$IncludeBootstrap) {
+function Write-ApplicationConfiguration($Config, [string]$DatabasePassword, [string]$BackupEncryptionKey,
+                                       [string]$SyncEncryptionKey, [bool]$IncludeBootstrap) {
     New-Item -ItemType Directory -Force $ConfigRoot, (Join-Path $DataRoot 'backups'), (Join-Path $DataRoot 'logs') | Out-Null
     $properties = [Collections.Generic.List[string]]::new()
     $properties.Add('spring.profiles.active=counter')
@@ -923,6 +1170,11 @@ function Write-ApplicationConfiguration($Config, [string]$DatabasePassword, [str
     $properties.Add("pos.backup.pg-dump=$(ConvertTo-PropertyValue (Join-Path $PgBin 'pg_dump.exe'))")
     if ($Config.offsiteEnabled) {
         $properties.Add("POS_BACKUP_ENCRYPTION_KEY=$(ConvertTo-PropertyValue $BackupEncryptionKey)")
+        # The one key every computer in this business holds. On the owner's
+        # computer it is generated once and handed out in enrollment files; on an
+        # outlet computer it arrives in one. Without it a counter finds
+        # config/ACC.json and cannot read a byte of it.
+        $properties.Add("POS_SYNC_ENCRYPTION_KEY=$(ConvertTo-PropertyValue $SyncEncryptionKey)")
         $properties.Add("pos.backup.offsite.endpoint=$(ConvertTo-PropertyValue $Config.offsiteEndpoint)")
         $properties.Add("pos.backup.offsite.bucket=$(ConvertTo-PropertyValue $Config.offsiteBucket)")
         $properties.Add("pos.backup.offsite.access-key-id=$(ConvertTo-PropertyValue $Config.offsiteAccessKey)")
@@ -940,10 +1192,81 @@ function Write-ApplicationConfiguration($Config, [string]$DatabasePassword, [str
         $properties.Add("pos.bootstrap.outlet-code=$(ConvertTo-PropertyValue $Config.outletCode)")
         $properties.Add("pos.bootstrap.outlet-name=$(ConvertTo-PropertyValue $Config.outletName)")
         $properties.Add("pos.bootstrap.terminal-code=$(ConvertTo-PropertyValue $Config.terminalCode)")
-        $properties.Add('pos.bootstrap.terminal-name=Counter 1')
+        $properties.Add("pos.bootstrap.terminal-name=$(ConvertTo-PropertyValue (Get-ConfigValue $Config 'terminalName' 'Counter 1'))")
     }
     [IO.File]::WriteAllLines($ConfigPath, $properties, [Text.UTF8Encoding]::new($false))
     Set-DataPermissions
+}
+
+function Invoke-ConfigurationPull($Config) {
+    # Signed in over loopback with the throwaway account, because the pull is an
+    # authenticated action and on a fresh counter there is no other user to be:
+    # the real staff are inside the payload this call is about to fetch.
+    $base = 'http://127.0.0.1:8080'
+    $session = $null
+
+    # The endpoint hands back its own header name rather than us assuming one.
+    $csrf = Invoke-RestMethod "$base/api/auth/csrf" -SessionVariable session -TimeoutSec 20
+    $headers = @{ $csrf.headerName = $csrf.token }
+
+    try {
+        Invoke-RestMethod "$base/api/auth/sign-in" -Method Post -WebSession $session -Headers $headers `
+            -ContentType 'application/json' -TimeoutSec 30 -Body (@{
+                identifier = $Config.ownerUsername
+                password   = $Config.ownerPassword
+            } | ConvertTo-Json) | Out-Null
+    } catch {
+        throw ("Setup could not sign in to finish enrolling this computer. " +
+               "Run Radiance POS Diagnostics from the Start menu.`n`n$($_.Exception.Message)")
+    }
+
+    try {
+        $applied = Invoke-RestMethod "$base/api/sync/config" -Method Post -WebSession $session `
+            -Headers $headers -TimeoutSec 180
+    } catch {
+        # The message the API produced is the useful one here — "nothing
+        # published for ACC", or a sync key that does not match — and all of
+        # them are things the owner can fix and the operator cannot guess.
+        $detail = $_.Exception.Message
+        try {
+            $body = $_.ErrorDetails.Message | ConvertFrom-Json
+            if ($body.message) { $detail = $body.message }
+        } catch { }
+        throw ("This computer reached Cloud Sync but could not take the configuration for " +
+               "$($Config.outletCode).`n`n$detail")
+    }
+
+    # Proof, not optimism. An empty payload applied without error would leave a
+    # counter with no staff and no catalogue, looking installed.
+    if ([int]$applied.users -le 0) {
+        throw ("The configuration for $($Config.outletCode) arrived with no staff accounts, so " +
+               'nobody could sign in at this counter. Ask the owner to publish the outlet again.')
+    }
+    Write-Host "Pulled $($applied.users) staff and $($applied.products) products for $($Config.outletCode)."
+    return $applied
+}
+
+function Disable-BootstrapAccount($Config, [string]$DatabasePassword) {
+    # Deactivated, never deleted: audit_log.actor_id is a foreign key to this
+    # row and the pull wrote a CONFIG_PULLED entry attributed to it, so a DELETE
+    # fails. Deactivating is also sufficient — sign-in rejects inactive users.
+    #
+    # It matters that this happens. Adopting head office's outlet id re-points
+    # user_outlet onto it, so this throwaway account ends up a genuine owner at
+    # the branch. Left enabled, every outlet computer would ship with a hidden
+    # owner whose password sat in a setup file.
+    $env:PGPASSWORD = $DatabasePassword
+    try {
+        $sql = "update app_user set is_active = false where username = '{0}'" -f ($Config.ownerUsername -replace "'", "''")
+        $null = & (Join-Path $PgBin 'psql.exe') -h 127.0.0.1 -p $PgPort -U giftedlabs -d pos_system -v ON_ERROR_STOP=1 -tAc $sql
+        if ($LASTEXITCODE -ne 0) {
+            throw ('Setup could not disable the temporary account it used to enroll this computer. ' +
+                   "Sign in as the owner and deactivate '$($Config.ownerUsername)' under User Accounts.")
+        }
+    } finally {
+        Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+    }
+    Write-Host "Disabled the temporary enrollment account $($Config.ownerUsername)."
 }
 
 function Install-ApplicationService {
@@ -1023,6 +1346,8 @@ try {
         exit 0
     }
 
+    # Set only by the outlet path, and read only there.
+    $applied = $null
     $databasePassword = New-RandomSecret
     # Reused when an earlier attempt already saved them: the cluster was
     # initialised with that superuser password and cannot be opened with another.
@@ -1031,33 +1356,69 @@ try {
     $existingBackupKey = Read-Secret $BackupEncryptionSecretPath 'backup encryption key'
     $backupEncryptionKey = if ($existingBackupKey) { $existingBackupKey } else { New-BackupEncryptionKey }
 
+    $mode = Get-SetupMode $configuration
+    # An outlet computer is given the business's sync key; the owner's computer
+    # generates one and hands it out. Either way it is never the backup key,
+    # which stays on the machine that made it.
+    $existingSyncKey = Read-Secret $SyncEncryptionSecretPath 'Cloud Sync encryption key'
+    $syncEncryptionKey = if ($mode -eq 'outlet') {
+        Get-ConfigValue $configuration 'syncEncryptionKey'
+    } elseif ($existingSyncKey) {
+        $existingSyncKey
+    } else {
+        New-BackupEncryptionKey
+    }
+
     Start-SetupProgress
     Set-SetupStatus 'Initializing the private database...'
     Initialize-Database $postgresPassword $databasePassword
     Save-Secret $PostgresAdminSecretPath $postgresPassword
     Save-Secret $BackupEncryptionSecretPath $backupEncryptionKey
+    Save-Secret $SyncEncryptionSecretPath $syncEncryptionKey
     Assert-PortAvailable
     Set-SetupStatus 'Securing configuration and creating the Windows service...'
-    Write-ApplicationConfiguration $configuration $databasePassword $backupEncryptionKey $true
+    Write-ApplicationConfiguration $configuration $databasePassword $backupEncryptionKey $syncEncryptionKey $true
     Install-ApplicationService
-    Set-SetupStatus 'Applying database migrations and creating the first owner...'
+    Set-SetupStatus $(if ($mode -eq 'outlet') {
+        "Preparing this computer for $($configuration.outletCode)..."
+    } else {
+        'Applying database migrations and creating the first owner...'
+    })
     Wait-Application
+
+    # Joining, not starting. The stub outlet the bootstrap just created carries
+    # head office's code, so the pull recognises it by code and swaps in head
+    # office's id — taking this counter's till with it — rather than leaving two
+    # branches behind. Then the real staff, catalogue and prices land, and the
+    # throwaway account that did it is shut off.
+    if ($mode -eq 'outlet') {
+        Set-SetupStatus "Taking $($configuration.outletCode)'s staff, products and prices from Cloud Sync..."
+        $applied = Invoke-ConfigurationPull $configuration
+        Set-SetupStatus 'Removing the temporary setup account...'
+        Disable-BootstrapAccount $configuration $databasePassword
+    }
 
     # The plaintext first-owner password and PIN exist only for the bootstrap
     # start. After the hashes are committed, remove both and prove the app can
     # restart without them.
     Stop-Service RadiancePos
-    Write-ApplicationConfiguration $configuration $databasePassword $backupEncryptionKey $false
+    Write-ApplicationConfiguration $configuration $databasePassword $backupEncryptionKey $syncEncryptionKey $false
     Start-Service RadiancePos
     Set-SetupStatus 'Verifying the protected installation...'
     Wait-Application
 
     $state = [ordered]@{
         configuredAt = (Get-Date).ToUniversalTime().ToString('o')
+        setupMode = $mode
         outletCode = $configuration.outletCode
         terminalCode = $configuration.terminalCode
         databasePort = $PgPort
         offsiteBackupConfigured = [bool]$configuration.offsiteEnabled
+    }
+    if ($mode -eq 'outlet') {
+        $state.enrolledOutletId = Get-ConfigValue $configuration 'expectedOutletId'
+        $state.staffReceived = [int]$applied.users
+        $state.productsReceived = [int]$applied.products
     }
     $state | ConvertTo-Json | Set-Content (Join-Path $DataRoot 'install-state.json') -Encoding UTF8
     if ($script:ProgressForm) { $script:ProgressForm.Close() }
@@ -1072,7 +1433,15 @@ try {
     # hung forever even though the counter is already healthy and configured.
     if (-not $ConfigFile) {
         Add-Type -AssemblyName PresentationFramework
-        [System.Windows.MessageBox]::Show('Radiance POS is installed, protected, and ready to use.', 'Setup complete', 'OK', 'Information') | Out-Null
+        $done = if ($mode -eq 'outlet') {
+            "This computer is now $($configuration.outletName) ($($configuration.outletCode)), till " +
+            "$($configuration.terminalCode). It took $([int]$applied.users) staff accounts and " +
+            "$([int]$applied.products) products from Cloud Sync.`n`n" +
+            'Staff sign in with the credentials they already use. Delete the enrollment file — it holds cloud keys.'
+        } else {
+            'Radiance POS is installed, protected, and ready to use.'
+        }
+        [System.Windows.MessageBox]::Show($done, 'Setup complete', 'OK', 'Information') | Out-Null
     }
     Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
 } catch {

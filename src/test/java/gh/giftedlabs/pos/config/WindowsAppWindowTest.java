@@ -10,6 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("Windows installed-app window")
@@ -87,13 +88,21 @@ class WindowsAppWindowTest {
         assertTrue(silentRun.contains("-ConfigFile") && silentRun.contains("-NonInteractive"),
                 "silent setup must identify itself with a response file: " + silentRun);
 
+        // The structure, not the wording. The completion message now depends on
+        // whether this computer started a business or joined one, and pinning one
+        // sentence made a copy change look like a silent-install regression.
         Pattern guardedSuccessDialog = Pattern.compile(
                 "if \\(-not \\$ConfigFile\\) \\{\\s*"
-                        + "Add-Type -AssemblyName PresentationFramework\\s*"
-                        + "\\[System\\.Windows\\.MessageBox\\]::Show\\('Radiance POS is installed, protected, and ready to use\\.'",
+                        + "Add-Type -AssemblyName PresentationFramework\\b"
+                        + ".*?\\[System\\.Windows\\.MessageBox\\]::Show\\(",
                 Pattern.DOTALL);
         assertTrue(guardedSuccessDialog.matcher(onboarding).find(),
                 "response-file onboarding must not block on the interactive success dialog");
+
+        // And it cannot also be raised outside that guard, which the structural
+        // match above would not notice on its own.
+        assertEquals(1, onboarding.split("'Setup complete'", -1).length - 1,
+                "the completion dialog must be raised in exactly one place, inside the -not $ConfigFile guard");
     }
 
     @Test
