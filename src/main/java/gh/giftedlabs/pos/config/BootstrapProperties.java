@@ -7,6 +7,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 @ConfigurationProperties(prefix = "pos.bootstrap")
 public record BootstrapProperties(
         @DefaultValue("false") boolean enabled,
+        @DefaultValue("Radiance POS") String businessName,
+        @DefaultValue("") String businessTradingName,
         @DefaultValue("admin@radiancepos.com") String username,
         @DefaultValue("Mr Jones") String fullName,
         @DefaultValue("") String email,

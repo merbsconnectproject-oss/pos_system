@@ -28,6 +28,33 @@ class OutletComputerOnboardingTest {
     }
 
     @Nested
+    @DisplayName("business hierarchy")
+    class BusinessHierarchy {
+
+        @Test
+        @DisplayName("FR-SET-01 · the organization is named before its owner and first outlet")
+        void businessComesFirst() throws IOException {
+            String script = onboarding();
+
+            int business = script.indexOf("$tabs.TabPages.Add($businessPage)");
+            int owner = script.indexOf("$tabs.TabPages.Add($ownerPage)");
+            int outlet = script.indexOf("$tabs.TabPages.Add($shopPage)");
+            assertTrue(business > 0 && owner > business && outlet > owner,
+                    "new-business setup must read Business → Owner → First outlet");
+        }
+
+        @Test
+        @DisplayName("FR-SET-01 · the organization name reaches the bootstrap service")
+        void businessNameIsPersisted() throws IOException {
+            String script = onboarding();
+
+            assertTrue(script.contains("businessName = $businessName.Text.Trim()"));
+            assertTrue(script.contains("pos.bootstrap.business-name=$(ConvertTo-PropertyValue"),
+                    "the name collected before the outlet must reach business_settings");
+        }
+    }
+
+    @Nested
     @DisplayName("joining rather than starting a business")
     class Joining {
 

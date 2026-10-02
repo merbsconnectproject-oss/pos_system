@@ -152,6 +152,13 @@ function Assert-Configuration($Config) {
     # setup signs in with is generated here, used once and disabled, so none of
     # the owner rules below describe anything an operator typed.
     if ($mode -eq 'business') {
+        $business = [string](Get-ConfigValue $Config 'businessName' $Config.outletName)
+        $businessTrading = [string](Get-ConfigValue $Config 'businessTradingName')
+        if ([string]::IsNullOrWhiteSpace($business)) { $errors.Add('Business or organization name is required.') }
+        if ($business.Length -gt 200) { $errors.Add('Business or organization name must be 200 characters or fewer.') }
+        if ($businessTrading -and $businessTrading.Length -gt 200) {
+            $errors.Add('Business trading name must be 200 characters or fewer.')
+        }
         if ([string]::IsNullOrWhiteSpace($Config.ownerUsername) -or $Config.ownerUsername -notmatch '^[A-Za-z0-9._-]{3,40}$') {
             $errors.Add('Owner username must be 3-40 letters, numbers, dots, dashes, or underscores.')
         }
@@ -227,7 +234,7 @@ function Get-InteractiveConfiguration {
     $modeBusiness.Checked = $true
     $modePage.Controls.Add($modeBusiness)
     $modeBusinessHelp = [Windows.Forms.Label]::new()
-    $modeBusinessHelp.Text = 'Creates the owner account, the first branch and this counter. Afterwards the owner adds the other branches, staff and products, publishes each branch, and produces one enrollment file per outlet computer.'
+    $modeBusinessHelp.Text = 'Creates the business or organization first, then its owner, first outlet and this counter. Afterwards the owner adds other outlets, staff and products, publishes each outlet, and produces an enrollment file for each outlet computer.'
     $modeBusinessHelp.SetBounds(50, 80, 530, 56)
     $modePage.Controls.Add($modeBusinessHelp)
 
@@ -240,7 +247,20 @@ function Get-InteractiveConfiguration {
     $modeOutletHelp.SetBounds(50, 178, 530, 60)
     $modePage.Controls.Add($modeOutletHelp)
 
-    $ownerPage = [Windows.Forms.TabPage]::new('2. Owner')
+    $businessPage = [Windows.Forms.TabPage]::new('2. Business')
+    $businessHelp = [Windows.Forms.Label]::new()
+    $businessHelp.Text = 'Name the business or organization that owns every outlet. This is not an outlet name.'
+    $businessHelp.SetBounds(28, 20, 565, 40)
+    $businessPage.Controls.Add($businessHelp)
+    $businessName = Add-Field $businessPage 'Legal / organization name' 82 $false 'Radiance POS'
+    $businessTradingName = Add-Field $businessPage 'Trading name (optional)' 122
+
+    $businessNote = [Windows.Forms.Label]::new()
+    $businessNote.Text = 'Example: Gifted Labs Limited may own Accra Store and Kumasi Store. You will create the first outlet after the owner account.'
+    $businessNote.SetBounds(28, 172, 547, 48)
+    $businessPage.Controls.Add($businessNote)
+
+    $ownerPage = [Windows.Forms.TabPage]::new('3. Owner')
     $ownerHelp = [Windows.Forms.Label]::new()
     $ownerHelp.Text = 'Create the first owner. The password and PIN are used once, hashed, and removed from setup files.'
     $ownerHelp.SetBounds(28, 20, 565, 40)
@@ -253,16 +273,16 @@ function Get-InteractiveConfiguration {
     $ownerPin = Add-Field $ownerPage 'Approval PIN (4-6 digits)' 272 $true
     $ownerPinConfirm = Add-Field $ownerPage 'Confirm PIN' 312 $true
 
-    $shopPage = [Windows.Forms.TabPage]::new('3. Shop')
+    $shopPage = [Windows.Forms.TabPage]::new('4. First outlet')
     $shopHelp = [Windows.Forms.Label]::new()
-    $shopHelp.Text = 'The installer creates the first outlet and Counter 1. Codes appear in receipt numbers.'
+    $shopHelp.Text = 'Now create the first physical outlet under the business. The outlet and till codes appear in receipt numbers.'
     $shopHelp.SetBounds(28, 20, 565, 40)
     $shopPage.Controls.Add($shopHelp)
     $outletCode = Add-Field $shopPage 'Outlet code' 86 $false 'RAD'
     $outletName = Add-Field $shopPage 'Outlet name' 126 $false 'Radiance Lighting'
     $terminalCode = Add-Field $shopPage 'Terminal code' 166 $false '01'
 
-    $backupPage = [Windows.Forms.TabPage]::new('4. Protection')
+    $backupPage = [Windows.Forms.TabPage]::new('5. Cloud & protection')
     $backupHelp = [Windows.Forms.Label]::new()
     $backupHelp.Text = 'Local backups run every 15 minutes. Add an S3-compatible bucket now for protection against disk loss, or configure it later in Settings.'
     $backupHelp.SetBounds(28, 18, 565, 52)
@@ -358,6 +378,7 @@ function Get-InteractiveConfiguration {
             $tabs.TabPages.Add($tillPage)
             $title.Text = 'Connect this outlet computer'
         } else {
+            $tabs.TabPages.Add($businessPage)
             $tabs.TabPages.Add($ownerPage)
             $tabs.TabPages.Add($shopPage)
             $tabs.TabPages.Add($backupPage)
@@ -438,6 +459,7 @@ function Get-InteractiveConfiguration {
         } else {
             [pscustomobject]@{
                 mode = 'business'
+                businessName = $businessName.Text.Trim(); businessTradingName = $businessTradingName.Text.Trim()
                 ownerUsername = $ownerUsername.Text.Trim(); ownerName = $ownerName.Text.Trim(); ownerEmail = $ownerEmail.Text.Trim()
                 ownerPassword = $ownerPassword.Text; ownerPasswordConfirm = $ownerPasswordConfirm.Text
                 ownerPin = $ownerPin.Text; ownerPinConfirm = $ownerPinConfirm.Text
@@ -1184,6 +1206,10 @@ function Write-ApplicationConfiguration($Config, [string]$DatabasePassword, [str
     }
     $properties.Add("pos.bootstrap.enabled=$($IncludeBootstrap.ToString().ToLowerInvariant())")
     if ($IncludeBootstrap) {
+        # Older silent-install response files predate the separate business
+        # page. Their outlet name is the only honest organization name we have.
+        $properties.Add("pos.bootstrap.business-name=$(ConvertTo-PropertyValue (Get-ConfigValue $Config 'businessName' $Config.outletName))")
+        $properties.Add("pos.bootstrap.business-trading-name=$(ConvertTo-PropertyValue (Get-ConfigValue $Config 'businessTradingName'))")
         $properties.Add("pos.bootstrap.username=$(ConvertTo-PropertyValue $Config.ownerUsername)")
         $properties.Add("pos.bootstrap.full-name=$(ConvertTo-PropertyValue $Config.ownerName)")
         $properties.Add("pos.bootstrap.email=$(ConvertTo-PropertyValue $Config.ownerEmail)")

@@ -1,9 +1,24 @@
 # Progress
 
-**Updated** 2026-09-30 · **Tests** 572 backend (3 live R2 checks skipped) + 124 frontend green · **DB** migrations V1–V34 validated
+**Updated** 2026-10-02 · **Tests** 602 backend (3 live R2 checks skipped) + 125 frontend green · **DB** migrations V1–V34 validated
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (258 items, dual checkbox).
+
+## Business-first onboarding and enrollment authorization — 2026-10-02
+
+The Windows new-business path now states and persists the actual hierarchy:
+**Business/organization → Owner → First outlet → Till → Cloud protection**. The
+organization name is collected before any outlet, written into
+`business_settings`, and carried through response-file installs with a backward-
+compatible fallback for files created before the business page existed.
+
+The owner enrollment download no longer fails with a misleading permission
+error. That download is a direct blob request rather than the shared JSON request
+helper, and it was the one protected `POST` that did not attach the session's CSRF
+header. Spring therefore rejected it before checking the owner's
+`settings.general` authority. The request now includes the CSRF proof and has a
+regression test reproducing the former 403 path.
 
 ---
 
@@ -36,9 +51,9 @@ S ██████████  Expenses & credit  100%  expenses, P&L and ins
 T ██████████  Returns & swaps    100%  wired end to end; net of returns now reaches the takings and the P&L
 ```
 
-570 backend tests green (3 skipped) across the full 2026-09-30 Testcontainers run,
+602 backend tests green (3 skipped) across the full 2026-10-02 Testcontainers run,
 including Cloud Sync scheduling and Windows installer acceptance checks; the frontend
-is green at **115 tests** across 17 files, with `tsc --noEmit` clean and the contract
+is green at **125 tests** across 19 files, with `tsc --noEmit` clean and the contract
 check passing all 41 barcodes over 32 products. Three live R2 checks remain on-demand
 because they require configured credentials. The offline Windows build, onboarding and
 installation have completed successfully on the target machine.
@@ -48,7 +63,7 @@ installation have completed successfully on the target machine.
 `Tests run: 0` to its `.txt` while its nested tests are counted only in the `.xml` — 29
 of the 55 classes report zero that way, `SaleControllerTest` among them at 11 seconds
 of elapsed time for its supposed nothing. The `.xml` `testsuite` attributes agree with
-Maven: 570 tests, 0 failures, 0 errors, 3 skipped. This is the same trap recorded on
+Maven: 602 tests, 0 failures, 0 errors, 3 skipped. This is the same trap recorded on
 2026-09-23 in a different disguise, and it is worth naming once more because the
 cheap glance is the wrong one.
 

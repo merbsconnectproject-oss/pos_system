@@ -96,6 +96,8 @@ pos:
     name: ${POS_PRINTER_NAME:}
   bootstrap:
     enabled: ${POS_BOOTSTRAP_ADMIN_ENABLED:false}
+    business-name: ${POS_BOOTSTRAP_BUSINESS_NAME:Radiance POS}
+    business-trading-name: ${POS_BOOTSTRAP_BUSINESS_TRADING_NAME:}
     username: ${POS_BOOTSTRAP_ADMIN_USERNAME:admin}
     full-name: ${POS_BOOTSTRAP_ADMIN_NAME:System Administrator}
     email: ${POS_BOOTSTRAP_ADMIN_EMAIL:}
