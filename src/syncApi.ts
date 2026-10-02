@@ -1,4 +1,4 @@
-import { request } from './apiClient';
+import { csrfHeader, request } from './apiClient';
 import { filenameFrom, messageFromFailure, saveBlob } from './fileDownload';
 
 /**
@@ -73,7 +73,12 @@ export const syncApi = {
   downloadEnrollment: async (outletId: string, outletCode: string) => {
     const response = await fetch(`/api/sync/enrollment/${outletId}`, {
       method: 'POST',
-      credentials: 'same-origin',
+      // This download cannot use request(): it needs the response blob and its
+      // Content-Disposition header. It is still a state-changing POST, so it
+      // must carry the same CSRF proof as every other protected action. Without
+      // it Spring answers 403 before it ever checks that the user is an owner.
+      headers: await csrfHeader(),
+      credentials: 'include',
     });
 
     if (!response.ok) {
