@@ -30,6 +30,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
           # Read the pinned URL from the build script rather than maintaining
           # a second PostgreSQL version just for these checks.
           $script = (Resolve-Path 'packaging\windows\build-installer.ps1').Path
@@ -37,11 +38,16 @@ jobs:
           $parameter = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'PostgresUrl' }
           $url = $parameter.DefaultValue.SafeGetValue()
           $archive = Join-Path $env:RUNNER_TEMP 'postgresql.zip'
-          Invoke-WebRequest $url -OutFile $archive
+          Write-Host "Downloading PostgreSQL from $url"
+          & curl.exe --fail --location --silent --show-error --retry 2 --connect-timeout 30 --max-time 180 --output $archive $url
+          if ($LASTEXITCODE -ne 0) { throw "PostgreSQL download failed (exit $LASTEXITCODE)." }
           $destination = Join-Path $env:RUNNER_TEMP 'postgresql-path-checks'
-          Expand-Archive -LiteralPath $archive -DestinationPath $destination
+          Write-Host "Extracting $((Get-Item -LiteralPath $archive).Length) bytes"
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [IO.Compression.ZipFile]::ExtractToDirectory($archive, $destination)
           $initdb = Get-ChildItem $destination -Filter initdb.exe -Recurse | Select-Object -First 1
           if (-not $initdb) { throw 'The PostgreSQL archive does not contain initdb.exe.' }
+          Write-Host 'Running Windows native path regression checks'
           .\packaging\windows\tests\setup-paths.ps1 -PgBin $initdb.DirectoryName
 
   package:

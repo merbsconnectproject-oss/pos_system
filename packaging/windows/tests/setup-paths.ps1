@@ -26,6 +26,7 @@ try {
     if ($shortPath -match '~\d') { $profiles += $shortPath }
 
     foreach ($profileTemp in $profiles) {
+        Write-Host "Checking inherited profile TEMP: $profileTemp"
         $profileTmp = $profileTemp + '-tmp'
         $env:TEMP = $profileTemp
         $env:TMP = $profileTmp

@@ -37,6 +37,10 @@ The workflow additionally runs the native path suite in a short Windows job
 before either full package build, using the PostgreSQL URL pinned by the build
 script. This makes path failures visible without waiting for installer
 compression, while the staged-binary checks remain part of both package jobs.
+The first early-check run exceeded its ten-minute setup limit before reporting
+a test result. The job now logs download, extraction and test boundaries, uses
+a bounded native download, and extracts through .NET rather than the slower
+PowerShell archive cmdlet.
 
 ## Business-first onboarding and enrollment authorization — 2026-10-02
 
