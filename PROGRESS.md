@@ -33,6 +33,10 @@ workspace, and acceptance on the affected PC remains pending.
 
 The focused packaging suite also reproduces both missing safeguards against
 the previous onboarding script, then passes all 13 checks with the fix applied.
+The workflow additionally runs the native path suite in a short Windows job
+before either full package build, using the PostgreSQL URL pinned by the build
+script. This makes path failures visible without waiting for installer
+compression, while the staged-binary checks remain part of both package jobs.
 
 ## Business-first onboarding and enrollment authorization — 2026-10-02
 

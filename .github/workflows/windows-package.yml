@@ -18,7 +18,34 @@ on:
       - 'v*'
 
 jobs:
+  paths:
+    name: Windows administrator path checks
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test native setup paths before packaging
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Read the pinned URL from the build script rather than maintaining
+          # a second PostgreSQL version just for these checks.
+          $script = (Resolve-Path 'packaging\windows\build-installer.ps1').Path
+          $ast = [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$null, [ref]$null)
+          $parameter = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'PostgresUrl' }
+          $url = $parameter.DefaultValue.SafeGetValue()
+          $archive = Join-Path $env:RUNNER_TEMP 'postgresql.zip'
+          Invoke-WebRequest $url -OutFile $archive
+          $destination = Join-Path $env:RUNNER_TEMP 'postgresql-path-checks'
+          Expand-Archive -LiteralPath $archive -DestinationPath $destination
+          $initdb = Get-ChildItem $destination -Filter initdb.exe -Recurse | Select-Object -First 1
+          if (-not $initdb) { throw 'The PostgreSQL archive does not contain initdb.exe.' }
+          .\packaging\windows\tests\setup-paths.ps1 -PgBin $initdb.DirectoryName
+
   package:
+    needs: paths
     runs-on: windows-latest
     permissions:
       contents: read
