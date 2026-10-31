@@ -73,6 +73,7 @@ $HealthUrl = 'http://127.0.0.1:8080/actuator/health'
 $PgPort = 54329
 $script:ProgressForm = $null
 $script:ProgressLabel = $null
+$setupTemp = $null
 
 function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -97,7 +98,7 @@ function New-BackupEncryptionKey {
 
 function Read-EnrollmentFile([string]$Path) {
     if ([string]::IsNullOrWhiteSpace($Path)) { throw 'Choose the outlet enrollment file supplied by the owner.' }
-    if (-not (Test-Path $Path)) { throw "The enrollment file was not found at $Path." }
+    if (-not (Test-Path -LiteralPath $Path)) { throw "The enrollment file was not found at $Path." }
 
     try { $file = Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json }
     catch { throw "$Path is not a readable Radiance enrollment file. Ask the owner to produce it again from System Settings - Stores & Branches." }
@@ -1355,9 +1356,12 @@ try {
         throw 'Radiance POS setup did not receive administrator rights. Answer Yes to the Windows permission prompt when it appears, or sign in to an administrator account.'
     }
 
+    . (Join-Path $PSScriptRoot 'setup-temp.ps1')
+    $setupTemp = Start-RadianceSetupTemp -DataRoot $DataRoot
+
     $configuration = if ($ConfigFile) {
-        if (-not (Test-Path $ConfigFile)) { throw "The onboarding response file was not found at $ConfigFile." }
-        Get-Content -Raw $ConfigFile | ConvertFrom-Json
+        if (-not (Test-Path -LiteralPath $ConfigFile)) { throw "The onboarding response file was not found at $ConfigFile." }
+        Get-Content -Raw -LiteralPath $ConfigFile | ConvertFrom-Json
     } else {
         Get-InteractiveConfiguration
     }
@@ -1448,10 +1452,14 @@ try {
     }
     $state | ConvertTo-Json | Set-Content (Join-Path $DataRoot 'install-state.json') -Encoding UTF8
     if ($script:ProgressForm) { $script:ProgressForm.Close() }
+    # The everyday launcher outlives setup. Do not let it inherit a temporary
+    # directory that the finally block is about to remove.
+    Stop-RadianceSetupTemp $setupTemp
+    $setupTemp = $null
     if (-not $NoLaunch) {
         # Through the same console-free shim the shortcuts use.
         Start-Process 'wscript.exe' -ArgumentList @(
-            (Join-Path $InstallRoot 'tools\launch.vbs'), 'open-pos.ps1'
+            ('"{0}"' -f (Join-Path $InstallRoot 'tools\launch.vbs')), 'open-pos.ps1'
         )
     }
     # A response file means there is no operator at this desktop. Inno waits for
@@ -1476,4 +1484,6 @@ try {
     # 64 tells launch.vbs the operator has already been shown the reason, so it
     # does not follow this dialog with a second one carrying an exit code.
     exit 64
+} finally {
+    if ($null -ne $setupTemp) { Stop-RadianceSetupTemp $setupTemp }
 }

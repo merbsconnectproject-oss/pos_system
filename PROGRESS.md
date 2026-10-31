@@ -1,9 +1,38 @@
 # Progress
 
-**Updated** 2026-10-02 · **Tests** 602 backend (3 live R2 checks skipped) + 125 frontend green · **DB** migrations V1–V34 validated
+**Updated** 2026-10-31 · **Tests** 603 backend (isolated verification; 3 live R2 checks skipped) + 125 frontend (last verified 2026-10-02) · **DB** migrations V1–V34 validated
 
 Updated after every completed feature. Detail lives in
 `../pos-system/docs/CHECKLIST.md` (258 items, dual checkbox).
+
+## Windows setup temporary paths — NFR-13 — 2026-10-31
+
+Onboarding no longer depends on the installing administrator's profile-backed
+`TEMP`/`TMP`, including short-name aliases such as `SHOPAD~1`. Each run uses a
+random temporary directory beneath the existing ProgramData data root, with an
+ACL applied at creation for SYSTEM, Administrators and the installing user's
+SID. The user SID also lets PostgreSQL's restricted child token read its
+password file. PostgreSQL initialization, security-policy files and Add-Type's
+compiler all inherit this directory. Setup restores the original process
+environment and removes the workspace on success, cancellation or failure;
+the everyday launcher receives the restored environment.
+
+The post-setup launcher now quotes its script path when calling Start-Process.
+Response and enrollment files use literal paths. Windows CI runs native initdb
+and Add-Type checks with spaced profile paths, unavailable `~1` aliases and real
+8.3 aliases where available, verifies the private ACL and cleanup, and installs
+the complete counter with a response file inside a spaced path.
+
+Validation: `./mvnw test` passed in an isolated copy of HEAD plus this fix:
+**603 tests, 0 failures, 0 errors, 3 skipped**. The existing local staged deletion
+of `ReceiptQueueMatcher.java` prevents this checkout from compiling; the isolated
+copy retains that class without changing the user's pending deletion. Workflow
+YAML also parses successfully. Windows-native checks require the Windows
+packaging workflow; no replacement installer has been produced from this Linux
+workspace, and acceptance on the affected PC remains pending.
+
+The focused packaging suite also reproduces both missing safeguards against
+the previous onboarding script, then passes all 13 checks with the fix applied.
 
 ## Business-first onboarding and enrollment authorization — 2026-10-02
 

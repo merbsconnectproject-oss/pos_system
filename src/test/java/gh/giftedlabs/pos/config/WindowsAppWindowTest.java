@@ -17,6 +17,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class WindowsAppWindowTest {
 
     @Test
+    @DisplayName("NFR-13 · setup isolates native tools from administrator profile temp paths")
+    void setupOwnsItsTemporaryWorkspace() throws IOException {
+        String onboarding = Files.readString(Path.of("packaging/windows/tools/onboard.ps1"));
+        String build = Files.readString(Path.of("packaging/windows/build-installer.ps1"));
+        String workflow = Files.readString(Path.of(".github/workflows/windows-package.yml"));
+
+        assertTrue(onboarding.contains("Start-RadianceSetupTemp -DataRoot $DataRoot"));
+        assertTrue(onboarding.indexOf("Start-RadianceSetupTemp -DataRoot $DataRoot")
+                < onboarding.indexOf("$configuration = if ($ConfigFile)"),
+                "temporary paths must be isolated before native tools or Add-Type run");
+        assertTrue(Pattern.compile("finally\\s*\\{\\s*if \\(\\$null -ne \\$setupTemp\\) \\{ Stop-RadianceSetupTemp \\$setupTemp", Pattern.DOTALL)
+                .matcher(onboarding).find(), "cleanup must run after success, cancellation and failure");
+        assertTrue(build.contains("'setup-temp.ps1'"), "the installed helper must be staged");
+        assertTrue(workflow.contains("packaging\\windows\\tests\\setup-paths.ps1"),
+                "Windows CI must exercise real native tools against profile paths with spaces and ~1");
+    }
+
+    @Test
     @DisplayName("shortcuts and onboarding open the POS without browser chrome")
     void launcherUsesInstalledAppMode() throws IOException {
         String launcher = Files.readString(Path.of("packaging/windows/tools/open-pos.ps1"));
@@ -28,6 +46,8 @@ class WindowsAppWindowTest {
         // Through the console-free shim rather than powershell.exe directly —
         // launching the window used to flash a console on the counter screen.
         assertTrue(onboarding.contains("tools\\launch.vbs"));
+        assertTrue(onboarding.contains("('\"{0}\"' -f (Join-Path $InstallRoot 'tools\\launch.vbs'))"),
+                "Start-Process must preserve the spaced installation path as one argument");
         assertTrue(onboarding.contains("open-pos.ps1"));
         assertFalse(onboarding.contains("Start-Process 'http://127.0.0.1:8080/'"));
     }
