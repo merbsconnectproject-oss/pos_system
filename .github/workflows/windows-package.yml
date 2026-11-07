@@ -238,7 +238,12 @@ jobs:
 
           # Through the launcher shipped beside the EXE: that is what a person
           # double-clicks on the counter PC, so that is the path that must work.
-          $launcher = Resolve-Path 'pos-api\dist\Install Radiance POS.cmd'
+          # From a folder named the way a second download unzips, because a
+          # bracket in the path once closed the script early without a word.
+          $unzipped = Join-Path $env:RUNNER_TEMP 'radiance-pos-windows (1)'
+          New-Item -ItemType Directory -Path $unzipped -Force | Out-Null
+          Copy-Item 'pos-api\dist\Radiance-POS-Setup-*.exe', 'pos-api\dist\Install Radiance POS.cmd' -Destination $unzipped
+          $launcher = Join-Path $unzipped 'Install Radiance POS.cmd'
           $upgrade = Start-Process $env:ComSpec -ArgumentList @(
             '/c', ('""{0}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="{1}""' -f $launcher, (Join-Path $env:RUNNER_TEMP 'missing-temp-upgrade.log'))
           ) -PassThru

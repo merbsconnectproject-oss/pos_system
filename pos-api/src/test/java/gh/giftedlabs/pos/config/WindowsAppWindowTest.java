@@ -145,6 +145,21 @@ class WindowsAppWindowTest {
     }
 
     @Test
+    @DisplayName("NFR-13 · the install launcher survives brackets in its folder and never vanishes silently")
+    void installLauncherCannotCloseWithoutSayingWhy() throws IOException {
+        String launcher = Files.readString(Path.of("packaging/windows/Install Radiance POS.cmd"));
+
+        // cmd expands %~f0 before it parses an ( ) block, so a folder named
+        // "AppWindow (1)" closed the block early and the window simply vanished.
+        assertFalse(Pattern.compile("(?im)^\\s*if\\b[^\\r\\n]*\\($").matcher(launcher).find(),
+                "the launcher must use goto, not ( ) blocks, around anything that expands a path");
+        assertTrue(launcher.contains(":denied") && launcher.contains(":missing"),
+                "a refused elevation and a missing installer must each say so");
+        assertTrue(launcher.split("(?i)\\bpause\\b", -1).length - 1 >= 3,
+                "every way out that is not success must pause long enough to be read");
+    }
+
+    @Test
     @DisplayName("NFR-13 · a failed initdb says why, in the dialog and the log")
     void initdbFailureCarriesItsOwnReason() throws IOException {
         String onboarding = Files.readString(Path.of("packaging/windows/tools/onboard.ps1"));
