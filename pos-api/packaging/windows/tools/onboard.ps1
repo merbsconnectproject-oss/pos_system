@@ -527,6 +527,26 @@ function Invoke-Checked([string]$File, [string[]]$Arguments, [hashtable]$Environ
     if ($LASTEXITCODE -ne 0) { throw "$File failed with exit code $LASTEXITCODE." }
 }
 
+# Like Invoke-Checked, but the tool's own words reach the dialog and the log.
+# Setup runs hidden, and Windows PowerShell does not transcribe a native
+# tool's stderr, so a failed initdb said only "exit code 1" — the one line that
+# could not be acted on. With -ErrorActionPreference Stop, a stderr line would
+# itself throw, before the exit code is known; hence Continue around the call.
+function Invoke-CheckedWithOutput([string]$File, [string[]]$Arguments) {
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = @(& $File @Arguments 2>&1 | ForEach-Object { "$_" })
+        $exitCode = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $previous }
+    $output | ForEach-Object { Write-Host $_ }
+    if ($exitCode -ne 0) {
+        $tail = ($output | Select-Object -Last 15) -join "`n"
+        if (-not $tail) { $tail = '(it printed nothing)' }
+        throw "$([IO.Path]::GetFileName($File)) failed with exit code $exitCode. It said:`n`n$tail"
+    }
+}
+
 function Invoke-IcaclsChecked([string]$Context, [string[]]$Arguments) {
     Write-Step "Applying permissions to $Context"
     $output = & icacls.exe @Arguments 2>&1
@@ -1073,7 +1093,7 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
         $passwordFile = Join-Path $env:TEMP ("radiance-pg-{0}.txt" -f [guid]::NewGuid())
         try {
             [IO.File]::WriteAllText($passwordFile, $SuperPassword, [Text.UTF8Encoding]::new($false))
-            Invoke-Checked (Join-Path $PgBin 'initdb.exe') @('-D', $PgData, '-U', 'postgres', '--pwfile', $passwordFile, '--auth-host=scram-sha-256', '--auth-local=scram-sha-256', '--encoding=UTF8', '--locale=C')
+            Invoke-CheckedWithOutput (Join-Path $PgBin 'initdb.exe') @('-D', $PgData, '-U', 'postgres', '--pwfile', $passwordFile, '--auth-host=scram-sha-256', '--auth-local=scram-sha-256', '--encoding=UTF8', '--locale=C')
         } finally { Remove-Item $passwordFile -Force -ErrorAction SilentlyContinue }
         Add-Content (Join-Path $PgData 'postgresql.conf') "`nlisten_addresses = '127.0.0.1'`nport = $PgPort`npassword_encryption = 'scram-sha-256'`n"
     }

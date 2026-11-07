@@ -145,6 +145,21 @@ class WindowsAppWindowTest {
     }
 
     @Test
+    @DisplayName("NFR-13 · a failed initdb says why, in the dialog and the log")
+    void initdbFailureCarriesItsOwnReason() throws IOException {
+        String onboarding = Files.readString(Path.of("packaging/windows/tools/onboard.ps1"));
+
+        // A counter reported only "initdb.exe failed with exit code 1": Windows
+        // PowerShell does not transcribe a native tool's stderr, so the reason
+        // initdb printed never reached the log or the operator.
+        assertTrue(onboarding.contains("Invoke-CheckedWithOutput (Join-Path $PgBin 'initdb.exe')"),
+                "initdb must run through the wrapper that keeps its output");
+        assertTrue(Pattern.compile("function Invoke-CheckedWithOutput.*?\\$ErrorActionPreference = 'Continue'.*?2>&1.*?It said:", Pattern.DOTALL)
+                .matcher(onboarding).find(),
+                "the wrapper must capture stderr without throwing on it, and put it in the error");
+    }
+
+    @Test
     @DisplayName("NFR-13 · service-account rights compile on Windows PowerShell")
     void serviceLogonRightDoesNotDuplicateInteropImport() throws IOException {
         String onboarding = Files.readString(Path.of("packaging/windows/tools/onboard.ps1"));
