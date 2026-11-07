@@ -16,12 +16,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("Windows installed-app window")
 class WindowsAppWindowTest {
 
+    /** Workflows live at the monorepo root; the suite runs from pos-api/. */
+    private static final Path WINDOWS_WORKFLOW = Path.of("../.github/workflows/windows-package.yml");
+
     @Test
     @DisplayName("NFR-13 · setup isolates native tools from administrator profile temp paths")
     void setupOwnsItsTemporaryWorkspace() throws IOException {
         String onboarding = Files.readString(Path.of("packaging/windows/tools/onboard.ps1"));
         String build = Files.readString(Path.of("packaging/windows/build-installer.ps1"));
-        String workflow = Files.readString(Path.of(".github/workflows/windows-package.yml"));
+        String workflow = Files.readString(WINDOWS_WORKFLOW);
 
         assertTrue(onboarding.contains("Start-RadianceSetupTemp -DataRoot $DataRoot"));
         assertTrue(onboarding.indexOf("Start-RadianceSetupTemp -DataRoot $DataRoot")
@@ -32,6 +35,8 @@ class WindowsAppWindowTest {
         assertTrue(build.contains("'setup-temp.ps1'"), "the installed helper must be staged");
         assertTrue(workflow.contains("packaging\\windows\\tests\\setup-paths.ps1"),
                 "Windows CI must exercise real native tools against profile paths with spaces and ~1");
+        assertTrue(workflow.contains("SHOPAD~1") && workflow.contains("Install Radiance POS.cmd"),
+                "Windows CI must install through the shipped launcher under a missing 8.3 TEMP");
     }
 
     @Test
@@ -126,14 +131,17 @@ class WindowsAppWindowTest {
     }
 
     @Test
-    @DisplayName("Windows packaging reads the frontend from the Gifted-Labs repository")
-    void packagingUsesTheGiftedLabsFrontend() throws IOException {
-        String workflow = Files.readString(Path.of(".github/workflows/windows-package.yml"));
+    @DisplayName("Windows packaging builds the frontend from this same repository")
+    void packagingUsesTheFrontendBesideIt() throws IOException {
+        String workflow = Files.readString(WINDOWS_WORKFLOW);
 
-        assertTrue(workflow.contains("repository: Gifted-Labs/radiance-pos-frontend"),
-                "the package must not silently fall back to the old personal frontend repository");
-        assertTrue(workflow.contains("ssh-key: ${{ secrets.POS_SYSTEM_DEPLOY_KEY }}"),
-                "the private frontend checkout must use its read-only deploy key");
+        // pos-api/ and pos-system/ live in one repository, so one commit builds
+        // one installer. A second checkout of another repository could ship a
+        // frontend from a different commit than the backend it was tested with.
+        assertFalse(workflow.contains("repository:"),
+                "the package must not check out a frontend from another repository");
+        assertTrue(workflow.contains("working-directory: pos-system"),
+                "the frontend beside the backend must be checked and bundled");
     }
 
     @Test
