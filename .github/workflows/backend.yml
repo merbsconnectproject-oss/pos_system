@@ -1,17 +1,19 @@
-name: CI
+name: Backend
 
-# This repository has no remote yet, so nothing triggers this. It is committed
-# so that the checks exist the moment one is added — `git remote add origin …`
-# is all that stands between here and a green tick.
 on:
   push:
     branches: [main, master]
+    paths: ['pos-api/**', '.github/workflows/backend.yml']
   pull_request:
+    paths: ['pos-api/**', '.github/workflows/backend.yml']
   workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pos-api
 
     steps:
       - uses: actions/checkout@v7
@@ -22,6 +24,7 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
           cache: maven
+          cache-dependency-path: pos-api/pom.xml
 
       # The test database is PostgreSQL 18. Ubuntu's preinstalled pg_dump is
       # older and refuses to dump a newer server, which makes the backup tests
@@ -52,5 +55,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: surefire-reports
-          path: target/surefire-reports/
+          path: pos-api/target/surefire-reports/
           retention-days: 14

@@ -7,13 +7,9 @@ on:
         description: Installer version
         required: true
         default: 0.1.0
-      frontend_ref:
-        description: radiance-pos-frontend branch, tag, or SHA
-        required: true
-        default: main
   push:
     branches:
-      - feature/auth-session
+      - main
     tags:
       - 'v*'
 
@@ -28,6 +24,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Test native setup paths before packaging
         shell: powershell
+        working-directory: pos-api
         run: |
           $ErrorActionPreference = 'Stop'
           $ProgressPreference = 'SilentlyContinue'
@@ -71,19 +68,10 @@ jobs:
         launch: [AppWindow, Browser]
 
     steps:
-      - name: Check out backend
+      # One checkout: pos-api/ and pos-system/ sit side by side in this
+      # repository, which is the layout build-installer.ps1 expects.
+      - name: Check out backend and frontend
         uses: actions/checkout@v7
-        with:
-          path: pos-api
-
-      - name: Check out frontend
-        uses: actions/checkout@v7
-        with:
-          repository: Gifted-Labs/radiance-pos-frontend
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.frontend_ref || (github.ref_name == 'feature/auth-session' && 'feature/auth-integration' || 'main') }}
-          path: pos-system
-          ssh-key: ${{ secrets.POS_SYSTEM_DEPLOY_KEY }}
-          persist-credentials: false
 
       - uses: actions/setup-java@v6
         with:

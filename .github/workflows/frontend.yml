@@ -1,14 +1,19 @@
-name: CI
+name: Frontend
 
 on:
   push:
     branches: [main, master]
+    paths: ['pos-system/**', '.github/workflows/frontend.yml']
   pull_request:
+    paths: ['pos-system/**', '.github/workflows/frontend.yml']
   workflow_dispatch:
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pos-system
 
     steps:
       - uses: actions/checkout@v7
@@ -18,6 +23,7 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+          cache-dependency-path: pos-system/package-lock.json
 
       - name: Install
         run: npm ci
