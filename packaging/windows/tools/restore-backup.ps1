@@ -33,7 +33,13 @@ $backupDir = Join-Path $dataRoot 'backups'
 $safety = Join-Path $backupDir ("pre-restore-{0}.dump" -f (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss'))
 $restoreFile = $source
 $temporary = $null
+# NFR-13: the administrator's own TEMP can be an 8.3 alias (SHOPAD~1) that does
+# not exist on disk. The decrypted dump and pg_restore's scratch files go to the
+# same private workspace onboarding uses instead.
+. (Join-Path $PSScriptRoot 'setup-temp.ps1')
+$restoreTemp = $null
 try {
+    $restoreTemp = Start-RadianceSetupTemp -DataRoot $dataRoot
     Stop-Service RadiancePos -ErrorAction Stop
     & (Join-Path $pgBin 'pg_dump.exe') --host=127.0.0.1 --port=54329 --username=giftedlabs --dbname=pos_system --format=custom --no-password "--file=$safety"
     if ($LASTEXITCODE -ne 0) { throw 'The safety backup failed; the restore was not started.' }
@@ -63,5 +69,6 @@ try {
     # block below still runs.
     exit 64
 } finally {
-    if ($temporary) { Remove-Item $temporary -Force -ErrorAction SilentlyContinue }
+    if ($temporary) { Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue }
+    Stop-RadianceSetupTemp $restoreTemp
 }
