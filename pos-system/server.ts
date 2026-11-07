@@ -57,7 +57,10 @@ app.use('/api', async (req, res) => {
       headers,
       body,
       redirect: 'manual',
-      signal: AbortSignal.timeout(15_000),
+      // A catalogue import of several hundred rows takes longer than 15 s.
+      // Cutting it off reported "Cannot reach the POS API" while the server went
+      // on to save every row, so the operator retried and imported it twice.
+      signal: AbortSignal.timeout(req.originalUrl.startsWith('/api/products/import') ? 300_000 : 15_000),
     });
 
     response.headers.forEach((value, name) => {
