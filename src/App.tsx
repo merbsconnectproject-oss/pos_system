@@ -621,6 +621,7 @@ export default function App() {
         // every discounted sale arrive short at the server.
         cartDiscountPercent: sale.cartDiscountPercent,
         cartDiscountApproverId: sale.cartDiscountApproverId,
+        cartDiscountApprovalPin: sale.cartDiscountApprovalPin,
         payments: sale.payments,
       });
 

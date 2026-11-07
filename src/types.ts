@@ -86,9 +86,17 @@ export interface CartItem {
    * person the server cannot look up.
    */
   floorPriceApproverId?: string;
+  /**
+   * BR-10: the PIN that approver typed. The server honours the id only with it,
+   * so an id alone cannot be replayed. Held in memory until the sale is sent and
+   * never stored: see toCompletedSale.
+   */
+  floorPriceApprovalPin?: string;
   /** FR-POS-10: who approved a discount past the seller's ceiling. */
   discountApprover?: string;
   discountApproverId?: string;
+  /** FR-POS-10: that approver's PIN, sent with the id and never stored. */
+  discountApprovalPin?: string;
 }
 
 export type PaymentMethod = 'cash' | 'momo' | 'card' | 'transfer';
@@ -126,6 +134,8 @@ export interface CompletedSale {
   cartDiscountPercent?: number;
   /** FR-POS-10: who approved the bill-level concession, when it needed one. */
   cartDiscountApproverId?: string;
+  /** FR-POS-10: that approver's PIN, which the server needs to honour the id. */
+  cartDiscountApprovalPin?: string;
   total: number;
   payments: PaymentEntry[];
   changeDue: number;

@@ -58,7 +58,9 @@ export const toCompletedSale = (wire: SaleWire, cart: CartItem[], outletName: st
   customerName: wire.customerName || 'Walk-in Customer',
   customerPhone: wire.customerPhone || undefined,
   customerType: 'retail',
-  items: cart,
+  // The approval PINs did their job on the way in. A completed sale lives on in
+  // the sales list and the receipt, and a manager's PIN has no business there.
+  items: cart.map(({ floorPriceApprovalPin: _floor, discountApprovalPin: _discount, ...item }) => item),
   subtotal: toMajor(wire.subtotal),
   discountTotal: toMajor(wire.discountTotal),
   total: toMajor(wire.total),
@@ -97,6 +99,8 @@ export interface SaleDraft {
   cartDiscountPercent?: number;
   /** FR-POS-10: the approver, when the concession passed the seller's ceiling. */
   cartDiscountApproverId?: string;
+  /** FR-POS-10: the approver's PIN — without it the server ignores the id. */
+  cartDiscountApprovalPin?: string;
   payments: PaymentEntry[];
 }
 
@@ -172,10 +176,13 @@ export const salesApi = {
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         discount: toPesewas(item.discount || 0),
-        // BR-10 · FR-POS-10: ids, not names. The server checks that the person
-        // named actually holds the right to approve this.
+        // BR-10 · FR-POS-10: ids, not names, each with the PIN that proves the
+        // person named consented. An id alone is a claim anyone who has seen
+        // it could make, so the server drops an approver that arrives without one.
         floorApprovedBy: item.floorPriceApproverId || undefined,
+        floorApprovalPin: item.floorPriceApproverId ? item.floorPriceApprovalPin : undefined,
         discountApprovedBy: item.discountApproverId || undefined,
+        discountApprovalPin: item.discountApproverId ? item.discountApprovalPin : undefined,
       })),
       // FR-POS-10: the cart concession travels as its own field. It used to
       // travel nowhere at all — the till reduced the total, took payment for
@@ -187,6 +194,7 @@ export const salesApi = {
         ? draft.cartDiscountPercent
         : undefined,
       cartDiscountApprovedBy: draft.cartDiscountApproverId || undefined,
+      cartDiscountApprovalPin: draft.cartDiscountApproverId ? draft.cartDiscountApprovalPin : undefined,
       payments: draft.payments.map((payment) => ({
         id: crypto.randomUUID(),
         method: payment.method,

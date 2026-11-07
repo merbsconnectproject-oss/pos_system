@@ -16,7 +16,11 @@ interface ManagerPinModalProps {
    * checks the holder against this code.
    */
   permission: PermissionCode;
-  onSuccess: (approverName: string, approverId: string) => void;
+  /**
+   * The PIN comes back too: the action it approved is sent to the server later,
+   * and the server honours the approver's id only alongside the PIN.
+   */
+  onSuccess: (approverName: string, approverId: string, pin: string) => void;
 }
 
 export const ManagerPinModal: React.FC<ManagerPinModalProps> = ({
@@ -45,7 +49,7 @@ export const ManagerPinModal: React.FC<ManagerPinModalProps> = ({
 
     void authApi.approve(pin, permission)
       .then((result) => {
-        onSuccess(result.approverName, result.approverId);
+        onSuccess(result.approverName, result.approverId, pin);
         setPin('');
       })
       .catch((failure) => {

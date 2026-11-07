@@ -187,6 +187,7 @@ export const PosModal: React.FC<PosModalProps> = ({
   const [cartDiscountPercent, setCartDiscountPercent] = useState<number>(0);
   /** FR-POS-10: set when the bill concession passed the seller's own ceiling. */
   const [cartDiscountApproverId, setCartDiscountApproverId] = useState<string | undefined>();
+  const [cartDiscountApprovalPin, setCartDiscountApprovalPin] = useState<string | undefined>();
   const [cartDiscountApprover, setCartDiscountApprover] = useState<string | undefined>();
   /** The concession waiting on a manager's PIN, if one is. */
   const [pendingCartDiscount, setPendingCartDiscount] = useState<number | null>(null);
@@ -643,7 +644,7 @@ export const PosModal: React.FC<PosModalProps> = ({
     );
   };
 
-  const handleFloorPinSuccess = (approverName: string, approverId: string) => {
+  const handleFloorPinSuccess = (approverName: string, approverId: string, pin: string) => {
     if (!floorOverrideTarget) return;
     const { productId, requestedPrice } = floorOverrideTarget;
 
@@ -657,6 +658,7 @@ export const PosModal: React.FC<PosModalProps> = ({
             floorPriceApproved: true,
             floorPriceApprover: approverName,
             floorPriceApproverId: approverId,
+            floorPriceApprovalPin: pin,
           };
         }
         return item;
@@ -727,6 +729,7 @@ export const PosModal: React.FC<PosModalProps> = ({
     setSelectedCustomer(null);
     setCartDiscountPercent(0);
     setCartDiscountApproverId(undefined);
+    setCartDiscountApprovalPin(undefined);
     setCartDiscountApprover(undefined);
     setHoldLabel('');
     setHoldModalOpen(false);
@@ -815,15 +818,17 @@ export const PosModal: React.FC<PosModalProps> = ({
     }
     setCartDiscountPercent(asked);
     setCartDiscountApproverId(undefined);
+    setCartDiscountApprovalPin(undefined);
     setCartDiscountApprover(undefined);
     setDiscountModalOpen(false);
   };
 
   /** FR-POS-10: the manager who signed for a concession past the ceiling. */
-  const handleCartDiscountPinSuccess = (approverName: string, approverId: string) => {
+  const handleCartDiscountPinSuccess = (approverName: string, approverId: string, pin: string) => {
     if (pendingCartDiscount === null) return;
     setCartDiscountPercent(pendingCartDiscount);
     setCartDiscountApproverId(approverId);
+    setCartDiscountApprovalPin(pin);
     setCartDiscountApprover(approverName);
     setPendingCartDiscount(null);
   };
@@ -1025,6 +1030,7 @@ export const PosModal: React.FC<PosModalProps> = ({
       // against its own subtotal rather than trusting the cedis computed here.
       cartDiscountPercent: cartDiscountPercent > 0 ? cartDiscountPercent : undefined,
       cartDiscountApproverId: cartDiscountPercent > 0 ? cartDiscountApproverId : undefined,
+      cartDiscountApprovalPin: cartDiscountPercent > 0 ? cartDiscountApprovalPin : undefined,
       total,
       payments,
       changeDue: activePaymentTab === 'cash' ? changeDue : 0,
@@ -1062,6 +1068,7 @@ export const PosModal: React.FC<PosModalProps> = ({
       // one after that, until somebody noticed at the cash-up.
       setCartDiscountPercent(0);
       setCartDiscountApproverId(undefined);
+      setCartDiscountApprovalPin(undefined);
       setCartDiscountApprover(undefined);
       setDiscountDraft('0');
       setCashTendered('');
@@ -1885,6 +1892,7 @@ export const PosModal: React.FC<PosModalProps> = ({
                   setSelectedCustomer(null);
                   setCartDiscountPercent(0);
                   setCartDiscountApproverId(undefined);
+                  setCartDiscountApprovalPin(undefined);
                   setCartDiscountApprover(undefined);
                 }}
                 disabled={cart.length === 0}
