@@ -1088,8 +1088,16 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
     # least informative place to discover that.
     Assert-PostgresRuntime
     New-Item -ItemType Directory -Force $DataRoot, (Join-Path $DataRoot 'logs') | Out-Null
+    # initdb drops Administrators from its own token before it writes anything,
+    # so it can write the cluster only where the installing account may write
+    # in its own right. A stock ProgramData lets ordinary users create files,
+    # which is why this held on most counters; a locked-down image does not, and
+    # initdb failed with exit code 1. The grant is removed again below, once the
+    # cluster is handed to the service account.
+    $installerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
     if (-not (Test-Path (Join-Path $PgData 'PG_VERSION'))) {
         New-Item -ItemType Directory -Force $PgData | Out-Null
+        Invoke-IcaclsChecked 'the new PostgreSQL cluster' @($PgData, '/grant', "*$($installerSid):(OI)(CI)F", '/C')
         $passwordFile = Join-Path $env:TEMP ("radiance-pg-{0}.txt" -f [guid]::NewGuid())
         try {
             [IO.File]::WriteAllText($passwordFile, $SuperPassword, [Text.UTF8Encoding]::new($false))
@@ -1133,6 +1141,9 @@ function Initialize-Database([string]$SuperPassword, [string]$DatabasePassword) 
     # which is not what those flags mean and not how the tree is meant to be
     # granted; /reset makes each child take the parent's entries cleanly.
     Invoke-IcaclsChecked 'the PostgreSQL cluster' @($PgData, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', "*$($dbSid):(OI)(CI)F", '/C')
+    # The installing account needed the cluster only while initdb wrote it.
+    # Administrators keeps access for repair; a person's own account does not.
+    Invoke-IcaclsChecked 'the PostgreSQL cluster' @($PgData, '/remove:g', "*$installerSid", '/C')
     # The wildcard matters: /reset on $PgData itself would replace the ACL set
     # on the line above with whatever it inherits, undoing the grant.
     Invoke-IcaclsChecked 'the PostgreSQL cluster contents' @((Join-Path $PgData '*'), '/reset', '/T', '/C')

@@ -160,6 +160,22 @@ class WindowsAppWindowTest {
     }
 
     @Test
+    @DisplayName("NFR-13 · initdb can write its cluster on a locked-down ProgramData")
+    void initdbMayWriteItsOwnCluster() throws IOException {
+        String onboarding = Files.readString(Path.of("packaging/windows/tools/onboard.ps1"));
+
+        int grant = onboarding.indexOf("/grant', \"*$($installerSid):(OI)(CI)F\"");
+        int initdb = onboarding.indexOf("Invoke-CheckedWithOutput (Join-Path $PgBin 'initdb.exe')");
+        int handover = onboarding.indexOf("'/setowner', \"*$dbSid\"");
+        int revoke = onboarding.indexOf("'/remove:g', \"*$installerSid\"");
+
+        assertTrue(grant > 0 && grant < initdb,
+                "initdb runs without Administrators, so the installing account must be granted the cluster first");
+        assertTrue(revoke > handover,
+                "the installing account's grant must be removed once the cluster belongs to the service account");
+    }
+
+    @Test
     @DisplayName("NFR-13 · service-account rights compile on Windows PowerShell")
     void serviceLogonRightDoesNotDuplicateInteropImport() throws IOException {
         String onboarding = Files.readString(Path.of("packaging/windows/tools/onboard.ps1"));
