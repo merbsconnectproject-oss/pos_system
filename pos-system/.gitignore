@@ -1,0 +1,10 @@
+node_modules/
+build/
+dist/
+# The Windows installer's Vite output, produced by build-installer.ps1.
+dist-windows/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example

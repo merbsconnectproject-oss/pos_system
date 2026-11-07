@@ -1,0 +1,910 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --radius-xs: 0.125rem;
+  --radius-sm: 0.2rem;
+  --radius-md: 0.275rem;
+  --radius-lg: 0.375rem;
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.625rem;
+  --radius-3xl: 0.75rem;
+  --radius-4xl: 1rem;
+
+  /*
+   * The accent scale, exposed to Tailwind as `accent-*` utilities
+   * (bg-accent-500, text-accent-600, border-accent-200, …).
+   * Each maps to a runtime custom property that Settings rewrites, so the
+   * accent is a single token and no component hard-codes a hex (NFR-15).
+   */
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-50: var(--accent-50);
+  --color-accent-100: var(--accent-100);
+  --color-accent-200: var(--accent-200);
+  --color-accent-300: var(--accent-300);
+  --color-accent-400: var(--accent-400);
+  --color-accent-500: var(--accent-500);
+  --color-accent-600: var(--accent-600);
+  --color-accent-700: var(--accent-700);
+  --color-accent-800: var(--accent-800);
+  --color-accent-900: var(--accent-900);
+}
+
+@layer base {
+  :root {
+    /* Kept alongside the root font size so responsive chrome can account for
+       the selected readability setting as well as the physical viewport. */
+    --ui-scale: 1;
+    /* Counter Datasheet Design System Tokens */
+    --accent: #c55200;
+    --accent-fg: #ffffff;
+    --accent-hover: #b14900;
+    --accent-active: #9f4100;
+    --accent-50: #fff5f0;
+    --accent-100: #ffe8dd;
+    --accent-200: #ffd2be;
+    --accent-300: #ffb593;
+    --accent-400: #ff905a;
+    --accent-500: #ed7638;
+    --accent-600: #d6611e;
+    --accent-700: #b64c02;
+    --accent-800: #913a00;
+    --accent-900: #6b2900;
+    --accent-soft: var(--accent-50);
+    --accent-on-soft: var(--accent-800);
+    --accent-border: var(--accent-200);
+
+    /* Neutrals */
+    --paper: #ffffff;
+    --canvas: #f8fafc;
+    --sunken: #f1f5f9;
+    --ink: #0f172a;
+    --ink-muted: #475569;
+    --ink-subtle: #64748b;
+    --border: #e2e8f0;
+    --border-strong: #cbd5e1;
+
+    --shell: #0f172a;
+    --shell-raised: #1e293b;
+    --shell-border: #334155;
+    --shell-fg: #f8fafc;
+    --shell-fg-muted: #94a3b8;
+
+    /* Semantic — fixed, never derived from accent (FR-SET-04) */
+    --success: #15803d;
+    --success-soft: #eefaf1;
+    --success-border: #b6e3c4;
+    --success-on-soft: #14532d;
+    /* Informational states stay neutral; amber is reserved out of the UI palette. */
+    --warning: #475569;
+    --warning-soft: #f1f5f9;
+    --warning-border: #cbd5e1;
+    --warning-on-soft: #1e293b;
+    --danger: #b3261e;
+    --danger-soft: #fdf2f1;
+    --danger-border: #f2c4c0;
+    --danger-on-soft: #7f1d1d;
+    --info: #475569;
+    --info-soft: #f1f5f9;
+    --info-border: #cbd5e1;
+    --info-on-soft: #1e293b;
+
+    /* Charts — eight series, none of them blue (AC-11) */
+    --chart-1: #c55200;
+    --chart-2: #0f766e;
+    --chart-3: #b45309;
+    --chart-4: #7c3f8f;
+    --chart-5: #4d7c0f;
+    --chart-6: #a3401f;
+    --chart-7: #9d174d;
+    --chart-8: #475569;
+    --chart-grid: #e2e8f0;
+
+    --primary-accent: #c55200;
+    --primary-accent-hover: #b14900;
+    --primary-accent-light: #fff5f0;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    font-size: 15.5px;
+    letter-spacing: 0;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+body {
+    font-family: var(--font-sans);
+    color: #0f172a;
+    background-color: #f8fafc;
+    line-height: 1.5;
+    letter-spacing: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    color: var(--accent-900);
+    background: var(--accent-100);
+  }
+
+  /* Uncompromising Mathematical Typography Scale */
+  /* Display / H1: 32px (2rem) - Sharp, High-Contrast, -0.025em letter-spacing */
+  h1, .text-3xl {
+    font-family: var(--font-sans);
+    letter-spacing: -0.025em;
+    color: #0f172a;
+  }
+
+  /* Primary Header / H2: 24px (1.5rem) - Distinct, -0.02em letter-spacing */
+  h2, .text-2xl {
+    font-family: var(--font-sans);
+    letter-spacing: -0.02em;
+    color: #0f172a;
+  }
+
+  /* Section Subtitle / H3: 18px-20px (1.25rem) - Clean, -0.015em letter-spacing */
+  h3, .text-xl {
+    font-family: var(--font-sans);
+    letter-spacing: -0.015em;
+    color: #0f172a;
+  }
+
+  /* Card Subheadings / H4: 16px (1rem) - -0.01em letter-spacing */
+  h4, .text-lg {
+    font-family: var(--font-sans);
+    letter-spacing: -0.01em;
+    color: #0f172a;
+  }
+
+  /* Body Text: 14px (0.875rem) & 16px (1rem) - Hyper-readable, neutral tracking (0) */
+  p, span, div, li, td, th, input, select, textarea, button {
+    letter-spacing: 0;
+  }
+
+  /* Secondary Labels & Micro-copy: Clean slate grays (#64748B), never muddy */
+  .text-secondary-label {
+    color: #64748b;
+    letter-spacing: 0;
+  }
+
+  /* Micro metadata / Uppercase trackers */
+  .text-micro-caps {
+    font-size: 0.6875rem; /* 11px */
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Tabular Numerals & Monospace: Financial clarity, SKU codes, ticket numbers */
+  .font-mono, [data-mono] {
+    font-family: var(--font-mono);
+    font-feature-settings: 'tnum' on, 'zero' on;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Application palette guardrails. Charts use inline series colours and are intentionally excluded. */
+@layer utilities {
+  /* Modal bars use a dark/blue surface. Keep semantic heading defaults from
+     turning their titles dark (the global h1-h4 scale otherwise wins in some
+     browsers and makes the title disappear into the bar).
+
+     bg-slate-950 is listed separately because the substring match on
+     "bg-slate-900" does not cover it — which left the sign-in page's headline
+     rendered in #0f172a on a #020617 panel, effectively invisible. */
+  [class*="bg-slate-900"] h1,
+  [class*="bg-slate-900"] h2,
+  [class*="bg-slate-900"] h3,
+  [class*="bg-slate-950"] h1,
+  [class*="bg-slate-950"] h2,
+  [class*="bg-slate-950"] h3,
+  [class*="bg-blue-"] h1,
+  [class*="bg-blue-"] h2,
+  [class*="bg-blue-"] h3 {
+    color: #ffffff !important;
+  }
+
+  [class*="bg-amber-"], [class*="bg-yellow-"], [class*="bg-blue-"], [class*="bg-indigo-"], [class*="bg-purple-"], [class*="bg-violet-"], [class*="bg-teal-"], [class*="bg-cyan-"] {
+    background-color: #f1f5f9 !important;
+  }
+  [class*="text-amber-"], [class*="text-yellow-"], [class*="text-blue-"], [class*="text-indigo-"], [class*="text-purple-"], [class*="text-violet-"], [class*="text-teal-"], [class*="text-cyan-"] {
+    color: #475569 !important;
+  }
+  [class*="border-amber-"], [class*="border-yellow-"], [class*="border-blue-"], [class*="border-indigo-"], [class*="border-purple-"], [class*="border-violet-"], [class*="border-teal-"], [class*="border-cyan-"] {
+    border-color: #cbd5e1 !important;
+  }
+  [class*="ring-amber-"], [class*="ring-yellow-"], [class*="ring-blue-"], [class*="ring-indigo-"], [class*="ring-purple-"], [class*="ring-violet-"], [class*="ring-teal-"], [class*="ring-cyan-"] {
+    --tw-ring-color: #cbd5e1 !important;
+  }
+  [class*="bg-rose-"] { background-color: #fdf2f1 !important; }
+  [class*="text-rose-"], [class*="text-red-"] { color: #b3261e !important; }
+  [class*="border-rose-"], [class*="border-red-"] { border-color: #f2c4c0 !important; }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Workspace depth and motion -------------------------------------------------
+ * One restrained system shared by every module. Reveals are attached by
+ * useScrollReveal as content enters the workspace viewport, including cards
+ * that arrive after an API request. The gradients are intentionally faint so
+ * tables and financial figures remain the visual priority.
+ */
+.app-main {
+  position: relative;
+  isolation: isolate;
+  scroll-behavior: smooth;
+  background:
+    radial-gradient(circle at 8% -4%, color-mix(in srgb, var(--accent) 8%, transparent) 0, transparent 29rem),
+    radial-gradient(circle at 94% 18%, rgb(15 118 110 / 0.045) 0, transparent 26rem),
+    linear-gradient(180deg, #fbfcfd 0%, #f7f9fb 46%, #f8fafc 100%) !important;
+}
+
+.app-main::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto auto;
+  z-index: -1;
+  width: 24rem;
+  height: 24rem;
+  pointer-events: none;
+  opacity: 0.42;
+  background-image: radial-gradient(rgb(100 116 139 / 0.15) 0.65px, transparent 0.65px);
+  background-size: 15px 15px;
+  mask-image: linear-gradient(to bottom left, black, transparent 72%);
+}
+
+@keyframes workspacePageEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ui-page-enter,
+.animate-fade-in {
+  animation: workspacePageEnter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ui-reveal {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0) scale(0.992);
+  transition:
+    opacity 520ms cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay, 0ms),
+    transform 520ms cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay, 0ms),
+    box-shadow 220ms ease,
+    border-color 220ms ease;
+  will-change: opacity, transform;
+}
+
+.ui-reveal.ui-reveal-visible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  will-change: auto;
+}
+
+.ui-surface {
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.035), 0 10px 28px rgb(15 23 42 / 0.035);
+}
+
+.app-main :is(button, a, input, select, textarea) {
+  transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+  transition-duration: 180ms;
+  transition-timing-function: ease-out;
+}
+
+.app-main :is(input, select, textarea):focus-visible {
+  outline: none;
+  border-color: var(--accent-400);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.app-main tbody tr {
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.app-main tbody tr:hover {
+  background-color: color-mix(in srgb, var(--accent) 3.5%, white);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ui-surface.ui-reveal-visible:hover {
+    transform: translate3d(0, -3px, 0);
+    border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
+    box-shadow: 0 2px 4px rgb(15 23 42 / 0.04), 0 18px 44px rgb(15 23 42 / 0.075);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-main {
+    scroll-behavior: auto;
+  }
+
+  .ui-page-enter,
+  .animate-fade-in,
+  .ui-reveal,
+  .ui-reveal.ui-reveal-visible {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* Smooth Entry & Interactive Animations for Modals and Drawers */
+@keyframes modalBackdropFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes modalZoomIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes commandPaletteIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes drawerSlideInRight {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes drawerSlideInLeft {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes sheetSlideInUp {
+  0% {
+    transform: translateY(100%);
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-modal-backdrop {
+  animation: modalBackdropFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity;
+}
+
+.animate-modal-card {
+  animation: modalZoomIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.animate-command-palette {
+  animation: commandPaletteIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.animate-drawer-right {
+  animation: drawerSlideInRight 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform;
+}
+
+.animate-drawer-left {
+  animation: drawerSlideInLeft 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform;
+}
+
+.animate-sheet-up {
+  animation: sheetSlideInUp 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+/* Responsive overlay contract ------------------------------------------------
+ * AppWindow does not cause the sizing issue: it merely exposes dialogs that
+ * were centred inside a fixed viewport while their content kept growing with
+ * the user's text setting. Every centred full-screen overlay now owns a safe
+ * scroll boundary. Its direct panel is constrained by the *usable* dynamic
+ * viewport, not a fixed 88/92vh guess, and narrow modal grids respond to the
+ * panel rather than to the much wider application window. A panel's own
+ * max-width remains authoritative so responsiveness never stretches a dialog
+ * beyond its designed proportions.
+ */
+.fixed.inset-0.items-center {
+  --modal-gutter: clamp(0.5rem, 2vmin, 1.5rem);
+  align-items: safe center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--modal-gutter);
+  scrollbar-gutter: stable;
+}
+
+.fixed.inset-0.items-center > :first-child {
+  box-sizing: border-box;
+  container-type: inline-size;
+  max-height: calc(100dvh - var(--modal-gutter) - var(--modal-gutter)) !important;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* The till is a desktop workspace, not a generic form dialog. In normal
+   AppWindow mode it scales as one 16:9 frame: a short window reduces its width
+   and a narrow window reduces its height. This prevents the formerly wide,
+   flattened layout while maximized mode still deliberately fills the screen. */
+.ui-pos-window-normal {
+  aspect-ratio: 16 / 9;
+  height: auto !important;
+  max-height: calc(100dvh - 2 * var(--modal-gutter)) !important;
+  /* 165dvh is a 16:9 width whose resulting height is 92.8dvh. Keeping the
+     arithmetic in like units avoids relying on newer calc multiplication. */
+  width: min(96vw, 1550px, 165dvh) !important;
+}
+
+/* Small confirmation cards and printable slips scroll as a whole. Larger
+   flex-column dialogs retain their fixed header/footer and scrollable body. */
+.fixed.inset-0.items-center > :first-child:not(.flex) {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.fixed.inset-0.items-center > .flex.flex-col > :is(.flex-1, .overflow-y-auto, .overflow-auto),
+.fixed.inset-0.items-center > :first-child .min-h-0 {
+  min-height: 0;
+}
+
+.fixed.inset-0.items-center > :first-child :is(h1, h2, h3, h4, p, label, span) {
+  overflow-wrap: anywhere;
+}
+
+.fixed.inset-0.items-center > :first-child :is(input, select, textarea),
+.fixed.inset-0.items-center > :first-child :is(.flex, .grid) > * {
+  min-width: 0;
+}
+
+/* Viewport breakpoints can leave three- and four-column forms inside a narrow
+   dialog because the underlying page is wide. Container queries make those
+   grids honour the space the dialog actually has; the rem threshold grows
+   with the selected font size, so larger text stacks sooner. */
+@container (max-width: 25rem) {
+  .fixed.inset-0.items-center > :first-child :is(
+    [class*="sm:grid-cols-"],
+    [class*="md:grid-cols-"],
+    [class*="lg:grid-cols-"]
+  ) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .fixed.inset-0.items-center > :first-child :is(
+    [class*="sm:col-span-"],
+    [class*="md:col-span-"],
+    [class*="lg:col-span-"]
+  ) {
+    grid-column: 1 / -1 !important;
+  }
+
+  .fixed.inset-0.items-center > :first-child > [class*="border-t"]:has(button) {
+    align-items: stretch;
+    flex-direction: column;
+    flex-wrap: wrap;
+  }
+
+  .fixed.inset-0.items-center > :first-child > [class*="border-t"]:has(button) button {
+    width: 100%;
+  }
+}
+
+/* Short laptop/AppWindow viewports must start at the top edge. `safe center`
+   is the normal path; this explicit fallback also covers older WebView builds. */
+@media (max-height: 48rem) {
+  .fixed.inset-0.items-center {
+    --modal-gutter: 0.5rem;
+    align-items: flex-start;
+  }
+}
+
+/* The command palette is intentionally top-aligned, but its old 4–6rem top
+   padding could consume most of a short AppWindow. Give it the same reachable
+   dynamic-viewport boundary without forcing it into vertical centring. */
+.ui-command-layer {
+  --modal-gutter: clamp(0.5rem, 4vmin, 3rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-top: var(--modal-gutter);
+}
+
+.ui-command-layer > .animate-command-palette {
+  max-height: calc(100dvh - var(--modal-gutter) - 0.5rem) !important;
+  min-height: 0;
+  min-width: 0;
+}
+
+@media (max-height: 48rem) {
+  .ui-command-layer {
+    --modal-gutter: 0.5rem;
+  }
+}
+
+/* Drawers remain full-height, but never become wider than the live viewport
+   when their rem-based max width grows with the typography setting. */
+.fixed.inset-0.justify-end > :is(.animate-drawer-right, [class*="h-full"]) {
+  max-width: 100vw;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* General workspace containment: flex/grid children and long identifiers can
+   shrink instead of widening the native AppWindow. Tables keep intentional
+   width and scroll inside their dedicated overflow wrappers. */
+.app-main,
+.app-main > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.app-main :is(.flex, .grid) > * {
+  min-width: 0;
+}
+
+.app-main :is(img, svg, canvas) {
+  max-width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-modal-backdrop,
+  .animate-modal-card,
+  .animate-command-palette,
+  .animate-drawer-right,
+  .animate-drawer-left,
+  .animate-sheet-up {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* Analytics surfaces use one restrained shell; chart series keep their own semantic colors. */
+.analytics-page .analytics-header,
+.analytics-page .analytics-snapshot,
+.analytics-page .analytics-inference,
+.analytics-page .analytics-scorecards > div,
+.analytics-page .analytics-chart-grid > div {
+  border-color: var(--border);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}
+
+.analytics-page .analytics-scorecards > div,
+.analytics-page .analytics-chart-grid > div {
+  border-radius: 0.75rem;
+}
+
+.analytics-page .analytics-snapshot .grid > div,
+.analytics-page .analytics-scorecards > div {
+  background: #020617;
+  border-color: #1e293b;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.12);
+}
+
+.analytics-page .analytics-scorecards > div .text-slate-400 {
+  color: #cbd5e1;
+}
+
+.analytics-page .analytics-scorecards > div .text-slate-500 {
+  color: #94a3b8;
+}
+
+.analytics-page .analytics-scorecards > div .text-slate-700 {
+  color: #cbd5e1;
+}
+
+.returns-page .returns-metric-card {
+  background: #020617;
+  border-color: #1e293b;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.12);
+}
+
+.returns-page .returns-metric-card .text-slate-500 {
+  color: #cbd5e1;
+}
+
+.returns-page .returns-metric-card .text-slate-900,
+.returns-page .returns-metric-card .text-slate-800 {
+  color: #ffffff;
+}
+
+.installments-page .installments-metric-card {
+  background: #020617;
+  border-color: #1e293b;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.12);
+}
+
+.installments-page .installments-metric-card .text-slate-500 {
+  color: #cbd5e1;
+}
+
+.analytics-page .analytics-callout {
+  border-color: var(--border);
+}
+
+/* Isolated print surface: hidden on screen, the only thing that reaches paper. */
+#printable-receipt,
+#printable-barcode-labels {
+  display: none;
+}
+
+@media print {
+  /* Hide the whole app shell, then re-reveal only the receipt document. */
+  body * {
+    visibility: hidden !important;
+  }
+  #printable-receipt,
+  #printable-receipt *,
+  #printable-barcode-labels,
+  #printable-barcode-labels * {
+    visibility: visible !important;
+  }
+  #printable-receipt {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  #printable-barcode-labels {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Release the app shell's scroll containers so a long receipt can paginate cleanly. */
+  #root,
+  #root > *,
+  #root main {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+  }
+
+  /* Crisp, ink-saving black & white thermal output (PRD §9) */
+  #printable-receipt .receipt-doc {
+    margin: 0 auto;
+    font-family: var(--font-mono), 'JetBrains Mono', 'Courier New', ui-monospace, monospace;
+    line-height: 1.35;
+    color: #000000 !important;
+    background: #ffffff !important;
+    overflow-wrap: anywhere;
+    text-rendering: geometricPrecision;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Standard 80mm roll width */
+  #printable-receipt .receipt-doc,
+  #printable-receipt .receipt-doc.slip-80mm {
+    width: 76mm !important;
+    max-width: 76mm !important;
+    font-size: 10.5px !important;
+    padding: 2mm 1mm !important;
+  }
+
+  /* Compact 58mm roll width */
+  #printable-receipt .receipt-doc.slip-58mm {
+    width: 52mm !important;
+    max-width: 52mm !important;
+    font-size: 9px !important;
+    padding: 1mm !important;
+  }
+
+  /* Force 100% ink-saving: NO background colors, NO gradients, NO shadows */
+  #printable-receipt .receipt-doc * {
+    color: #000000 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    -webkit-filter: none !important;
+    filter: none !important;
+  }
+
+  /* Ensure sharp thermal border dividers */
+  #printable-receipt .receipt-doc [class*="border"] {
+    border-color: #000000 !important;
+  }
+
+  /* Prevent awkward item page breaks */
+  #printable-receipt .receipt-doc .break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Crisp thermal barcode rendering in print */
+  #printable-receipt .receipt-doc svg rect {
+    fill: #000000 !important;
+  }
+  #printable-receipt .receipt-doc svg rect[fill="#ffffff"],
+  #printable-receipt .receipt-doc svg rect.qr-quiet-zone {
+    fill: #ffffff !important;
+  }
+
+  /* Product Barcode Label Print Styles */
+  #printable-barcode-labels .barcode-print-container {
+    display: flex;
+    flex-wrap: wrap;
+    background: #ffffff !important;
+    width: 100%;
+  }
+
+  /* Thermal roll format: single continuous roll, page break after every label */
+  #printable-barcode-labels .barcode-print-container.roll-40x25 .barcode-label-slip,
+  #printable-barcode-labels .barcode-print-container.roll-50x30 .barcode-label-slip,
+  #printable-barcode-labels .barcode-print-container.roll-60x40 .barcode-label-slip {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    margin: 0 auto !important;
+    padding: 1.5mm 1mm !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    border: none !important;
+  }
+
+  /* Sheet A4 (24 labels: 3 columns x 8 rows) */
+  #printable-barcode-labels .barcode-print-container.sheet-a4-24 {
+    display: grid !important;
+    grid-template-columns: repeat(3, 64mm) !important;
+    column-gap: 2.5mm !important;
+    row-gap: 0 !important;
+    justify-content: center !important;
+    padding: 8mm 4mm !important;
+  }
+  #printable-barcode-labels .barcode-print-container.sheet-a4-24 .barcode-label-slip {
+    height: 33.8mm !important;
+    max-height: 33.8mm !important;
+    padding: 1.5mm 2mm !important;
+    box-sizing: border-box !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    border: none !important;
+  }
+
+  /* Sheet A4 (40 labels: 4 columns x 10 rows) */
+  #printable-barcode-labels .barcode-print-container.sheet-a4-40 {
+    display: grid !important;
+    grid-template-columns: repeat(4, 48.5mm) !important;
+    column-gap: 2mm !important;
+    row-gap: 0 !important;
+    justify-content: center !important;
+    padding: 8mm 3mm !important;
+  }
+  #printable-barcode-labels .barcode-print-container.sheet-a4-40 .barcode-label-slip {
+    height: 25.4mm !important;
+    max-height: 25.4mm !important;
+    padding: 1mm 1.5mm !important;
+    box-sizing: border-box !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    border: none !important;
+  }
+
+  /* Barcode label sub-elements styling */
+  #printable-barcode-labels .barcode-label-store {
+    font-size: 7pt !important;
+    font-weight: 900 !important;
+    text-transform: uppercase !important;
+    text-align: center !important;
+    line-height: 1 !important;
+    color: #000000 !important;
+    border-bottom: 0.5pt solid #000000 !important;
+    padding-bottom: 0.5mm !important;
+    margin-bottom: 0.5mm !important;
+  }
+  #printable-barcode-labels .barcode-label-name {
+    font-size: 8pt !important;
+    font-weight: 800 !important;
+    text-align: center !important;
+    line-height: 1.1 !important;
+    max-height: 2.3em !important;
+    overflow: hidden !important;
+    color: #000000 !important;
+  }
+  #printable-barcode-labels .barcode-label-svg-wrap {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    margin: 0.5mm 0 !important;
+  }
+  #printable-barcode-labels .barcode-label-svg-wrap svg {
+    max-width: 100% !important;
+  }
+  #printable-barcode-labels .barcode-label-footer {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: flex-end !important;
+    font-size: 7pt !important;
+    line-height: 1 !important;
+    color: #000000 !important;
+    border-top: 0.5pt solid #000000 !important;
+    padding-top: 0.5mm !important;
+  }
+  #printable-barcode-labels .barcode-label-sku {
+    font-family: monospace !important;
+    font-weight: 600 !important;
+  }
+  #printable-barcode-labels .barcode-label-price {
+    font-weight: 900 !important;
+    font-size: 8.5pt !important;
+  }
+
+  @page {
+    /* Minimal roll margin: avoids wasting thermal paper roll */
+    margin: 2mm 0;
+    size: auto;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+}

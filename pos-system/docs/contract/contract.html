@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Software Development & Licence Agreement — Radiance POS</title>
+<style>
+  @page { size: A4; margin: 20mm 18mm 18mm 18mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: "Source Serif 4", "Charter", "Georgia", serif;
+    font-size: 9.6pt; line-height: 1.55; color: #1c1917; margin: 0;
+  }
+  .sans { font-family: "Inter", "Helvetica Neue", Arial, sans-serif; }
+
+  /* ---------- Cover ---------- */
+  .cover { height: 245mm; display: flex; flex-direction: column; page-break-after: always; }
+  .brandbar { border-top: 3px solid #c55200; padding-top: 10mm; }
+  .logo { font-family: "Inter", Arial, sans-serif; font-weight: 800; font-size: 19pt;
+          letter-spacing: -0.4pt; color: #1c1917; }
+  .logo span { color: #c55200; }
+  .logo-sub { font-family: "Inter", Arial, sans-serif; font-size: 7.6pt; letter-spacing: 1.6pt;
+              text-transform: uppercase; color: #78716c; margin-top: 2mm; }
+  .cover-mid { margin-top: auto; margin-bottom: auto; }
+  .doctype { font-family: "Inter", Arial, sans-serif; font-size: 8pt; letter-spacing: 2.4pt;
+             text-transform: uppercase; color: #c55200; font-weight: 700; }
+  h1.cover-title { font-size: 27pt; line-height: 1.15; font-weight: 600; margin: 5mm 0 4mm;
+                   letter-spacing: -0.5pt; max-width: 135mm; }
+  .cover-lede { font-size: 11pt; color: #57534e; max-width: 125mm; line-height: 1.6; }
+  .cover-meta { margin-top: 12mm; border-top: 1px solid #e7e5e4; padding-top: 6mm;
+                display: grid; grid-template-columns: 1fr 1fr; gap: 6mm 10mm; max-width: 140mm; }
+  .cover-meta dt { font-family: "Inter", Arial, sans-serif; font-size: 7pt; letter-spacing: 1.2pt;
+                   text-transform: uppercase; color: #a8a29e; margin-bottom: 1.2mm; }
+  .cover-meta dd { margin: 0; font-size: 10pt; font-weight: 600; }
+  .cover-foot { border-top: 1px solid #e7e5e4; padding-top: 4mm; font-family: "Inter", Arial, sans-serif;
+                font-size: 7.6pt; color: #a8a29e; display: flex; justify-content: space-between; }
+
+  /* ---------- Structure ---------- */
+  h2 { font-family: "Inter", Arial, sans-serif; font-size: 11.5pt; font-weight: 700;
+       letter-spacing: -0.2pt; margin: 8mm 0 3mm; padding-bottom: 1.8mm;
+       border-bottom: 1.5px solid #1c1917; page-break-after: avoid; }
+  h2 .num { color: #c55200; margin-right: 2.5mm; }
+  h3 { font-family: "Inter", Arial, sans-serif; font-size: 9.4pt; font-weight: 700;
+       margin: 5mm 0 1.5mm; page-break-after: avoid; }
+  p { margin: 0 0 2.6mm; text-align: justify; }
+  ol.clauses { margin: 0; padding: 0; list-style: none; counter-reset: none; }
+  ol.clauses > li { margin-bottom: 2.6mm; padding-left: 12mm; position: relative; text-align: justify; }
+  ol.clauses > li > .cn { position: absolute; left: 0; font-family: "Inter", Arial, sans-serif;
+                          font-size: 8.4pt; font-weight: 700; color: #78716c; }
+  ul.plain { margin: 1mm 0 3mm; padding-left: 5mm; }
+  ul.plain li { margin-bottom: 1.4mm; }
+  .lead-in { font-style: italic; color: #57534e; margin-bottom: 3mm; }
+
+  /* ---------- Callouts ---------- */
+  .callout { border-left: 3px solid #c55200; background: #fdf8f4; padding: 3.5mm 5mm;
+             margin: 4mm 0; page-break-inside: avoid; }
+  .callout-title { font-family: "Inter", Arial, sans-serif; font-size: 8pt; font-weight: 700;
+                   letter-spacing: 0.8pt; text-transform: uppercase; color: #c55200; margin-bottom: 1.5mm; }
+  .callout p:last-child { margin-bottom: 0; }
+  .note { background: #fafaf9; border: 1px solid #e7e5e4; padding: 3.5mm 5mm; margin: 4mm 0;
+          font-size: 9pt; color: #44403c; page-break-inside: avoid; }
+
+  /* ---------- Tables ---------- */
+  table { width: 100%; border-collapse: collapse; margin: 3mm 0 4mm; font-size: 9pt;
+          page-break-inside: auto; }
+  tr { page-break-inside: avoid; }
+  thead { display: table-header-group; }
+  thead th { font-family: "Inter", Arial, sans-serif; font-size: 7.4pt; letter-spacing: 1pt;
+             text-transform: uppercase; color: #78716c; text-align: left; font-weight: 700;
+             border-bottom: 1.5px solid #1c1917; padding: 2mm 2.5mm 1.8mm; }
+  tbody td { padding: 2.2mm 2.5mm; border-bottom: 1px solid #eeecea; vertical-align: top; }
+  tbody tr:last-child td { border-bottom: 1px solid #d6d3d1; }
+  td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .money { font-family: "Inter", Arial, sans-serif; font-weight: 700; font-variant-numeric: tabular-nums; }
+  tr.total td { border-top: 1.5px solid #1c1917; border-bottom: none; padding-top: 2.5mm;
+                font-weight: 700; background: #fdf8f4; }
+
+  /* ---------- Feature schedule ---------- */
+  .mod { page-break-inside: avoid; margin-bottom: 4.5mm; }
+  .mod-head { display: flex; align-items: baseline; gap: 3mm; border-bottom: 1px solid #e7e5e4;
+              padding-bottom: 1.2mm; margin-bottom: 2mm; }
+  .mod-id { font-family: "Inter", Arial, sans-serif; font-size: 7.4pt; font-weight: 800;
+            color: #ffffff; background: #c55200; padding: 0.6mm 2mm; border-radius: 1mm; letter-spacing: 0.5pt; }
+  .mod-name { font-family: "Inter", Arial, sans-serif; font-size: 9.4pt; font-weight: 700; }
+  .mod-body { font-size: 9pt; color: #292524; text-align: justify; }
+
+  /* ---------- Signatures ---------- */
+  .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 14mm; margin-top: 8mm;
+          page-break-inside: avoid; }
+  .sig-block { }
+  .sig-party { font-family: "Inter", Arial, sans-serif; font-size: 8pt; letter-spacing: 1.2pt;
+               text-transform: uppercase; color: #c55200; font-weight: 700; margin-bottom: 6mm; }
+  .sig-line { border-bottom: 1px solid #1c1917; height: 13mm; margin-bottom: 1.5mm; }
+  .sig-label { font-family: "Inter", Arial, sans-serif; font-size: 7.4pt; color: #78716c;
+               margin-bottom: 5mm; }
+  .fill { color: #a8a29e; }
+
+  .pb { page-break-before: always; }
+  .avoid { page-break-inside: avoid; }
+  .avoid > h2:first-child { margin-top: 0; }
+</style>
+</head>
+<body>
+
+<!-- ================= COVER ================= -->
+<section class="cover">
+  <div class="brandbar">
+    <div class="logo">Gifted<span>Labs</span> Technologies</div>
+    <div class="logo-sub">Software Engineering &middot; Accra, Ghana</div>
+  </div>
+
+  <div class="cover-mid">
+    <div class="doctype">Software Development &amp; Licence Agreement</div>
+    <h1 class="cover-title">Radiance POS &mdash; Point of Sale &amp; Inventory Management System</h1>
+    <p class="cover-lede">
+      A multi-outlet retail operating system covering point of sale, stock control, cash
+      reconciliation, credit management and business reporting &mdash; delivered, hosted,
+      installed and supported for the life of the system.
+    </p>
+
+    <dl class="cover-meta">
+      <div><dt>Agreement reference</dt><dd>GLT&#8209;POS&#8209;2026&#8209;<span class="fill">001</span></dd></div>
+      <div><dt>Contract value</dt><dd>GH&#8373;&nbsp;5,000.00</dd></div>
+      <div><dt>Prepared for</dt><dd class="fill">[CLIENT LEGAL NAME]</dd></div>
+      <div><dt>Delivery window</dt><dd>Eight (8) weeks</dd></div>
+      <div><dt>Prepared by</dt><dd>GiftedLabs Technologies</dd></div>
+      <div><dt>Date of issue</dt><dd class="fill">[DATE]</dd></div>
+    </dl>
+  </div>
+
+  <div class="cover-foot">
+    <span>Confidential &mdash; issued for the named client only</span>
+    <span>Version 1.0</span>
+  </div>
+</section>
+
+<!-- ================= 1. PARTIES ================= -->
+<h2><span class="num">1.</span>The Parties</h2>
+<p>This Software Development and Licence Agreement (the <strong>&ldquo;Agreement&rdquo;</strong>) is made on
+<span class="fill">[DATE]</span> between:</p>
+
+<table>
+  <tbody>
+    <tr>
+      <td style="width:22%"><strong>The Developer</strong></td>
+      <td><strong>GiftedLabs Technologies</strong>, of <span class="fill">[REGISTERED ADDRESS]</span>,
+      Ghana &mdash; business registration no. <span class="fill">[REG. NO.]</span>, acting through its
+      authorised representative <span class="fill">[NAME, TITLE]</span>
+      (<span class="fill">[EMAIL]</span> &middot; <span class="fill">[PHONE]</span>)
+      (<strong>&ldquo;GiftedLabs&rdquo;</strong>).</td>
+    </tr>
+    <tr>
+      <td><strong>The Client</strong></td>
+      <td><strong><span class="fill">[CLIENT LEGAL NAME]</span></strong>, of
+      <span class="fill">[CLIENT ADDRESS]</span>, Ghana &mdash; trading from its retail outlets at
+      <span class="fill">[OUTLET 1 NAME &amp; TOWN]</span> and <span class="fill">[OUTLET 2 NAME &amp; TOWN]</span>,
+      acting through <span class="fill">[NAME, TITLE]</span>
+      (<span class="fill">[EMAIL]</span> &middot; <span class="fill">[PHONE]</span>)
+      (the <strong>&ldquo;Client&rdquo;</strong>).</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>GiftedLabs and the Client are each a <strong>&ldquo;Party&rdquo;</strong> and together the
+<strong>&ldquo;Parties&rdquo;</strong>.</p>
+
+<h2><span class="num">2.</span>Background</h2>
+<ol class="clauses">
+  <li><span class="cn">2.1</span>The Client operates a retail business trading in lighting, electrical
+  and hardware goods from two outlets, and requires a computerised system to record every sale,
+  maintain accurate stock figures per outlet, reconcile cash daily, track customer credit, and give
+  the owner a single view of the whole business.</li>
+  <li><span class="cn">2.2</span>GiftedLabs has designed and built <strong>Radiance POS</strong>, a
+  point-of-sale and inventory management system engineered specifically for Ghanaian
+  multi-outlet retail &mdash; including mobile money payments, multi-unit selling with conversions,
+  trade and contractor price tiers, installment credit, and operation on unreliable power and
+  internet.</li>
+  <li><span class="cn">2.3</span>The Client wishes to engage GiftedLabs to complete, deploy,
+  configure and support that system for its two outlets, and GiftedLabs agrees to do so on the
+  terms set out below.</li>
+</ol>
+
+<h2><span class="num">3.</span>Definitions</h2>
+<table>
+  <tbody>
+    <tr><td style="width:30%"><strong>System</strong></td><td>The Radiance POS software described in <strong>Schedule A</strong>, as deployed and configured for the Client.</td></tr>
+    <tr><td><strong>Outlet</strong></td><td>A physical retail location of the Client registered in the System. This Agreement covers <strong>two (2) outlets</strong>.</td></tr>
+    <tr><td><strong>Go&#8209;Live</strong></td><td>The date on which the System is in productive use for real trading at both Outlets.</td></tr>
+    <tr><td><strong>Client Data</strong></td><td>All product, customer, supplier, sales, stock, cash and user data entered into or generated by the System. Owned entirely by the Client.</td></tr>
+    <tr><td><strong>Defect</strong></td><td>A reproducible failure of the System to perform as described in Schedule A.</td></tr>
+    <tr><td><strong>Business Hours</strong></td><td>08:00&ndash;18:00 GMT, Monday to Saturday, excluding Ghanaian public holidays.</td></tr>
+    <tr><td><strong>Change Request</strong></td><td>Any request for functionality outside Schedule A, handled under clause 12.</td></tr>
+  </tbody>
+</table>
+
+<!-- ================= 4. SCOPE ================= -->
+<h2><span class="num">4.</span>Scope of Work</h2>
+<ol class="clauses">
+  <li><span class="cn">4.1</span>GiftedLabs shall deliver the System with the functionality set out in
+  <strong>Schedule A (Delivered Functionality)</strong>. Schedule A forms part of this Agreement and
+  is the definitive statement of what is being purchased.</li>
+  <li><span class="cn">4.2</span>Delivery comprises the following work streams:</li>
+</ol>
+<table>
+  <thead><tr><th style="width:30%">Work stream</th><th>What GiftedLabs does</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Software delivery</strong></td><td>Completion, testing and release of every module listed in Schedule A.</td></tr>
+    <tr><td><strong>Hosting &amp; domain</strong></td><td>Provisioning of cloud hosting, a managed database, SSL and one domain name &mdash; free for twelve (12) months from Go-Live (clause 8).</td></tr>
+    <tr><td><strong>Deployment</strong></td><td>Installation and configuration at <strong>both</strong> Outlets: counter terminals, thermal receipt printers (80mm and 58mm), barcode scanners, network and printing service.</td></tr>
+    <tr><td><strong>Configuration</strong></td><td>Registration of the business profile, both Outlets, receipt templates, user accounts, roles, permissions, manager PIN policy, price tiers and stock thresholds.</td></tr>
+    <tr><td><strong>Data migration</strong></td><td>Import of the Client&rsquo;s product catalogue, opening stock, customers and suppliers from the templates supplied by GiftedLabs, using the built-in import wizard (clause 10.2).</td></tr>
+    <tr><td><strong>Training &amp; onboarding</strong></td><td>Role-based training of the Client&rsquo;s staff and supervised go-live support at both Outlets (clause 9).</td></tr>
+    <tr><td><strong>Technical support</strong></td><td>Lifetime technical support on the delivered System (clause 7).</td></tr>
+  </tbody>
+</table>
+<ol class="clauses">
+  <li><span class="cn">4.3</span>Functionality not listed in Schedule A is outside this Agreement.
+  <strong>Schedule B</strong> lists items expressly excluded so that neither Party is in doubt.</li>
+</ol>
+
+<!-- ================= 5. PRICE ================= -->
+<h2><span class="num">5.</span>Contract Price and Payment</h2>
+<ol class="clauses">
+  <li><span class="cn">5.1</span>The total price for everything in clause 4 is
+  <strong>five thousand Ghana Cedis (GH&#8373;&nbsp;5,000.00)</strong>. This is a fixed price, not an
+  estimate. It is inclusive of the hosting, domain, deployment, training and lifetime support
+  described in this Agreement.</li>
+  <li><span class="cn">5.2</span>The price is payable in three instalments:</li>
+</ol>
+
+<table>
+  <thead>
+    <tr><th style="width:12%">Stage</th><th style="width:40%">Trigger</th><th class="num" style="width:14%">Share</th><th class="num" style="width:20%">Amount</th><th style="width:14%">Due</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>1</strong></td>
+      <td><strong>Commencement.</strong> On signature of this Agreement, before development work begins.</td>
+      <td class="num">30%</td><td class="num money">GH&#8373; 1,500.00</td>
+      <td>On signing</td>
+    </tr>
+    <tr>
+      <td><strong>2</strong></td>
+      <td><strong>Build complete and reviewed.</strong> The System is built, demonstrated to the Client on a staging environment, and the Client has walked through it and confirmed the functionality in Schedule A is present.</td>
+      <td class="num">30%</td><td class="num money">GH&#8373; 1,500.00</td>
+      <td>7 days from review</td>
+    </tr>
+    <tr>
+      <td><strong>3</strong></td>
+      <td><strong>Setup and training complete.</strong> The System is installed and configured at both Outlets and staff training has been delivered.</td>
+      <td class="num">40%</td><td class="num money">GH&#8373; 2,000.00</td>
+      <td>7 days from training</td>
+    </tr>
+    <tr class="total">
+      <td colspan="2">Total contract price</td><td class="num">100%</td>
+      <td class="num money">GH&#8373; 5,000.00</td><td></td>
+    </tr>
+  </tbody>
+</table>
+
+<ol class="clauses">
+  <li><span class="cn">5.3</span>Payment is made to the account nominated by GiftedLabs in writing.
+  Mobile money and bank transfer are both accepted. GiftedLabs issues a receipt for each instalment.</li>
+  <li><span class="cn">5.4</span>Where the Client raises no written objection within
+  <strong>seven (7) days</strong> of a stage being presented, that stage is deemed accepted and the
+  instalment falls due.</li>
+  <li><span class="cn">5.5</span>Invoices unpaid <strong>fourteen (14) days</strong> past their due
+  date carry interest at 2% per month on the outstanding balance. GiftedLabs may suspend hosting and
+  support &mdash; but never delete or withhold Client Data &mdash; while an instalment remains
+  overdue beyond thirty (30) days, having first given seven (7) days&rsquo; written notice.</li>
+  <li><span class="cn">5.6</span>The price excludes hardware. Counter terminals, thermal printers,
+  barcode scanners, UPS units, internet connectivity and any third-party charges are procured and
+  paid for by the Client (clause 10.1). GiftedLabs will supply a written specification and may
+  assist with sourcing at no charge.</li>
+</ol>
+
+<!-- ================= 6. TIMELINE ================= -->
+<h2><span class="num">6.</span>Timeline</h2>
+<ol class="clauses">
+  <li><span class="cn">6.1</span>GiftedLabs shall deliver the System within <strong>eight (8) weeks</strong>
+  of the later of (a) receipt of the first instalment and (b) delivery by the Client of the inputs
+  listed in clause 10.2. GiftedLabs may deliver earlier, and the payment stages in clause 5.2 are
+  triggered by the events described rather than by the passage of time &mdash; so early delivery
+  brings the stages forward.</li>
+  <li><span class="cn">6.2</span>Indicative schedule:</li>
+</ol>
+<table>
+  <thead><tr><th style="width:18%">Period</th><th>Activity</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Weeks 1&ndash;2</strong></td><td>Configuration workshop, business rules confirmed, data templates issued, catalogue and stock data collection begins.</td></tr>
+    <tr><td><strong>Weeks 3&ndash;5</strong></td><td>Completion of the System against Schedule A; internal testing; staging environment made available to the Client.</td></tr>
+    <tr><td><strong>Week 6</strong></td><td>Client walkthrough and review on staging. Feedback logged and resolved. <em>Stage&nbsp;2 payment.</em></td></tr>
+    <tr><td><strong>Week 7</strong></td><td>Data migration, hardware installation and configuration at Outlet&nbsp;1 and Outlet&nbsp;2. Receipt printing and scanning verified on the real hardware.</td></tr>
+    <tr><td><strong>Week 8</strong></td><td>Staff training at both Outlets, supervised Go-Live, handover of documentation. <em>Stage&nbsp;3 payment.</em></td></tr>
+  </tbody>
+</table>
+<ol class="clauses">
+  <li><span class="cn">6.3</span>Time lost while GiftedLabs waits on Client inputs, approvals,
+  hardware, internet provisioning or site access extends the delivery date day-for-day. GiftedLabs
+  will notify the Client in writing when a dependency is holding up work.</li>
+</ol>
+
+<!-- ================= 7. SUPPORT ================= -->
+<h2><span class="num">7.</span>Lifetime Technical Support</h2>
+<div class="callout">
+  <div class="callout-title">Included at no further charge</div>
+  <p>GiftedLabs provides <strong>lifetime technical support</strong> on the delivered System, for as long
+  as the Client operates it. There is no support fee, no annual renewal and no per-user charge.</p>
+</div>
+<ol class="clauses">
+  <li><span class="cn">7.1</span>Support covers, without charge and without time limit:</li>
+</ol>
+<ul class="plain">
+  <li>Diagnosis and correction of Defects in the System.</li>
+  <li>Assistance with day-to-day use &mdash; questions from cashiers, storekeepers, managers and the owner.</li>
+  <li>User account administration: creating, resetting and deactivating accounts, PINs and permissions.</li>
+  <li>Reconfiguration of receipts, price tiers, thresholds, categories, outlets and other settings.</li>
+  <li>Assistance recovering from data-entry errors, and guidance on stock and cash discrepancies arising from use of the System.</li>
+  <li>Security patches, dependency updates and maintenance releases of the System.</li>
+  <li>Help re-installing the System after a device is replaced, repaired or re-imaged.</li>
+</ul>
+<ol class="clauses">
+  <li><span class="cn">7.2</span>Support is delivered remotely during Business Hours by telephone,
+  WhatsApp, email and remote desktop. On-site attendance is provided where a problem genuinely
+  cannot be resolved remotely; travel outside <span class="fill">[BASE TOWN]</span> is charged at
+  cost, agreed in advance.</li>
+  <li><span class="cn">7.3</span>Target response times, measured within Business Hours:</li>
+</ol>
+<table>
+  <thead><tr><th style="width:20%">Severity</th><th style="width:44%">Meaning</th><th style="width:18%">First response</th><th>Target fix</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Critical</strong></td><td>An Outlet cannot sell &mdash; the POS or payment flow is down.</td><td>2 hours</td><td>Same day</td></tr>
+    <tr><td><strong>High</strong></td><td>A core function fails but a workaround exists (e.g. reports, goods receipt).</td><td>1 business day</td><td>3 business days</td></tr>
+    <tr><td><strong>Normal</strong></td><td>Minor Defect, question, or configuration request.</td><td>2 business days</td><td>By agreement</td></tr>
+  </tbody>
+</table>
+<ol class="clauses">
+  <li><span class="cn">7.4</span><strong>What lifetime support is not.</strong> To keep the commitment
+  honest and sustainable, support does not include: new features or modules not in Schedule A
+  (these are Change Requests under clause 12); the Stage&nbsp;2 and Stage&nbsp;3 items in
+  Schedule&nbsp;B; hosting and domain fees after the first twelve months (clause 8.3); repair or
+  replacement of the Client&rsquo;s hardware, printers, network or electricity supply; third-party
+  services and their charges; recovery of data lost through the Client&rsquo;s own deletion where no
+  backup exists; or retraining beyond clause 9 arising from staff turnover, which is offered at a
+  reduced day rate agreed in advance.</li>
+  <li><span class="cn">7.5</span>Support survives full payment and continues indefinitely, subject
+  only to clause 15 (Termination) and to the System remaining substantially unmodified by anyone
+  other than GiftedLabs.</li>
+</ol>
+
+<!-- ================= 8. HOSTING ================= -->
+<h2><span class="num">8.</span>Hosting, Domain and Data</h2>
+<ol class="clauses">
+  <li><span class="cn">8.1</span>GiftedLabs shall provide, at no additional cost for
+  <strong>twelve (12) months from Go-Live</strong>: cloud hosting of the application and database,
+  one domain name of the Client&rsquo;s choosing (subject to availability), an SSL certificate,
+  and <strong>automated daily backups</strong> retained for no less than thirty (30) days.</li>
+  <li><span class="cn">8.2</span>GiftedLabs targets <strong>99% monthly availability</strong> of the
+  hosted System, excluding scheduled maintenance notified in advance, and excluding outages of the
+  Client&rsquo;s own internet or power.</li>
+  <li><span class="cn">8.3</span>After the first twelve months, hosting and domain renewal are
+  charged at cost. GiftedLabs shall notify the Client of the renewal amount not less than
+  <strong>thirty (30) days</strong> before it falls due. The Client may instead elect to hold the
+  hosting account and domain in its own name, and GiftedLabs will migrate the System and transfer
+  the domain at no charge.</li>
+  <li><span class="cn">8.4</span><strong>The Client owns all Client Data absolutely.</strong> The
+  Client may request a complete export &mdash; the built-in JSON archive together with accounting
+  CSV exports &mdash; at any time and for any reason, and GiftedLabs shall provide it within five
+  (5) business days at no charge. This right survives termination.</li>
+  <li><span class="cn">8.5</span>GiftedLabs shall not access Client Data except as necessary to
+  deliver support, migration or backup, shall not disclose it to any third party, and shall not use
+  it for any purpose other than performing this Agreement.</li>
+</ol>
+
+<!-- ================= 9. TRAINING ================= -->
+<h2><span class="num">9.</span>Training and Onboarding</h2>
+<ol class="clauses">
+  <li><span class="cn">9.1</span>GiftedLabs shall deliver role-based training on site at both Outlets,
+  in plain language, using the Client&rsquo;s own products and prices rather than sample data:</li>
+</ol>
+<table>
+  <thead><tr><th style="width:22%">Role</th><th>Covered</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Cashiers</strong></td><td>Opening a shift, scanning and searching, selling in different units, trade and contractor pricing, discounts and approvals, all payment methods including split payments, holding and resuming sales, printing and reprinting receipts, closing a shift and counting the drawer.</td></tr>
+    <tr><td><strong>Storekeepers</strong></td><td>Receiving goods against a supplier invoice, stock adjustments with reasons, write-offs, low-stock review, stock counts and reading the movement history.</td></tr>
+    <tr><td><strong>Managers</strong></td><td>Approvals and the manager PIN, voids and returns, installment plans and collections, expenses, end-of-day reconciliation, variance investigation and the control reports.</td></tr>
+    <tr><td><strong>Owner</strong></td><td>The dashboard, outlet comparison, profit and margin reporting, the analytics and inference workspace, users and permissions, the audit trail, and backups and exports.</td></tr>
+  </tbody>
+</table>
+<ol class="clauses">
+  <li><span class="cn">9.2</span>Training includes a written quick-reference guide for each role and
+  <strong>supervised go-live support</strong> &mdash; GiftedLabs present at the counter for the first
+  trading day at each Outlet.</li>
+  <li><span class="cn">9.3</span>A <strong>follow-up session</strong> is included at each Outlet within
+  thirty (30) days of Go-Live, to answer the questions that only surface once staff have been
+  trading on the System.</li>
+  <li><span class="cn">9.4</span>Onboarding questions after that period are handled under lifetime
+  support (clause 7). Full retraining of newly hired staff is available at a reduced day rate.</li>
+</ol>
+
+<!-- ================= 10. CLIENT OBLIGATIONS ================= -->
+<h2><span class="num">10.</span>Client Responsibilities</h2>
+<p class="lead-in">The delivery date in clause 6 assumes the Client meets these obligations promptly.</p>
+<ol class="clauses">
+  <li><span class="cn">10.1</span><strong>Hardware and environment.</strong> The Client shall provide,
+  at each Outlet: a counter computer meeting the written specification supplied by GiftedLabs, a
+  USB thermal receipt printer, a barcode scanner, a UPS, and a working internet connection.</li>
+  <li><span class="cn">10.2</span><strong>Business inputs.</strong> The Client shall supply, in the
+  templates provided by GiftedLabs: the product catalogue with prices, units and conversions;
+  opening stock quantities per Outlet; supplier and customer records; the business logo and receipt
+  footer wording; the staff list with roles per Outlet; and its decisions on price tiers, discount
+  ceilings and approval thresholds.</li>
+  <li><span class="cn">10.3</span><strong>People and access.</strong> The Client shall nominate one
+  person with authority to make decisions and give approvals, make staff available for training on
+  the agreed dates, and provide site access for installation.</li>
+  <li><span class="cn">10.4</span><strong>Accuracy.</strong> GiftedLabs migrates the data it is given.
+  The Client is responsible for the accuracy of its own product, price and opening stock figures.</li>
+  <li><span class="cn">10.5</span><strong>Approvals.</strong> The Client shall respond to written
+  requests for approval within five (5) business days. Silence beyond that period is treated as
+  approval so that the project is not stalled.</li>
+</ol>
+
+<!-- ================= 11. ACCEPTANCE ================= -->
+<h2><span class="num">11.</span>Acceptance</h2>
+<ol class="clauses">
+  <li><span class="cn">11.1</span>On completion of the build, GiftedLabs shall make the System
+  available on a staging environment and demonstrate it against Schedule A. The Client has
+  <strong>seven (7) days</strong> to review it and report, in writing, any item of Schedule A that is
+  absent or not working.</li>
+  <li><span class="cn">11.2</span>GiftedLabs shall correct reported Defects at no charge and
+  re-present. Anything not listed in Schedule A that the Client asks for at this point is a Change
+  Request, not a Defect.</li>
+  <li><span class="cn">11.3</span>The System is deemed accepted on the earlier of (a) written
+  acceptance, (b) expiry of the seven-day review period without written objection, or (c) the Client
+  using the System for real trading at either Outlet.</li>
+  <li><span class="cn">11.4</span><strong>Warranty.</strong> For <strong>ninety (90) days</strong> from
+  Go-Live, GiftedLabs warrants that the System will perform substantially as described in
+  Schedule A and shall correct any Defect at no charge and as a priority. Thereafter, Defects
+  continue to be corrected without charge under lifetime support (clause 7).</li>
+</ol>
+
+<!-- ================= 12. CHANGES ================= -->
+<h2><span class="num">12.</span>Changes to Scope</h2>
+<ol class="clauses">
+  <li><span class="cn">12.1</span>Either Party may propose a change. GiftedLabs shall respond in
+  writing with the effect on price and timeline. No change is binding, and no work on it begins,
+  until both Parties have agreed it in writing.</li>
+  <li><span class="cn">12.2</span>Minor adjustments &mdash; wording, labels, receipt layout, report
+  columns, colour and configuration &mdash; are made at no charge as part of normal delivery and
+  support.</li>
+  <li><span class="cn">12.3</span>Substantial new functionality, including the Stage&nbsp;2 and
+  Stage&nbsp;3 items in Schedule B, is quoted separately. GiftedLabs shall offer the Client its
+  standard rates less <strong>fifteen per cent (15%)</strong> for as long as this Agreement remains
+  in force.</li>
+  <li><span class="cn">12.4</span>Adding a <strong>third or subsequent Outlet</strong> is a Change
+  Request. The System is already built to accommodate further Outlets, so the charge covers setup,
+  data configuration, installation and training only &mdash; not redevelopment.</li>
+</ol>
+
+<!-- ================= 13. IP ================= -->
+<h2><span class="num">13.</span>Intellectual Property and Licence</h2>
+<ol class="clauses">
+  <li><span class="cn">13.1</span>GiftedLabs retains ownership of the Radiance POS source code,
+  its design, architecture, and all components, libraries and tooling created before or during this
+  Agreement.</li>
+  <li><span class="cn">13.2</span>On payment in full, GiftedLabs grants the Client a
+  <strong>perpetual, irrevocable, non-exclusive, non-transferable licence</strong> to use the System
+  for the operation of its retail business, without limit on the number of users, terminals or
+  transactions, at the Outlets covered by this Agreement and any further Outlets added under
+  clause 12.4.</li>
+  <li><span class="cn">13.3</span>The licence is perpetual and does not lapse. It cannot be revoked
+  for any reason other than the Client sub-licensing, reselling or redistributing the System to a
+  third party.</li>
+  <li><span class="cn">13.4</span>The Client shall not sell, sub-license, rent or redistribute the
+  System, nor make it available to another business, without the prior written consent of
+  GiftedLabs.</li>
+  <li><span class="cn">13.5</span><strong>Client Data is not licensed &mdash; it is owned outright by
+  the Client</strong> (clause 8.4). Nothing in this clause gives GiftedLabs any interest in it.</li>
+  <li><span class="cn">13.6</span>The Client&rsquo;s name, logo and branding remain the
+  Client&rsquo;s property. GiftedLabs may state that the Client is a customer and show the System in
+  its portfolio, unless the Client objects in writing.</li>
+  <li><span class="cn">13.7</span>Where the Client requires assignment of the source code, that is
+  available as a separate written agreement at an additional fee.</li>
+</ol>
+
+<!-- ================= 14. LIABILITY ================= -->
+<h2><span class="num">14.</span>Confidentiality, Liability and Indemnity</h2>
+<ol class="clauses">
+  <li><span class="cn">14.1</span>Each Party shall keep confidential all commercial, financial and
+  technical information of the other, during this Agreement and for three (3) years afterwards.</li>
+  <li><span class="cn">14.2</span>The Client remains responsible for its own trading records,
+  cash handling, stock accuracy and tax compliance. The System is a tool for recording and reporting
+  the business; it does not replace the Client&rsquo;s own controls, its accountant, or its
+  obligations to the Ghana Revenue Authority.</li>
+  <li><span class="cn">14.3</span>GiftedLabs&rsquo; total aggregate liability under this Agreement is
+  limited to the total price actually paid by the Client, being GH&#8373;&nbsp;5,000.00.</li>
+  <li><span class="cn">14.4</span>Neither Party is liable for indirect or consequential loss,
+  including loss of profit, loss of business or loss of goodwill.</li>
+  <li><span class="cn">14.5</span>Nothing in this Agreement limits liability for fraud, wilful
+  misconduct, or any liability that cannot lawfully be limited.</li>
+  <li><span class="cn">14.6</span><strong>Force majeure.</strong> Neither Party is in breach for a
+  delay caused by an event beyond its reasonable control, including sustained power or internet
+  failure, civil disturbance, or the failure of a third-party service provider. The affected Party
+  shall notify the other promptly and resume as soon as it can.</li>
+</ol>
+
+<!-- ================= 15. TERMINATION ================= -->
+<h2><span class="num">15.</span>Termination</h2>
+<ol class="clauses">
+  <li><span class="cn">15.1</span>Either Party may terminate on <strong>thirty (30) days&rsquo;</strong>
+  written notice, or immediately if the other commits a material breach and fails to remedy it
+  within fourteen (14) days of written notice.</li>
+  <li><span class="cn">15.2</span>On termination the Client shall pay for all work completed to the
+  date of termination. Sums already paid for completed stages are not refundable.</li>
+  <li><span class="cn">15.3</span>On termination for any reason, GiftedLabs shall deliver to the
+  Client a complete export of Client Data within five (5) business days, at no charge, and shall
+  cooperate in good faith with any migration.</li>
+  <li><span class="cn">15.4</span>Clauses 8.4 (data ownership), 13 (intellectual property and
+  licence), 14 (confidentiality and liability) and 16 (governing law) survive termination.</li>
+</ol>
+
+<!-- ================= 16. GENERAL ================= -->
+<h2><span class="num">16.</span>General</h2>
+<ol class="clauses">
+  <li><span class="cn">16.1</span>This Agreement, together with Schedules A, B and C, is the entire
+  agreement between the Parties and supersedes all prior proposals, quotations and discussions.</li>
+  <li><span class="cn">16.2</span>No variation is effective unless in writing and signed by both
+  Parties. Written confirmation by email from the nominated representatives is sufficient.</li>
+  <li><span class="cn">16.3</span>Neither Party may assign this Agreement without the other&rsquo;s
+  written consent, which shall not be unreasonably withheld.</li>
+  <li><span class="cn">16.4</span>GiftedLabs is an independent contractor. Nothing here creates a
+  partnership, joint venture or employment relationship.</li>
+  <li><span class="cn">16.5</span>If any provision is held invalid, the rest remains in force.</li>
+  <li><span class="cn">16.6</span>The Parties shall attempt in good faith to resolve any dispute by
+  discussion within thirty (30) days before commencing proceedings.</li>
+  <li><span class="cn">16.7</span>This Agreement is governed by the laws of the
+  <strong>Republic of Ghana</strong> and the Parties submit to the exclusive jurisdiction of the
+  Ghanaian courts.</li>
+  <li><span class="cn">16.8</span>This Agreement may be signed in counterparts, and scanned or
+  electronic signatures are as effective as originals.</li>
+</ol>
+
+<!-- ================= SIGNATURES ================= -->
+<div class="avoid">
+<h2><span class="num">17.</span>Execution</h2>
+<p>The Parties, having read and understood this Agreement and its Schedules, sign below as evidence
+of their agreement to be bound by it.</p>
+
+<div class="sigs">
+  <div class="sig-block">
+    <div class="sig-party">For GiftedLabs Technologies</div>
+    <div class="sig-line"></div><div class="sig-label">Signature</div>
+    <div class="sig-line"></div><div class="sig-label">Name and title (block capitals)</div>
+    <div class="sig-line"></div><div class="sig-label">Date</div>
+  </div>
+  <div class="sig-block">
+    <div class="sig-party">For the Client</div>
+    <div class="sig-line"></div><div class="sig-label">Signature</div>
+    <div class="sig-line"></div><div class="sig-label">Name and title (block capitals)</div>
+    <div class="sig-line"></div><div class="sig-label">Date</div>
+  </div>
+</div>
+
+<div class="note">
+  <strong>Please initial each page.</strong> Return one signed copy to GiftedLabs together with the
+  Stage&nbsp;1 payment of GH&#8373;&nbsp;1,500.00 to commence work.
+</div>
+</div>
+
+<!-- ================= SCHEDULE A ================= -->
+<div class="pb"></div>
+<h2>Schedule A &mdash; Delivered Functionality</h2>
+<p class="lead-in">This Schedule is the definitive statement of what the Client is purchasing.
+Every module below is part of the System delivered under clause 4.1 and covered by the warranty in
+clause 11.4 and by lifetime support under clause 7.</p>
+
+<div class="mod">
+  <div class="mod-head"><span class="mod-id">A1</span><span class="mod-name">Authentication, Roles and Access Control</span></div>
+  <div class="mod-body">Staff sign-in with username and password; outlet selection on entry; screen lock
+  with PIN re-entry so a cashier can step away without ending a shift; idle session timeout. Four role
+  types &mdash; Owner, Manager, Storekeeper, Cashier &mdash; governed by a full permissions matrix
+  covering selling, discounting, voiding, price visibility, stock adjustment, cash movement, reporting,
+  user management and settings. Per-user grants and revocations against the role baseline. Controls a
+  user has no permission for are not displayed at all rather than shown and disabled. Manager PIN
+  approval for privileged actions, with the approver&rsquo;s identity recorded against the transaction.</div>
+</div>
+
+<div class="mod">
+  <div class="mod-head"><span class="mod-id">A2</span><span class="mod-name">Point of Sale Terminal</span></div>
+  <div class="mod-body">A dedicated full-screen selling terminal. Product tile grid with category
+  filtering, live search and barcode scanning. <strong>Multi-unit selling with conversions</strong> &mdash;
+  cable bought by the drum and sold by the metre, bulbs bought by the carton and sold singly &mdash;
+  with a unit picker showing the price for each unit. <strong>Trade and contractor price tiers</strong>
+  applied automatically once a customer is attached. Line-level editing: quantity, unit, price and line
+  discount. Cart-level discount with a permitted ceiling. <strong>Floor-price protection</strong> &mdash;
+  a sale below the product&rsquo;s floor price requires manager PIN approval and records the approver.
+  Customer attachment by phone search, with quick customer creation at the counter. Hold and resume
+  multiple parked sales. Keyboard shortcuts throughout. Out-of-stock and unknown-barcode handling that
+  informs rather than blocks.</div>
+</div>
+
+<div class="mod">
+  <div class="mod-head"><span class="mod-id">A3</span><span class="mod-name">Payments and Receipts</span></div>
+  <div class="mod-body">Cash with denomination shortcuts and large change display; <strong>mobile money
+  across MTN MoMo, Telecel Cash and AT Money</strong> with network selection, payer number, transaction
+  reference and explicit received-confirmation; card and bank transfer with reference capture; and
+  <strong>split payments</strong> across multiple methods with a running balance that will not complete
+  until the amount due reaches zero. Receipt generation and printing to <strong>80mm and 58mm</strong>
+  thermal printers with an on-screen preview, configurable header, logo, footer and returns wording.
+  Reprint of any past receipt. Print failure never blocks a sale &mdash; the sale is saved and printing
+  can be retried. Receipt numbering is sequential per Outlet and per terminal, gapless and never reused.</div>
+</div>
+
+<div class="mod">
+  <div class="mod-head"><span class="mod-id">A4</span><span class="mod-name">Cashier Shifts and Cash Control</span></div>
+  <div class="mod-body">Opening a shift with a counted float; a <strong>blind close</strong> in which the
+  cashier counts the drawer by denomination without seeing what the system expects; variance revealed
+  only after submission, with a mandatory written explanation beyond a configurable threshold. Shift
+  register showing outlet, cashier, times, sales total, expected cash, counted cash and variance.
+  Cash movements in and out of the drawer &mdash; banking, owner drawings, supplier payments, float
+  transfers &mdash; each with a reason and a user. End-of-day reconciliation per Outlet with takings
+  broken down by payment method.</div>
+</div>
+
+<div class="mod">
+  <div class="mod-head"><span class="mod-id">A5</span><span class="mod-name">Product Catalogue</span></div>
+  <div class="mod-body">Full catalogue with images, SKUs, multiple barcodes, categories, brands and
+  supplier links. Per-product selling units with conversion factors and a price for each unit. Four
+  price points per product &mdash; cost, retail, trade and floor &mdash; with live margin calculation
+  and optional per-Outlet overrides. Cost price hidden from users without permission. Price change
+  history. Category, brand and unit-of-measure management. <strong>CSV import wizard</strong> with
+  template download, column mapping, row-level validation, error reporting and a preview before commit.
+  Bulk price updates across a filtered selection with an affected-count preview.</div>
+</div>
+
+<div class="mod">
+  <div class="mod-head"><span class="mod-id">A6</span><span class="mod-name">Inventory Control</span></div>
+  <div class="mod-body">Stock held <strong>per product per Outlet</strong> &mdash; there is no single
+  global quantity anywhere in the System. Every change is a movement row carrying the Outlet, quantity
+  delta, reason, user, timestamp and source document, so the current level always equals the sum of its
+  movements. Goods receipt against a supplier with purchase units, unit costs and a confirmation step
+  showing the resulting stock and the new <strong>weighted average cost</strong>. Stock adjustments with
+  a mandatory reason, value impact and approval above a threshold. Damage and write-off recording.
+  Low-stock list grouped by supplier with suggested reorder quantities. Stock valuation at cost by
+  category and Outlet. Physical stock count with variance review. Stock transfer between Outlets.
+  An exceptions register surfacing oversells, large adjustments and write-offs for review.</div>
+</div>
+
+<div class="mod">
+  <div class="mod-head"><span class="mod-id">A7</span><span class="mod-name">Sales History, Voids, Returns and Exchanges</span></div>
+  <div class="mod-body">Searchable transaction history filtered by date, receipt number, customer,
+  amount, cashier and Outlet, with a full sale detail view showing lines, units, payments, cashier,
+  terminal and any approver. Completed sales are immutable &mdash; correction is by void, which writes
+  reversing stock movements and leaves both records visible, requires a reason and manager approval,
+  and is logged. <strong>Returns and exchanges</strong> against an original receipt: select the lines
+  and quantities being returned, record replacement items on a swap, calculate the balance due either
+  way, and print a return voucher. Return and void registers exportable to CSV.</div>
+</div>
+
+<div class="mod">
+  <div class="mod-head"><span class="mod-id">A8</span><span class="mod-name">Installment Plans and Customer Credit</span></div>
+  <div class="mod-body">Creation of a written installment agreement against a customer, with the items,
+  total value, deposit and payment schedule. Recording of each collection with a printed payment slip.
+  Automatic identification of <strong>overdue plans</strong>, outstanding balances and credit ageing.
+  Portfolio metrics showing total credit extended, collected and at risk. Full export to CSV. This
+  addresses the single largest cash risk in hardware retail &mdash; goods released on trust and paid
+  for later.</div>
+</div>
+
+<div class="mod">
+  <div class="mod-head"><span class="mod-id">A9</span><span class="mod-name">Customers and Suppliers</span></div>
+  <div class="mod-body">Customer register with phone-number search, customer type mapped to a price tier
+  (retail, electrician, contractor), purchase history across both Outlets, total spent and purchase
+  count. Supplier directory with contacts, payment terms, products supplied, goods-receipt history and
+  total purchased.</div>
+</div>
+
+<div class="mod">
+  <div class="mod-head"><span class="mod-id">A10</span><span class="mod-name">Expenses and Profitability</span></div>
+  <div class="mod-body">Operational expense ledger by category and Outlet with dates and notes.
+  Automatic calculation of gross revenue, cost of goods sold at the cost frozen on each sale line,
+  gross profit, total operating expenditure and <strong>net profit or loss</strong>. Category breakdown
+  of where the money is going. Because cost is frozen at the moment of sale, later price or cost changes
+  never rewrite historical profit.</div>
+</div>
+
+<div class="mod">
+  <div class="mod-head"><span class="mod-id">A11</span><span class="mod-name">Dashboard and Business Reporting</span></div>
+  <div class="mod-body">A role-aware dashboard: the Owner sees both Outlets combined or separately with
+  today&rsquo;s sales, estimated profit, expected cash and stock value; the Manager sees one Outlet
+  operationally; the Cashier sees only their own shift and their own sales, with no profit or stock
+  value. Reports covering sales by day, product, category, cashier and customer; gross profit and
+  margin; best sellers and slow movers; stock on hand and stock movements; payment method breakdown;
+  the discount and override log; the void and refund log; and purchases by supplier. Every report is
+  available per Outlet and combined, with date-range presets and CSV export.</div>
+</div>
+
+<div class="mod">
+  <div class="mod-head"><span class="mod-id">A12</span><span class="mod-name">Outlet Comparison and Analytics Workspace</span></div>
+  <div class="mod-body">Side-by-side comparison of the Outlets on revenue, margin, transaction count,
+  average sale and stock position. An analytics workspace with six chart families &mdash; sales and
+  margin velocity, comparative outlet performance, category mix, payment channel distribution,
+  installment credit ageing and top-mover velocity &mdash; supported by an
+  <strong>inference engine</strong> that reads the figures and writes a plain-language commentary:
+  an executive summary, a financial health grade, an explanation of what each chart is showing and
+  where the risks and opportunities sit. Preset questions cover margin comparison between the lighting
+  and hardware lines, debtor and installment risk, fast versus dead stock, and payment method friction,
+  and free-text questions can be asked of the data. The engine falls back to a deterministic rules
+  model so the workspace continues to produce analysis when the network is unavailable.</div>
+</div>
+
+<div class="mod">
+  <div class="mod-head"><span class="mod-id">A13</span><span class="mod-name">Audit Trail</span></div>
+  <div class="mod-body">A read-only record of consequential actions &mdash; price changes, stock
+  adjustments, voids, discounts and overrides, permission changes, user administration and settings
+  changes &mdash; each with the user, the Outlet, the timestamp and the before and after values.
+  Filterable by user, action, entity, Outlet and date. It cannot be edited or deleted from within the
+  System by anyone, including the Owner.</div>
+</div>
+
+<div class="mod">
+  <div class="mod-head"><span class="mod-id">A14</span><span class="mod-name">System Settings and Administration</span></div>
+  <div class="mod-body">Store profile with legal identity, currency and rounding. Registration and
+  management of branches with staff assignment, so further Outlets can be added without redevelopment.
+  User accounts with credentials, PINs and Outlet assignment. The roles and permissions matrix.
+  Manager PIN policy governing floor-price and void overrides. Hardware and receipt configuration with
+  80mm and 58mm templates and a test print. Theme and accent colour with a live preview.
+  <strong>Backup and export</strong> &mdash; a complete JSON archive of the business and accounting CSV
+  exports, available to the Client on demand.</div>
+</div>
+
+<div class="mod">
+  <div class="mod-head"><span class="mod-id">A15</span><span class="mod-name">Operating Characteristics</span></div>
+  <div class="mod-body">Global search across products, customers, suppliers and sales from any screen.
+  Consistent loading, empty, error and permission states throughout. Amounts held in minor units as
+  integers so rounding never drifts; quantities held to three decimal places to support cut lengths.
+  Every sale carries a unique identifier so a double-click, retry or reconnection can never create a
+  duplicate sale or a duplicate payment. Stock decrements happen inside a locked database transaction,
+  so two terminals cannot sell the same last unit. Designed desktop-first for the counter, usable on a
+  tablet in the store room, and readable on the Owner&rsquo;s phone for the dashboard and reports.</div>
+</div>
+
+<!-- ================= SCHEDULE B ================= -->
+<h2>Schedule B &mdash; Not Included</h2>
+<p class="lead-in">Listed explicitly so that neither Party is in any doubt. Any item below can be added
+under clause 12 as a separately quoted Change Request, at GiftedLabs&rsquo; standard rates less 15%.</p>
+
+<table>
+  <thead><tr><th style="width:30%">Area</th><th>Excluded from this Agreement</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Tax and compliance</strong></td><td>VAT, NHIL and GETFund calculation and reporting; tax invoicing; integration with the Ghana Revenue Authority Certified Invoicing System (E&#8209;VAT). Receipts show prices as charged, with no tax breakdown.</td></tr>
+    <tr><td><strong>Accounting</strong></td><td>General ledger, trial balance, financial statements, bank reconciliation and payroll. The System exports accounting CSVs for the Client&rsquo;s accountant; it is not an accounting package.</td></tr>
+    <tr><td><strong>Procurement</strong></td><td>Purchase orders, supplier ageing and payables. Goods receipt is included; the ordering cycle preceding it is not.</td></tr>
+    <tr><td><strong>Integrations</strong></td><td>Bank or mobile-money API integration &mdash; payments are recorded with a reference, not verified automatically against the network. No SMS or email receipts, no accounting software integration.</td></tr>
+    <tr><td><strong>Extended commerce</strong></td><td>Online store, e-commerce, customer mobile application, loyalty programme, quotations and proforma invoices, barcode label design and printing, delivery scheduling.</td></tr>
+    <tr><td><strong>Product depth</strong></td><td>Product variant matrices, serial number tracking, expiry date tracking, batch and lot control, manufacturing or kit assembly, multi-currency.</td></tr>
+    <tr><td><strong>Hardware</strong></td><td>Supply, repair or replacement of computers, printers, scanners, UPS units, cash drawers, customer displays, networking equipment or internet service (clause 5.6).</td></tr>
+    <tr><td><strong>Third parties</strong></td><td>Charges levied by any third-party service, and hosting or domain renewal after the first twelve months (clause 8.3).</td></tr>
+  </tbody>
+</table>
+
+<!-- ================= SCHEDULE C ================= -->
+<h2>Schedule C &mdash; Payment Stage Criteria</h2>
+<p class="lead-in">What must be true before each instalment under clause 5.2 becomes payable.</p>
+
+<table>
+  <thead><tr><th style="width:26%">Stage</th><th>Criteria</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Stage 1 &mdash; 30%<br><span class="money">GH&#8373; 1,500.00</span></strong></td>
+      <td>This Agreement signed by both Parties. Payable before development work begins; the eight-week clock in clause 6.1 starts on receipt.</td>
+    </tr>
+    <tr>
+      <td><strong>Stage 2 &mdash; 30%<br><span class="money">GH&#8373; 1,500.00</span></strong></td>
+      <td>
+        Every module in Schedule A is present and functioning on a staging environment reachable by the Client;
+        the Client has been given credentials and a walkthrough covering each module;
+        the Client has had seven days to review and any Defects raised in that period have been corrected;
+        and the System has been accepted under clause 11.3.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Stage 3 &mdash; 40%<br><span class="money">GH&#8373; 2,000.00</span></strong></td>
+      <td>
+        The System is live on production hosting under the Client&rsquo;s domain;
+        the Client&rsquo;s product catalogue, opening stock, customers and suppliers have been migrated;
+        both Outlets, their users, roles, permissions, price tiers and receipt templates are configured;
+        counter terminals, receipt printers and scanners are installed and verified working at
+        <strong>both</strong> Outlets, with a successful test sale and printed receipt at each;
+        role-based training has been delivered to the Client&rsquo;s staff at both Outlets per clause 9.1;
+        and quick-reference guides have been handed over.
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="callout-title">Continuing after Stage 3</div>
+  <p>Lifetime technical support (clause 7), free hosting and domain for twelve months from Go&#8209;Live
+  (clause 8.1), the ninety-day warranty (clause 11.4), the follow-up training session within thirty days
+  (clause 9.3) and the Client&rsquo;s perpetual licence (clause 13.2) all continue at no further charge
+  once Stage&nbsp;3 is paid.</p>
+</div>
+
+<div class="note" style="margin-top:8mm">
+  <strong>GiftedLabs Technologies</strong> &middot; <span class="fill">[ADDRESS]</span> &middot;
+  <span class="fill">[EMAIL]</span> &middot; <span class="fill">[PHONE]</span><br>
+  Agreement GLT&#8209;POS&#8209;2026&#8209;<span class="fill">001</span> &middot; Version 1.0 &middot;
+  Page count and content confidential to the named Parties.
+</div>
+
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "name": "Radiance POS",
+  "description": "Radiance POS multi-outlet Point of Sale and Inventory Management system with real-time sales tracking, stock control, and full-screen POS terminal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
