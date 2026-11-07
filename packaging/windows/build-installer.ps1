@@ -174,5 +174,8 @@ $installer = Join-Path $BackendRoot "dist\Radiance-POS-Setup-$Version-x64$suffix
 if (-not (Test-Path $installer)) { throw 'Inno Setup did not produce the expected installer.' }
 $hash = (Get-FileHash $installer -Algorithm SHA256).Hash
 Set-Content "$installer.sha256" "$hash  $([IO.Path]::GetFileName($installer))" -Encoding ascii
+# NFR-13: shipped beside the EXE. Double-clicking it installs on a PC whose
+# TEMP is a missing 8.3 alias, where the EXE alone stops before setup begins.
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Install Radiance POS.cmd') -Destination (Join-Path $BackendRoot 'dist') -Force
 Write-Host "Built $installer ($LaunchMode)"
 Write-Host "SHA256 $hash"

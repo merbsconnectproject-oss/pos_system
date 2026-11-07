@@ -248,9 +248,11 @@ jobs:
           $env:TEMP = $missing
           $env:TMP = $missing
 
-          $installer = Get-ChildItem 'pos-api\dist\Radiance-POS-Setup-*.exe' | Select-Object -First 1
-          $upgrade = Start-Process $installer.FullName -ArgumentList @(
-            '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/LOG="{0}"' -f (Join-Path $env:RUNNER_TEMP 'missing-temp-upgrade.log'))
+          # Through the launcher shipped beside the EXE: that is what a person
+          # double-clicks on the counter PC, so that is the path that must work.
+          $launcher = Resolve-Path 'pos-api\dist\Install Radiance POS.cmd'
+          $upgrade = Start-Process $env:ComSpec -ArgumentList @(
+            '/c', ('""{0}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="{1}""' -f $launcher, (Join-Path $env:RUNNER_TEMP 'missing-temp-upgrade.log'))
           ) -PassThru
           if (-not $upgrade.WaitForExit(10 * 60 * 1000)) {
             Stop-Process -Id $upgrade.Id -Force -ErrorAction SilentlyContinue
@@ -258,14 +260,14 @@ jobs:
           }
           Get-Content (Join-Path $env:RUNNER_TEMP 'missing-temp-upgrade.log') -Tail 40 -ErrorAction SilentlyContinue
           if ($upgrade.ExitCode -ne 0) {
-            throw "With TEMP=$missing the installer exited $($upgrade.ExitCode). A Windows account with a space in its name cannot install this build."
+            throw "With TEMP=$missing the launcher exited $($upgrade.ExitCode). A Windows account with a space in its name cannot install this build."
           }
 
           $deadline = (Get-Date).AddMinutes(3)
           do {
             try {
               if ((Invoke-RestMethod 'http://127.0.0.1:8080/actuator/health' -TimeoutSec 3).status -eq 'UP') {
-                Write-Host 'Installer ran under a missing 8.3 TEMP and the counter is healthy.'
+                Write-Host 'The launcher installed under a missing 8.3 TEMP and the counter is healthy.'
                 exit 0
               }
             } catch { }
@@ -280,5 +282,6 @@ jobs:
           path: |
             pos-api/dist/Radiance-POS-Setup-*.exe
             pos-api/dist/Radiance-POS-Setup-*.sha256
+            pos-api/dist/Install Radiance POS.cmd
           if-no-files-found: error
           retention-days: 30
