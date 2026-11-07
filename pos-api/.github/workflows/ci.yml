@@ -1,0 +1,56 @@
+name: CI
+
+# This repository has no remote yet, so nothing triggers this. It is committed
+# so that the checks exist the moment one is added — `git remote add origin …`
+# is all that stands between here and a green tick.
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+
+      # The test database is PostgreSQL 18. Ubuntu's preinstalled pg_dump is
+      # older and refuses to dump a newer server, which makes the backup tests
+      # fail before the application code is exercised.
+      - name: Install matching PostgreSQL client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] http://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo \"$VERSION_CODENAME\")-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-18
+
+      # Testcontainers starts a real PostgreSQL — the runner provides Docker, so
+      # nothing extra is needed here. Running the suite against an in-memory
+      # database instead would prove the code works somewhere it will never run:
+      # the schema uses gin_trgm_ops, partial indexes, enum types and an
+      # append-only trigger, none of which H2 has.
+      - name: Backend suite
+        run: ./mvnw -B test -DexcludedGroups=live
+
+      # The live checks talk to the real R2 bucket. They stay excluded above:
+      # a red build caused by somebody's connection teaches people to ignore red
+      # builds. Run them by hand when the credentials change.
+      - name: Publish test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          retention-days: 14

@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+set -e
+
+if ! getent group radiance-pos >/dev/null; then
+  addgroup --system radiance-pos
+fi
+if ! id radiance-pos >/dev/null 2>&1; then
+  adduser --system --ingroup radiance-pos --home /var/lib/radiance-pos --no-create-home --disabled-login radiance-pos
+fi
+
+install -d -o root -g radiance-pos -m 750 /etc/radiance-pos
+install -d -o radiance-pos -g radiance-pos -m 750 /var/lib/radiance-pos /var/lib/radiance-pos/backups
+chown -R root:radiance-pos /opt/radiance-pos
+chmod -R o-rwx /opt/radiance-pos
+find /opt/radiance-pos -type d -exec chmod 750 {} +
+chmod 750 /opt/radiance-pos/runtime/bin/java
+
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl start postgresql.service || true
+fi
+
+if [[ ! -f /etc/radiance-pos/pos.env ]]; then
+  DB_PASSWORD=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
+  if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='radiance_pos'" | grep -q 1; then
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "CREATE ROLE radiance_pos LOGIN PASSWORD '$DB_PASSWORD'"
+  else
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "ALTER ROLE radiance_pos WITH LOGIN PASSWORD '$DB_PASSWORD'"
+  fi
+  if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname='pos_system'" | grep -q 1; then
+    runuser -u postgres -- createdb --owner=radiance_pos pos_system
+  else
+    # Adopting a database somebody else created — an evaluation install, a
+    # developer machine, or the Windows-style setup, all of which use the role
+    # `giftedlabs`. Taking the database is not enough and taking only the
+    # database is actively harmful:
+    #
+    #   * Since PostgreSQL 15 the `public` schema is owned by the implicit role
+    #     `pg_database_owner`, so changing the database owner silently moves
+    #     CREATE-on-public to the new owner. The old role keeps its tables and
+    #     loses the ability to create anything — so its next migration fails on
+    #     the first CREATE INDEX, with "permission denied for schema public".
+    #   * The tables, sequences and `flyway_schema_history` still belong to the
+    #     old role, so the new one cannot migrate them either. It fails earlier
+    #     and more bluntly: "permission denied for table flyway_schema_history".
+    #
+    # The result was a database neither role could migrate, and a service stuck
+    # in `activating` with a stack trace nobody would connect to having
+    # installed a .deb. Ownership therefore moves as one piece.
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "ALTER DATABASE pos_system OWNER TO radiance_pos"
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -d pos_system -c "ALTER SCHEMA public OWNER TO pg_database_owner"
+    # REASSIGN OWNED needs the source role to exist; it is the Windows-style
+    # role this package may be taking over from. Missing is the ordinary case.
+    if runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='giftedlabs'" | grep -q 1; then
+      runuser -u postgres -- psql -v ON_ERROR_STOP=1 -d pos_system \
+        -c "REASSIGN OWNED BY giftedlabs TO radiance_pos"
+    fi
+    # Whatever else is in there — objects made by a superuser, say — the
+    # application role still has to be able to read and write it.
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -d pos_system -c "GRANT ALL ON SCHEMA public TO radiance_pos"
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -d pos_system -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO radiance_pos"
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -d pos_system -c "GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO radiance_pos"
+  fi
+  cat >/etc/radiance-pos/pos.env <<EOF
+SPRING_PROFILES_ACTIVE=counter
+JDBC_DATABASE_URL="jdbc:postgresql://127.0.0.1:5432/pos_system"
+DB_USERNAME="radiance_pos"
+DB_PASSWORD="$DB_PASSWORD"
+PORT=8080
+POS_BIND_ADDRESS="127.0.0.1"
+POS_PRINTER_NAME="POS-80"
+OUTLET_CODE="RAD"
+TERMINAL_CODE="01"
+POS_BACKUP_DIRECTORY="/var/lib/radiance-pos/backups"
+POS_BOOTSTRAP_ADMIN_ENABLED=false
+EOF
+  chown root:radiance-pos /etc/radiance-pos/pos.env
+  chmod 640 /etc/radiance-pos/pos.env
+fi
+
+if command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; then
+  systemctl daemon-reload
+  systemctl enable radiance-pos.service >/dev/null
+  systemctl restart radiance-pos.service || true
+fi
+
+if [[ ! -f /var/lib/radiance-pos/.configured ]]; then
+  echo
+  echo "Radiance POS was installed. Finish setup with:"
+  echo "  sudo radiance-pos-setup"
+fi
+
+exit 0

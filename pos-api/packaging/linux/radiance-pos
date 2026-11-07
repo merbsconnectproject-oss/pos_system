@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+URL=http://127.0.0.1:8080
+
+for _ in $(seq 1 30); do
+  if curl --silent --fail "$URL/actuator/health" >/dev/null; then
+    exec xdg-open "$URL"
+  fi
+  sleep 1
+done
+
+message="Radiance POS is not running. Run 'sudo radiance-pos-diagnostics' in a terminal."
+if command -v notify-send >/dev/null 2>&1; then
+  notify-send --urgency=critical "Radiance POS could not start" "$message"
+fi
+echo "$message" >&2
+exit 1

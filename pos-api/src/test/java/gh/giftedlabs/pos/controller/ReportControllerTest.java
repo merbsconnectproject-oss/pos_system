@@ -1,0 +1,967 @@
+package gh.giftedlabs.pos.controller;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import gh.giftedlabs.pos.TestcontainersConfiguration;
+import gh.giftedlabs.pos.entity.Outlet;
+import gh.giftedlabs.pos.entity.Terminal;
+import gh.giftedlabs.pos.entity.User;
+import gh.giftedlabs.pos.repository.OutletRepository;
+import gh.giftedlabs.pos.repository.TerminalRepository;
+import gh.giftedlabs.pos.repository.UserRepository;
+import gh.giftedlabs.pos.rules.Permission;
+import gh.giftedlabs.pos.rules.Role;
+import gh.giftedlabs.pos.security.PosPrincipal;
+import gh.giftedlabs.pos.service.LoginAttemptService;
+import gh.giftedlabs.pos.service.ShiftService;
+import jakarta.servlet.http.Cookie;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+/**
+ * Reports over HTTP — FR-RPT.
+ *
+ * <p>Two things are worth proving. That the figures are the database's answer
+ * over the whole period, not a sum of whatever a screen had loaded — which is
+ * right at a hundred sales and quietly wrong at a hundred and one. And
+ * FR-RPT-05: that a caller without {@code report.view_profit} is not sent a
+ * cost at all, rather than sent one the screen promises to hide.
+ */
+@Import(TestcontainersConfiguration.class)
+@SpringBootTest
+@AutoConfigureMockMvc
+@DisplayName("Reports HTTP contract")
+class ReportControllerTest {
+
+    private static final String PASSWORD = "Counter-Pass-123";
+
+    @Autowired MockMvc mvc;
+    @Autowired ObjectMapper json;
+    @Autowired UserRepository users;
+    @Autowired OutletRepository outlets;
+    @Autowired TerminalRepository terminals;
+    @Autowired LoginAttemptService loginAttempts;
+    @Autowired ShiftService shiftService;
+    @Autowired @Qualifier("passwordEncoder") PasswordEncoder passwords;
+
+    private String run;
+    private String ownerName;
+    private String cashierName;
+    private UUID outletId;
+    private UUID terminalId;
+    private UUID ownerId;
+
+    @BeforeEach
+    void seed() {
+        run = UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+        outletId = outlets.save(new Outlet("R" + run.substring(0, 5), "Report Branch " + run)).getId();
+        terminalId = terminals.save(new Terminal(outletId, "01", "Counter 1", 1L, 1000L)).getId();
+
+        ownerName = "owner-" + run.toLowerCase();
+        User owner = new User(ownerName, "Test Owner", passwords.encode(PASSWORD));
+        owner.assignRole(Role.OWNER);
+        owner.assignOutlet(outletId);
+        ownerId = users.save(owner).getId();
+
+        // A cashier may sell and see their own dashboard, and holds neither
+        // report.view nor report.view_profit.
+        cashierName = "cashier-" + run.toLowerCase();
+        User cashier = new User(cashierName, "Test Cashier", passwords.encode(PASSWORD));
+        cashier.assignRole(Role.CASHIER);
+        cashier.assignOutlet(outletId);
+        users.save(cashier);
+
+        loginAttempts.recordSuccess(ownerName);
+        loginAttempts.recordSuccess(cashierName);
+    }
+
+    @Nested
+    @DisplayName("the figures are the database's, over the whole period")
+    class Figures {
+
+        @Test
+        @DisplayName("revenue, cost and profit come from the frozen cost — FR-RPT-06, BR-5")
+        void profitUsesTheFrozenCost() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            // Received at 10.00, sold at 40.00: 30.00 profit a unit.
+            String productId = stockedProduct(session, "Cable " + run, "10.00");
+            sell(session, productId, "2", "40.00");
+
+            mvc.perform(session.authorise(get("/api/reports/summary").param("outletId", outletId.toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.saleCount").value(1))
+                    .andExpect(jsonPath("$.revenue").value(80.00))
+                    .andExpect(jsonPath("$.cost").value(20.00))
+                    .andExpect(jsonPath("$.profit").value(60.00))
+                    .andExpect(jsonPath("$.marginPercent").value(75.0));
+        }
+
+        @Test
+        @DisplayName("a later cost change does not restate an old sale — BR-5, FR-RPT-06")
+        void restockingDoesNotRewriteHistory() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Conduit " + run, "10.00");
+            sell(session, productId, "1", "40.00");
+
+            // The next delivery costs three times as much. The sale already
+            // made keeps the cost it was made at.
+            receive(session, productId, "10", "30.00");
+
+            mvc.perform(session.authorise(get("/api/reports/summary").param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$.cost").value(10.00))
+                    .andExpect(jsonPath("$.profit").value(30.00));
+        }
+
+        @Test
+        @DisplayName("a voided sale is not revenue, and is counted as a void — BR-3")
+        void voidsAreNotRevenue() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Socket " + run, "10.00");
+            String kept = sell(session, productId, "1", "40.00");
+            String scrapped = sell(session, productId, "1", "60.00");
+
+            mvc.perform(session.authorise(post("/api/sales/" + scrapped + "/void"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(Map.of("reason", "Wrong item"))))
+                    .andExpect(status().isOk());
+
+            mvc.perform(session.authorise(get("/api/reports/summary").param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$.saleCount").value(1))
+                    .andExpect(jsonPath("$.revenue").value(40.00))
+                    .andExpect(jsonPath("$.voidCount").value(1))
+                    .andExpect(jsonPath("$.voidedValue").value(60.00));
+
+            // BR-3: the void is still on the record, with who and why.
+            mvc.perform(session.authorise(get("/api/reports/exceptions").param("log", "void")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$[0].reason").value("Wrong item"))
+                    .andExpect(jsonPath("$[0].approver").value("Test Owner"));
+            org.junit.jupiter.api.Assertions.assertNotNull(kept);
+        }
+
+        @Test
+        @DisplayName("a date range outside the sales returns zero, not the whole table")
+        void theRangeIsHonoured() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Bulb " + run, "10.00");
+            sell(session, productId, "1", "40.00");
+
+            Instant lastYear = Instant.now().minus(400, ChronoUnit.DAYS);
+            mvc.perform(session.authorise(get("/api/reports/summary").param("outletId", outletId.toString())
+                            .param("from", lastYear.toString())
+                            .param("to", lastYear.plus(1, ChronoUnit.DAYS).toString())))
+                    .andExpect(jsonPath("$.saleCount").value(0))
+                    .andExpect(jsonPath("$.revenue").value(0));
+        }
+    }
+
+    @Nested
+    @DisplayName("returns come off the takings")
+    class Returns {
+
+        @Test
+        @DisplayName("a refund reduces net sales and the profit with it")
+        void refundReducesNetSales() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            // Received at 10.00, five sold at 40.00: 200.00 in, 50.00 of cost.
+            String productId = stockedProduct(session, "Returned Cable " + run, "10.00");
+            String saleId = sell(session, productId, "5", "40.00");
+
+            mvc.perform(session.authorise(get("/api/reports/summary")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$.revenue").value(200.00))
+                    .andExpect(jsonPath("$.netRevenue").value(200.00))
+                    .andExpect(jsonPath("$.profit").value(150.00));
+
+            refund(session, saleId, "2", "RESTOCK");
+
+            // Two back at 40.00. Gross takings are still 200 — they were rung up
+            // — but the shop kept 120, and the two units' cost came back with
+            // them, so profit is 120 - 30.
+            mvc.perform(session.authorise(get("/api/reports/summary")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$.revenue").value(200.00))
+                    .andExpect(jsonPath("$.refundTotal").value(80.00))
+                    .andExpect(jsonPath("$.refundCount").value(1))
+                    .andExpect(jsonPath("$.netRevenue").value(120.00))
+                    .andExpect(jsonPath("$.cost").value(30.00))
+                    .andExpect(jsonPath("$.profit").value(90.00));
+        }
+
+        @Test
+        @DisplayName("a written-off return keeps its cost — the shop paid for stock it no longer has")
+        void writeOffKeepsItsCost() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Broken Lamp " + run, "10.00");
+            String saleId = sell(session, productId, "5", "40.00");
+
+            refund(session, saleId, "2", "DAMAGED_WRITE_OFF");
+
+            // Revenue falls by the refund, but unlike a restock the goods cannot
+            // be sold again, so their cost stays on the books as a loss.
+            mvc.perform(session.authorise(get("/api/reports/summary")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$.netRevenue").value(120.00))
+                    .andExpect(jsonPath("$.cost").value(50.00))
+                    .andExpect(jsonPath("$.profit").value(70.00));
+        }
+
+        @Test
+        @DisplayName("a returned product falls down the product ranking")
+        void productBreakdownIsNet() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String kept = stockedProduct(session, "Kept " + run, "10.00");
+            String sentBack = stockedProduct(session, "Sent Back " + run, "10.00");
+
+            sell(session, kept, "2", "50.00");                       // 100.00 kept
+            String returnedSale = sell(session, sentBack, "3", "50.00"); // 150.00, then most back
+            refund(session, returnedSale, "2", "RESTOCK");           // 100.00 back
+
+            MvcResult result = mvc.perform(session.authorise(get("/api/reports/breakdown")
+                            .param("by", "PRODUCT").param("outletId", outletId.toString())))
+                    .andExpect(status().isOk()).andReturn();
+
+            JsonNode rows = json.readTree(result.getResponse().getContentAsString());
+            // Sent Back netted to 50; Kept stayed at 100, so Kept ranks first.
+            // On gross takings the returned product would have led at 150.
+            assertEquals("Kept " + run, rows.get(0).get("name").asText(),
+                    "a product sold and returned must not outrank one that stayed sold: " + rows);
+            for (JsonNode row : rows) {
+                if (row.get("name").asText().equals("Sent Back " + run)) {
+                    assertEquals(50.00, row.get("revenue").asDouble(), 0.001);
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("the chart's sales line is net of the day's returns")
+        void seriesIsNet() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Chart " + run, "10.00");
+            String saleId = sell(session, productId, "4", "50.00");
+            refund(session, saleId, "1", "RESTOCK");
+
+            MvcResult result = mvc.perform(session.authorise(get("/api/reports/series")
+                            .param("bucket", "DAY").param("outletId", outletId.toString())))
+                    .andExpect(status().isOk()).andReturn();
+
+            JsonNode points = json.readTree(result.getResponse().getContentAsString());
+            double today = points.get(points.size() - 1).get("sales").asDouble();
+            // 200 sold, 50 back.
+            assertEquals(150.00, today, 0.001,
+                    "a chart on gross takings shows a good day that was really selling and unselling");
+        }
+
+        @Test
+        @DisplayName("a return is netted against whoever sold it, not whoever handled it")
+        void cashierBreakdownAttributesToTheSeller() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Seller " + run, "10.00");
+            String saleId = sell(session, productId, "4", "50.00");
+            refund(session, saleId, "2", "RESTOCK");
+
+            MvcResult result = mvc.perform(session.authorise(get("/api/reports/breakdown")
+                            .param("by", "CASHIER").param("outletId", outletId.toString())))
+                    .andExpect(status().isOk()).andReturn();
+
+            JsonNode rows = json.readTree(result.getResponse().getContentAsString());
+            // 200 sold less 100 returned, against the one cashier who did both.
+            assertEquals(100.00, rows.get(0).get("revenue").asDouble(), 0.001, rows.toString());
+        }
+
+        @Test
+        @DisplayName("the P&L is built on net sales, not gross")
+        void profitAndLossUsesNetSales() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "PL Return " + run, "10.00");
+            String saleId = sell(session, productId, "5", "40.00");
+            refund(session, saleId, "2", "RESTOCK");
+
+            mvc.perform(session.authorise(get("/api/reports/profit-and-loss")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isOk())
+                    // A P&L on gross takings would claim 200 and overstate the
+                    // month by everything that came back.
+                    .andExpect(jsonPath("$.revenue").value(120.00))
+                    .andExpect(jsonPath("$.costOfSales").value(30.00))
+                    .andExpect(jsonPath("$.grossProfit").value(90.00));
+        }
+    }
+
+    @Nested
+    @DisplayName("grouped reports")
+    class Grouped {
+
+        @Test
+        @DisplayName("by product, by category and by cashier each add up to the same revenue")
+        void groupingsAgree() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String first = stockedProduct(session, "Breaker " + run, "10.00");
+            String second = stockedProduct(session, "Switch " + run, "5.00");
+            sell(session, first, "2", "40.00");
+            sell(session, second, "1", "50.00");
+
+            // 2 x 40 + 1 x 50 = 130.00 however it is sliced.
+            for (String by : List.of("product", "category", "cashier", "customer")) {
+                MvcResult result = mvc.perform(session.authorise(get("/api/reports/breakdown").param("by", by)
+                                .param("outletId", outletId.toString())))
+                        .andExpect(status().isOk()).andReturn();
+                double total = 0;
+                for (var row : json.readTree(result.getResponse().getContentAsString())) {
+                    total += row.get("revenue").asDouble();
+                }
+                org.junit.jupiter.api.Assertions.assertEquals(130.00, total, 0.001,
+                        "grouping by " + by + " did not agree: " + result.getResponse().getContentAsString());
+            }
+        }
+
+        @Test
+        @DisplayName("a payment breakdown counts payments, not sales — a split sale is two rows")
+        void splitPaymentsAreTwoRows() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Meter " + run, "10.00");
+
+            Map<String, Object> body = saleBody(productId, "1", "40.00");
+            body.put("payments", List.of(
+                    payment("cash", 1500L),
+                    payment("momo", 2500L)));
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(body)))
+                    .andExpect(status().isCreated());
+
+            mvc.perform(session.authorise(get("/api/reports/breakdown").param("by", "payment")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(2));
+        }
+
+        @Test
+        @DisplayName("slow movers include what sold nothing at all")
+        void slowMoversIncludeTheUnsold() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String moving = stockedProduct(session, "Popular " + run, "10.00");
+            String stuck = stockedProduct(session, "Gathering Dust " + run, "10.00");
+            sell(session, moving, "5", "40.00");
+
+            MvcResult result = mvc.perform(session.authorise(get("/api/reports/ranking")
+                            .param("direction", "slow").param("limit", "50")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isOk()).andReturn();
+
+            String body = result.getResponse().getContentAsString();
+            // A product with no sales never appears in a sales table, and it is
+            // exactly the one a slow-movers report exists to show.
+            org.junit.jupiter.api.Assertions.assertTrue(body.contains("Gathering Dust " + run), body);
+            org.junit.jupiter.api.Assertions.assertEquals(stuck,
+                    json.readTree(body).get(0).get("key").asText(),
+                    "the least-sold product should be first: " + body);
+        }
+
+        @Test
+        @DisplayName("an unknown grouping is refused rather than answered with something else")
+        void unknownGroupingIsRefused() throws Exception {
+            mvc.perform(signIn(ownerName).authorise(get("/api/reports/breakdown").param("by", "weather")))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Nested
+    @DisplayName("every filter FR-RPT-03 names")
+    class Filters {
+
+        @Test
+        @DisplayName("a payment-method filter narrows the summary to that method")
+        void byPaymentMethod() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Filter pay " + run, "10.00");
+
+            Map<String, Object> split = saleBody(productId, "1", "40.00");
+            split.put("payments", List.of(payment("cash", 1500L), payment("momo", 2500L)));
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(split)))
+                    .andExpect(status().isCreated());
+
+            // The filter reaches the query rather than being accepted and
+            // ignored — which is what "the screen offers no control" hid.
+            mvc.perform(session.authorise(get("/api/reports/breakdown")
+                            .param("by", "payment")
+                            .param("outletId", outletId.toString())
+                            .param("paymentMethod", "momo")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(1))
+                    .andExpect(jsonPath("$[0].key").value("momo"));
+        }
+
+        @Test
+        @DisplayName("a user filter narrows the summary to that cashier")
+        void byUser() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Filter user " + run, "10.00");
+            sell(session, productId, "1", "40.00");
+
+            mvc.perform(session.authorise(get("/api/reports/summary")
+                            .param("outletId", outletId.toString())
+                            .param("userId", ownerId.toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.saleCount").value(org.hamcrest.Matchers.greaterThan(0)));
+
+            // Somebody who sold nothing has sold nothing, rather than seeing
+            // the shop's figures because the filter was dropped.
+            mvc.perform(session.authorise(get("/api/reports/summary")
+                            .param("outletId", outletId.toString())
+                            .param("userId", UUID.randomUUID().toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.saleCount").value(0));
+        }
+
+        @Test
+        @DisplayName("the discount log takes a user filter — FR-RPT-03")
+        void discountLogByUser() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Filter disc " + run, "10.00");
+
+            Map<String, Object> body = saleBody(productId, "1", "40.00");
+            ((Map<String, Object>) ((List<?>) body.get("items")).get(0)).put("discount", 500L);
+            body.put("payments", List.of(payment("cash", 3500L)));
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(body)))
+                    .andExpect(status().isCreated());
+
+            mvc.perform(session.authorise(get("/api/reports/exceptions")
+                            .param("log", "discount")
+                            .param("outletId", outletId.toString())
+                            .param("userId", ownerId.toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(org.hamcrest.Matchers.greaterThan(0)));
+
+            mvc.perform(session.authorise(get("/api/reports/exceptions")
+                            .param("log", "discount")
+                            .param("outletId", outletId.toString())
+                            .param("userId", UUID.randomUUID().toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(0));
+        }
+
+        @Test
+        @DisplayName("a cart discount reaches the discount log — FR-POS-10, FR-RPT-04")
+        void cartDiscountIsLogged() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Filter cart " + run, "10.00");
+
+            Map<String, Object> body = saleBody(productId, "1", "40.00");
+            body.put("cartDiscountPercent", "10");
+            body.put("payments", List.of(payment("cash", 3600L)));
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(body)))
+                    .andExpect(status().isCreated());
+
+            // Apportioned onto the line, so the log that reads sale_item.discount
+            // sees it without needing to know a cart discount exists.
+            MvcResult result = mvc.perform(session.authorise(get("/api/reports/exceptions")
+                            .param("log", "discount")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isOk()).andReturn();
+            String log = result.getResponse().getContentAsString();
+            org.junit.jupiter.api.Assertions.assertTrue(log.contains("Cart discount"),
+                    "the cart concession should be named as one: " + log);
+        }
+
+        @Test
+        @DisplayName("inventory valuation and low stock answer, and withhold cost — FR-RPT-04, FR-RPT-05")
+        void stockViews() throws Exception {
+            Session session = signIn(ownerName);
+            stockedProduct(session, "Valued " + run, "10.00");
+
+            mvc.perform(session.authorise(get("/api/reports/stock")
+                            .param("view", "VALUATION").param("outletId", outletId.toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].valueAtCost").exists());
+
+            mvc.perform(session.authorise(get("/api/reports/stock")
+                            .param("view", "LOW").param("outletId", outletId.toString())))
+                    .andExpect(status().isOk());
+
+            // A cashier holds no report.view at all, so the stock report is
+            // refused outright rather than answered with the cost removed.
+            // FR-RPT-05's redaction is covered by the Profit tests.
+            mvc.perform(signIn(cashierName).authorise(get("/api/reports/stock")
+                            .param("view", "ON_HAND").param("outletId", outletId.toString())))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Nested
+    @DisplayName("the dashboard chart's series")
+    class Series {
+
+        @Test
+        @DisplayName("returns every bucket in the range, including the quiet days")
+        void quietDaysAreZeroNotMissing() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Charted " + run, "10.00");
+            sell(session, productId, "1", "40.00");
+
+            Instant to = Instant.now();
+            Instant from = to.minus(6, ChronoUnit.DAYS);
+
+            MvcResult result = mvc.perform(session.authorise(get("/api/reports/series")
+                            .param("bucket", "DAY")
+                            .param("from", from.toString()).param("to", to.toString())
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isOk()).andReturn();
+
+            var body = json.readTree(result.getResponse().getContentAsString());
+            // Seven days asked for, seven points back. A chart drawn only
+            // through the busy days is the wrong shape.
+            org.junit.jupiter.api.Assertions.assertEquals(7, body.size(), body.toString());
+
+            double sales = 0;
+            for (var point : body) sales += point.get("sales").asDouble();
+            org.junit.jupiter.api.Assertions.assertEquals(40.00, sales, 0.001, body.toString());
+        }
+
+        @Test
+        @DisplayName("counts goods received as purchases, against the takings")
+        void purchasesAreTheOtherSide() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            // 20 received at 10.00 is GH200.00 of purchases.
+            String productId = stockedProduct(session, "Delivered " + run, "10.00");
+            sell(session, productId, "1", "40.00");
+
+            MvcResult result = mvc.perform(session.authorise(get("/api/reports/series")
+                            .param("bucket", "DAY")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isOk()).andReturn();
+
+            double purchases = 0;
+            for (var point : json.readTree(result.getResponse().getContentAsString())) {
+                purchases += point.get("purchases").asDouble();
+            }
+            org.junit.jupiter.api.Assertions.assertEquals(200.00, purchases, 0.001);
+        }
+
+        @Test
+        @DisplayName("splits takings by the kind of customer — FR-CUST-04")
+        void byCustomerType() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Split " + run, "10.00");
+
+            Map<String, Object> customerBody = new LinkedHashMap<>();
+            customerBody.put("name", "Sparks " + run);
+            customerBody.put("phone", "059" + Math.abs(run.hashCode() % 1000000));
+            customerBody.put("type", "electrician");
+            MvcResult created = mvc.perform(session.authorise(post("/api/customers"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(customerBody)))
+                    .andExpect(status().isCreated()).andReturn();
+            String customerId = json.readTree(created.getResponse().getContentAsString()).get("id").asText();
+
+            Map<String, Object> attributed = saleBody(productId, "1", "40.00");
+            attributed.put("customerId", customerId);
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(attributed)))
+                    .andExpect(status().isCreated());
+
+            // And one walk-in, which is a row of its own, not a gap.
+            sell(session, productId, "1", "60.00");
+
+            MvcResult result = mvc.perform(session.authorise(get("/api/reports/breakdown")
+                            .param("by", "customer_type").param("outletId", outletId.toString())))
+                    .andExpect(status().isOk()).andReturn();
+
+            String body = result.getResponse().getContentAsString();
+            org.junit.jupiter.api.Assertions.assertTrue(body.contains("electrician"), body);
+            org.junit.jupiter.api.Assertions.assertTrue(body.contains("walk-in"), body);
+        }
+    }
+
+    @Nested
+    @DisplayName("who sees cost — FR-RPT-05")
+    class Profit {
+
+        @Test
+        @DisplayName("a cashier cannot open a report at all")
+        void reportsNeedReportView() throws Exception {
+            mvc.perform(signIn(cashierName).authorise(get("/api/reports/summary").param("outletId", outletId.toString())))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("without report.view_profit the cost is absent, not hidden")
+        void costIsNotSent() throws Exception {
+            Session owner = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(owner, "Priced " + run, "10.00");
+            sell(owner, productId, "1", "40.00");
+
+            // A manager who reports but may not see profit: report.view granted,
+            // report.view_profit withheld.
+            String reader = "reader-" + run.toLowerCase();
+            User user = new User(reader, "Test Reader", passwords.encode(PASSWORD));
+            user.assignRole(Role.MANAGER);
+            user.assignOutlet(outletId);
+            UUID readerId = users.save(user).getId();
+            loginAttempts.recordSuccess(reader);
+
+            mvc.perform(owner.authorise(put("/api/users/" + readerId + "/permissions/report.view_profit")
+                            .param("granted", "false")))
+                    .andExpect(status().isOk());
+
+            Session theirs = signIn(reader);
+            mvc.perform(theirs.authorise(get("/api/reports/summary").param("outletId", outletId.toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.revenue").value(40.00))
+                    .andExpect(jsonPath("$.cost").doesNotExist())
+                    .andExpect(jsonPath("$.profit").doesNotExist());
+
+            mvc.perform(theirs.authorise(get("/api/reports/breakdown").param("by", "product")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$[0].revenue").value(40.00))
+                    .andExpect(jsonPath("$[0].cost").doesNotExist());
+
+            mvc.perform(theirs.authorise(get("/api/reports/stock").param("view", "valuation")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$[0].averageCost").doesNotExist())
+                    .andExpect(jsonPath("$[0].valueAtCost").doesNotExist());
+        }
+    }
+
+    @Nested
+    @DisplayName("the dashboard — FR-RPT-01, FR-RPT-02")
+    class DashboardScope {
+
+        @Test
+        @DisplayName("shows today's figures and a combined line")
+        void showsTodayAndCombined() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            String productId = stockedProduct(session, "Dash " + run, "10.00");
+            sell(session, productId, "1", "40.00");
+
+            MvcResult result = mvc.perform(session.authorise(get("/api/reports/dashboard")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.combined.outletName").value("All branches"))
+                    .andReturn();
+
+            var body = json.readTree(result.getResponse().getContentAsString());
+            var mine = java.util.stream.StreamSupport
+                    .stream(body.get("outlets").spliterator(), false)
+                    .filter(row -> row.get("outletId").asText().equals(outletId.toString()))
+                    .findFirst().orElseThrow();
+
+            org.junit.jupiter.api.Assertions.assertEquals(40.00, mine.get("salesToday").asDouble(), 0.001);
+            org.junit.jupiter.api.Assertions.assertEquals(1, mine.get("receiptsToday").asInt());
+            org.junit.jupiter.api.Assertions.assertEquals(1, mine.get("openShifts").asInt());
+            // BR-14: the float plus what the till took in cash.
+            org.junit.jupiter.api.Assertions.assertEquals(140.00, mine.get("expectedCash").asDouble(), 0.001);
+        }
+
+        @Test
+        @DisplayName("a cashier sees only the branch they are assigned to")
+        void scopedToAssignedBranches() throws Exception {
+            // A second branch the cashier is not assigned to.
+            UUID otherId = outlets.save(new Outlet("S" + run.substring(0, 5), "Other Branch " + run)).getId();
+
+            MvcResult result = mvc.perform(signIn(cashierName).authorise(get("/api/reports/dashboard")))
+                    .andExpect(status().isOk()).andReturn();
+
+            String body = result.getResponse().getContentAsString();
+            org.junit.jupiter.api.Assertions.assertTrue(body.contains(outletId.toString()), body);
+            org.junit.jupiter.api.Assertions.assertFalse(body.contains(otherId.toString()),
+                    "a cashier was shown a branch they are not assigned to: " + body);
+        }
+    }
+
+    @Nested
+    @DisplayName("profit and loss — report.view_pl")
+    class ProfitAndLoss {
+
+        @Test
+        @DisplayName("net profit is gross profit less the period's paid expenses")
+        void netProfitSubtractsExpenses() throws Exception {
+            Session session = signIn(ownerName);
+            openShift();
+            // Received at 10.00, two sold at 40.00 — 80.00 in, 20.00 of cost,
+            // 60.00 gross.
+            String productId = stockedProduct(session, "PL Cable " + run, "10.00");
+            sell(session, productId, "2", "40.00");
+
+            recordExpense(session, 15_00, "UTILITIES_POWER", "PAID");
+            recordExpense(session, 5_00, "PACKAGING_BAGS", "PAID");
+            // Owed, not gone. It must not reduce this month's net profit, or the
+            // month is understated now and double-counted when it is paid.
+            recordExpense(session, 40_00, "STAFF_PAYROLL", "PENDING");
+
+            mvc.perform(session.authorise(get("/api/reports/profit-and-loss")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.revenue").value(80.00))
+                    .andExpect(jsonPath("$.costOfSales").value(20.00))
+                    .andExpect(jsonPath("$.grossProfit").value(60.00))
+                    .andExpect(jsonPath("$.operatingExpenses").value(20.00))
+                    .andExpect(jsonPath("$.pendingExpenses").value(40.00))
+                    .andExpect(jsonPath("$.netProfit").value(40.00))
+                    .andExpect(jsonPath("$.netMarginPercent").value(50.0));
+        }
+
+        @Test
+        @DisplayName("the breakdown lists paid categories and omits the unpaid")
+        void breakdownByCategory() throws Exception {
+            Session session = signIn(ownerName);
+            recordExpense(session, 120_00, "RENT_LEASE", "PAID");
+            recordExpense(session, 30_00, "STAFF_PAYROLL", "PENDING");
+
+            mvc.perform(session.authorise(get("/api/reports/profit-and-loss")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$.expensesByCategory[0].category").value("RENT_LEASE"))
+                    // The label travels with the key so the statement prints
+                    // without the screen keeping its own translation table.
+                    .andExpect(jsonPath("$.expensesByCategory[0].label").value("Rent & Lease"))
+                    .andExpect(jsonPath("$.expensesByCategory[0].amount").value(120.00))
+                    .andExpect(jsonPath("$.expensesByCategory.length()").value(1));
+        }
+
+        @Test
+        @DisplayName("an expense removed after the fact leaves the statement")
+        void voidedExpenseIsExcluded() throws Exception {
+            Session session = signIn(ownerName);
+            String id = recordExpense(session, 80_00, "MAINTENANCE_REPAIRS", "PAID");
+
+            mvc.perform(session.authorise(delete("/api/expenses/" + id)))
+                    .andExpect(status().isNoContent());
+
+            mvc.perform(session.authorise(get("/api/reports/profit-and-loss")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$.operatingExpenses").value(0.00));
+        }
+
+        @Test
+        @DisplayName("no revenue leaves the margin absent rather than zero")
+        void noRevenueMeansNoMargin() throws Exception {
+            Session session = signIn(ownerName);
+            recordExpense(session, 10_00, "MISCELLANEOUS", "PAID");
+
+            // 0% reads as "we sold things and made nothing", which is a
+            // different month from "we sold nothing at all".
+            mvc.perform(session.authorise(get("/api/reports/profit-and-loss")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(jsonPath("$.netMarginPercent").doesNotExist())
+                    .andExpect(jsonPath("$.netProfit").value(-10.00));
+        }
+
+        @Test
+        @DisplayName("report.view_profit is not enough — the P&L needs its own code")
+        void grossProfitDoesNotBuyTheStatement() throws Exception {
+            // A manager holds report.view and report.view_profit, so gross profit
+            // is theirs. Net profit exposes the rent and the payroll, and is not.
+            User manager = users.findByUsernameOrEmail(ownerName).orElseThrow();
+            manager.override(Permission.REPORT_VIEW_PL, false);
+            users.save(manager);
+
+            Session session = signIn(ownerName);
+            mvc.perform(session.authorise(get("/api/reports/summary")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.profit").exists());
+
+            mvc.perform(session.authorise(get("/api/reports/profit-and-loss")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    // --- helpers -----------------------------------------------------------
+
+    /** Records an expense and returns its id. Amounts in pesewas. */
+    private String recordExpense(Session session, long pesewas, String category, String status)
+            throws Exception {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("spentOn", java.time.LocalDate.now().toString());
+        body.put("category", category);
+        body.put("title", category + " " + run);
+        body.put("amountPesewas", pesewas);
+        body.put("outletId", outletId.toString());
+        body.put("payee", "Supplier " + run);
+        body.put("paymentMethod", "BANK_TRANSFER");
+        body.put("taxDeductible", false);
+        body.put("status", status);
+
+        MvcResult created = mvc.perform(session.authorise(post("/api/expenses"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(body)))
+                .andExpect(status().isCreated()).andReturn();
+        return json.readTree(created.getResponse().getContentAsString()).get("id").asText();
+    }
+
+    /** Takes goods back against a sale, so the reports have something to net off. */
+    private void refund(Session session, String saleId, String quantity, String disposition)
+            throws Exception {
+        MvcResult returnable = mvc.perform(session.authorise(
+                        get("/api/returns/returnable/" + saleId)))
+                .andExpect(status().isOk()).andReturn();
+        String lineId = json.readTree(returnable.getResponse().getContentAsString())
+                .get("lines").get(0).get("saleItemId").asText();
+
+        Map<String, Object> line = new LinkedHashMap<>();
+        line.put("saleItemId", lineId);
+        line.put("quantityBase", quantity);
+        line.put("reason", "Customer Changed Mind");
+        line.put("disposition", disposition);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("originalSaleId", saleId);
+        body.put("kind", "REFUND");
+        body.put("items", List.of(line));
+        body.put("refundMethod", "CASH");
+
+        mvc.perform(session.authorise(post("/api/returns"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(body)))
+                .andExpect(status().isCreated());
+    }
+
+    private void openShift() {
+        shiftService.open(terminalId, 10_000L,
+                new PosPrincipal(ownerId, ownerName, outletId, Instant.now()), "127.0.0.1");
+    }
+
+    private String stockedProduct(Session session, String name, String unitCost) throws Exception {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("name", name);
+        body.put("category", "Hardware & Tools");
+        body.put("brand", "Generic");
+        body.put("baseUnit", "pc");
+        body.put("retailPrice", "60.00");
+        body.put("tradePrice", "50.00");
+        body.put("floorPrice", "30.00");
+
+        MvcResult created = mvc.perform(session.authorise(post("/api/products"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(body)))
+                .andExpect(status().isCreated()).andReturn();
+        String productId = json.readTree(created.getResponse().getContentAsString()).get("id").asText();
+        receive(session, productId, "20", unitCost);
+        return productId;
+    }
+
+    private void receive(Session session, String productId, String quantity, String unitCost) throws Exception {
+        Map<String, Object> movement = new LinkedHashMap<>();
+        movement.put("productId", productId);
+        movement.put("outletId", outletId.toString());
+        movement.put("type", "RECEIPT");
+        movement.put("quantity", quantity);
+        movement.put("unitCost", unitCost);
+        mvc.perform(session.authorise(post("/api/stock/movements"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(movement)))
+                .andExpect(status().isCreated());
+    }
+
+    private Map<String, Object> payment(String method, long amount) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", UUID.randomUUID().toString());
+        row.put("method", method);
+        row.put("amount", amount);
+        if (!"cash".equals(method)) row.put("reference", "TEST-" + UUID.randomUUID());
+        return row;
+    }
+
+    private Map<String, Object> saleBody(String productId, String quantity, String price) {
+        Map<String, Object> line = new LinkedHashMap<>();
+        line.put("productId", productId);
+        line.put("selectedUnit", "pc");
+        line.put("conversionFactor", "1");
+        line.put("quantity", quantity);
+        line.put("unitPrice", price);
+
+        long total = Math.round(Double.parseDouble(quantity) * Double.parseDouble(price) * 100);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("id", UUID.randomUUID().toString());
+        body.put("outletId", outletId.toString());
+        body.put("terminalId", terminalId.toString());
+        body.put("items", List.of(line));
+        body.put("payments", List.of(payment("cash", total)));
+        return body;
+    }
+
+    private String sell(Session session, String productId, String quantity, String price) throws Exception {
+        MvcResult result = mvc.perform(session.authorise(post("/api/sales"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(saleBody(productId, quantity, price))))
+                .andExpect(status().isCreated()).andReturn();
+        return json.readTree(result.getResponse().getContentAsString()).get("id").asText();
+    }
+
+    private Session signIn(String identifier) throws Exception {
+        MockHttpSession http = new MockHttpSession();
+        MvcResult csrf = mvc.perform(get("/api/auth/csrf").session(http))
+                .andExpect(status().isOk()).andReturn();
+        String token = json.readTree(csrf.getResponse().getContentAsString()).get("token").asText();
+
+        MvcResult signedIn = mvc.perform(post("/api/auth/sign-in").session(http)
+                        .header("X-XSRF-TOKEN", token).cookie(new Cookie("XSRF-TOKEN", token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("identifier", identifier, "password", PASSWORD))))
+                .andExpect(status().isOk()).andReturn();
+
+        return new Session((MockHttpSession) signedIn.getRequest().getSession(false), token);
+    }
+
+    private record Session(MockHttpSession http, String csrfToken) {
+        MockHttpServletRequestBuilder authorise(MockHttpServletRequestBuilder builder) {
+            return builder.session(http).header("X-XSRF-TOKEN", csrfToken)
+                    .cookie(new Cookie("XSRF-TOKEN", csrfToken));
+        }
+    }
+}

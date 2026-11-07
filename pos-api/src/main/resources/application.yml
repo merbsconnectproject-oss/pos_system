@@ -1,0 +1,157 @@
+# Shared configuration.
+#
+# TWO DEPLOYMENTS, ONE JAR.
+#
+#   counter   the POS on a shop's counter PC. The system of record.
+#   consolidator  the owner's view, on Railway. Receives pushed snapshots.
+#
+# Everything that differs between them is a profile, and everything that
+# differs between machines is an environment variable with a working local
+# default. Nothing here should ever need editing to deploy.
+#
+# Activate with SPRING_PROFILES_ACTIVE=counter (or consolidator).
+
+spring:
+  application:
+    name: pos-api
+
+  autoconfigure:
+    # Authentication is established explicitly by AuthController; never create
+    # Spring Boot's generated development user or print a password at startup.
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+
+  profiles:
+    # A counter PC is the common case and the one a developer runs locally.
+    default: counter
+
+  datasource:
+    # Railway injects DATABASE_URL. Locally this falls back to a dev database.
+    # DatabaseUrlConfig normalises Railway's postgres:// form into JDBC.
+    url: ${JDBC_DATABASE_URL:jdbc:postgresql://localhost:5432/pos_system}
+    username: ${DB_USERNAME:giftedlabs}
+    password: ${DB_PASSWORD:}
+    hikari:
+      # A counter serves one browser; the consolidator serves one owner.
+      # Ten is generous for both and keeps the JVM small enough for Railway's
+      # memory-priced billing.
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      pool-name: pos-pool
+
+  jpa:
+    open-in-view: false          # an HTTP thread must not hold a DB connection
+    hibernate:
+      ddl-auto: validate         # Flyway owns DDL. Hibernate never writes it.
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+    validate-on-migrate: true
+
+  jackson:
+    default-property-inclusion: non_null
+    deserialization:
+      fail-on-unknown-properties: false
+
+server:
+  # Railway assigns a port and expects the app to bind it. Locally, 8080.
+  port: ${PORT:8080}
+  shutdown: graceful
+  error:
+    include-message: never       # errors are shaped by ApiExceptionHandler
+    include-stacktrace: never
+  forward-headers-strategy: framework   # X-Forwarded-* from Railway/Cloudflare
+  servlet:
+    # Application-level idle handling distinguishes expiry from an open-shift lock.
+    session:
+      timeout: ${HTTP_SESSION_TIMEOUT:PT12H}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Railway health checks hit /actuator/health. Nothing else is exposed.
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+logging:
+  level:
+    gh.giftedlabs.pos: ${LOG_LEVEL:INFO}
+
+pos:
+  printer:
+    # Blank — the normal case — detects the counter's thermal printer by its
+    # installed queue name, whatever the driver called it. Set this only to
+    # disambiguate a counter with more than one thermal printer attached.
+    name: ${POS_PRINTER_NAME:}
+  bootstrap:
+    enabled: ${POS_BOOTSTRAP_ADMIN_ENABLED:false}
+    business-name: ${POS_BOOTSTRAP_BUSINESS_NAME:Radiance POS}
+    business-trading-name: ${POS_BOOTSTRAP_BUSINESS_TRADING_NAME:}
+    username: ${POS_BOOTSTRAP_ADMIN_USERNAME:admin}
+    full-name: ${POS_BOOTSTRAP_ADMIN_NAME:System Administrator}
+    email: ${POS_BOOTSTRAP_ADMIN_EMAIL:}
+    password: ${POS_BOOTSTRAP_ADMIN_PASSWORD:}
+    pin: ${POS_BOOTSTRAP_ADMIN_PIN:}
+    outlet-code: ${POS_BOOTSTRAP_OUTLET_CODE:RAD}
+    outlet-name: ${POS_BOOTSTRAP_OUTLET_NAME:Radiance Lighting}
+    terminal-code: ${POS_BOOTSTRAP_TERMINAL_CODE:01}
+    terminal-name: ${POS_BOOTSTRAP_TERMINAL_NAME:Counter 1}
+  auth:
+    max-attempts: ${AUTH_MAX_ATTEMPTS:5}
+    lockout-duration: ${AUTH_LOCKOUT:PT15M}
+    attempt-window: ${AUTH_ATTEMPT_WINDOW:PT15M}
+    # FR-AUTH-05: configurable, not a constant. With an open shift the POS
+    # locks rather than signing out.
+    idle-timeout: ${AUTH_IDLE_TIMEOUT:PT15M}
+    reset-token-ttl: ${AUTH_RESET_TOKEN_TTL:PT30M}
+    reset-base-url: ${AUTH_RESET_BASE_URL:http://localhost:5173/reset-password}
+    resend-api-key: ${RESEND_API_KEY:}
+    resend-from: ${RESEND_FROM:Radiance POS <onboarding@resend.dev>}
+
+  # NFR-6 · NFR-7: the backup.
+  #
+  # Every fifteen minutes rather than nightly, because NFR-7 asks for a recovery
+  # point of fifteen minutes and a nightly dump has a recovery point of a day. A
+  # shop's database is a few megabytes, so a full dump that often costs nothing.
+  #
+  # WITHOUT THE OFF-SITE BLOCK THIS IS NOT A BACKUP OF A DISK FAILURE. Copies sit
+  # beside the database and die with it, which is the exact risk in the delivery
+  # plan's table. The settings screen says "this machine only" until a bucket and
+  # key exist — it will not show green on a local-only install.
+  backup:
+    enabled: ${POS_BACKUP_ENABLED:true}
+    interval: ${POS_BACKUP_INTERVAL:PT15M}
+    directory: ${POS_BACKUP_DIRECTORY:backups}
+    retention: ${POS_BACKUP_RETENTION:P30D}
+    # How long every copy is kept before thinning to one a day. Two days covers
+    # a mistake noticed the next morning.
+    keep-all: ${POS_BACKUP_KEEP_ALL:P2D}
+    # Empty means whatever is on PATH, which is right when Postgres is bundled
+    # on the counter PC. Set it when pg_dump is somewhere unusual (Windows).
+    pg-dump: ${POS_BACKUP_PG_DUMP:pg_dump}
+    timeout: ${POS_BACKUP_TIMEOUT:PT5M}
+    # S3-compatible, so Cloudflare R2 (what the plan budgets for), Backblaze or
+    # AWS all work through the same client. Off until a bucket and key exist.
+    offsite:
+      endpoint: ${POS_BACKUP_OFFSITE_ENDPOINT:}
+      bucket: ${POS_BACKUP_OFFSITE_BUCKET:}
+      access-key-id: ${POS_BACKUP_OFFSITE_ACCESS_KEY_ID:}
+      secret-access-key: ${POS_BACKUP_OFFSITE_SECRET_ACCESS_KEY:}
+      region: ${POS_BACKUP_OFFSITE_REGION:auto}
+      prefix: ${POS_BACKUP_OFFSITE_PREFIX:}
+
+  # NFR-17 · BR-2: does every stock level still equal the sum of its movements?
+  # Reports, never corrects — a number that repaired itself would hide the bug.
+  reconcile:
+    cron: ${POS_RECONCILE_CRON:0 30 2 * * *}

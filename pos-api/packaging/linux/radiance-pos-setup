@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ENV_FILE=/etc/radiance-pos/pos.env
+STATE_DIR=/var/lib/radiance-pos
+HEALTH_URL=http://127.0.0.1:8080/actuator/health
+
+if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
+  echo "Run this setup as administrator: sudo radiance-pos-setup" >&2
+  exit 1
+fi
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "Radiance POS is not installed correctly: $ENV_FILE is missing." >&2
+  exit 1
+fi
+if [[ -f "$STATE_DIR/.configured" ]]; then
+  echo "Radiance POS is already configured."
+  echo "Open it with: radiance-pos"
+  exit 0
+fi
+
+prompt_default() {
+  local target=$1 prompt=$2 default=$3 value
+  read -r -p "$prompt [$default]: " value
+  printf -v "$target" '%s' "${value:-$default}"
+}
+
+quote_env() {
+  local value=$1
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  printf '"%s"' "$value"
+}
+
+echo "Radiance POS first-time setup"
+echo "The application stays on this computer and listens only on 127.0.0.1."
+echo
+
+prompt_default OWNER_USER "Owner username" "admin"
+prompt_default OWNER_NAME "Owner full name" "System Administrator"
+read -r -p "Owner email (optional): " OWNER_EMAIL
+while :; do
+  read -r -s -p "Owner password (at least 8 characters): " OWNER_PASSWORD
+  echo
+  [[ ${#OWNER_PASSWORD} -ge 8 ]] && break
+  echo "The password must contain at least 8 characters." >&2
+done
+while :; do
+  read -r -s -p "Owner PIN (4 to 6 digits): " OWNER_PIN
+  echo
+  [[ "$OWNER_PIN" =~ ^[0-9]{4,6}$ ]] && break
+  echo "The PIN must contain 4 to 6 digits." >&2
+done
+prompt_default OUTLET_CODE "Outlet code" "RAD"
+prompt_default OUTLET_NAME "Outlet name" "Radiance Lighting"
+prompt_default TERMINAL_CODE "Terminal code" "01"
+prompt_default TERMINAL_NAME "Terminal name" "Counter 1"
+
+[[ "$OWNER_USER" =~ ^[A-Za-z0-9._@-]+$ ]] || { echo "The username contains unsupported characters." >&2; exit 1; }
+[[ "$OUTLET_CODE" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "The outlet code may contain letters, numbers, underscores and hyphens." >&2; exit 1; }
+[[ "$TERMINAL_CODE" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "The terminal code may contain letters, numbers, underscores and hyphens." >&2; exit 1; }
+
+DB_PASSWORD=$(sed -n 's/^DB_PASSWORD="\(.*\)"$/\1/p' "$ENV_FILE")
+[[ -n "$DB_PASSWORD" ]] || { echo "The database password is missing from $ENV_FILE." >&2; exit 1; }
+
+write_configuration() {
+  local bootstrap=$1 password=$2 pin=$3
+  local temporary
+  temporary=$(mktemp /etc/radiance-pos/pos.env.XXXXXX)
+  cat >"$temporary" <<EOF
+SPRING_PROFILES_ACTIVE=counter
+JDBC_DATABASE_URL="jdbc:postgresql://127.0.0.1:5432/pos_system"
+DB_USERNAME="radiance_pos"
+DB_PASSWORD=$(quote_env "$DB_PASSWORD")
+PORT=8080
+POS_BIND_ADDRESS="127.0.0.1"
+POS_PRINTER_NAME="POS-80"
+OUTLET_CODE=$(quote_env "$OUTLET_CODE")
+TERMINAL_CODE=$(quote_env "$TERMINAL_CODE")
+POS_BACKUP_DIRECTORY="/var/lib/radiance-pos/backups"
+POS_BOOTSTRAP_ADMIN_ENABLED=$bootstrap
+POS_BOOTSTRAP_ADMIN_USERNAME=$(quote_env "$OWNER_USER")
+POS_BOOTSTRAP_ADMIN_NAME=$(quote_env "$OWNER_NAME")
+POS_BOOTSTRAP_ADMIN_EMAIL=$(quote_env "$OWNER_EMAIL")
+POS_BOOTSTRAP_ADMIN_PASSWORD=$(quote_env "$password")
+POS_BOOTSTRAP_ADMIN_PIN=$(quote_env "$pin")
+POS_BOOTSTRAP_OUTLET_CODE=$(quote_env "$OUTLET_CODE")
+POS_BOOTSTRAP_OUTLET_NAME=$(quote_env "$OUTLET_NAME")
+POS_BOOTSTRAP_TERMINAL_CODE=$(quote_env "$TERMINAL_CODE")
+POS_BOOTSTRAP_TERMINAL_NAME=$(quote_env "$TERMINAL_NAME")
+EOF
+  chown root:radiance-pos "$temporary"
+  chmod 640 "$temporary"
+  mv -f "$temporary" "$ENV_FILE"
+}
+
+write_configuration true "$OWNER_PASSWORD" "$OWNER_PIN"
+systemctl daemon-reload
+systemctl enable radiance-pos.service >/dev/null
+systemctl restart radiance-pos.service
+
+echo "Starting Radiance POS..."
+healthy=false
+for _ in $(seq 1 90); do
+  if curl --silent --fail "$HEALTH_URL" >/dev/null; then
+    healthy=true
+    break
+  fi
+  sleep 1
+done
+
+if [[ "$healthy" != true ]]; then
+  echo "Radiance POS did not finish starting. Its setup values were kept so setup can be retried." >&2
+  echo "Run: sudo radiance-pos-diagnostics" >&2
+  systemctl --no-pager --full status radiance-pos.service || true
+  exit 1
+fi
+
+# The owner now exists in PostgreSQL. Do not leave their password or PIN on disk.
+write_configuration false "" ""
+install -o radiance-pos -g radiance-pos -m 600 /dev/null "$STATE_DIR/.configured"
+unset OWNER_PASSWORD OWNER_PIN
+
+echo
+echo "Radiance POS is ready at http://127.0.0.1:8080"
+echo "Open it from the Applications menu or run: radiance-pos"

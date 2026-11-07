@@ -1,0 +1,28 @@
+Radiance POS Windows distribution - third-party components
+
+This installer redistributes the following components. Their license files are
+also present in the bundled runtime/archive where supplied by the vendor.
+
+PostgreSQL 18
+  Copyright (c) 1996-2026, PostgreSQL Global Development Group
+  License: PostgreSQL License
+  https://www.postgresql.org/about/licence/
+
+WinSW 2.12.0
+  Copyright (c) 2008-2023 Kohsuke Kawaguchi, Oleg Nenashev and contributors
+  License: MIT
+  https://github.com/winsw/winsw
+
+Java runtime
+  Built with jlink from the JDK used for packaging. The runtime's legal/
+  directory contains the applicable module notices and licenses.
+
+Sign-in background photograph (assets/counter-bg.jpg)
+  "Belle Etoile, Bartreng, Cactus, Keesen, Juli 2025" by Bdx, via Wikimedia
+  Commons. Dedicated to the public domain under CC0 1.0, so no attribution is
+  required; it is recorded here for provenance. Cropped, blurred, desaturated
+  and darkened for use as a background.
+  https://creativecommons.org/publicdomain/zero/1.0/
+
+Application dependency notices are available from the corresponding Maven and
+npm package metadata in the source distributions.

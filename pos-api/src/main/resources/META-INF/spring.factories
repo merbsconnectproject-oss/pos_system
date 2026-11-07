@@ -1,0 +1,4 @@
+# DatabaseUrlConfig must run before the DataSource is built, which is before
+# any bean exists — so it is registered here rather than as @Configuration.
+org.springframework.boot.env.EnvironmentPostProcessor=\
+gh.giftedlabs.pos.config.DatabaseUrlConfig

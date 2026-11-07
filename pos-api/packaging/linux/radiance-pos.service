@@ -1,0 +1,32 @@
+[Unit]
+Description=Radiance POS
+Documentation=file:/usr/share/doc/radiance-pos/README.md
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=radiance-pos
+Group=radiance-pos
+WorkingDirectory=/var/lib/radiance-pos
+EnvironmentFile=/etc/radiance-pos/pos.env
+ExecStart=/opt/radiance-pos/runtime/bin/java -jar /opt/radiance-pos/radiance-pos.jar
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+SuccessExitStatus=143
+NoNewPrivileges=true
+PrivateTmp=true
+# Printing is submitted to the CUPS spooler, not opened as a raw USB device.
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/radiance-pos
+
+[Install]
+WantedBy=multi-user.target

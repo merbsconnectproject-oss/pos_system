@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Radiance POS
+Comment=Open the Radiance point-of-sale system
+Exec=radiance-pos
+Icon=radiance-pos
+Terminal=false
+Categories=Office;Finance;
+Keywords=POS;Sales;Inventory;Radiance;
+StartupNotify=true

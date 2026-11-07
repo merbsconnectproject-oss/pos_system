@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -u
+
+echo "Radiance POS diagnostics"
+echo "========================"
+echo
+echo "Package:"
+dpkg-query -W -f='${Package} ${Version} ${Architecture}\n' radiance-pos 2>&1 || true
+echo
+echo "Service:"
+systemctl --no-pager --full status radiance-pos.service 2>&1 || true
+echo
+echo "PostgreSQL:"
+systemctl --no-pager --full status postgresql.service 2>&1 || true
+echo
+echo "Health endpoint:"
+curl --silent --show-error --max-time 5 http://127.0.0.1:8080/actuator/health 2>&1 || true
+echo
+echo
+echo "Recent application log:"
+journalctl --no-pager -u radiance-pos.service -n 100 2>&1 || true
