@@ -1,5 +1,7 @@
 package gh.giftedlabs.pos.controller;
 
+import gh.giftedlabs.pos.security.OutletAccessGuard;
+
 import gh.giftedlabs.pos.dto.ShiftView;
 import gh.giftedlabs.pos.rules.CashMovementType;
 import gh.giftedlabs.pos.rules.Permission;
@@ -36,8 +38,11 @@ public class ShiftController {
     private final ShiftService shifts;
     private final SettingsService settings;
 
-    public ShiftController(ShiftService shifts, SettingsService settings) {
+    private final OutletAccessGuard outletAccess;
+
+    public ShiftController(ShiftService shifts, SettingsService settings, OutletAccessGuard outletAccess) {
         this.shifts = shifts;
+        this.outletAccess = outletAccess;
         this.settings = settings;
     }
 
@@ -55,6 +60,7 @@ public class ShiftController {
     public List<ShiftView> recent(@RequestParam(required = false) UUID outletId,
                                   @RequestParam(required = false) UUID cashierId,
                                   @RequestParam(defaultValue = "50") int limit) {
+        outletId = outletAccess.scope(outletId);
         return shifts.recent(outletId, cashierId, Math.clamp(limit, 1, 200));
     }
 

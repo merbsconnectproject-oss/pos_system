@@ -10,6 +10,7 @@ import gh.giftedlabs.pos.repository.*;
 import gh.giftedlabs.pos.rules.*;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.AuditService;
+import gh.giftedlabs.pos.service.AuthenticationService;
 import gh.giftedlabs.pos.service.InventoryService;
 import gh.giftedlabs.pos.service.SaleService;
 import gh.giftedlabs.pos.service.PricingService;
@@ -52,6 +53,7 @@ public class SaleServiceImpl implements SaleService {
     private final SettingsService settings;
     private final PricingService pricing;
     private final UserService staff;
+    private final AuthenticationService authentication;
     private final AuditService audit;
     private final Clock clock;
 
@@ -60,11 +62,13 @@ public class SaleServiceImpl implements SaleService {
                            StockLevelRepository levels,
                            InventoryService inventory, ShiftService shiftsService,
                            SettingsService settings, PricingService pricing, UserService staff,
+                           AuthenticationService authentication,
                            AuditService audit, Clock clock) {
         this.shiftsService = shiftsService;
         this.settings = settings;
         this.pricing = pricing;
         this.staff = staff;
+        this.authentication = authentication;
         this.sales = sales;
         this.products = products;
         this.terminals = terminals;
@@ -300,7 +304,10 @@ public class SaleServiceImpl implements SaleService {
             priced.add(new PricedLine(product.getId(), product.getName(), line.selectedUnit().trim(),
                     factor, quantity.amount(), quantityBase.amount(), line.unitPrice(), discount,
                     0L, gross.pesewas(), costAtSale, floor,
-                    line.floorApprovedBy(), line.discountApprovedBy()));
+                    verifiedApprover(line.floorApprovedBy(), line.floorApprovalPin(),
+                            Permission.SALE_APPROVE_BELOW_FLOOR),
+                    verifiedApprover(line.discountApprovedBy(), line.discountApprovalPin(),
+                            Permission.SALE_DISCOUNT)));
         }
 
         // The cart concession lands on the lines before anything is checked, so
@@ -308,12 +315,16 @@ public class SaleServiceImpl implements SaleService {
         // charged rather than what the line said before the cart was discounted.
         List<PricedLine> settled = applyCartDiscount(request, priced);
 
+        // BR-10/FR-POS-10: the cart approver, honoured only if their PIN proves it.
+        UUID cartApprover = verifiedApprover(request.cartDiscountApprovedBy(),
+                request.cartDiscountApprovalPin(), Permission.SALE_DISCOUNT);
+
         for (PricedLine line : settled) {
             // The ceiling first, deliberately. When a discount breaks both
             // rules, "that is more than you may give" is the answer the cashier
             // can act on; the floor only becomes the question once somebody has
             // agreed to the concession at all.
-            requireDiscountAllowed(line, request.cartDiscountApprovedBy(), actor, customer);
+            requireDiscountAllowed(line, cartApprover, actor, customer);
             requireAtOrAboveFloor(line, actor);
         }
         return settled;
@@ -404,16 +415,33 @@ public class SaleServiceImpl implements SaleService {
         BigDecimal effective = line.effectiveUnitPrice();
         if (effective.compareTo(line.floor()) >= 0) return;
 
+        // BR-10: the approver here has already been reduced to null unless their
+        // PIN was presented and verified (see verifiedApprover). An id in the
+        // request body is only a claim — without the PIN that proves consent, it
+        // is dropped before it reaches this point, so naming a manager (or
+        // oneself) buys nothing.
         UUID approver = line.floorApprovedBy();
-        // BR-10: the approver is checked, not taken on the client's word. An id
-        // arrives in the request body, so an unverified one would let the
-        // browser name anybody, the cashier themselves included.
         if (approver == null) {
             throw SaleException.belowFloor(line.productName(), effective, line.floor());
         }
         if (!staff.holdsPermission(approver, Permission.SALE_APPROVE_BELOW_FLOOR)) {
             throw SaleException.approverNotPermitted(line.productName());
         }
+    }
+
+    /**
+     * BR-10 · FR-POS-10: an approver counts only when their PIN proves consent.
+     *
+     * <p>The id that arrives in the request body is a claim the browser makes;
+     * the PIN is the proof. {@link AuthenticationService#verifyApprovalPin}
+     * checks the PIN against that user and that the user actually holds the
+     * authority in question, and is rate-limited. Without a matching PIN the
+     * approver is dropped to {@code null}, so a leaked or guessed user id cannot
+     * authorise a below-floor price or an over-ceiling discount on its own.
+     */
+    private UUID verifiedApprover(UUID approverId, String pin, Permission authority) {
+        if (approverId == null || pin == null || pin.isBlank()) return null;
+        return authentication.verifyApprovalPin(approverId, pin, authority) ? approverId : null;
     }
 
     /**

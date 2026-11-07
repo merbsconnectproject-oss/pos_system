@@ -1,5 +1,7 @@
 package gh.giftedlabs.pos.controller;
 
+import gh.giftedlabs.pos.security.OutletAccessGuard;
+
 import gh.giftedlabs.pos.dto.*;
 import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.security.PosPrincipal;
@@ -31,8 +33,11 @@ public class SupplierController {
     private final SupplierService suppliers;
     private final GoodsReceiptService receipts;
 
-    public SupplierController(SupplierService suppliers, GoodsReceiptService receipts) {
+    private final OutletAccessGuard outletAccess;
+
+    public SupplierController(SupplierService suppliers, GoodsReceiptService receipts, OutletAccessGuard outletAccess) {
         this.suppliers = suppliers;
+        this.outletAccess = outletAccess;
         this.receipts = receipts;
     }
 
@@ -87,6 +92,7 @@ public class SupplierController {
     @GetMapping("/goods-receipts")
     @PreAuthorize("hasAuthority('" + Permission.Codes.STOCK_VIEW + "')")
     public List<GoodsReceiptView> atOutlet(@RequestParam UUID outletId) {
+        outletAccess.assertVisible(outletId);
         return receipts.atOutlet(outletId);
     }
 

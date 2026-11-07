@@ -53,6 +53,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SettingsControllerTest {
 
     private static final String PASSWORD = "Counter-Pass-123";
+    /** Every approver here has this PIN; an id is honoured only alongside it (F-002). */
+    private static final String PIN = "4827";
 
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
@@ -61,6 +63,7 @@ class SettingsControllerTest {
     @Autowired TerminalRepository terminals;
     @Autowired LoginAttemptService loginAttempts;
     @Autowired @Qualifier("passwordEncoder") PasswordEncoder passwords;
+    @Autowired @Qualifier("pinEncoder") PasswordEncoder pins;
 
     private String run;
     private UUID outletId;
@@ -288,11 +291,21 @@ class SettingsControllerTest {
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.code").value("APPROVAL_REQUIRED"));
 
-            // The same write-off, approved by a manager, goes through.
+            // F-002: naming the manager is not their consent. Without the PIN
+            // it is a claim anyone who has seen the id could make.
             mvc.perform(keeper.authorise(post("/api/stock/movements"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(json.writeValueAsString(
                                     movement(productId, "DAMAGE", "10", "Water damage", managerId))))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("APPROVAL_REQUIRED"));
+
+            // The same write-off, approved by a manager with their PIN, goes through.
+            Map<String, Object> approved = movement(productId, "DAMAGE", "10", "Water damage", managerId);
+            approved.put("approvalPin", PIN);
+            mvc.perform(keeper.authorise(post("/api/stock/movements"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(approved)))
                     .andExpect(status().isCreated());
         }
 
@@ -337,6 +350,7 @@ class SettingsControllerTest {
         User user = new User(username, "Test " + prefix, passwords.encode(PASSWORD));
         user.assignRole(role);
         user.assignOutlet(outletId);
+        user.setPinHash(pins.encode(PIN));
         users.save(user);
         loginAttempts.recordSuccess(username);
         return username;

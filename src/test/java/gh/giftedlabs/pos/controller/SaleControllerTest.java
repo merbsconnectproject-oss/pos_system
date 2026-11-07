@@ -61,6 +61,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SaleControllerTest {
 
     private static final String PASSWORD = "Counter-Pass-123";
+    /** Every approver here has this PIN; an id is honoured only alongside it (F-002). */
+    private static final String PIN = "4827";
 
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
@@ -74,6 +76,7 @@ class SaleControllerTest {
     @Autowired SaleService saleService;
     @Autowired ShiftService shiftService;
     @Autowired @Qualifier("passwordEncoder") PasswordEncoder passwords;
+    @Autowired @Qualifier("pinEncoder") PasswordEncoder pins;
 
     private String ownerName;
     private String run;
@@ -93,6 +96,7 @@ class SaleControllerTest {
         User owner = new User(ownerName, "Test Owner", passwords.encode(PASSWORD));
         owner.assignRole(Role.OWNER);
         owner.assignOutlet(outletId);
+        owner.setPinHash(pins.encode(PIN));
         ownerId = users.save(owner).getId();
 
         loginAttempts.recordSuccess(ownerName);
@@ -445,15 +449,54 @@ class SaleControllerTest {
             User clerk = new User(clerkName, "Test Clerk", passwords.encode(PASSWORD));
             clerk.assignRole(Role.CASHIER);
             clerk.assignOutlet(outletId);
+            clerk.setPinHash(pins.encode(PIN));
             UUID clerkId = users.save(clerk).getId();
+
+            // Even with the clerk's own correct PIN: the PIN proves who they
+            // are, not that they may approve. The approver is dropped, so the
+            // line is simply under the floor with nobody behind it.
+            Map<String, Object> item = line(productId, "pcs", "1", "40.00", null, clerkId.toString());
+            item.put("floorApprovalPin", PIN);
 
             mvc.perform(session.authorise(post("/api/sales"))
                             .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(sale(item, cash(4000L)))))
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.code").value("BELOW_FLOOR_PRICE"));
+        }
+
+        @Test
+        @DisplayName("an approver's id without their PIN approves nothing — F-002, BR-10")
+        void anApproverIdAloneIsNotConsent() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "No PIN " + run, "pcs", "60.00", "20");
+
+            // The owner may approve this — but an id is something anyone who has
+            // seen it can type. Without the PIN the server cannot tell the owner
+            // agreed, so it is as if nobody was named.
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
                             .content(json.writeValueAsString(sale(
-                                    line(productId, "pcs", "1", "40.00", null, clerkId.toString()),
+                                    line(productId, "pcs", "1", "40.00", null, ownerId.toString()),
                                     cash(4000L)))))
                     .andExpect(status().isUnprocessableEntity())
-                    .andExpect(jsonPath("$.code").value("APPROVER_NOT_PERMITTED"));
+                    .andExpect(jsonPath("$.code").value("BELOW_FLOOR_PRICE"));
+        }
+
+        @Test
+        @DisplayName("nor with the wrong PIN — F-002, BR-10")
+        void aWrongPinIsNotConsent() throws Exception {
+            Session session = signIn();
+            String productId = stockedProduct(session, "Wrong PIN " + run, "pcs", "60.00", "20");
+
+            Map<String, Object> item = line(productId, "pcs", "1", "40.00", null, ownerId.toString());
+            item.put("floorApprovalPin", "0000");
+
+            mvc.perform(session.authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(sale(item, cash(4000L)))))
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.code").value("BELOW_FLOOR_PRICE"));
         }
 
         @Test
@@ -510,6 +553,7 @@ class SaleControllerTest {
 
             Map<String, Object> item = line(productId, "pcs", "1", "1", "60.00", 2_000L, null);
             item.put("floorApprovedBy", ownerId.toString());
+            item.put("floorApprovalPin", PIN);
 
             mvc.perform(session.authorise(post("/api/sales"))
                             .contentType(MediaType.APPLICATION_JSON)
@@ -524,11 +568,12 @@ class SaleControllerTest {
             Session session = signIn();
             String productId = stockedProduct(session, "Approved " + run, "pcs", "60.00", "20");
 
+            Map<String, Object> item = line(productId, "pcs", "1", "40.00", null, ownerId.toString());
+            item.put("floorApprovalPin", PIN);
+
             mvc.perform(session.authorise(post("/api/sales"))
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(json.writeValueAsString(sale(
-                                    line(productId, "pcs", "1", "40.00", null, ownerId.toString()),
-                                    cash(4000L)))))
+                            .content(json.writeValueAsString(sale(item, cash(4000L)))))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.items[0].belowFloor").value(true));
         }
@@ -592,6 +637,7 @@ class SaleControllerTest {
             User manager = new User(managerName, "Test Manager", passwords.encode(PASSWORD));
             manager.assignRole(Role.MANAGER);
             manager.assignOutlet(outletId);
+            manager.setPinHash(pins.encode(PIN));
             UUID managerId = users.save(manager).getId();
 
             // The seller may give 5%; the manager may give 20. The line asks 20.
@@ -599,6 +645,7 @@ class SaleControllerTest {
 
             Map<String, Object> item = line(productId, "pcs", "1", "1", "100.00", 2_000L, null);
             item.put("discountApprovedBy", managerId.toString());
+            item.put("discountApprovalPin", PIN);
 
             mvc.perform(session.authorise(post("/api/sales"))
                             .contentType(MediaType.APPLICATION_JSON)
@@ -878,6 +925,65 @@ class SaleControllerTest {
                             .param("outletId", outletId.toString())))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$[0].items[0].frozenCostPrice").doesNotExist());
+        }
+    }
+
+    @Nested
+    @DisplayName("another branch's sales — F-001, FR-OUT-05")
+    class OutletIsolation {
+
+        private UUID otherOutletId;
+        private String clerkName;
+
+        /** A cashier assigned here only, and a second branch they were never given. */
+        @BeforeEach
+        void otherBranch() {
+            otherOutletId = outlets.save(new Outlet("H" + run.substring(0, 5), "Other Branch " + run)).getId();
+            clerkName = "branch-" + run.toLowerCase();
+            User clerk = new User(clerkName, "Test Branch Cashier", passwords.encode(PASSWORD));
+            clerk.assignRole(Role.CASHIER);
+            clerk.assignOutlet(outletId);
+            users.save(clerk);
+            loginAttempts.recordSuccess(clerkName);
+        }
+
+        @Test
+        @DisplayName("a cashier naming another branch cannot read its sales")
+        void cannotListAnotherBranch() throws Exception {
+            mvc.perform(signInAs(clerkName).authorise(get("/api/sales")
+                            .param("outletId", otherOutletId.toString())))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("OUTLET_NOT_PERMITTED"));
+        }
+
+        @Test
+        @DisplayName("nor ring a sale up there")
+        void cannotSellAtAnotherBranch() throws Exception {
+            String productId = stockedProduct(signIn(), "Elsewhere " + run, "pcs", "10.00", "20");
+            Map<String, Object> body = sale(line(productId, "pcs", "1", "10.00"), cash(1000L));
+            body.put("outletId", otherOutletId.toString());
+
+            mvc.perform(signInAs(clerkName).authorise(post("/api/sales"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(body)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("OUTLET_NOT_PERMITTED"));
+        }
+
+        @Test
+        @DisplayName("their own branch still answers")
+        void ownBranchStillWorks() throws Exception {
+            mvc.perform(signInAs(clerkName).authorise(get("/api/sales")
+                            .param("outletId", outletId.toString())))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("and someone who may see every branch still can")
+        void viewAllStillSeesEveryBranch() throws Exception {
+            mvc.perform(signIn().authorise(get("/api/sales")
+                            .param("outletId", otherOutletId.toString())))
+                    .andExpect(status().isOk());
         }
     }
 

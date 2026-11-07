@@ -1,5 +1,7 @@
 package gh.giftedlabs.pos.controller;
 
+import gh.giftedlabs.pos.security.OutletAccessGuard;
+
 import gh.giftedlabs.pos.dto.MovementRequest;
 import gh.giftedlabs.pos.dto.MovementView;
 import gh.giftedlabs.pos.dto.StockView;
@@ -44,8 +46,11 @@ public class InventoryController {
     private final InventoryService inventory;
     private final InventoryQueryService history;
 
-    public InventoryController(InventoryService inventory, InventoryQueryService history) {
+    private final OutletAccessGuard outletAccess;
+
+    public InventoryController(InventoryService inventory, InventoryQueryService history, OutletAccessGuard outletAccess) {
         this.inventory = inventory;
+        this.outletAccess = outletAccess;
         this.history = history;
     }
 
@@ -74,6 +79,7 @@ public class InventoryController {
     @GetMapping("/outlet/{outletId}")
     @PreAuthorize("hasAuthority('" + Permission.Codes.STOCK_VIEW + "')")
     public List<StockView> atOutlet(@PathVariable UUID outletId, Authentication authentication) {
+        outletAccess.assertVisible(outletId);
         return costFiltered(inventory.atOutlet(outletId), authentication);
     }
 
@@ -87,6 +93,7 @@ public class InventoryController {
     @GetMapping("/outlet/{outletId}/low")
     @PreAuthorize("hasAuthority('" + Permission.Codes.STOCK_VIEW + "')")
     public List<StockView> low(@PathVariable UUID outletId, Authentication authentication) {
+        outletAccess.assertVisible(outletId);
         return costFiltered(inventory.lowAt(outletId), authentication);
     }
 

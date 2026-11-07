@@ -3,6 +3,7 @@ package gh.giftedlabs.pos.controller;
 import gh.giftedlabs.pos.dto.SaleRequest;
 import gh.giftedlabs.pos.dto.SaleView;
 import gh.giftedlabs.pos.rules.Permission;
+import gh.giftedlabs.pos.security.OutletAccessGuard;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.SaleService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,9 +34,11 @@ public class SaleController {
     private static final int MAX_PAGE = 200;
 
     private final SaleService sales;
+    private final OutletAccessGuard outletAccess;
 
-    public SaleController(SaleService sales) {
+    public SaleController(SaleService sales, OutletAccessGuard outletAccess) {
         this.sales = sales;
+        this.outletAccess = outletAccess;
     }
 
     @PostMapping
@@ -44,6 +47,7 @@ public class SaleController {
     public SaleView complete(@Valid @RequestBody SaleRequest body,
                              @AuthenticationPrincipal PosPrincipal actor,
                              Authentication authentication, HttpServletRequest request) {
+        outletAccess.assertVisible(body.outletId());
         boolean mayOversell = has(authentication, Permission.Codes.STOCK_OVERSELL);
         return redact(sales.complete(body, actor, mayOversell, clientIp(request)), authentication);
     }
@@ -63,6 +67,7 @@ public class SaleController {
                                  @RequestParam(required = false) String q,
                                  @RequestParam(defaultValue = "100") int limit,
                                  Authentication authentication) {
+        outletId = outletAccess.scope(outletId);
         return sales.recent(outletId, q, Math.clamp(limit, 1, MAX_PAGE)).stream()
                 .map(sale -> redact(sale, authentication))
                 .toList();

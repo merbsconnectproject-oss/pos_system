@@ -49,6 +49,15 @@ public interface UserService {
     /** FR-POS-10: the roles a person holds, for working out their ceiling. */
     Set<Role> rolesOf(UUID userId);
 
+    /**
+     * FR-OUT-05 · FR-AUTH-03: the branches a person is assigned to.
+     *
+     * <p>Used to confine a user without {@code outlet.view_all} to their own
+     * branches. Empty for an unknown or deactivated account, which then reaches
+     * nothing.
+     */
+    Set<UUID> assignedOutlets(UUID userId);
+
     /** `J-06`: what the permission matrix is drawn from. */
     List<PermissionInfo> permissionCatalogue();
 

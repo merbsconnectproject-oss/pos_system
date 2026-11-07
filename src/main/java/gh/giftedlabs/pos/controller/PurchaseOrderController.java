@@ -1,5 +1,7 @@
 package gh.giftedlabs.pos.controller;
 
+import gh.giftedlabs.pos.security.OutletAccessGuard;
+
 import gh.giftedlabs.pos.dto.PurchaseOrderRequest;
 import gh.giftedlabs.pos.dto.PurchaseOrderView;
 import gh.giftedlabs.pos.rules.Permission;
@@ -33,8 +35,11 @@ public class PurchaseOrderController {
 
     private final PurchaseOrderService orders;
 
-    public PurchaseOrderController(PurchaseOrderService orders) {
+    private final OutletAccessGuard outletAccess;
+
+    public PurchaseOrderController(PurchaseOrderService orders, OutletAccessGuard outletAccess) {
         this.orders = orders;
+        this.outletAccess = outletAccess;
     }
 
     @GetMapping
@@ -43,6 +48,7 @@ public class PurchaseOrderController {
                                         @RequestParam(required = false) String status,
                                         @RequestParam(required = false) UUID supplierId,
                                         @RequestParam(defaultValue = "200") int limit) {
+        outletId = outletAccess.scope(outletId);
         return orders.list(outletId, status, supplierId, limit);
     }
 

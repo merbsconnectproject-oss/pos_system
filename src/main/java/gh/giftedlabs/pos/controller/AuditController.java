@@ -1,5 +1,7 @@
 package gh.giftedlabs.pos.controller;
 
+import gh.giftedlabs.pos.security.OutletAccessGuard;
+
 import gh.giftedlabs.pos.dto.AuditEntryView;
 import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.service.AuditQueryService;
@@ -26,8 +28,11 @@ public class AuditController {
 
     private final AuditQueryService audit;
 
-    public AuditController(AuditQueryService audit) {
+    private final OutletAccessGuard outletAccess;
+
+    public AuditController(AuditQueryService audit, OutletAccessGuard outletAccess) {
         this.audit = audit;
+        this.outletAccess = outletAccess;
     }
 
     @GetMapping
@@ -40,6 +45,7 @@ public class AuditController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @RequestParam(defaultValue = "100") int limit,
             @RequestParam(defaultValue = "0") int offset) {
+        outletId = outletAccess.scope(outletId);
         return audit.recent(action, actorId, outletId, from, to,
                 Math.clamp(limit, 1, MAX_PAGE), Math.max(0, offset));
     }

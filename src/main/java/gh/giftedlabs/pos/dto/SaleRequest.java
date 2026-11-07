@@ -53,8 +53,25 @@ public record SaleRequest(
         /** FR-POS-10: required when the cart discount passes the seller's ceiling. */
         UUID cartDiscountApprovedBy,
 
+        /**
+         * The approver's PIN for the cart discount — BR-10/FR-POS-10.
+         *
+         * <p>An approver id alone is a claim the browser can make up; the PIN is
+         * what proves the named manager actually authorised this. The server
+         * honours {@link #cartDiscountApprovedBy} only when this PIN matches it.
+         */
+        String cartDiscountApprovalPin,
+
         @NotEmpty(message = "A sale needs at least one payment")
         @Valid List<PaymentLine> payments) {
+
+    /** Back-compat: a sale with no cart-discount approval PIN. */
+    public SaleRequest(UUID id, UUID outletId, UUID terminalId, UUID customerId, String customerName,
+                       String customerPhone, List<Line> items, BigDecimal cartDiscountPercent,
+                       Long cartDiscount, UUID cartDiscountApprovedBy, List<PaymentLine> payments) {
+        this(id, outletId, terminalId, customerId, customerName, customerPhone, items,
+                cartDiscountPercent, cartDiscount, cartDiscountApprovedBy, null, payments);
+    }
 
     public record Line(
             @NotNull UUID productId,
@@ -72,7 +89,20 @@ public record SaleRequest(
             UUID floorApprovedBy,
 
             /** FR-POS-10: required when the discount passes the seller's ceiling. */
-            UUID discountApprovedBy) {
+            UUID discountApprovedBy,
+
+            /** The floor approver's PIN — BR-10. Proves {@link #floorApprovedBy} consented. */
+            String floorApprovalPin,
+
+            /** The discount approver's PIN — FR-POS-10. Proves {@link #discountApprovedBy} consented. */
+            String discountApprovalPin) {
+
+        /** Back-compat: a line with no approval PINs. */
+        public Line(UUID productId, String selectedUnit, BigDecimal conversionFactor, BigDecimal quantity,
+                    BigDecimal unitPrice, Long discount, UUID floorApprovedBy, UUID discountApprovedBy) {
+            this(productId, selectedUnit, conversionFactor, quantity, unitPrice, discount,
+                    floorApprovedBy, discountApprovedBy, null, null);
+        }
     }
 
     public record PaymentLine(

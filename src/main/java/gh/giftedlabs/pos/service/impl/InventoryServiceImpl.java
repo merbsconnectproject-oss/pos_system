@@ -18,6 +18,7 @@ import gh.giftedlabs.pos.rules.Permission;
 import gh.giftedlabs.pos.rules.Quantity;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.AuditService;
+import gh.giftedlabs.pos.service.AuthenticationService;
 import gh.giftedlabs.pos.service.SettingsService;
 import gh.giftedlabs.pos.service.UserService;
 import gh.giftedlabs.pos.service.InventoryService;
@@ -48,12 +49,14 @@ public class InventoryServiceImpl implements InventoryService {
     private final OutletRepository outlets;
     private final SettingsService settings;
     private final UserService staff;
+    private final AuthenticationService authentication;
     private final AuditService audit;
     private final Clock clock;
 
     public InventoryServiceImpl(StockLevelRepository levels, InventoryMovementRepository movements,
                                 ProductRepository products, OutletRepository outlets,
                                 SettingsService settings, UserService staff,
+                                AuthenticationService authentication,
                                 AuditService audit, Clock clock) {
         this.levels = levels;
         this.movements = movements;
@@ -61,6 +64,7 @@ public class InventoryServiceImpl implements InventoryService {
         this.outlets = outlets;
         this.settings = settings;
         this.staff = staff;
+        this.authentication = authentication;
         this.audit = audit;
         this.clock = clock;
     }
@@ -158,7 +162,13 @@ public class InventoryServiceImpl implements InventoryService {
         if (value.movePointRight(2).compareTo(BigDecimal.valueOf(threshold)) <= 0) return;
 
         if (staff.holdsPermission(actor.userId(), Permission.STOCK_APPROVE_ADJUSTMENT)) return;
-        if (staff.holdsPermission(request.approvedBy(), Permission.STOCK_APPROVE_ADJUSTMENT)) return;
+        // FR-INV-06: a named approver counts only when their PIN proves consent.
+        // Without it, a leaked or guessed id cannot wave through a large write-off.
+        if (request.approvedBy() != null
+                && authentication.verifyApprovalPin(request.approvedBy(), request.approvalPin(),
+                        Permission.STOCK_APPROVE_ADJUSTMENT)) {
+            return;
+        }
 
         throw ApprovalRequiredException.adjustment(value, threshold);
     }

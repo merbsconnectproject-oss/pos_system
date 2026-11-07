@@ -221,6 +221,16 @@ public class UserServiceImpl implements UserService {
                 .orElse(Set.of());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Set<UUID> assignedOutlets(UUID userId) {
+        if (userId == null) return Set.of();
+        return users.findById(userId)
+                .filter(User::isActive)
+                .map(user -> Set.copyOf(user.getOutletIds()))
+                .orElse(Set.of());
+    }
+
     /** FR-USER-02 · `J-06`: the catalogue the permission matrix is drawn from. */
     @Override
     public List<PermissionInfo> permissionCatalogue() {

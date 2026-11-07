@@ -1,5 +1,7 @@
 package gh.giftedlabs.pos.controller;
 
+import gh.giftedlabs.pos.security.OutletAccessGuard;
+
 import gh.giftedlabs.pos.dto.ReturnRequest;
 import gh.giftedlabs.pos.dto.ReturnView;
 import gh.giftedlabs.pos.rules.Permission;
@@ -30,14 +32,18 @@ public class ReturnController {
 
     private final ReturnService returns;
 
-    public ReturnController(ReturnService returns) {
+    private final OutletAccessGuard outletAccess;
+
+    public ReturnController(ReturnService returns, OutletAccessGuard outletAccess) {
         this.returns = returns;
+        this.outletAccess = outletAccess;
     }
 
     @GetMapping
     @PreAuthorize("hasAuthority('" + Permission.Codes.SALE_REFUND + "')")
     public List<ReturnView> list(@RequestParam(required = false) UUID outletId,
                                  @RequestParam(defaultValue = "100") int limit) {
+        outletId = outletAccess.scope(outletId);
         return returns.list(outletId, limit);
     }
 

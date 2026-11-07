@@ -3,6 +3,7 @@ package gh.giftedlabs.pos.controller;
 import gh.giftedlabs.pos.dto.ExpenseRequest;
 import gh.giftedlabs.pos.dto.ExpenseView;
 import gh.giftedlabs.pos.rules.Permission;
+import gh.giftedlabs.pos.security.OutletAccessGuard;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.ExpenseService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,9 +35,11 @@ import java.util.UUID;
 public class ExpenseController {
 
     private final ExpenseService expenses;
+    private final OutletAccessGuard outletAccess;
 
-    public ExpenseController(ExpenseService expenses) {
+    public ExpenseController(ExpenseService expenses, OutletAccessGuard outletAccess) {
         this.expenses = expenses;
+        this.outletAccess = outletAccess;
     }
 
     /**
@@ -50,6 +53,7 @@ public class ExpenseController {
                                  @RequestParam(required = false) LocalDate to,
                                  @RequestParam(required = false) UUID outletId,
                                  @RequestParam(defaultValue = "500") int limit) {
+        outletId = outletAccess.scope(outletId);
         return expenses.list(from, to, outletId, limit);
     }
 
@@ -59,6 +63,7 @@ public class ExpenseController {
     public ExpenseView record(@Valid @RequestBody ExpenseRequest body,
                               @AuthenticationPrincipal PosPrincipal actor,
                               HttpServletRequest request) {
+        outletAccess.assertVisible(body.outletId());
         return expenses.record(body, actor, clientIp(request));
     }
 

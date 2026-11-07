@@ -1,5 +1,7 @@
 package gh.giftedlabs.pos.controller;
 
+import gh.giftedlabs.pos.security.OutletAccessGuard;
+
 import gh.giftedlabs.pos.dto.InstallmentPaymentRequest;
 import gh.giftedlabs.pos.dto.InstallmentPlanRequest;
 import gh.giftedlabs.pos.dto.InstallmentPlanView;
@@ -36,14 +38,18 @@ public class InstallmentController {
 
     private final InstallmentService installments;
 
-    public InstallmentController(InstallmentService installments) {
+    private final OutletAccessGuard outletAccess;
+
+    public InstallmentController(InstallmentService installments, OutletAccessGuard outletAccess) {
         this.installments = installments;
+        this.outletAccess = outletAccess;
     }
 
     @GetMapping
     @PreAuthorize("hasAuthority('" + Permission.Codes.CUSTOMER_CREDIT + "')")
     public InstallmentPlanView.Page list(@RequestParam(required = false) UUID outletId,
                                          @RequestParam(required = false) UUID customerId) {
+        outletId = outletAccess.scope(outletId);
         return installments.list(outletId, customerId);
     }
 

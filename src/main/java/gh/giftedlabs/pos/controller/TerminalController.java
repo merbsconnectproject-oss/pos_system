@@ -4,6 +4,7 @@ import gh.giftedlabs.pos.entity.Terminal;
 import gh.giftedlabs.pos.exception.TerminalCodeTakenException;
 import gh.giftedlabs.pos.repository.TerminalRepository;
 import gh.giftedlabs.pos.rules.Permission;
+import gh.giftedlabs.pos.security.OutletAccessGuard;
 import gh.giftedlabs.pos.security.PosPrincipal;
 import gh.giftedlabs.pos.service.AuditService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -37,15 +38,19 @@ public class TerminalController {
 
     private final TerminalRepository terminals;
     private final AuditService audit;
+    private final OutletAccessGuard outletAccess;
 
-    public TerminalController(TerminalRepository terminals, AuditService audit) {
+    public TerminalController(TerminalRepository terminals, AuditService audit,
+                             OutletAccessGuard outletAccess) {
         this.terminals = terminals;
         this.audit = audit;
+        this.outletAccess = outletAccess;
     }
 
     @GetMapping
     @PreAuthorize("hasAuthority('" + Permission.Codes.POS_SELL + "')")
     public List<TerminalView> list(@RequestParam UUID outletId) {
+        outletAccess.assertVisible(outletId);
         return terminals.findAllByOutletIdAndActiveTrueOrderByCodeAsc(outletId).stream()
                 .map(TerminalView::of).toList();
     }
@@ -56,6 +61,7 @@ public class TerminalController {
     @Transactional
     public TerminalView create(@Valid @RequestBody NewTerminal body,
                                @AuthenticationPrincipal PosPrincipal actor, HttpServletRequest request) {
+        outletAccess.assertVisible(body.outletId());
         String code = body.code().toUpperCase();
 
         // `terminal_code_unique_per_outlet` would refuse this anyway, but as a

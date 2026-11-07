@@ -39,10 +39,14 @@ public record MovementRequest(
          * FR-INV-06: who approved this, when its value passes the threshold.
          *
          * <p>Null on everything below the threshold, which is most movements.
-         * The person named must hold {@code stock.approve_adjustment} — it is
-         * verified, because an id in a request body is the client's claim.
+         * The person named must hold {@code stock.approve_adjustment}, and
+         * {@link #approvalPin} must prove it is really them — an id in a request
+         * body is only the client's claim.
          */
-        UUID approvedBy) {
+        UUID approvedBy,
+
+        /** FR-INV-06: the approver's PIN. {@link #approvedBy} is honoured only when it matches. */
+        String approvalPin) {
 
     /**
      * For movements the system writes itself — a sale, a receipt, a void.
@@ -54,6 +58,13 @@ public record MovementRequest(
     public MovementRequest(UUID productId, UUID outletId, MovementType type, BigDecimal quantity,
                            BigDecimal unitCost, String reason, String note,
                            String sourceType, UUID sourceId) {
-        this(productId, outletId, type, quantity, unitCost, reason, note, sourceType, sourceId, null);
+        this(productId, outletId, type, quantity, unitCost, reason, note, sourceType, sourceId, null, null);
+    }
+
+    /** Back-compat: an approver named without a PIN (the PIN path supersedes this). */
+    public MovementRequest(UUID productId, UUID outletId, MovementType type, BigDecimal quantity,
+                           BigDecimal unitCost, String reason, String note,
+                           String sourceType, UUID sourceId, UUID approvedBy) {
+        this(productId, outletId, type, quantity, unitCost, reason, note, sourceType, sourceId, approvedBy, null);
     }
 }
