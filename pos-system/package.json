@@ -12,6 +12,7 @@
     "lint": "tsc --noEmit",
     "check:contract": "tsx src/contract-check.ts",
     "gen:vectors": "tsx src/gen-vectors.ts",
+    "gen:legacy-css": "tsx src/gen-legacy-css.ts",
     "check": "tsc --noEmit && tsx src/contract-check.ts && vitest run",
     "test": "vitest run"
   },

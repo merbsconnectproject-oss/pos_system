@@ -84,8 +84,21 @@ function readableForeground(hex: string): string {
   return luminance > 0.45 ? '#1f2937' : '#ffffff';
 }
 
+/** `#c55200` → `197 82 0`, for `rgb(var(--…-rgb) / alpha)`. */
+export function hexToChannels(hex: string): string {
+  const clean = hex.trim().replace(/^#/, '');
+  const full = clean.length === 3 ? [...clean].map((c) => c + c).join('') : clean;
+  return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16)).join(' ');
+}
+
 export interface AccentScale {
   base: string;
+  /**
+   * The base as space-separated RGB channels, for `rgb(var(--accent-rgb) / 0.1)`.
+   * Tints are not written with color-mix(): a browser older than Chrome/Edge
+   * 111 cannot read it, and the build's fallback for it is the full accent.
+   */
+  channels: string;
   shades: Record<number, string>;
   hover: string;
   active: string;
@@ -103,6 +116,7 @@ export function buildAccentScale(hex: string): AccentScale | null {
   });
   return {
     base: hex,
+    channels: hexToChannels(hex),
     shades,
     hover: hslToHex({ h: hsl.h, s: hsl.s, l: clamp(hsl.l - 6, 0, 100) }),
     active: hslToHex({ h: hsl.h, s: hsl.s, l: clamp(hsl.l - 12, 0, 100) }),
@@ -136,11 +150,14 @@ export function applyAccent(hex: string): boolean {
   if (!scale) return false;
   const root = document.documentElement.style;
   root.setProperty('--accent', scale.base);
+  root.setProperty('--accent-rgb', scale.channels);
   root.setProperty('--accent-fg', scale.foreground);
   root.setProperty('--accent-hover', scale.hover);
   root.setProperty('--accent-active', scale.active);
   Object.entries(scale.shades).forEach(([stop, value]) => {
     root.setProperty(`--accent-${stop}`, value);
+    // Old browsers tint `bg-accent-500/20` and the like from these (legacy-browsers.css).
+    root.setProperty(`--accent-${stop}-rgb`, hexToChannels(value));
   });
   root.setProperty('--accent-soft', scale.shades[50]);
   root.setProperty('--accent-on-soft', scale.shades[800]);
