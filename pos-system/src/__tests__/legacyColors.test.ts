@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { buildAccentScale, hexToChannels } from '../accent';
 import { OUT, THEME, accentOpacityClasses, legacyBrowsersCss, oklchToHex, readSources } from '../gen-legacy-css';
 
-const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
+// Windows checkouts carry CRLF; compare content, not line endings.
+const read = (file: string | URL) => readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+const css = read(new URL('../index.css', import.meta.url));
 
 // A counter PC on an unpatched Windows image ran a browser older than
 // Chrome/Edge 111 and Firefox 113. The dashboard's dark metric cards lost their
@@ -16,8 +18,8 @@ describe('colours on browsers older than Chrome/Edge 111 and Firefox 113', () =>
   });
 
   it('ships a current legacy stylesheet', () => {
-    const expected = legacyBrowsersCss(readFileSync(THEME, 'utf8'), readSources());
-    expect(readFileSync(OUT, 'utf8'), 'stale: run npm run gen:legacy-css').toBe(expected);
+    const expected = legacyBrowsersCss(read(THEME), readSources());
+    expect(read(OUT), 'stale: run npm run gen:legacy-css').toBe(expected);
     expect(expected).toContain('@supports not (color: oklch(0% 0 0))');
     expect(expected).toContain('--color-slate-950: #020618;');
     expect(expected).not.toMatch(/--color-[a-z]+-\d+: oklch\(/);
