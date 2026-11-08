@@ -47,8 +47,10 @@ counter PC, as `postgres.exe` failing to load and the service refusing to start
 with nothing written to any log.
 
 The installer therefore carries `vendor\vc_redist.x64.exe`. Before it touches
-the cluster, setup runs `postgres.exe -V`; if Windows cannot load it, the
-bundled redistributable is installed silently and the probe is repeated. Pin it
+the cluster, setup always installs the bundled redistributable silently, then
+runs `postgres.exe -V` to confirm Windows can load it. It runs every time
+because an *old* runtime, as on an unpatched Windows image, still loads
+`postgres -V` but crashes initdb's post-bootstrap step with `0xC0000005`. Pin it
 for release builds with `-VcRedistSha256`.
 
 Runtime data is under `%ProgramData%\GiftedLabs\Radiance POS`. ACLs separate

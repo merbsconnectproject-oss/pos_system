@@ -175,6 +175,22 @@ class WindowsAppWindowTest {
     }
 
     @Test
+    @DisplayName("NFR-13 · an old Visual C++ runtime is upgraded before initdb")
+    void visualCppRuntimeIsAlwaysRefreshed() throws IOException {
+        String onboarding = Files.readString(Path.of("packaging/windows/tools/onboard.ps1"));
+        // A counter on an unpatched Windows image passed postgres -V and then
+        // crashed in initdb's post-bootstrap step with 0xC0000005: an old
+        // runtime loads, it just cannot run the binaries. The probe alone
+        // must not decide whether the bundled runtime is installed.
+        int start = onboarding.indexOf("function Assert-PostgresRuntime");
+        String assertion = onboarding.substring(start, onboarding.indexOf("\n}", start));
+        int install = assertion.indexOf("Install-VisualCppRuntime");
+        int probe = assertion.indexOf("if (Test-PostgresBinaries)");
+        assertTrue(install > 0 && install < probe,
+                "the bundled runtime must be installed before the first probe, not only when it fails");
+    }
+
+    @Test
     @DisplayName("NFR-13 · initdb can write its cluster on a locked-down ProgramData")
     void initdbMayWriteItsOwnCluster() throws IOException {
         String onboarding = Files.readString(Path.of("packaging/windows/tools/onboard.ps1"));

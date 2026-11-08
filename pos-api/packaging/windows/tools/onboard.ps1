@@ -1070,7 +1070,11 @@ function Install-VisualCppRuntime {
 
 function Assert-PostgresRuntime {
     Write-Step 'Checking that the database binaries can run on this computer'
-    if (Test-PostgresBinaries) { return }
+    # Always, not only when the probe fails: an older runtime - an unpatched
+    # Windows image ships one - loads postgres.exe -V fine, and then the C++
+    # parts PostgreSQL is built against (ICU collations, loaded in initdb's
+    # post-bootstrap step) crash it with 0xC0000005. The redistributable
+    # upgrades an older runtime and is a no-op (1638) on a current one.
     Install-VisualCppRuntime
     if (Test-PostgresBinaries) { return }
     throw ('The bundled PostgreSQL executables still will not run on this computer after the ' +
