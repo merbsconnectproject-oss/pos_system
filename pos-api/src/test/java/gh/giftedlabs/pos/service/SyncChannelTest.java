@@ -388,6 +388,11 @@ class SyncChannelTest {
         UUID invented = UUID.randomUUID();
         jdbc.update("insert into outlet (id, code, name, is_active) values (?, ?, ?, true)",
                 invented, code, "Invented by first run");
+        // Setup signs in before it pulls, so the invented outlet is already named
+        // by an append-only audit entry. Deleting it then failed on the foreign
+        // key, and every outlet-mode setup stopped with a 500.
+        jdbc.update("insert into audit_log (actor_id, action, entity_type, entity_id, outlet_id) "
+                + "values (?, 'AUTH_SIGN_IN', 'user', ?, ?)", actor.userId(), actor.userId(), invented);
 
         SyncView.Configuration applied = sync.pullConfiguration(
                 new PosPrincipal(actor.userId(), actor.username(), invented, Instant.now()),
@@ -398,8 +403,10 @@ class SyncChannelTest {
         // pushed sale is keyed to.
         assertTrue(outlets.findById(headOfficeId).isPresent(),
                 "head office's outlet must exist after the pull");
-        assertTrue(outlets.findById(invented).isEmpty(),
-                "the invented outlet must be gone, not left beside it");
+        assertFalse(outlets.findById(invented).orElseThrow().isActive(),
+                "the invented outlet must be retired, not left trading beside it");
+        assertFalse(code.equals(outlets.findById(invented).orElseThrow().getCode()),
+                "the invented outlet must give up the shop's code");
     }
 
     @Test

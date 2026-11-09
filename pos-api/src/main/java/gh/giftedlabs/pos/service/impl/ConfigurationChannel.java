@@ -310,9 +310,18 @@ public class ConfigurationChannel {
                             + "where u2.user_id = user_outlet.user_id and u2.outlet_id = ?)",
                     wire.id(), local, wire.id());
             jdbc.getJdbcTemplate().update("delete from user_outlet where outlet_id = ?", local);
-            jdbc.getJdbcTemplate().update("delete from outlet where id = ?", local);
 
-            log.info("Adopted Cloud Sync id for outlet {} (was {})", wire.code(), local);
+            // Retired, not deleted. Setup signs in before it pulls, and that
+            // AUTH_SIGN_IN entry names the invented outlet. audit_log is
+            // append-only (BR-15), so its outlet_id can be neither moved nor
+            // nulled, and deleting the outlet fails on the foreign key: every
+            // outlet-mode setup got a 500 from "Get configuration". Inactive is
+            // enough. Sync and the outlet chooser only ever look at active outlets.
+            jdbc.getJdbcTemplate().update(
+                    "update outlet set is_active = false, name = ? where id = ?",
+                    "Setup placeholder (retired)", local);
+
+            log.info("Adopted Cloud Sync id for outlet {} (retired placeholder {})", wire.code(), local);
         }
     }
 
